@@ -1,0 +1,314 @@
+import type { ComponentName, ViewNode } from './catalog.js';
+
+export type ComponentCategory =
+  'data' | 'overview' | 'goals & scope' | 'plan & time' | 'work' | 'outputs' | 'layout';
+
+export type ComponentInfo = {
+  category: ComponentCategory;
+  /** When an agent should reach for this component. */
+  use: string;
+  /** Narrowest readable width, in board columns (of 12). People can't resize below it. */
+  minColumns: number;
+  /** A good default width on a board. */
+  suggestedColumns: number;
+  /** A complete, valid example node. */
+  example: ViewNode;
+};
+
+/**
+ * Guidance for choosing and sizing components. Shared by the MCP catalog tools (for agents)
+ * and the web app (resize limits), so both follow the same rules.
+ */
+export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
+  ProjectHeader: {
+    category: 'overview',
+    use: 'Top of an overview: name, status, summary, repository, current stage, overall progress. Use once per view, full width.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: { component: 'ProjectHeader' },
+  },
+  StatCards: {
+    category: 'overview',
+    use: 'A few headline counts (2–4). Each stat counts entities matching a query; `of` shows "x / total".',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'StatCards',
+      stats: [
+        {
+          label: 'Open',
+          query: { type: 'task', where: { status: { not: ['done', 'cancelled'] } } },
+        },
+        { label: 'Blocked', query: { type: 'task', where: { status: 'blocked' } }, tone: 'bad' },
+        {
+          label: 'Done',
+          query: { type: 'task', where: { status: 'done' } },
+          of: { type: 'task', where: { status: { not: 'cancelled' } } },
+          tone: 'good',
+        },
+      ],
+    },
+  },
+  ProgressRing: {
+    category: 'overview',
+    use: 'One percentage that matters, e.g. progress of the current stage. Narrow; pair it with a list beside it.',
+    minColumns: 3,
+    suggestedColumns: 4,
+    example: {
+      component: 'ProgressRing',
+      title: 'Current stage',
+      where: { stageId: '$currentStage' },
+    },
+  },
+  Callout: {
+    category: 'overview',
+    use: 'A short message the reader must not miss: a risk, a blocker, a key decision. Keep it to 1–3 sentences.',
+    minColumns: 3,
+    suggestedColumns: 12,
+    example: {
+      component: 'Callout',
+      tone: 'warning',
+      title: 'Release blocked',
+      body: 'Waiting on **API review**.',
+    },
+  },
+  Markdown: {
+    category: 'overview',
+    use: 'Prose that has no better structured form, or the project description (`source`). Prefer structured components.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: { component: 'Markdown', title: 'About', source: 'project.description' },
+  },
+  GoalTree: {
+    category: 'goals & scope',
+    use: 'Goals and sub-goals with their success criteria: why the project exists.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: { component: 'GoalTree', title: 'Goals' },
+  },
+  ScopeBoard: {
+    category: 'goals & scope',
+    use: 'What is in, maybe, and out of scope, with reasons. Good next to GoalTree.',
+    minColumns: 4,
+    suggestedColumns: 6,
+    example: { component: 'ScopeBoard', title: 'Scope' },
+  },
+  StageTracker: {
+    category: 'plan & time',
+    use: 'Where the project is: stages as steps with progress, current one highlighted. Full width works best.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: { component: 'StageTracker', title: 'Stages' },
+  },
+  Timeline: {
+    category: 'plan & time',
+    use: 'When things happen: stages on a time axis (needs start/target dates). Full width.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: { component: 'Timeline', title: 'Timeline' },
+  },
+  MilestoneList: {
+    category: 'plan & time',
+    use: 'Stages as a compact vertical list with dates and progress; fits a side column.',
+    minColumns: 3,
+    suggestedColumns: 4,
+    example: { component: 'MilestoneList', title: 'Milestones' },
+  },
+  KanbanBoard: {
+    category: 'work',
+    use: 'Tasks by status (or stage, assignee, priority). The default way to show work; people can drag cards.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'KanbanBoard',
+      title: 'Tasks',
+      filter: { where: { stageId: '$currentStage' } },
+    },
+  },
+  TaskTable: {
+    category: 'work',
+    use: 'Many tasks with details side by side (estimate, dependencies). Denser than a kanban.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'TaskTable',
+      title: 'All tasks',
+      columns: ['status', 'priority', 'stage', 'assignee', 'estimate'],
+    },
+  },
+  TaskChecklist: {
+    category: 'work',
+    use: 'A to-do list people tick off, e.g. tasks assigned to humans (`assigneeKind: "human"`).',
+    minColumns: 4,
+    suggestedColumns: 8,
+    example: { component: 'TaskChecklist', title: 'Your tasks', assigneeKind: 'human' },
+  },
+  DependencyGraph: {
+    category: 'work',
+    use: 'Why something is blocked or what order work must happen in: tasks linked by dependsOn.',
+    minColumns: 4,
+    suggestedColumns: 8,
+    example: {
+      component: 'DependencyGraph',
+      title: 'Dependencies',
+      filter: { where: { status: { not: 'done' } } },
+    },
+  },
+  AssigneeMatrix: {
+    category: 'work',
+    use: 'Who is on what: task counts per person/agent and status.',
+    minColumns: 4,
+    suggestedColumns: 6,
+    example: { component: 'AssigneeMatrix', title: 'Workload' },
+  },
+  ArtifactGallery: {
+    category: 'outputs',
+    use: 'Expected and delivered deliverables (docs, files, links).',
+    minColumns: 3,
+    suggestedColumns: 12,
+    example: { component: 'ArtifactGallery', title: 'Deliverables' },
+  },
+  DecisionLog: {
+    category: 'outputs',
+    use: 'Recent decisions and their status; the reasoning opens on click.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
+  },
+  ActivityFeed: {
+    category: 'outputs',
+    use: 'Recent changes: who changed what and why.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: { component: 'ActivityFeed', title: 'Recent activity', limit: 8 },
+  },
+  DataTable: {
+    category: 'data',
+    use: 'Any entity type with chosen columns, e.g. artifacts with kind, status, and stage; or tasks with due date and assignee. Use when no domain component shows the fields you need.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'DataTable',
+      title: 'Due this week',
+      query: {
+        type: 'task',
+        where: { dueDate: { gte: '$today', lte: '$today+7d' } },
+        sort: [{ field: 'dueDate' }],
+      },
+      columns: [
+        { field: 'title' },
+        { field: 'dueDate', label: 'Due' },
+        { field: 'assigneeId', label: 'Who' },
+        { field: 'stage.name', label: 'Stage' },
+      ],
+    },
+  },
+  CountChart: {
+    category: 'data',
+    use: 'How things are distributed: count of any entity type by any field (status, kind, stage, assignee). Good for "where is the work?" questions.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: {
+      component: 'CountChart',
+      title: 'Open tasks by stage',
+      query: { type: 'task', where: { status: { not: ['done', 'cancelled'] } } },
+      by: 'stage.name',
+    },
+  },
+  Stat: {
+    category: 'data',
+    use: 'One key number with context, e.g. overdue tasks, or the share of deliverables delivered. Pair several in a row.',
+    minColumns: 2,
+    suggestedColumns: 3,
+    example: {
+      component: 'Stat',
+      label: 'Overdue',
+      tone: 'bad',
+      query: {
+        type: 'task',
+        where: { dueDate: { lt: '$today' }, status: { not: ['done', 'cancelled'] } },
+      },
+    },
+  },
+  DataList: {
+    category: 'data',
+    use: 'A short list of anything with a few details, e.g. decisions still proposed, goals still open.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: {
+      component: 'DataList',
+      title: 'Open questions',
+      query: { type: 'decision', where: { status: 'proposed' } },
+      secondary: ['createdAt'],
+    },
+  },
+  Text: {
+    category: 'data',
+    use: 'A sentence or two with live numbers, as a headline or summary at the top of an answer.',
+    minColumns: 3,
+    suggestedColumns: 12,
+    example: {
+      component: 'Text',
+      content: '**${open}** tasks are open in ${stage}; **${late}** are overdue.',
+      values: {
+        open: {
+          count: {
+            type: 'task',
+            where: { stageId: '$currentStage', status: { not: ['done', 'cancelled'] } },
+          },
+        },
+        late: {
+          count: {
+            type: 'task',
+            where: { dueDate: { lt: '$today' }, status: { not: ['done', 'cancelled'] } },
+          },
+        },
+        stage: { project: 'currentStage' },
+      },
+    },
+  },
+  Tabs: {
+    category: 'layout',
+    use: 'Several alternative views of the same thing in one widget (e.g. Board / Table). Each tab holds components.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'Tabs',
+      tabs: [
+        { label: 'Board', children: [{ component: 'KanbanBoard' }] },
+        { label: 'Table', children: [{ component: 'TaskTable' }] },
+      ],
+    },
+  },
+  Grid: {
+    category: 'layout',
+    use: 'Rarely needed: a board already lays widgets out in columns. Only for side-by-side components inside Tabs.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'Grid',
+      columns: 2,
+      children: [{ component: 'GoalTree' }, { component: 'ScopeBoard' }],
+    },
+  },
+  Section: {
+    category: 'layout',
+    use: 'Rarely needed on a board: groups components under a heading inside Tabs.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: { component: 'Section', title: 'Planning', children: [{ component: 'StageTracker' }] },
+  },
+};
+
+/** How boards work, for agents composing views. */
+export const BOARD_GUIDE = `A view is a Board: a 12-column grid of widgets laid out left to right, top to bottom.
+Each widget is {id, w?, x?, h?, node}: a stable id, a width in columns (1–12, default 12), an optional start column (0–11; omit to flow), an optional minimum height in px (omit to fit content), and one catalog component as \`node\`.
+Widths in a row should add up to 12 (e.g. 4 + 8, 6 + 6). Never go below a component's minColumns.
+Components read live project data; never copy data into a view. Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
+- where values: exact value, array (any of), {not: value|array}, {exists: bool}, {contains: text}, or a range {gt|gte|lt|lte: value}
+- dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
+- fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"
+- \`anyOf: [where, where]\` adds an "or": at least one must also match
+- statuses and other option fields match by meaning too (e.g. "in_progress" matches a custom "In review"), and ranges follow the option order (priority {gte: "high"})
+Examples: overdue tasks {where: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}} · due this week {where: {dueDate: {gte: "$today", lte: "$today+7d"}}} · blocked or late {anyOf: [{status: "blocked"}, {"stage.targetDate": {lt: "$today"}, status: {not: "done"}}]}
+Good views answer one question each (e.g. "what's left this stage?"), lead with the most important widget, and use 3–8 widgets.`;

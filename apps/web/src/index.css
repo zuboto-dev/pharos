@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+/* Dark mode follows the `dark` class on <html>, set from the theme switch (System = OS setting). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+  }
+}
+
+/* Compact prose styles for rendered markdown. */
+@layer components {
+  .md {
+    @apply text-sm leading-relaxed text-neutral-700 dark:text-neutral-300;
+  }
+  .md > * + * {
+    @apply mt-2;
+  }
+  .md h1,
+  .md h2,
+  .md h3,
+  .md h4 {
+    @apply mt-4 font-semibold text-neutral-900 first:mt-0 dark:text-neutral-100;
+  }
+  .md h1 {
+    @apply text-lg;
+  }
+  .md h2 {
+    @apply text-base;
+  }
+  .md ul {
+    @apply list-disc pl-5;
+  }
+  .md ol {
+    @apply list-decimal pl-5;
+  }
+  .md a {
+    @apply text-sky-600 underline underline-offset-2 dark:text-sky-400;
+  }
+  .md code {
+    @apply rounded bg-neutral-100 px-1 py-0.5 font-mono text-[0.85em] dark:bg-neutral-800;
+  }
+  .md pre {
+    @apply overflow-x-auto rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800;
+  }
+  .md pre code {
+    @apply bg-transparent p-0;
+  }
+  .md blockquote {
+    @apply border-l-2 border-neutral-300 pl-3 text-neutral-500 dark:border-neutral-700;
+  }
+  .md table {
+    @apply w-full text-left;
+  }
+  .md th,
+  .md td {
+    @apply border-b border-neutral-200 px-2 py-1 dark:border-neutral-800;
+  }
+}

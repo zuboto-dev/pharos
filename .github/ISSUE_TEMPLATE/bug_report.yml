@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a reproducible problem in Pharos.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, follow SECURITY.md in the repository root.
+        Use synthetic data. Do not attach project databases, credentials, private paths, or agent logs containing personal data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include a small example or view spec with synthetic data, if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include your Pharos commit, OS, Node.js and pnpm versions, browser, and MCP client if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or error output
+      description: Optional. Remove personal data, credentials, and local paths before sharing.

@@ -1,0 +1,657 @@
+{
+  "project": {
+    "id": "prj_3155a488397b",
+    "type": "project",
+    "data": {
+      "name": "Pharos",
+      "repositoryId": "repo_22f01d5218b4",
+      "summary": "Generative UI project management for humans working with AI agents",
+      "description": "Agents connect over **MCP**, store structured project data, and compose views from a component catalog.\n\n- Structured data first, UI second\n- Compose, don't draw",
+      "status": "active",
+      "currentStageId": "stg_ce4472a75f91"
+    },
+    "createdAt": "2026-10-05T23:11:06.622Z",
+    "updatedAt": "2026-10-05T23:11:06.622Z",
+    "createdRev": 1,
+    "updatedRev": 1
+  },
+  "repository": {
+    "id": "repo_22f01d5218b4",
+    "type": "repository",
+    "data": {
+      "name": "pharos",
+      "path": "/workspace/pharos"
+    },
+    "createdAt": "2026-10-05T23:11:06.622Z",
+    "updatedAt": "2026-10-05T23:11:06.622Z",
+    "createdRev": 1,
+    "updatedRev": 1
+  },
+  "assignees": [
+    {
+      "id": "asg_dc7d702b0bcf",
+      "type": "assignee",
+      "data": {
+        "name": "Alex",
+        "kind": "human"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "asg_f5efff73d022",
+      "type": "assignee",
+      "data": {
+        "name": "Claude Code",
+        "kind": "agent"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal_963b4788afb3",
+      "type": "goal",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Agents can describe a project visually",
+        "successCriteria": [
+          "An agent builds a useful view from catalog_list alone",
+          "Views render live without reload"
+        ],
+        "status": "open",
+        "order": 0
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "goal_51251a3397d6",
+      "type": "goal",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "parentId": "goal_963b4788afb3",
+        "title": "Catalog covers common PM views",
+        "successCriteria": [],
+        "status": "achieved",
+        "order": 1
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "goal_4bca27dd1224",
+      "type": "goal",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "parentId": "goal_963b4788afb3",
+        "title": "Answer questions with views",
+        "successCriteria": [],
+        "status": "open",
+        "order": 2
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "goal_4eefb382dc5b",
+      "type": "goal",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Every change is traceable",
+        "successCriteria": ["Revisions record author + reason", "Revert with conflict detection"],
+        "status": "achieved",
+        "order": 3
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "scopeItems": [
+    {
+      "id": "scope_848ec8ad7a5d",
+      "type": "scope_item",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "MCP server",
+        "kind": "in",
+        "order": 0
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "scope_0b16dd57ac5c",
+      "type": "scope_item",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Component catalog + JSON view specs",
+        "kind": "in",
+        "order": 1
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "scope_45da88628bf0",
+      "type": "scope_item",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Git-like revision history",
+        "kind": "in",
+        "order": 2
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "scope_1dcd4ce6e45d",
+      "type": "scope_item",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Built-in chat panel",
+        "kind": "maybe",
+        "rationale": "Agents connect over MCP instead, for now",
+        "order": 3
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "scope_ca232ce9ab48",
+      "type": "scope_item",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Multi-user accounts",
+        "kind": "out",
+        "rationale": "Local-first v1",
+        "order": 4
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "stages": [
+    {
+      "id": "stg_27e4628464a6",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M0 Foundations",
+        "status": "done",
+        "startDate": "2026-09-28",
+        "targetDate": "2026-10-02",
+        "order": 0
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "stg_9cec7f7852f5",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M1 Data + MCP",
+        "status": "done",
+        "startDate": "2026-10-02",
+        "targetDate": "2026-10-05",
+        "order": 1
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "stg_ce4472a75f91",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M2 Catalog + renderer",
+        "status": "active",
+        "startDate": "2026-10-05",
+        "targetDate": "2026-10-12",
+        "order": 2
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "stg_8f56362ad888",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M3 Generative views",
+        "status": "planned",
+        "startDate": "2026-10-12",
+        "targetDate": "2026-10-19",
+        "order": 3
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "stg_c169f860aca8",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M4 Ask & explain",
+        "status": "planned",
+        "targetDate": "2026-10-26",
+        "order": 4
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "stg_5d73e9706213",
+      "type": "stage",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "M5 Polish + dogfood",
+        "status": "planned",
+        "order": 5
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_a9f652e80406",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_ce4472a75f91",
+        "title": "View spec format + queries",
+        "status": "done",
+        "priority": "medium",
+        "assigneeId": "asg_f5efff73d022",
+        "dependsOn": [],
+        "order": 0
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_5a03a9b58b2d",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_ce4472a75f91",
+        "title": "Catalog components",
+        "status": "in_progress",
+        "priority": "high",
+        "assigneeId": "asg_f5efff73d022",
+        "dependsOn": ["task_a9f652e80406"],
+        "estimate": "1d",
+        "order": 1
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_8170b1225b8d",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_ce4472a75f91",
+        "title": "Renderer with error boundaries",
+        "status": "done",
+        "priority": "medium",
+        "assigneeId": "asg_f5efff73d022",
+        "dependsOn": ["task_a9f652e80406"],
+        "order": 2
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_a9f9187501d1",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_ce4472a75f91",
+        "title": "Default Overview view",
+        "status": "in_progress",
+        "priority": "medium",
+        "assigneeId": "asg_f5efff73d022",
+        "dependsOn": ["task_5a03a9b58b2d", "task_8170b1225b8d"],
+        "order": 3
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_3ecb27d34f4d",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_ce4472a75f91",
+        "title": "Review the UI in the browser",
+        "status": "todo",
+        "priority": "medium",
+        "assigneeId": "asg_dc7d702b0bcf",
+        "dependsOn": ["task_a9f9187501d1"],
+        "order": 4
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_c7a2046f45e7",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_8f56362ad888",
+        "title": "catalog_list / catalog_describe tools",
+        "status": "todo",
+        "priority": "medium",
+        "dependsOn": ["task_5a03a9b58b2d"],
+        "order": 5
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_d09750cef32c",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_8f56362ad888",
+        "title": "SSE live updates",
+        "status": "blocked",
+        "priority": "urgent",
+        "dependsOn": ["task_a9f9187501d1"],
+        "order": 6
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_d41c6c6d6408",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_c169f860aca8",
+        "title": "Answer views",
+        "status": "todo",
+        "priority": "low",
+        "dependsOn": [],
+        "order": 7
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "task_d285789146cb",
+      "type": "task",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "stageId": "stg_9cec7f7852f5",
+        "title": "Revision store",
+        "status": "done",
+        "priority": "medium",
+        "assigneeId": "asg_f5efff73d022",
+        "dependsOn": [],
+        "order": 8
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "art_68d3bcbbe10b",
+      "type": "artifact",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "docs/SCOPE.md",
+        "kind": "doc",
+        "status": "delivered",
+        "uri": "docs/SCOPE.md",
+        "stageId": "stg_27e4628464a6"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "art_41ae8bd418f4",
+      "type": "artifact",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "MCP server",
+        "kind": "file",
+        "status": "delivered",
+        "uri": "apps/server/src/mcp.ts",
+        "stageId": "stg_9cec7f7852f5"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "art_a7efca2542a0",
+      "type": "artifact",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Component catalog",
+        "kind": "file",
+        "status": "in_progress",
+        "stageId": "stg_ce4472a75f91",
+        "taskId": "task_5a03a9b58b2d"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "decisions": [
+    {
+      "id": "dec_979ef0588336",
+      "type": "decision",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Use node:sqlite instead of Drizzle",
+        "body": "Drizzle has no driver for the built-in module; entities are stored as validated JSON anyway.",
+        "status": "accepted"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "dec_e5fd77ba35fa",
+      "type": "decision",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Default views follow templates",
+        "body": "Views with `template` render the latest template until an agent sets a custom spec.",
+        "status": "accepted"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "dec_cb06c24ad739",
+      "type": "decision",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "title": "Add a chat panel to the UI?",
+        "status": "proposed"
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    }
+  ],
+  "views": [
+    {
+      "id": "view_9c1dab0b6e22",
+      "type": "view",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "Overview",
+        "template": "overview",
+        "pinned": true,
+        "order": 0
+      },
+      "createdAt": "2026-10-05T23:11:06.622Z",
+      "updatedAt": "2026-10-05T23:11:06.622Z",
+      "createdRev": 1,
+      "updatedRev": 1
+    },
+    {
+      "id": "view_dfc5ea290acf",
+      "type": "view",
+      "data": {
+        "projectId": "prj_3155a488397b",
+        "name": "Delivery",
+        "description": "Timeline, dependencies, and who is on what",
+        "spec": {
+          "component": "Section",
+          "children": [
+            {
+              "component": "Callout",
+              "title": "SSE live updates are blocked",
+              "tone": "warning",
+              "body": "Waiting on the default Overview view. Unblocks **M3**."
+            },
+            {
+              "component": "Timeline",
+              "title": "Timeline"
+            },
+            {
+              "component": "Grid",
+              "columns": 3,
+              "children": [
+                {
+                  "component": "DependencyGraph",
+                  "title": "Dependencies",
+                  "span": 2
+                },
+                {
+                  "component": "MilestoneList",
+                  "title": "Milestones"
+                }
+              ]
+            },
+            {
+              "component": "Tabs",
+              "tabs": [
+                {
+                  "label": "Table",
+                  "children": [
+                    {
+                      "component": "TaskTable",
+                      "columns": [
+                        "status",
+                        "priority",
+                        "stage",
+                        "assignee",
+                        "estimate",
+                        "dependsOn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "label": "By assignee",
+                  "children": [
+                    {
+                      "component": "KanbanBoard",
+                      "groupBy": "assignee"
+                    },
+                    {
+                      "component": "AssigneeMatrix",
+                      "title": "Load"
+                    }
+                  ]
+                },
+                {
+                  "label": "Artifacts",
+                  "children": [
+                    {
+                      "component": "ArtifactGallery"
+                    },
+                    {
+                      "component": "Markdown",
+                      "title": "About",
+                      "source": "project.description"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "pinned": false,
+        "order": 1
+      },
+      "createdAt": "2026-10-05T23:11:06.683Z",
+      "updatedAt": "2026-10-05T23:11:06.683Z",
+      "createdRev": 2,
+      "updatedRev": 2
+    }
+  ],
+  "requests": []
+}

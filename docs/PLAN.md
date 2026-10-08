@@ -25,7 +25,8 @@ reuse** workflow. Keep the authoritative project store, MCP access and revision 
 **G1 is current.** Stages express outcome gates; recorded task dependencies determine what can
 overlap. No delivery dates are assigned by this plan. Since October 7, 2026 every delivery task in the
 Pharos project is a work item (W1–W17) or one of its sub-tasks (Wn.m), each assigned to a model (Opus 5.5,
-Sonnet 5.5, GPT-6.1-Sol or GPT-6-Astra) with a required reasoning level and acceptance criteria; see the
+Sonnet 5.5, GPT-6.1-Sol or GPT-6-Astra) with a required reasoning level, or to the owner for approvals,
+usability walkthroughs and the release call, each with acceptance criteria; see the
 decision “Assign roadmap work to four models with required reasoning levels”. Compare factual correctness,
 task completion, correction burden, time to useful content, total latency and cost. Choose numerical
 improvement targets and budgets in G1 before the experiment; preserve correctness and prevent silent

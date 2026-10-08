@@ -41,7 +41,8 @@ Open the web app and create a project, or connect your agent and ask it to set o
 
 If Claude Code is installed, asking a question in the web app starts an agent automatically.
 To start with automatic answering disabled, use `PHAROS_AGENT_COMMAND=off pnpm dev` in a POSIX
-shell. You can also pause answering in **Settings**. The automatic runner uses a POSIX shell;
+shell. You can also pause answering in **Settings**; a pause is saved in the database, so it survives
+restarts until you resume. The automatic runner uses a POSIX shell;
 on Windows, use WSL for this workflow.
 
 ### Keep it running (macOS)
@@ -56,10 +57,11 @@ pnpm service install
 That builds Pharos, then starts the server at <http://localhost:4300>, which also serves the web
 app, at login and restarts it if it ever exits. Its log is `~/.pharos/server.log`. Use
 `pnpm service status`, `stop`, `start`, `restart`, `log`, and `uninstall` to manage it, and re-run
-`install` after pulling changes so it runs the latest build. Configuration variables set while
-installing are stored in the service, and links that agents share point at the service's own
-address unless `PHAROS_WEB_URL` says otherwise. Stop the service before `pnpm dev`, since both
-listen on port 4300. On other systems, run `pnpm build` and then `pnpm --filter @pharos/server start`
+`install` after pulling changes so it runs the latest build. `install` stores only `PORT`,
+`PHAROS_DB`, `PHAROS_AGENT_COMMAND`, `PHAROS_AGENT_LOG`, and `PHAROS_WEB_URL` from its environment
+(any other variable your command needs must be set by the command itself), and links that agents
+share point at the service's own address unless `PHAROS_WEB_URL` says otherwise. Stop the service
+before `pnpm dev`, since both listen on port 4300. On other systems, run `pnpm build` and then `pnpm --filter @pharos/server start`
 under your own supervisor; the built server serves the web app too.
 
 ## Connect your agent
@@ -102,8 +104,10 @@ url = "http://localhost:4300/mcp"
 }
 ```
 
-The stdio process uses the same database as the web server, and the web app picks up its changes
-within a second.
+The stdio process shares the web server's database only if both resolve the same path: set the
+same `PHAROS_DB` (an absolute path) in the client's `env` if the server doesn't use the default.
+Changes it makes are found by polling about once a second, so the web app normally shows them
+within a few seconds.
 
 Then try asking your agent:
 
@@ -131,19 +135,37 @@ in its environment. Output goes to `~/.pharos/agent.log`. Only one run happens a
 
 ## Configuration
 
-| Variable               | Default                  | Purpose                                         |
-| ---------------------- | ------------------------ | ----------------------------------------------- |
-| `PHAROS_DB`            | `~/.pharos/pharos.db`    | Database file                                   |
-| `PORT`                 | `4300`                   | Server port                                     |
-| `PHAROS_WEB_URL`       | `http://localhost:5173`  | Web app address used in links agents share      |
-| `PHAROS_SERVER_URL`    | `http://localhost:4300`  | Server the web app's dev proxy talks to         |
-| `PHAROS_AGENT_COMMAND` | Claude Code if installed | Command that answers questions (`off` disables) |
-| `PHAROS_AGENT_LOG`     | `~/.pharos/agent.log`    | Log for that command                            |
+| Variable               | Default                  | Purpose                                                 |
+| ---------------------- | ------------------------ | ------------------------------------------------------- |
+| `PHAROS_DB`            | `~/.pharos/pharos.db`    | Database file                                           |
+| `PORT`                 | `4300`                   | Server port                                             |
+| `PHAROS_WEB_URL`       | `http://localhost:5173`  | Web app address in shared links (built server: its own) |
+| `PHAROS_SERVER_URL`    | `http://localhost:4300`  | Server the web app's dev proxy talks to                 |
+| `PHAROS_AGENT_COMMAND` | Claude Code if installed | Command that answers questions (`off` disables)         |
+| `PHAROS_AGENT_LOG`     | `~/.pharos/agent.log`    | Log for that command                                    |
 
 Set configuration variables in the environment before starting Pharos; it does not automatically
 load a root `.env` file. The server only accepts requests from localhost. Keep the web app and
 server local: v0.1 has no authentication. See [SECURITY.md](SECURITY.md) for the trust model and
 vulnerability reporting.
+
+## Troubleshooting
+
+- **"Port 4300 is already in use"**: Pharos (maybe the service, see `pnpm service status`) is
+  already running. Stop it, or start this one with another `PORT`. With `pnpm dev`, also set
+  `PHAROS_SERVER_URL` to the new address so the web app's proxy follows, for example
+  `PORT=4400 PHAROS_SERVER_URL=http://localhost:4400 pnpm dev`. The web app stays on 5173, or the
+  next free port if that is taken. Update the MCP URL your agent uses to match.
+- **The agent can't connect**: the HTTP server must be running at the URL you registered. A stdio
+  client starts its own process and uses the database that process resolves, so a project that
+  seems to be missing usually means a different `PHAROS_DB`.
+- **Questions aren't answered**: **Settings** shows why. Answering is off with
+  `PHAROS_AGENT_COMMAND=off`, unavailable when Claude Code isn't installed (install it or set
+  your own command), or paused (resume it there). Output of the command is in
+  `~/.pharos/agent.log` (or `PHAROS_AGENT_LOG`); the service's own log is `~/.pharos/server.log`.
+- **Changes from another process don't appear**: the web app reloads on a server event, and
+  changes written by another process (stdio) are noticed by polling about once a second. Reload
+  the page if the live connection was interrupted.
 
 ## Development
 

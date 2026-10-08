@@ -69,7 +69,7 @@ views as `view` entities: a view can use a built-in `template`, while a saved `s
 view and takes precedence. Change a template when changing the shared default; use the MCP tools
 for project-specific tabs. `view_create` creates a persistent tab, `view_update` changes one or
 resets it to its template, and `view_answer` creates an answer view that expires after seven days
-unless kept.
+by default (`expiresInDays`, 1 to 90) unless kept.
 
 When designing or editing a project view:
 

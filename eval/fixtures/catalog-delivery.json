@@ -1,0 +1,645 @@
+{
+  "version": "1.0.0",
+  "today": "2026-10-07",
+  "dateSemantics": "Use fixed today 2026-10-07. The evaluation week is the UTC calendar week Monday 2026-10-05 through Sunday 2026-10-11, inclusive.",
+  "message": "Load the synthetic Catalog delivery evaluation dataset.",
+  "expected": {
+    "counts": {
+      "repository": 1,
+      "project": 1,
+      "assignee": 2,
+      "goal": 2,
+      "scope_item": 2,
+      "stage": 4,
+      "task": 10,
+      "artifact": 2,
+      "decision": 1,
+      "view": 4,
+      "request": 3
+    },
+    "overdue": ["cd_explicit_block", "cd_overdue_docs"],
+    "dueWeek": [
+      "cd_explicit_block",
+      "cd_overdue_docs",
+      "cd_today_prerequisite",
+      "cd_integration",
+      "cd_week_validation"
+    ],
+    "explicitlyBlocked": ["cd_explicit_block"],
+    "dependencyObstructed": ["cd_integration", "cd_later_smoke"],
+    "emptyStage": "cd_verification"
+  },
+  "operations": [
+    {
+      "op": "create",
+      "type": "repository",
+      "ref": "cd_repo",
+      "data": {
+        "name": "catalog-ui",
+        "description": "Synthetic repository record for catalog delivery evaluation.",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "assignee",
+      "ref": "cd_owner_role",
+      "data": { "name": "Owner role", "kind": "human", "description": "Synthetic human role." }
+    },
+    {
+      "op": "create",
+      "type": "assignee",
+      "ref": "cd_planning_agent",
+      "data": {
+        "name": "Planning agent",
+        "kind": "agent",
+        "description": "Synthetic planning role."
+      }
+    },
+    {
+      "op": "create",
+      "type": "project",
+      "ref": "cd_project",
+      "data": {
+        "name": "Catalog delivery",
+        "repositoryId": "$cd_repo",
+        "summary": "Deliver a stable component catalog and evaluate project risk views.",
+        "description": "A synthetic Pharos-style software project with custom status and priority options. Dates are scored against the fixture's fixed today of 2026-10-07.",
+        "status": "active",
+        "options": {
+          "task.status": [
+            { "value": "queued", "label": "Queued", "meaning": "todo" },
+            { "value": "building", "label": "Building", "meaning": "in_progress" },
+            { "value": "review", "label": "In review", "meaning": "in_progress" },
+            { "value": "waiting", "label": "Waiting", "meaning": "blocked" },
+            { "value": "accepted", "label": "Accepted", "meaning": "done" },
+            { "value": "dropped", "label": "Dropped", "meaning": "cancelled" }
+          ],
+          "task.priority": [
+            { "value": "routine", "label": "Routine", "meaning": "low" },
+            { "value": "normal", "label": "Normal", "meaning": "medium" },
+            { "value": "important", "label": "Important", "meaning": "high" },
+            { "value": "critical", "label": "Critical", "meaning": "urgent" }
+          ],
+          "stage.status": [
+            { "value": "next", "label": "Next", "meaning": "planned" },
+            { "value": "delivery", "label": "Delivery", "meaning": "active" },
+            { "value": "archive_complete", "label": "Complete", "meaning": "done" },
+            { "value": "archive_superseded", "label": "Superseded", "meaning": "skipped" }
+          ]
+        },
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "cd_foundation",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Foundation",
+        "description": "Completed groundwork for the current delivery stage.",
+        "status": "archive_complete",
+        "startDate": "2026-09-28",
+        "targetDate": "2026-10-03",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "cd_delivery",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Stage 2: Catalog delivery",
+        "description": "Current work to improve catalog behavior and its evaluation views.",
+        "status": "delivery",
+        "startDate": "2026-10-05",
+        "targetDate": "2026-10-16",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "cd_verification",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Verification",
+        "description": "Future validation stage, intentionally empty in this dataset.",
+        "status": "next",
+        "startDate": "2026-10-19",
+        "targetDate": "2026-10-23",
+        "order": 3
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "cd_superseded",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Superseded prototype",
+        "description": "A prior approach retained as a skipped stage for comparison.",
+        "status": "archive_superseded",
+        "startDate": "2026-09-21",
+        "targetDate": "2026-10-02",
+        "order": 4
+      }
+    },
+    {
+      "op": "update",
+      "type": "project",
+      "id": "$cd_project",
+      "data": { "currentStageId": "$cd_delivery" }
+    },
+    {
+      "op": "create",
+      "type": "goal",
+      "ref": "cd_goal_delivery",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Ship a reliable catalog",
+        "description": "Make project views predictable as the component catalog grows.",
+        "successCriteria": [
+          "Catalog options retain their standard meanings.",
+          "Evaluation views show the expected risks."
+        ],
+        "status": "open",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "goal",
+      "ref": "cd_goal_reliability",
+      "data": {
+        "projectId": "$cd_project",
+        "parentId": "$cd_goal_delivery",
+        "title": "Preserve option meaning",
+        "description": "Custom labels should keep progress, grouping, and actions consistent.",
+        "successCriteria": [
+          "Both in-progress labels count as work in progress.",
+          "Blocked and dependency-obstructed work remain visible."
+        ],
+        "status": "open",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "scope_item",
+      "ref": "cd_scope_catalog",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Catalog status and priority behavior",
+        "kind": "in",
+        "rationale": "The evaluation should exercise project-specific option labels.",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "scope_item",
+      "ref": "cd_scope_external",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "External deployment automation",
+        "kind": "out",
+        "rationale": "Deployment behavior is outside this fixture's evaluation scope.",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_foundation_schema",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_foundation",
+        "title": "Define catalog data shape",
+        "description": "Record the fields needed by catalog-backed views.",
+        "status": "accepted",
+        "priority": "important",
+        "assigneeId": "$cd_planning_agent",
+        "dependsOn": [],
+        "estimate": "3 points",
+        "dueDate": "2026-10-01",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_explicit_block",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Resolve catalog review question",
+        "description": "Explicitly waiting for a review decision; this task has no dependency edge.",
+        "status": "waiting",
+        "priority": "critical",
+        "assigneeId": "$cd_owner_role",
+        "dependsOn": [],
+        "estimate": "1 day",
+        "dueDate": "2026-10-06",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_today_prerequisite",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Implement option editor",
+        "description": "In-progress prerequisite with a due date on fixed today.",
+        "status": "building",
+        "priority": "important",
+        "assigneeId": "$cd_planning_agent",
+        "dependsOn": ["$cd_foundation_schema"],
+        "estimate": "5 points",
+        "dueDate": "2026-10-07",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_integration",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Integrate status controls",
+        "description": "Queued work that is obstructed by the unfinished option editor.",
+        "status": "queued",
+        "priority": "important",
+        "assigneeId": "$cd_owner_role",
+        "dependsOn": ["$cd_today_prerequisite"],
+        "estimate": "2 days",
+        "dueDate": "2026-10-10",
+        "order": 3
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_overdue_docs",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Document rollback path",
+        "description": "Open work past its due date, independent of explicit blocking.",
+        "status": "queued",
+        "priority": "normal",
+        "assigneeId": "$cd_owner_role",
+        "dependsOn": [],
+        "estimate": "2 hours",
+        "dueDate": "2026-10-06",
+        "order": 4
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_week_validation",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Validate option meanings",
+        "description": "Due three days after fixed today and dependent on completed groundwork.",
+        "status": "review",
+        "priority": "important",
+        "assigneeId": "$cd_planning_agent",
+        "dependsOn": ["$cd_foundation_schema"],
+        "estimate": "1 day",
+        "dueDate": "2026-10-10",
+        "order": 5
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_later_smoke",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_delivery",
+        "title": "Run cross-project smoke checks",
+        "description": "Later work due ten days after fixed today and dependent on unfinished integration work.",
+        "status": "queued",
+        "priority": "normal",
+        "assigneeId": "$cd_planning_agent",
+        "dependsOn": ["$cd_integration"],
+        "estimate": "1 day",
+        "dueDate": "2026-10-17",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_completed_overdue_control",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_foundation",
+        "title": "Record baseline import",
+        "description": "Completed overdue control; it should not count as open overdue work.",
+        "status": "accepted",
+        "priority": "routine",
+        "assigneeId": "$cd_planning_agent",
+        "dependsOn": [],
+        "dueDate": "2026-10-03",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_cancelled_overdue_control",
+      "data": {
+        "projectId": "$cd_project",
+        "stageId": "$cd_superseded",
+        "title": "Retire superseded token adapter",
+        "description": "Cancelled overdue control; it should not count as open overdue work.",
+        "status": "dropped",
+        "priority": "routine",
+        "dependsOn": [],
+        "dueDate": "2026-10-04",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "cd_unassigned_checklist",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Prepare release checklist",
+        "description": "Undated, unassigned work with no stage.",
+        "status": "queued",
+        "priority": "normal",
+        "dependsOn": [],
+        "order": 6
+      }
+    },
+    {
+      "op": "create",
+      "type": "artifact",
+      "ref": "cd_expected_notes",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Catalog review notes",
+        "description": "Expected notes for resolving the explicit review blocker.",
+        "kind": "doc",
+        "status": "expected",
+        "stageId": "$cd_delivery",
+        "taskId": "$cd_explicit_block"
+      }
+    },
+    {
+      "op": "create",
+      "type": "artifact",
+      "ref": "cd_delivered_schema",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Catalog data shape",
+        "description": "Delivered result linked to completed groundwork.",
+        "kind": "design",
+        "status": "delivered",
+        "stageId": "$cd_foundation",
+        "taskId": "$cd_foundation_schema"
+      }
+    },
+    {
+      "op": "create",
+      "type": "decision",
+      "ref": "cd_decision_rollout",
+      "data": {
+        "projectId": "$cd_project",
+        "title": "Keep option labels project-specific",
+        "body": "Custom labels help each project speak clearly. Preserve their built-in meanings so progress counts, task actions, and evaluation filters stay consistent.",
+        "status": "accepted",
+        "decidedById": "$cd_owner_role",
+        "decisionDate": "2026-10-06"
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "cd_saved_board",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Catalog risk board",
+        "description": "Saved working board with fixed-date risk counts and an intentionally empty completed-stage control.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "stage-progress",
+              "w": 5,
+              "x": 0,
+              "h": 240,
+              "node": { "component": "StageTracker", "title": "Delivery stages" }
+            },
+            {
+              "id": "blocked-count",
+              "w": 3,
+              "x": 5,
+              "h": 160,
+              "node": {
+                "component": "Stat",
+                "title": "Explicitly waiting",
+                "label": "Blocked tasks",
+                "query": {
+                  "type": "task",
+                  "where": { "status": "waiting", "stageId": "$currentStage" }
+                },
+                "tone": "warning"
+              }
+            },
+            {
+              "id": "stage-work",
+              "w": 8,
+              "x": 0,
+              "h": 390,
+              "node": {
+                "component": "TaskChecklist",
+                "title": "Current stage work",
+                "filter": { "where": { "stageId": "$currentStage" } },
+                "assigneeKind": "human",
+                "hideDone": true
+              }
+            },
+            {
+              "id": "dependency-map",
+              "w": 12,
+              "h": 460,
+              "node": {
+                "component": "DependencyGraph",
+                "title": "Current stage dependencies",
+                "filter": { "where": { "stageId": "$currentStage" } }
+              }
+            },
+            {
+              "id": "foundation-risk-control",
+              "w": 6,
+              "x": 6,
+              "h": 210,
+              "node": {
+                "component": "DataTable",
+                "title": "Blocked or overdue work in completed Foundation",
+                "query": {
+                  "type": "task",
+                  "where": { "stage.name": "Foundation" },
+                  "anyOf": [
+                    { "status": "waiting" },
+                    {
+                      "status": ["queued", "building", "review", "waiting"],
+                      "dueDate": { "lt": "2026-10-07" }
+                    }
+                  ]
+                },
+                "columns": [{ "field": "status" }, { "field": "dueDate" }]
+              }
+            }
+          ]
+        },
+        "pinned": true,
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "cd_answer_risk",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Current catalog risks",
+        "description": "Temporary answer that combines explicit blocker, overdue table, and dependency context.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "answer-blocked-stat",
+              "w": 4,
+              "h": 150,
+              "node": {
+                "component": "Stat",
+                "label": "Explicitly waiting",
+                "query": {
+                  "type": "task",
+                  "where": { "status": "waiting", "stageId": "$currentStage" }
+                },
+                "tone": "warning"
+              }
+            },
+            {
+              "id": "answer-overdue-table",
+              "w": 8,
+              "h": 300,
+              "node": {
+                "component": "DataTable",
+                "title": "Open work past fixed today",
+                "query": {
+                  "type": "task",
+                  "where": {
+                    "stageId": "$currentStage",
+                    "status": ["queued", "building", "review", "waiting"],
+                    "dueDate": { "lt": "2026-10-07" }
+                  }
+                },
+                "columns": [
+                  { "field": "title" },
+                  { "field": "status" },
+                  { "field": "dueDate" },
+                  { "field": "assignee.name", "label": "Role" }
+                ]
+              }
+            },
+            {
+              "id": "answer-dependencies",
+              "w": 12,
+              "h": 440,
+              "node": {
+                "component": "DependencyGraph",
+                "title": "Current stage dependencies",
+                "filter": { "where": { "stageId": "$currentStage" } }
+              }
+            }
+          ]
+        },
+        "pinned": false,
+        "kind": "answer",
+        "question": "What is holding up the current catalog delivery?",
+        "expiresAt": "2026-10-14T00:00:00.000Z",
+        "order": 3
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "cd_expired_answer",
+      "data": {
+        "projectId": "$cd_project",
+        "name": "Expired catalog answer",
+        "description": "Expired answer kept as a reuse-exclusion control.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "expired-control",
+              "node": {
+                "component": "Callout",
+                "tone": "info",
+                "body": "This synthetic answer has expired."
+              }
+            }
+          ]
+        },
+        "pinned": false,
+        "kind": "answer",
+        "question": "What did the previous catalog pass show?",
+        "expiresAt": "2026-10-06T00:00:00.000Z",
+        "order": 4
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "cd_open_request",
+      "data": {
+        "projectId": "$cd_project",
+        "question": "What is blocking the current catalog delivery?",
+        "about": "Catalog risk board current stage work widget",
+        "viewId": "$cd_saved_board",
+        "widgetId": "stage-work",
+        "status": "open"
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "cd_answered_request",
+      "data": {
+        "projectId": "$cd_project",
+        "question": "What is holding up the current catalog delivery?",
+        "about": "Current stage delivery review",
+        "viewId": "$cd_saved_board",
+        "answerViewId": "$cd_answer_risk",
+        "status": "answered"
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "cd_dismissed_request",
+      "data": {
+        "projectId": "$cd_project",
+        "question": "Can the retired prototype be restored?",
+        "about": "Superseded prototype stage",
+        "status": "dismissed"
+      }
+    }
+  ]
+}

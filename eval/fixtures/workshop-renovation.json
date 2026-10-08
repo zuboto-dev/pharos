@@ -1,0 +1,481 @@
+{
+  "version": "1.0.0",
+  "today": "2026-10-07",
+  "dateSemantics": "Use fixed today 2026-10-07. The evaluation week is the UTC calendar week Monday 2026-10-05 through Sunday 2026-10-11, inclusive.",
+  "message": "Load the synthetic Workshop renovation evaluation dataset.",
+  "expected": {
+    "counts": {
+      "project": 1,
+      "assignee": 2,
+      "goal": 1,
+      "scope_item": 2,
+      "stage": 3,
+      "task": 7,
+      "artifact": 2,
+      "decision": 1,
+      "view": 4,
+      "request": 3
+    },
+    "overdue": ["wr_material_order", "wr_fit_lighting"],
+    "dueWeek": ["wr_material_order", "wr_fit_lighting", "wr_painting"],
+    "explicitlyBlocked": ["wr_fit_lighting"],
+    "dependencyObstructed": ["wr_fit_lighting", "wr_inspection_booking"],
+    "emptyStage": "wr_inspection"
+  },
+  "operations": [
+    {
+      "op": "create",
+      "type": "assignee",
+      "ref": "wr_owner_role",
+      "data": { "name": "Owner role", "kind": "human", "description": "Synthetic human role." }
+    },
+    {
+      "op": "create",
+      "type": "assignee",
+      "ref": "wr_scheduling_agent",
+      "data": {
+        "name": "Scheduling agent",
+        "kind": "agent",
+        "description": "Synthetic planning role."
+      }
+    },
+    {
+      "op": "create",
+      "type": "project",
+      "ref": "wr_project",
+      "data": {
+        "name": "Workshop renovation",
+        "summary": "Prepare a small shared workshop for safe, reliable use.",
+        "description": "A synthetic facilities project. Work packages are tasks and phases are stages; dates use fixed today 2026-10-07.",
+        "status": "active",
+        "options": {
+          "task.status": [
+            { "value": "queued", "label": "Queued", "meaning": "todo" },
+            { "value": "on_site", "label": "On site", "meaning": "in_progress" },
+            {
+              "value": "waiting_materials",
+              "label": "Waiting for materials",
+              "meaning": "blocked"
+            },
+            { "value": "signed_off", "label": "Signed off", "meaning": "done" },
+            { "value": "cancelled", "label": "Cancelled", "meaning": "cancelled" }
+          ],
+          "task.priority": [
+            { "value": "routine", "label": "Routine", "meaning": "low" },
+            { "value": "urgent", "label": "Urgent", "meaning": "urgent" }
+          ]
+        },
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "wr_preparation",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Preparation",
+        "description": "Measurement and groundwork are complete.",
+        "status": "done",
+        "startDate": "2026-09-28",
+        "targetDate": "2026-10-02",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "wr_installation",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Installation",
+        "description": "Current phase for lighting, fitting, and closeout work.",
+        "status": "active",
+        "startDate": "2026-10-05",
+        "targetDate": "2026-10-16",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "stage",
+      "ref": "wr_inspection",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Inspection",
+        "description": "Future stage intentionally empty in this dataset.",
+        "status": "planned",
+        "startDate": "2026-10-19",
+        "targetDate": "2026-10-20",
+        "order": 3
+      }
+    },
+    {
+      "op": "update",
+      "type": "project",
+      "id": "$wr_project",
+      "data": { "currentStageId": "$wr_installation" }
+    },
+    {
+      "op": "create",
+      "type": "goal",
+      "ref": "wr_goal_workshop",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Make the workshop usable",
+        "description": "Complete installation and verify the space is ready for normal use.",
+        "successCriteria": [
+          "Lighting is installed and working.",
+          "The inspection checklist is ready for the next phase."
+        ],
+        "status": "open",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "scope_item",
+      "ref": "wr_scope_lighting",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Workshop lighting",
+        "kind": "in",
+        "rationale": "Lighting is required for the renovation goal.",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "scope_item",
+      "ref": "wr_scope_extension",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Exterior extension",
+        "kind": "out",
+        "rationale": "This project covers interior readiness only.",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_measurement_done",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_preparation",
+        "title": "Measure work surfaces",
+        "description": "Completed prerequisite, due on fixed today.",
+        "status": "signed_off",
+        "priority": "routine",
+        "assigneeId": "$wr_owner_role",
+        "dependsOn": [],
+        "estimate": "2 hours",
+        "dueDate": "2026-10-07",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_material_order",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_installation",
+        "title": "Order lighting materials",
+        "description": "Open material order past its due date.",
+        "status": "queued",
+        "priority": "urgent",
+        "assigneeId": "$wr_scheduling_agent",
+        "dependsOn": [],
+        "estimate": "1 day",
+        "dueDate": "2026-10-06",
+        "order": 1
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_fit_lighting",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_installation",
+        "title": "Fit workshop lighting",
+        "description": "Explicitly waiting for materials and linked to the unfinished order.",
+        "status": "waiting_materials",
+        "priority": "urgent",
+        "assigneeId": "$wr_owner_role",
+        "dependsOn": ["$wr_material_order"],
+        "estimate": "1 day",
+        "dueDate": "2026-10-06",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_painting",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_installation",
+        "title": "Paint prepared work area",
+        "description": "Due three days after fixed today and dependent on completed preparation measurement.",
+        "status": "queued",
+        "priority": "routine",
+        "assigneeId": "$wr_owner_role",
+        "dependsOn": ["$wr_measurement_done"],
+        "estimate": "1 day",
+        "dueDate": "2026-10-10",
+        "order": 3
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_inspection_booking",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_installation",
+        "title": "Book inspection slot",
+        "description": "Later work due ten days after fixed today and dependent on fitting completion.",
+        "status": "queued",
+        "priority": "routine",
+        "assigneeId": "$wr_scheduling_agent",
+        "dependsOn": ["$wr_fit_lighting"],
+        "estimate": "1 hour",
+        "dueDate": "2026-10-17",
+        "order": 4
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_cancelled_extension",
+      "data": {
+        "projectId": "$wr_project",
+        "stageId": "$wr_preparation",
+        "title": "Cancel exterior extension option",
+        "description": "Cancelled overdue control; it is outside the accepted scope.",
+        "status": "cancelled",
+        "priority": "routine",
+        "dependsOn": [],
+        "dueDate": "2026-10-04",
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "task",
+      "ref": "wr_undated_cleanup",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Clear temporary storage area",
+        "description": "Undated, unassigned work with no phase.",
+        "status": "queued",
+        "priority": "routine",
+        "dependsOn": [],
+        "order": 5
+      }
+    },
+    {
+      "op": "create",
+      "type": "artifact",
+      "ref": "wr_expected_checklist",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Inspection checklist",
+        "description": "Expected checklist for the future inspection phase.",
+        "kind": "doc",
+        "status": "expected",
+        "stageId": "$wr_inspection",
+        "taskId": "$wr_fit_lighting"
+      }
+    },
+    {
+      "op": "create",
+      "type": "artifact",
+      "ref": "wr_delivered_sketch",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Lighting layout sketch",
+        "description": "Delivered layout sketch linked to completed measurement.",
+        "kind": "design",
+        "status": "delivered",
+        "stageId": "$wr_preparation",
+        "taskId": "$wr_measurement_done"
+      }
+    },
+    {
+      "op": "create",
+      "type": "decision",
+      "ref": "wr_decision_material",
+      "data": {
+        "projectId": "$wr_project",
+        "title": "Choose durable workshop lighting",
+        "body": "Choose lighting that fits the measured work area and can be serviced without changing the project scope.",
+        "status": "accepted",
+        "decidedById": "$wr_owner_role",
+        "decisionDate": "2026-10-05"
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "wr_saved_board",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Workshop work board",
+        "description": "Compact saved board for work packages, phase progress, and a generic query example.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "work-package-table",
+              "w": 8,
+              "x": 0,
+              "h": 360,
+              "node": {
+                "component": "TaskTable",
+                "title": "Installation work packages",
+                "filter": { "where": { "stageId": "$currentStage" } },
+                "columns": ["status", "priority", "assignee", "dueDate", "dependsOn"]
+              }
+            },
+            {
+              "id": "phase-tracker",
+              "w": 4,
+              "x": 8,
+              "h": 220,
+              "node": { "component": "StageTracker", "title": "Renovation phases" }
+            },
+            {
+              "id": "generic-installation-query",
+              "w": 12,
+              "h": 300,
+              "node": {
+                "component": "DataTable",
+                "title": "Installation items from a generic query",
+                "query": { "type": "task", "where": { "stage.name": "Installation" } },
+                "columns": [
+                  { "field": "title", "label": "Work package" },
+                  { "field": "status" },
+                  { "field": "dueDate" }
+                ]
+              }
+            }
+          ]
+        },
+        "pinned": true,
+        "order": 2
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "wr_answer_installation",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Installation blockers",
+        "description": "Temporary answer with a count and current dependency graph.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "installation-waiting-stat",
+              "w": 4,
+              "h": 150,
+              "node": {
+                "component": "Stat",
+                "label": "Waiting for materials",
+                "query": {
+                  "type": "task",
+                  "where": { "status": "waiting_materials", "stageId": "$currentStage" }
+                },
+                "tone": "warning"
+              }
+            },
+            {
+              "id": "installation-dependencies",
+              "w": 8,
+              "h": 360,
+              "node": {
+                "component": "DependencyGraph",
+                "title": "Work package dependencies",
+                "filter": { "where": { "stageId": "$currentStage" } }
+              }
+            }
+          ]
+        },
+        "pinned": false,
+        "kind": "answer",
+        "question": "What is holding up installation?",
+        "expiresAt": "2026-10-12T00:00:00.000Z",
+        "order": 3
+      }
+    },
+    {
+      "op": "create",
+      "type": "view",
+      "ref": "wr_expired_answer",
+      "data": {
+        "projectId": "$wr_project",
+        "name": "Expired workshop answer",
+        "description": "Expired answer kept as a reuse-exclusion control.",
+        "spec": {
+          "component": "Board",
+          "widgets": [
+            {
+              "id": "expired-workshop-control",
+              "node": {
+                "component": "Callout",
+                "tone": "info",
+                "body": "This synthetic answer has expired."
+              }
+            }
+          ]
+        },
+        "pinned": false,
+        "kind": "answer",
+        "question": "What did the earlier workshop review find?",
+        "expiresAt": "2026-10-06T00:00:00.000Z",
+        "order": 4
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "wr_open_request",
+      "data": {
+        "projectId": "$wr_project",
+        "question": "What is holding up installation?",
+        "about": "Workshop work board installation work packages widget",
+        "viewId": "$wr_saved_board",
+        "widgetId": "work-package-table",
+        "status": "open"
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "wr_answered_request",
+      "data": {
+        "projectId": "$wr_project",
+        "question": "What is holding up installation?",
+        "about": "Installation phase",
+        "viewId": "$wr_saved_board",
+        "answerViewId": "$wr_answer_installation",
+        "status": "answered"
+      }
+    },
+    {
+      "op": "create",
+      "type": "request",
+      "ref": "wr_dismissed_request",
+      "data": {
+        "projectId": "$wr_project",
+        "question": "Should the exterior extension be added?",
+        "about": "Out of scope item",
+        "status": "dismissed"
+      }
+    }
+  ]
+}

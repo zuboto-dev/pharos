@@ -1,0 +1,179 @@
+{
+  "id": "A-risks-A1-sample",
+  "version": "1.0.0",
+  "label": "sample, not part of the frozen corpus",
+  "workflow": "A",
+  "fixture": {
+    "path": "eval/fixtures/catalog-delivery.json",
+    "variant": "base",
+    "checksum": "354fa50c127cb9a8ed7901d29abdc0c28c5007e338615b3391f520535eff61a0",
+    "projectRef": "cd_project",
+    "semanticDate": "2026-10-07",
+    "timezone": "UTC"
+  },
+  "request": {
+    "question": "What's blocked or at risk right now?"
+  },
+  "timeoutMs": 15000,
+  "starting": {
+    "screen": "Catalog delivery project, ready to submit a new Ask request",
+    "state": "A fresh database loaded from the catalog-delivery base fixture, with its seeded open request cd_open_request dismissed during setup; no case request exists yet",
+    "seedViewProvenance": "No case-specific seed view; the request-generated answer is the measured output. Fixture-provided saved and prior answer views remain part of the starting data.",
+    "semanticDateStrategy": "Use fixture today 2026-10-07 and UTC for all query/date interpretation; this fixed semantic date is independent of the monotonic elapsed-time clock.",
+    "preparation": {
+      "actions": [
+        "Dismiss the fixture's existing open request before submitting the measured request, so AgentRunner cannot batch unrelated fixture work into this case."
+      ],
+      "dismissedRequestRefs": ["cd_open_request"],
+      "snapshotBoundary": "Retain the loaded fixture checksum, then capture the start snapshot and revision boundary after setup dismissal and before t0.",
+      "outsideTimedWindow": true
+    },
+    "optionMeanings": {
+      "task.status": {
+        "queued": "todo",
+        "building": "in_progress",
+        "review": "in_progress",
+        "waiting": "blocked",
+        "accepted": "done",
+        "dropped": "cancelled"
+      },
+      "task.priority": {
+        "routine": "low",
+        "normal": "medium",
+        "important": "high",
+        "critical": "urgent"
+      },
+      "stage.status": {
+        "next": "planned",
+        "delivery": "active",
+        "archive_complete": "done",
+        "archive_superseded": "skipped"
+      }
+    }
+  },
+  "script": {
+    "t0": "Immediately before the harness dispatches POST /api/apply with the A1 request create operation.",
+    "tEnd": "After the request is terminal, agent work is settled with no queued or running case work, and final checks and the end snapshot are captured, or the deadline failure and its terminal evidence are recorded.",
+    "steps": [
+      {
+        "id": "submit-a1",
+        "actor": "runner",
+        "action": "Create one request for the exact A1 question through POST /api/apply.",
+        "purpose": "planned"
+      },
+      {
+        "id": "wait-answer",
+        "actor": "observer",
+        "action": "Poll request state until it is answered with answerViewId or the deadline is reached.",
+        "purpose": "observation",
+        "waitMs": 50
+      },
+      {
+        "id": "capture-answer",
+        "actor": "observer",
+        "action": "Fetch the linked answer view, retain its persisted spec, and export the run's revisions and agent log slice.",
+        "purpose": "capture"
+      }
+    ],
+    "normalWaitMs": 50,
+    "answerOpenPolicy": "No browser is opened. The observer follows request.answerViewId and reads the persisted answer view over REST.",
+    "persistenceBoundary": "The request must be answered and its answerViewId must resolve to a persisted view in the same fixture project; capture that view spec and final request state.",
+    "undoPath": "No Undo step is prescribed for the Ask-to-answer smoke case; verify that no unrelated project data was changed.",
+    "correctionPolicy": {
+      "maxAttempts": 0,
+      "description": "No owner corrections or agent repair instructions are scripted in this sample run. Preserve the first answer and classify its outcome."
+    }
+  },
+  "useful": {
+    "targetView": {
+      "kind": "answer",
+      "linkedBy": "request.answerViewId",
+      "projectRef": "cd_project"
+    },
+    "milestone": "The request is answered and its answer view spec is persisted and retrievable.",
+    "checks": [
+      {
+        "id": "persisted-answer-view",
+        "method": "REST request and view records",
+        "factCheckIds": ["A1-risk-union"],
+        "expected": "An answer-kind view in the fixture project has the exact question and a DataTable widget with id risks."
+      }
+    ],
+    "renderCapture": {
+      "mode": "persisted-rest",
+      "painted": false,
+      "evidence": "Persisted request and view spec fetched over REST; no browser DOM, screenshot, or paint timestamp is captured.",
+      "limitation": "This persistence milestone is not W1.5 time to useful content, which requires the first qualifying painted render.",
+      "viewport": null,
+      "headless": true
+    }
+  },
+  "fact_checks": [
+    {
+      "id": "A1-risk-union",
+      "checkpoint": "initial-persisted-answer",
+      "widgetId": "risks",
+      "expectedRefs": ["cd_explicit_block", "cd_overdue_docs", "cd_integration", "cd_later_smoke"],
+      "derivation": "Sample smoke check: union the W3.1 fixture oracle's explicitlyBlocked, overdue, and dependencyObstructed refs, deduplicating overlap and excluding done/cancelled work at semantic date 2026-10-07. These catalog-delivery refs replace the differently named W1.2 draft-fixture refs. This combined set is not the full atomic W1.5 fact suite."
+    }
+  ],
+  "completion": {
+    "predicates": [
+      {
+        "id": "answer-persisted",
+        "condition": "The request is answered and request.answerViewId resolves to an answer-kind view whose question matches the submitted A1 question.",
+        "checkIds": ["persisted-answer-view"]
+      },
+      {
+        "id": "risk-membership",
+        "condition": "The persisted DataTable widget risks represents the expected A1 risk union in the fixture dataset.",
+        "checkIds": ["A1-risk-union"]
+      },
+      {
+        "id": "no-unrelated-write",
+        "condition": "The run does not change fixture project data beyond creating the request and its answer view.",
+        "checkIds": []
+      }
+    ],
+    "deadlineMs": 15000,
+    "maxCorrections": 0,
+    "terminalFailureBehavior": "At deadline, persist a timeout outcome with no answer view and no successful completion; retain all logs and revision evidence collected so far.",
+    "humanReview": "Pending: the harness does not perform W1.2's owner-reader exercise.",
+    "humanReviewStatus": "pending",
+    "extraClaimAudit": "Pending independent review of every generated claim against the fixture oracle; membership-only smoke checks cannot detect false extra claims."
+  },
+  "capture": {
+    "clock": {
+      "source": "monotonic",
+      "implementation": "Node.js performance.now() in the harness observer",
+      "resolution": "milliseconds from the process monotonic clock"
+    },
+    "sources": {
+      "agentLog": "The PHAROS_AGENT_LOG file, captured by byte offsets around the runner invocation.",
+      "revisions": "The isolated fixture database revisions and changes from the request start boundary through the terminal boundary.",
+      "viewSpec": "The effective persisted view spec linked from the request's answerViewId.",
+      "requestTrace": "Harness REST dispatch and response records, including request and view IDs."
+    },
+    "adapters": {
+      "toolCalls": "Extract normalized attempt records only when the configured agent log contains structured tool dispatch records; otherwise record an unavailable or incomplete status.",
+      "tokens": "Use provider-reported usage records captured in the log; do not estimate from text. No-agent runs with complete capture report zero.",
+      "cost": "Use provider-reported attributable cost; otherwise record unavailable and do not infer subscription cost."
+    },
+    "rawEvidenceLocations": [
+      "result.json",
+      "agent.log slice",
+      "revisions.json",
+      "view.json",
+      "view-spec.json"
+    ],
+    "reviewers": {
+      "requiredSlots": 2,
+      "status": "pending"
+    },
+    "limitations": [
+      "This sample defines one combined membership smoke check, not all atomic W1.2 facts, negative controls, view-shape checks, or human-reader checks.",
+      "REST persistence does not establish a painted browser render, so W1.5 TTUC is not measured by this case harness run.",
+      "The sample is not part of the frozen W3.2 corpus and makes no baseline result claim."
+    ]
+  }
+}

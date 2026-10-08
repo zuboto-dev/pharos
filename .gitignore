@@ -21,3 +21,4 @@ dist/
 .pharos/
 .DS_Store
 coverage/
+eval/results/

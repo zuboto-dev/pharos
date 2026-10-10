@@ -54,6 +54,15 @@ button{font:inherit;color:inherit;cursor:pointer}
 .badge .g{font-size:1.05em;margin-right:3px}
 .b-n{border-bottom-style:dashed}
 .b-r{border-bottom-style:dotted}
+.b-d,.b-a{color:var(--c-reading);border-bottom-style:dotted}
+.takeaway{border-left:4px solid var(--accent);padding:6px 12px;margin:12px 0;font-weight:600}
+.selcard{padding:0;overflow:hidden}
+.selhead{display:grid;gap:3px;width:100%;text-align:left;background:none;border:0;padding:14px 16px;color:inherit;font:inherit;cursor:pointer;min-height:44px}
+.selhead:hover{background:var(--sunk)}
+.selt{font-weight:650;font-size:17px}.sels{color:var(--muted);font-size:15px}.selhint{font-size:13.5px;color:var(--muted)}
+.selbody{padding:0 16px 14px;border-top:1px dashed var(--line)}
+.selbody[hidden]{display:none}
+.disc{font-style:normal}
 /* pills (rounded rectangles, text only) */
 .pill{display:inline-block;border-radius:6px;padding:1px 9px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap;border:1.5px solid var(--accent);color:var(--ink)}
 .p-built{background:var(--accent);color:var(--on-accent)}
@@ -249,7 +258,7 @@ details.q p{margin:6px 0 0;font-size:15.5px}
 <main class="wrap" id="top">
 
 <h1>What the models did in <span class="term" tabindex="0" role="button" data-term="G1">G1</span></h1>
-<p class="headline">The models built a test for Pharos but haven't run it for real, so there are no results yet. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the work that would run the test isn&#x27;t done, and the test runner has only been tried with a stand-in agent. Checked 10 Oct in the project records and the runner&#x27;s notes." data-date="10 Oct" data-src="The test runner&#x27;s notes::../../evidence/G1/W3.3-harness.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+<p class="headline">The models built a test for Pharos. The new <span class="term" tabindex="0" role="button" data-term="G1">G1</span> tests have not run with a real agent. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the work that would run the test isn&#x27;t done, and the test runner has only been tried with a stand-in agent. Checked 10 Oct in the project records and the runner&#x27;s notes." data-date="10 Oct" data-src="The test runner&#x27;s notes::../../evidence/G1/W3.3-harness.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
 
 <div id="answers-line" class="line small" hidden></div>
 
@@ -291,16 +300,18 @@ details.q p{margin:6px 0 0;font-size:15.5px}
 
 <p class="needs"><span class="lead"><b>Needs you:</b></span> nothing now. <span class="term" tabindex="0" role="button" data-term="G1">G1</span> has been paused since 10 Oct while Pharos is <span class="term" tabindex="0" role="button" data-term="reframed">reframed</span>. <button type="button" class="badge b-c" data-k="c" aria-expanded="false" data-how="you accepted the reframe decision." data-date="10 Oct"><span class="g" aria-hidden="true">◆</span>Confirmed by you</button></p>
 
-<p class="line"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="Written by Opus 5.5 on 10 Oct. Opus 5.5 also wrote three of the test situations and the pass marks, so weigh this with that in mind. The evidence is in the five parts below; &#x27;Your verdict&#x27; is where you give yours." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: solid groundwork that already caught real problems, but no results yet, and more rules than one person can review.</p>
+<p class="line small"><b>Earlier evidence, limited:</b> before <span class="term" tabindex="0" role="button" data-term="G1">G1</span>, one trial had six AI agents each answer one question. All six views were clean, but six runs are not enough to establish repeatable quality. <a href="#part-4" data-open-part="4">More in part 4.</a></p>
 
-<p class="line"><b>Also in <span class="term" tabindex="0" role="button" data-term="G1">G1</span>:</b> <a href="#part-3" data-open-part="3">the published version was re-checked from scratch and passed, after seven fixes to its instructions.</a> One check waits for you if <span class="term" tabindex="0" role="button" data-term="G1">G1</span> restarts. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="someone ran the checks on the published version on 7 Oct and saw them pass; the one check left is described in &quot;The release check&quot;." data-date="7 Oct" data-src="The release check notes::../../evidence/G1/W2.2-checks.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+<p class="line"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="Written by Opus 5.5 on 10 Oct. The evidence is in the five parts below; &#x27;Your verdict&#x27; is where you give yours." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: Useful test material; whether it helps a reader is untested. <span class="disc"><b>Not independent:</b> Opus 5.5 wrote this verdict and also wrote three of the test situations and the pass marks.</span> The rules and pass marks come to about 21,000 words and 26 questions for you (a count). That looks like more than one person can review (a reading).</p>
+
+<p class="line"><b>Also in <span class="term" tabindex="0" role="button" data-term="G1">G1</span>:</b> <a href="#part-3" data-open-part="3">The public copy passed installation and code checks. The instructions were improved afterward; checking the updated release again and trying the background service remain open.</a> <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="someone ran the checks on the public copy on 7 Oct and saw them pass; the repeat check and the background-service check are open. Details are in &quot;The release check&quot;." data-date="7 Oct" data-src="The release check notes::../../evidence/G1/W2.2-checks.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
 
 <nav class="path" aria-label="Look closer">
   <div class="ptitle">Look closer, in this order:</div>
   <ol>
     <li><button type="button" data-part="1"><span class="num">1</span><span class="lbl">One test, up close</span><span class="prev">a practice project, a question, the right answer</span></button></li>
     <li><button type="button" data-part="2"><span class="num">2</span><span class="lbl">Problems it turned up</span><span class="prev">five ways Pharos can mislead you or lose work</span></button></li>
-    <li><button type="button" data-part="3"><span class="num">3</span><span class="lbl">The release check</span><span class="prev">the published version, installed from scratch</span></button></li>
+    <li><button type="button" data-part="3"><span class="num">3</span><span class="lbl">The release check</span><span class="prev">the public copy, installed from scratch, and what is still open</span></button></li>
     <li><button type="button" data-part="4"><span class="num">4</span><span class="lbl">What's left before results</span><span class="prev">and what it would ask of you</span></button></li>
     <li><button type="button" data-part="5"><span class="num">5</span><span class="lbl">Your verdict</span><span class="prev">is this work good?</span></button></li>
   </ol>
@@ -334,7 +345,7 @@ details.q p{margin:6px 0 0;font-size:15.5px}
       <button type="button" class="btn quiet" id="keyreset" hidden>Try again</button>
     </div>
     <div id="keyresult" class="line" style="margin-top:12px" aria-live="polite"></div>
-    <div id="keyexplain" class="small" hidden><span class="term" tabindex="0" role="button" data-term="answer key">The answer key</span> was written before the test existed. A trap is a job a careless answer would list; the test fails an answer that lists one. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="see &quot;How sure is the answer key?&quot; below." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></div>
+    <div id="keyexplain" class="small" hidden><span class="term" tabindex="0" role="button" data-term="answer key">The answer key</span> was written before the test existed. A trap is a job a careless answer would list; the test fails an answer that lists one. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="it matches the rules on made-up data; see &quot;How sure is the answer key?&quot; below." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></div>
   </div>
 
   <h3>The three test situations</h3>
@@ -352,7 +363,13 @@ details.q p{margin:6px 0 0;font-size:15.5px}
   </div>
 
   <h3>How sure is the answer key?</h3>
-  <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the practice project&#x27;s own automated checks assert the answer key against Pharos&#x27;s filters, and it was run again on 10 Oct." data-date="10 Oct" data-src="The second model&#x27;s review::../../evidence/G1/W1.7-review.md"><span class="g" aria-hidden="true">●</span>Verified</button>: the answer key matches what Pharos's own <span class="term" tabindex="0" role="button" data-term="filter">filters</span> return on this project. The practice project's <span class="term" tabindex="0" role="button" data-term="automated checks">automated checks</span> confirm it, and it was run again on 10 Oct.</p>
+  <p>Two different questions, with different answers:</p>
+  <div class="cmp two">
+    <div class="panel"><div class="plabel">1. Does the answer key match its own rules?</div>
+      <p style="margin:6px 0">Yes, on the made-up practice projects. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the practice project&#x27;s own automated checks assert the answer key against Pharos&#x27;s filters, and it was run again on 10 Oct." data-date="10 Oct" data-src="The second model&#x27;s review::../../evidence/G1/W1.7-review.md"><span class="g" aria-hidden="true">●</span>Verified</button> The answer key matches what Pharos's own <span class="term" tabindex="0" role="button" data-term="filter">filters</span> return on these projects, and the <span class="term" tabindex="0" role="button" data-term="automated checks">automated checks</span> confirm it. That shows the rules are applied consistently.</p></div>
+    <div class="panel"><div class="plabel">2. Do the rules match what you mean by risk?</div>
+      <p style="margin:6px 0">Not known yet. <button type="button" class="badge b-n" data-k="n" aria-expanded="false" data-how="nobody has checked these rules against what you mean; &#x27;What counts as at risk?&#x27; is the first of the 26 questions for you." data-date="10 Oct"><span class="g" aria-hidden="true">○</span>Not known yet</button> Does 'blocked, late, or waiting on unfinished work' match what you mean by 'at risk', or by 'holding it up'?</p></div>
+  </div>
   <p>A second AI model, from another company, then checked all three test situations: 45 issues, each fixed or accepted with a reason. One of them:</p>
   <div class="cmp two">
     <div class="panel before"><div class="plabel">Before</div>First draft: the answer key used made-up task names, written before the <span class="term" tabindex="0" role="button" data-term="practice project">practice project</span> was built. It expected 5 tasks at risk.</div>
@@ -369,9 +386,11 @@ details.q p{margin:6px 0 0;font-size:15.5px}
 <section class="part" id="part-2" data-part="2" hidden>
   <h2><span class="num">2</span>Problems it turned up</h2>
   <p>To write the tests, the models read Pharos closely and found these five problems. None is fixed yet. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s app code has not changed since the published version, apart from new automated checks. Compared on 10 Oct." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+  <p class="takeaway">In one sentence: one problem is confirmed by running it (cancelled work counted as late); the other four are findings from reading the code that nobody has yet seen on screen. Pick a problem to see the detail.</p>
 
-  <article class="card" id="p21">
-    <h3>Pharos's own example counts cancelled work as late</h3>
+  <article class="card selcard" id="p21">
+    <button type="button" class="selhead" aria-expanded="false" aria-controls="p21b"><span class="selt">Pharos's own example counts cancelled work as late</span><span class="sels">Confirmed by running it: a cancelled task is listed as late.</span><span class="selhint">Show details</span></button>
+    <div class="selbody" id="p21b" hidden>
     <div class="small"><b>What you'd see</b></div>
     <div class="cmp two">
       <div class="panel"><div class="plabel">Pharos's example <span class="term" tabindex="0" role="button" data-term="filter">filter</span> 'Blocked or overdue', on the workshop project</div>
@@ -387,10 +406,12 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     <p class="why"><b>Why it matters:</b> Pharos gives this example to agents as a pattern to copy, so their views can warn you about cancelled work.</p>
     <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="ran the example on both practice projects (7 Oct, and again on 10 Oct); it lists a cancelled task in both." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
     <p class="next"><b>What happens next:</b> not fixed. The suggestion is to fix it after the first results, so the test can show the difference. That's one of the questions for you.</p>
+    </div>
   </article>
 
-  <article class="card" id="p22">
-    <h3>An empty list says 'No tasks yet' when there are tasks</h3>
+  <article class="card selcard" id="p22">
+    <button type="button" class="selhead" aria-expanded="false" aria-controls="p22b"><span class="selt">Some task views say 'No tasks yet' when nothing matches</span><span class="sels">Read in the code, not yet seen on screen: a view with no matches can say 'No tasks yet'.</span><span class="selhint">Show details</span></button>
+    <div class="selbody" id="p22b" hidden>
     <span class="illus">Illustration, on the practice project 'Catalog delivery'</span>
     <div class="cmp two">
       <div class="panel"><div class="plabel">What the list shows</div><b>Blocked or late in Foundation</b><div class="rowitem" style="margin-top:8px;text-align:center;border-style:dashed">No tasks yet</div></div>
@@ -399,10 +420,12 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     <p class="why"><b>Why it matters:</b> it tells you a <span class="term" tabindex="0" role="button" data-term="phase">phase</span> is empty when it is actually finished.</p>
     <p><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="read in the code; not yet seen on screen." data-date="7 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
     <p class="next"><b>What happens next:</b> not planned yet. Whether to require 'Nothing matches' is one of the questions for you.</p>
+    </div>
   </article>
 
-  <article class="card" id="p23">
-    <h3>If you and an agent change the same thing at nearly the same moment, one change is lost without a warning</h3>
+  <article class="card selcard" id="p23">
+    <button type="button" class="selhead" aria-expanded="false" aria-controls="p23b"><span class="selt">If you and an agent change the same thing at nearly the same moment, one change is lost without a warning</span><span class="sels">Read in the code, not reproduced: two changes at nearly the same moment can silently overwrite one.</span><span class="selhint">Show details</span></button>
+    <div class="selbody" id="p23b" hidden>
     <span class="illus">Illustration, on 'Catalog delivery'</span>
     <div class="lanes" aria-label="Two-lane timeline">
       <div class="lane-h you">You</div><div class="lane-h agent">An agent</div>
@@ -414,10 +437,12 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     <p class="why"><b>Why it matters:</b> work can quietly disappear.</p>
     <p><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="read in the code; not yet reproduced." data-date="7 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
     <p class="next"><b>What happens next:</b> planned in a later stage (protecting your changes from being overwritten), paused with the roadmap.</p>
+    </div>
   </article>
 
-  <article class="card" id="p24">
-    <h3>You can't change what a generated table or chart shows</h3>
+  <article class="card selcard" id="p24">
+    <button type="button" class="selhead" aria-expanded="false" aria-controls="p24b"><span class="selt">You can't change what a generated table or chart shows</span><span class="sels">Read in the code: for a generated table or chart, only the title can be changed.</span><span class="selhint">Show details</span></button>
+    <div class="selbody" id="p24b" hidden>
     <div class="small"><b>What you'd see</b> &mdash; a small copy of the settings dialog for a table an agent made</div>
     <div class="dialog" aria-label="Copy of a settings dialog (not interactive)">
       <div class="dl">Title</div><div class="dfield">&nbsp;</div>
@@ -427,10 +452,12 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     <p>For a table or chart an agent made, the title is all you can change: no <span class="term" tabindex="0" role="button" data-term="filter">filter</span>, no columns, no grouping. One of the three test situations ('Adjust a generated view') can't be done in today's Pharos.</p>
     <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the dialog&#x27;s words are quoted from the code." data-date="10 Oct" data-src="The settings code::../../../apps/web/src/catalog/settings.tsx"><span class="g" aria-hidden="true">●</span>Verified</button> <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="&quot;the title is all you can change&quot; is read in the code, not tried on screen." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
     <p class="next"><b>What happens next:</b> planned in a later stage (letting you adjust views yourself), paused.</p>
+    </div>
   </article>
 
-  <article class="card" id="p25">
-    <h3>Ticking a task done has no Undo, and a second click can reopen it</h3>
+  <article class="card selcard" id="p25">
+    <button type="button" class="selhead" aria-expanded="false" aria-controls="p25b"><span class="selt">Ticking a task done has no Undo, and a second click can reopen it</span><span class="sels">Read in the code, not reproduced: one click ticks a task done, and there is no Undo button.</span><span class="selhint">Show details</span></button>
+    <div class="selbody" id="p25b" hidden>
     <span class="illus">Illustration. Try it: click the round box.</span>
     <div class="trow" id="trow">
       <button type="button" class="tbox" id="tbox" aria-label="Mark the task done" aria-pressed="false"></button>
@@ -439,9 +466,10 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     </div>
     <div class="small" id="tnote" aria-live="polite" style="min-height:2.6em;margin-top:6px">Click the box to tick the task done.</div>
     <button type="button" class="linkbtn small" id="treset" hidden>Start over</button>
-    <p class="why"><b>Why it matters:</b> a slip of the mouse changes your project, and the only way back is <span class="term" tabindex="0" role="button" data-term="history">History</span>.</p>
+    <p class="why"><b>Why it matters:</b> a slip of the mouse changes your project, and No Undo button; a second click reopens the task as another change, or <span class="term" tabindex="0" role="button" data-term="history">History</span> can revert it.</p>
     <p><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="read in the code; not yet reproduced." data-date="7 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
     <p class="next"><b>What happens next:</b> planned in a later stage (one safe task action, with Undo), paused.</p>
+    </div>
   </article>
 
   <div class="qcard" data-qid="a26" data-q="Do these problems matter to you?" data-opts="Yes;;Some of them;;Not really;;Not sure" data-why="it helps decide what to fix first if G1 restarts." data-what="kept, and shown in &#x27;Your verdict&#x27;." data-kind="A question for you"></div>
@@ -454,21 +482,24 @@ details.q p{margin:6px 0 0;font-size:15.5px}
   <h2><span class="num">3</span>The release check</h2>
   <p>On 7 Oct Pharos was published as an early preview, version 0.1.0. <span class="term" tabindex="0" role="button" data-term="G1">G1</span> re-checked it the way a newcomer would meet it: a fresh copy and only the <span class="term" tabindex="0" role="button" data-term="README">README</span>. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the release is recorded in the project&#x27;s tasks and decisions." data-date="7 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
 
+  <div class="callout">
+    <p style="margin:0 0 6px"><span class="pill p-notyet">Open</span> <b>Read this first.</b> The public copy passed installation and code checks. The instructions were improved afterward; checking the updated release again and trying the <span class="term" tabindex="0" role="button" data-term="background service">background service</span> remain open.</p>
+  </div>
+
   <div class="card">
-    <h3 style="margin-top:0">Run on 7 Oct, on the published version</h3>
+    <h3 style="margin-top:0">Run on 7 Oct, on the public copy, before the later instruction fixes</h3>
     <ul class="checks">
       <li><span>Install, following the <span class="term" tabindex="0" role="button" data-term="README">README</span></span><span class="pill p-passed">Passed</span></li>
       <li><span>Code checks: types, style and formatting</span><span class="pill p-passed">Passed</span></li>
       <li><span>207 <span class="term" tabindex="0" role="button" data-term="automated checks">automated checks</span>, in about 5 seconds</span><span class="pill p-passed">Passed</span></li>
-      <li><span>Build <span class="small">(one harmless warning: the app's main file is large)</span></span><span class="pill p-passed">Passed</span></li>
+      <li><span>Build <span class="small">(one warning: the app's main file is large. It did not stop the build; nobody measured whether it slows the app.)</span></span><span class="pill p-passed">Passed</span></li>
       <li><span>Connect an <span class="term" tabindex="0" role="button" data-term="AI agent">AI agent</span> and read a project</span><span class="pill p-passed">Passed</span></li>
       <li><span>GitHub's own automatic checks for the same version, on 3 versions of <span class="term" tabindex="0" role="button" data-term="Node.js">Node.js</span></span><span class="pill p-passed">Passed</span></li>
-      <li><span>Settings view in a real browser: the dark theme stays after reloading; pausing automatic answers in one tab shows in another; 'answering off' explains itself</span><span class="pill p-passed">Passed</span></li>
     </ul>
     <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="someone ran each check on 7 Oct and saw the result." data-date="7 Oct" data-src="The check log::../../evidence/G1/W2.2-checks.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
-    <button type="button" class="btn" id="rawbtn" aria-expanded="false">Show the raw output</button>
+    <button type="button" class="btn" id="rawbtn" aria-expanded="false">Show the recorded check summary</button>
     <div id="raw" hidden>
-      <p class="small" style="margin-top:12px">The check log, copied from the evidence unchanged:</p>
+      <p class="small" style="margin-top:12px">The recorded summary of each check, copied from the evidence unchanged. The full logs were kept elsewhere:</p>
       <table class="plain">
         <thead><tr><th>Command</th><th>Exit</th><th>Elapsed</th><th>Output summary</th></tr></thead>
         <tbody>
@@ -482,8 +513,16 @@ details.q p{margin:6px 0 0;font-size:15.5px}
     </div>
   </div>
 
+  <div class="card">
+    <h3 style="margin-top:0">Run later, on a newer version</h3>
+    <ul class="checks">
+      <li><span>Settings view in a real browser: the dark theme stays after reloading; pausing automatic answers in one tab shows in another; 'answering off' explains itself</span><span class="pill p-passed">Passed</span></li>
+    </ul>
+    <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="someone ran this in a real browser on a version newer than the 7 Oct public copy." data-date="10 Oct" data-src="The browser check::../../evidence/G1/W2.7-settings-browser.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+  </div>
+
   <h3>One of the fixes</h3>
-  <p>Seven fixes to the <span class="term" tabindex="0" role="button" data-term="README">README</span> and the contributor guide. For example:</p>
+  <p>Seven fixes to the <span class="term" tabindex="0" role="button" data-term="README">README</span> and the contributor guide, made after the 7 Oct checks. The checks above did not test them. For example:</p>
   <div class="cmp two">
     <div class="panel before"><div class="plabel">Before</div>&hellip;the web app picks up its changes within a second.</div>
     <div class="panel after"><div class="plabel">After</div>Changes it makes are found by <span class="term" tabindex="0" role="button" data-term="polling">polling</span> about once a second, so the web app normally shows them within a few seconds.</div>
@@ -491,11 +530,12 @@ details.q p{margin:6px 0 0;font-size:15.5px}
   <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the before and after are the actual texts, from the release notes and the README." data-date="7 Oct" data-src="The findings note::../../evidence/G1/W2.5-findings.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
 
   <div class="callout">
-    <p style="margin:0 0 6px"><span class="pill p-needs">Needs you</span></p>
-    <p style="margin:0"><b>Not checked:</b> the <span class="term" tabindex="0" role="button" data-term="background service">background service</span>, which starts Pharos when you log in. Trying it would have replaced the copy you use, so it waits for you, if <span class="term" tabindex="0" role="button" data-term="G1">G1</span> restarts. These checks covered the version published on 7 Oct. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the findings note says the service was never run, by design." data-date="7 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+    <p style="margin:0 0 6px"><span class="pill p-notyet">Open</span> <span class="pill p-needs">Needs you</span></p>
+    <p style="margin:0 0 8px"><b>Not re-run:</b> the fresh install and GitHub checks on the updated release. The findings note says this repeat was not done. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the findings note says the repeat check was not re-run." data-date="7 Oct" data-src="The findings note::../../evidence/G1/W2.5-findings.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+    <p style="margin:0"><b>Not checked:</b> the <span class="term" tabindex="0" role="button" data-term="background service">background service</span>, which starts Pharos when you log in. Trying it would have replaced the copy you use, so it waits for you, if <span class="term" tabindex="0" role="button" data-term="G1">G1</span> restarts. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the findings note says the service was never run, by design." data-date="7 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
   </div>
 
-  <div class="qcard" data-qid="a34" data-q="Is this enough for you to trust the published version for now?" data-opts="Yes;;No;;Not sure" data-why="your trust decides whether the one open check is worth doing soon." data-what="kept, and shown in &#x27;Your verdict&#x27;." data-kind="A question for you"></div>
+  <div class="qcard" data-qid="a34" data-q="Is this enough for you to trust the public copy for now, with the repeat check and the service still open?" data-opts="Yes;;No;;Not sure" data-why="your trust decides whether the one open check is worth doing soon." data-what="kept, and shown in &#x27;Your verdict&#x27;." data-kind="A question for you"></div>
 
   <div class="nav"><button type="button" class="btn primary" data-next="4">Next: What's left before results</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
 </section>
@@ -538,7 +578,7 @@ details.q p{margin:6px 0 0;font-size:15.5px}
   <p><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the question is quoted from the second model&#x27;s review; the word counts were counted on 10 Oct from the notes (table markup included)." data-date="10 Oct" data-src="The second model&#x27;s review::../../evidence/G1/W1.7-review.md"><span class="g" aria-hidden="true">●</span>Verified</button> The plain-words version is this view's own wording.</p>
 
   <div class="callout plain">
-    <b>Already known about Pharos's quality.</b> One earlier trial, before <span class="term" tabindex="0" role="button" data-term="G1">G1</span>: six AI agents each answered one question about a copy of Pharos's own project. All six views were clean, and the two counts that were checked (overdue, due this week) were exact. Too small to repeat or compare, which is why G1 set out to build a proper test. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the earlier trial is recorded as a delivered evaluation in the project." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button>
+    <b>Already known about Pharos's quality.</b> One earlier trial, before <span class="term" tabindex="0" role="button" data-term="G1">G1</span>: six AI agents each answered one question about a copy of Pharos's own project. All six views were clean, and the two counts that were checked (overdue, due this week) were exact. Not enough runs to establish repeatable quality, which is why G1 set out to build a proper test. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the earlier trial is recorded as a delivered evaluation in the project." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button>
   </div>
 
   <div class="qcard" data-qid="a43" data-q="Is the rest worth doing, given what it asks of you?" data-opts="Yes, as planned;;Yes, but smaller;;No;;Not sure" data-why="it is the cost side of your verdict." data-what="kept, and shown in &#x27;Your verdict&#x27;." data-kind="A question for you"></div>
@@ -556,12 +596,13 @@ details.q p{margin:6px 0 0;font-size:15.5px}
 
   <div class="agentbox">
     <h3><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="an agent&#x27;s judgment, written after the evidence above." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button> &middot; Opus 5.5 &middot; 10 Oct</h3>
-    <p class="small" style="margin:0">Opus 5.5 also wrote three of the test situations and the pass marks.</p>
+    <p class="small" style="margin:0">Not independent: Opus 5.5 also wrote three of the test situations and the pass marks.</p>
     <ul>
-      <li><b>Worth keeping:</b> the answer keys are concrete, were checked by running them, and a second model caught real mistakes in the first drafts.</li>
-      <li><b>Already useful:</b> writing the tests exposed problems you would hit, like the cancelled-work example and the misleading 'No tasks yet'.</li>
-      <li><b>Not good yet:</b> there are no results, and the rules grew to tens of thousands of words and 26 questions before you saw anything. The work ran ahead of you.</li>
+      <li><b>Worth keeping:</b> the answer keys are concrete, were checked by running them on made-up data, and a second model caught real mistakes in the first drafts.</li>
+      <li><b>Already useful:</b> writing the tests exposed one problem confirmed by running it (the cancelled-work example) and four more found by reading the code, like a task view saying 'No tasks yet' when nothing matches.</li>
+      <li><b>Not good yet:</b> the new tests have not run with a real agent, and the rules grew to about 21,000 words and 26 questions before you saw anything. The work ran ahead of you.</li>
       <li><b>A gap:</b> only one of the three test situations checks whether a person can read the view at a glance; the other two check that views are correct and keep your changes. None asks whether you know where you stand.</li>
+      <li><b>Untested:</b> whether a reader finds the results easier to understand. Nobody has tried it with you yet.</li>
     </ul>
   </div>
 
@@ -650,7 +691,7 @@ details.q p{margin:6px 0 0;font-size:15.5px}
       <li>The two "Needs you" pills on the "what's left" chain say "Would need you only if G1 restarts", because the pill alone contradicted "None of this needs you now".</li>
       <li>Items in the chain and the earlier views don't open real records; they say so.</li>
       <li>The plain-words versions of the 26 questions and the descriptions of the 15 tasks were written for this sketch from the evidence notes; the design only fixed the first question's wording.</li>
-      <li>The Part 3 check list and the raw check log are copied from the evidence; the "Passed" pills are the design's.</li>
+      <li>The Part 3 check list and the recorded check summary are copied from the evidence; the "Passed" pills are the design's.</li>
       <li>The bars in part 4 are drawn from the rounded numbers in the design.</li>
       <li>"Show the answer key" has a "Try again" button, which the design didn't mention.</li>
     </ul>
@@ -690,13 +731,16 @@ var TERMS = {
  "MCP":"The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects. (Model Context Protocol.)",
  "token":"The unit AI models read and write in. More tokens means more time and cost.",
  "history":"Every change to a project or a view is saved with who made it and why, and can be undone.",
- "field":"One piece of information on a record, such as a task's due date."
+ "field":"One piece of information on a record, such as a task's due date.",
+ "sandbox":"A restricted area where a program runs, with limits on what it can reach. How strong the limits are depends on how it is set up."
 };
 var KINDS = {
  c:{g:"◆",w:"Confirmed by you",m:"You said so: an answer you gave or a decision you made."},
  v:{g:"●",w:"Verified",m:"Matches an official source, or someone ran it and saw the result."},
  r:{g:"◐",w:"Agent's reading",m:"An AI agent's analysis, for example from reading code or documents. Reasonable, but not tried or confirmed."},
- n:{g:"○",w:"Not known yet",m:"An open question."}
+ n:{g:"○",w:"Not known yet",m:"An open question."},
+ d:{g:"◐",w:"Agent's definition",m:"A definition an AI agent wrote for this view. It is not an official standard."},
+ a:{g:"◐",w:"Assessed from code",m:"An AI agent read the code and concluded how it behaves. Nobody ran it on screen."}
 };
 var SK = (function(){
   var NS = document.body.getAttribute("data-sketch");
@@ -865,11 +909,19 @@ var SK = (function(){
   function initFooter(){
     var r=$("#reset"); if(r) r.addEventListener("click",function(){ state={a:{}}; save(state); try{ window.localStorage.removeItem(KEY); }catch(e){} location.reload(); });
   }
+  function initSel(){
+    $$(".selhead").forEach(function(h){ h.addEventListener("click",function(e){
+      if(e.target.closest(".term,.badge,a")) return;
+      var b=document.getElementById(h.getAttribute("aria-controls")); var open=h.getAttribute("aria-expanded")!=="true";
+      h.setAttribute("aria-expanded",open?"true":"false"); if(b) b.hidden=!open;
+      var hint=h.querySelector(".selhint"); if(hint) hint.textContent=open?"Hide details":"Show details";
+    }); });
+  }
   function glossary(){ var seen={}, out=[]; $$(".term").forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } });
     $$("template").forEach(function(tp){ var d=document.createElement("div"); d.appendChild(tp.content.cloneNode(true)); $$(".term",d).forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } }); });
     return out.sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}); }
 
-  return {$:$,$$:$$,el:el,state:state,ans:ans,setAns:setAns,save:function(){save(state)},FOLLOW:FOLLOW,SAVED:SAVED,initCards:initCards,initFooter:initFooter,openPart:openPart,scrollTo:scrollTo,glossary:glossary,showPop:showPop,hidePop:hidePop,reduce:reduce,closeMore:closeMore};
+  return {$:$,$$:$$,el:el,state:state,ans:ans,setAns:setAns,save:function(){save(state)},FOLLOW:FOLLOW,SAVED:SAVED,initCards:initCards,initSel:initSel,initFooter:initFooter,openPart:openPart,scrollTo:scrollTo,glossary:glossary,showPop:showPop,hidePop:hidePop,reduce:reduce,closeMore:closeMore};
 })();
 
 </script>
@@ -926,13 +978,13 @@ var SK = (function(){
   tbox.addEventListener("click",function(){
     if(tstep===0){ tstep=1; tbox.setAttribute("aria-pressed","true"); tstate.textContent="Done"; tnote.textContent="First click: the row shows 'Done', and no Undo appears.";
       treset.hidden=false; ttimer=setTimeout(function(){ if(tstep===1){ tstep=2; tnote.textContent="The view refreshes. The task is still done, and still no Undo. Click the box again."; } },1400); }
-    else if(tstep===1||tstep===2){ clearTimeout(ttimer); tstep=3; tbox.setAttribute("aria-pressed","false"); tstate.textContent="Queued"; tnote.textContent="Second click: the row is 'Queued' again. Recorded as a second change."; }
+    else if(tstep===1||tstep===2){ clearTimeout(ttimer); tstep=3; tbox.setAttribute("aria-pressed","false"); tstate.textContent="Queued"; tnote.textContent="Second click: the task is reopened, shown here as 'Queued'. Recorded as a second change; the status may not be the one it had before."; }
   });
   treset.addEventListener("click",function(){ clearTimeout(ttimer); tstep=0; tbox.setAttribute("aria-pressed","false"); tstate.textContent="Queued"; tnote.textContent="Click the box to tick the task done."; treset.hidden=true; tbox.focus(); });
 
   /* ---- raw output ---- */
   var rb=$("#rawbtn");
-  rb.addEventListener("click",function(){ var r=$("#raw"); r.hidden=!r.hidden; rb.setAttribute("aria-expanded",r.hidden?"false":"true"); rb.textContent=r.hidden?"Show the raw output":"Hide the raw output"; });
+  rb.addEventListener("click",function(){ var r=$("#raw"); r.hidden=!r.hidden; rb.setAttribute("aria-expanded",r.hidden?"false":"true"); rb.textContent=r.hidden?"Show the recorded check summary":"Hide the recorded check summary"; });
 
   /* ---- chain items ---- */
   var cn=$("#chainnote");
@@ -941,7 +993,7 @@ var SK = (function(){
   /* ---- question follow-ups and saved wording ---- */
   SK.FOLLOW.a26={when:["Some of them"],title:"Which ones? (pick any)",items:[
     "Pharos's own example counts cancelled work as late",
-    "An empty list says 'No tasks yet' when there are tasks",
+    "Some task views say 'No tasks yet' when nothing matches",
     "If you and an agent change the same thing at nearly the same moment, one change is lost without a warning",
     "You can't change what a generated table or chart shows",
     "Ticking a task done has no Undo, and a second click can reopen it"]};
@@ -1000,7 +1052,7 @@ var SK = (function(){
     if(id==="questions"){ var ql=$("#qlist",panel); QS.forEach(function(q){ var d=document.createElement("details"); d.className="q"; var s=document.createElement("summary"); s.textContent=q[0]; d.appendChild(s); var p=document.createElement("p"); var b=document.createElement("b"); b.textContent="Suggested answer: "; p.appendChild(b); p.appendChild(document.createTextNode(q[1])); d.appendChild(p); ql.appendChild(d); }); }
   };
 
-  SK.initCards(); SK.initFooter(); window.onAnswers();
+  SK.initCards(); SK.initSel(); SK.initFooter(); window.onAnswers();
   /* open from a link such as #part-2 */
   var m=/^#part-(\d)$/.exec(location.hash); if(m) SK.openPart(m[1],true);
 })();

@@ -54,6 +54,15 @@ button{font:inherit;color:inherit;cursor:pointer}
 .badge .g{font-size:1.05em;margin-right:3px}
 .b-n{border-bottom-style:dashed}
 .b-r{border-bottom-style:dotted}
+.b-d,.b-a{color:var(--c-reading);border-bottom-style:dotted}
+.takeaway{border-left:4px solid var(--accent);padding:6px 12px;margin:12px 0;font-weight:600}
+.selcard{padding:0;overflow:hidden}
+.selhead{display:grid;gap:3px;width:100%;text-align:left;background:none;border:0;padding:14px 16px;color:inherit;font:inherit;cursor:pointer;min-height:44px}
+.selhead:hover{background:var(--sunk)}
+.selt{font-weight:650;font-size:17px}.sels{color:var(--muted);font-size:15px}.selhint{font-size:13.5px;color:var(--muted)}
+.selbody{padding:0 16px 14px;border-top:1px dashed var(--line)}
+.selbody[hidden]{display:none}
+.disc{font-style:normal}
 /* pills (rounded rectangles, text only) */
 .pill{display:inline-block;border-radius:6px;padding:1px 9px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap;border:1.5px solid var(--accent);color:var(--ink)}
 .p-built{background:var(--accent);color:var(--on-accent)}
@@ -313,12 +322,12 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
 <main class="wrap" id="top">
 
 <h1><span class="term" tabindex="0" role="button" data-term="Generative UI">Generative UI</span>, and where Pharos sits</h1>
-<p class="headline">Generative UI means an AI answers you by putting a <span class="term" tabindex="0" role="button" data-term="view">view</span> together; Pharos puts its views together from tested <span class="term" tabindex="0" role="button" data-term="building block">building blocks</span> and <span class="term" tabindex="0" role="button" data-term="live project data">live project data</span>. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s own docs and code for how Pharos works; the meaning of Generative UI follows the review of 6 Oct." data-date="6 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+<p class="headline">Generative UI means an AI answers you by putting a <span class="term" tabindex="0" role="button" data-term="view">view</span> together <button type="button" class="badge b-d" data-k="d" aria-expanded="false" data-how="this is the 6 Oct review&#x27;s own wording of the term, not an official definition." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's definition</button>; Pharos puts its views together from tested <span class="term" tabindex="0" role="button" data-term="building block">building blocks</span> and <span class="term" tabindex="0" role="button" data-term="live project data">live project data</span>. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s own docs and code for how Pharos works." data-date="6 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
 
 <div id="answers-line" class="line small" hidden></div>
 
 <section class="bandwrap" aria-labelledby="bandtitle">
-  <h2 class="bandtitle" id="bandtitle">How much of the view the AI makes</h2>
+  <h2 class="bandtitle" id="bandtitle">Four approaches, sorted by how much of the view the AI makes</h2>
   <div class="band">
     <div class="grp non">
       <div class="stops">
@@ -348,7 +357,7 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
     </div>
   </div>
   <div class="stopcard" id="stopcard" hidden></div>
-  <p class="small" style="margin-top:12px">Different approaches, not stages of progress. Further right, the AI has more freedom, and what it makes needs more checking.</p>
+  <p class="small" style="margin-top:12px">Different approaches, not stages of progress. They trade freedom against checking: where the AI makes more of the view, more of what it makes needs checking. None is better in general.</p>
 </section>
 
 <p class="line"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="an agent read official documents and Pharos&#x27;s code on 6 Oct; where each approach sits is its judgment." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: based on a review of official documents and Pharos's code on 6 Oct. Where each approach sits is an agent's reading.</p>
@@ -406,19 +415,20 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
         <div class="small" style="margin-top:6px">An arrow means: the next job waits for the one before it.</div>
       </div>
       <div class="toggles">
-        <button type="button" class="btn" id="recbtn" aria-expanded="false">Show the recipe the AI wrote</button>
+        <button type="button" class="btn" id="recbtn" aria-expanded="false">Show the recipe for this prepared example</button>
         <button type="button" class="btn" id="simbtn" aria-pressed="false">Pretend the materials arrived</button>
       </div>
       <div class="small" style="margin-top:6px">The second button is a <b>simulated change, for this sketch</b>.</div>
     </div>
   </div>
 
+  <p>In a live answer, the AI chooses which blocks to use, where they go and which data each one shows, and writes that down as a <span class="term" tabindex="0" role="button" data-term="recipe">recipe</span>. The AI doesn't draw anything: Pharos draws the view and keeps it current.</p>
+
   <div id="recipe" hidden>
     <div class="card">
-      <div class="plabel small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase">The <span class="term" tabindex="0" role="button" data-term="recipe">recipe</span>: copied from the practice project, unchanged</div>
+      <div class="plabel small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase">The <span class="term" tabindex="0" role="button" data-term="recipe">recipe</span> for this prepared example: copied from the practice project, unchanged. It is not a recording of a live answer.</div>
       <pre id="recipepre" tabindex="0" aria-label="The recipe as JSON"><span class="rl">{</span><span class="rl">  &quot;component&quot;: &quot;Board&quot;,</span><span class="rl">  &quot;widgets&quot;: [</span><span class="rl" data-w="stat">    {</span><span class="rl" data-w="stat">      &quot;id&quot;: &quot;installation-waiting-stat&quot;,</span><span class="rl" data-w="stat">      &quot;w&quot;: 4,</span><span class="rl" data-w="stat">      &quot;h&quot;: 150,</span><span class="rl" data-w="stat">      &quot;node&quot;: {</span><span class="rl" data-w="stat">        &quot;component&quot;: &quot;Stat&quot;,</span><span class="rl" data-w="stat">        &quot;label&quot;: &quot;Waiting for materials&quot;,</span><span class="rl" data-w="stat">        &quot;query&quot;: {</span><span class="rl" data-w="stat">          &quot;type&quot;: &quot;task&quot;,</span><span class="rl" data-w="stat">          &quot;where&quot;: {</span><span class="rl" data-w="stat">            &quot;status&quot;: &quot;waiting_materials&quot;,</span><span class="rl" data-w="stat">            &quot;stageId&quot;: &quot;$currentStage&quot;</span><span class="rl" data-w="stat">          }</span><span class="rl" data-w="stat">        },</span><span class="rl" data-w="stat">        &quot;tone&quot;: &quot;warning&quot;</span><span class="rl" data-w="stat">      }</span><span class="rl" data-w="stat">    },</span><span class="rl" data-w="graph">    {</span><span class="rl" data-w="graph">      &quot;id&quot;: &quot;installation-dependencies&quot;,</span><span class="rl" data-w="graph">      &quot;w&quot;: 8,</span><span class="rl" data-w="graph">      &quot;h&quot;: 360,</span><span class="rl" data-w="graph">      &quot;node&quot;: {</span><span class="rl" data-w="graph">        &quot;component&quot;: &quot;DependencyGraph&quot;,</span><span class="rl" data-w="graph">        &quot;title&quot;: &quot;Work package dependencies&quot;,</span><span class="rl" data-w="graph">        &quot;filter&quot;: {</span><span class="rl" data-w="graph">          &quot;where&quot;: {</span><span class="rl" data-w="graph">            &quot;stageId&quot;: &quot;$currentStage&quot;</span><span class="rl" data-w="graph">          }</span><span class="rl" data-w="graph">        }</span><span class="rl" data-w="graph">      }</span><span class="rl" data-w="graph">    }</span><span class="rl">  ]</span><span class="rl">}</span></pre>
       <p class="small" style="margin:8px 0 0">Tap or hover a block above, or a line here, to see which belongs to which.</p>
-      <p style="margin:8px 0 0">The AI doesn't draw anything. It writes this recipe: which blocks, where, and which data each one shows. Pharos draws the view and keeps it current.</p>
     </div>
   </div>
   <p id="simcaption" class="toast" hidden>Building blocks read live data. Written text doesn't update by itself. <span class="small">(Simulated change, for this sketch.)</span></p>
@@ -437,7 +447,7 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
   <div class="gridmap" id="gridmap" role="group" aria-label="Map of approaches"></div>
 
   <div class="connectors">
-    <p style="margin:0 0 6px"><b>Connectors: not ways to make views.</b> They link agents and apps, and work with any of the above:</p>
+    <p style="margin:0 0 6px"><b>Connectors: not ways to make views.</b> They link agents and apps. In principle they could be used with any of the above, with extra integration work; none is verified here:</p>
     <div class="chips" id="connchips"></div>
     <p class="small" style="margin:8px 0 0"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="none of these connectors is required for Pharos to count as Generative UI; that is the review&#x27;s conclusion." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: none of these connectors is needed for Pharos to count as Generative UI.</p>
   </div>
@@ -487,11 +497,12 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
 <!-- ============ PART 4 ============ -->
 <section class="part" id="part-4" data-part="4" hidden>
   <h2><span class="num">4</span>How well Pharos does it</h2>
-  <p>Measured against the idea of Generative UI. Assessed on 6 Oct by an agent reading the code; spot-checked again on 10 Oct: unchanged. <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="an agent read the code; nobody ran these on screen." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
+  <p>Compared with the idea of Generative UI. Assessed from code on 6 Oct by an agent reading it; spot-checked again on 10 Oct: unchanged. <button type="button" class="badge b-a" data-k="a" aria-expanded="false" data-how="an agent read the code; nobody ran these on screen." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Assessed from code</button></p>
+  <p class="takeaway">In one sentence: Pharos builds views and saves them well; adjusting them yourself, acting from them and seeing what the agent is doing are only partly there, and the only quality check so far is one small trial. Pick a group to see its findings.</p>
   <div id="pickslot"></div>
   <div id="caps"></div>
 
-  <div class="qcard" data-qid="b42" data-q="Which gap matters most to you?" data-opts="Adjusting views myself;;Acting from a view;;Seeing what the agent is doing;;Keyboard use;;None of these" data-why="it helps decide what to improve first." data-what="the card you pick moves to the top of this part, marked &#x27;You said this matters most (date)&#x27;." data-kind="A question for you"></div>
+  <div class="qcard" data-qid="b42" data-q="Which gap matters most to you?" data-opts="Adjusting views myself;;Acting from a view;;Seeing what the agent is doing;;Keyboard use;;None of these" data-why="it helps decide what to improve first." data-what="the card you pick moves to the top of this part, marked &#x27;You said this matters most (date)&#x27;. Every finding stays listed; your answer only changes the order." data-kind="A question for you"></div>
 
   <div class="nav"><button type="button" class="btn primary" data-next="5">Next: Open questions and your two proposals</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
 </section>
@@ -534,7 +545,7 @@ h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04e
 <!-- ============ MORE PANELS ============ -->
 <template id="more-sources">
   <h3 style="margin-top:0">All sources</h3>
-  <p class="small">Every source the research used, with a one-line note, how sure we are, and the date.</p>
+  <p class="small">Every source the research used, with a one-line note and what was done with it. There is no single certainty label per source: that it exists, what its author claims, and what an agent made of it are three different things.</p>
   <div id="srclist"></div>
 </template>
 <template id="more-review">
@@ -636,13 +647,16 @@ var TERMS = {
  "MCP":"The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects. (Model Context Protocol.)",
  "token":"The unit AI models read and write in. More tokens means more time and cost.",
  "history":"Every change to a project or a view is saved with who made it and why, and can be undone.",
- "field":"One piece of information on a record, such as a task's due date."
+ "field":"One piece of information on a record, such as a task's due date.",
+ "sandbox":"A restricted area where a program runs, with limits on what it can reach. How strong the limits are depends on how it is set up."
 };
 var KINDS = {
  c:{g:"◆",w:"Confirmed by you",m:"You said so: an answer you gave or a decision you made."},
  v:{g:"●",w:"Verified",m:"Matches an official source, or someone ran it and saw the result."},
  r:{g:"◐",w:"Agent's reading",m:"An AI agent's analysis, for example from reading code or documents. Reasonable, but not tried or confirmed."},
- n:{g:"○",w:"Not known yet",m:"An open question."}
+ n:{g:"○",w:"Not known yet",m:"An open question."},
+ d:{g:"◐",w:"Agent's definition",m:"A definition an AI agent wrote for this view. It is not an official standard."},
+ a:{g:"◐",w:"Assessed from code",m:"An AI agent read the code and concluded how it behaves. Nobody ran it on screen."}
 };
 var SK = (function(){
   var NS = document.body.getAttribute("data-sketch");
@@ -811,11 +825,19 @@ var SK = (function(){
   function initFooter(){
     var r=$("#reset"); if(r) r.addEventListener("click",function(){ state={a:{}}; save(state); try{ window.localStorage.removeItem(KEY); }catch(e){} location.reload(); });
   }
+  function initSel(){
+    $$(".selhead").forEach(function(h){ h.addEventListener("click",function(e){
+      if(e.target.closest(".term,.badge,a")) return;
+      var b=document.getElementById(h.getAttribute("aria-controls")); var open=h.getAttribute("aria-expanded")!=="true";
+      h.setAttribute("aria-expanded",open?"true":"false"); if(b) b.hidden=!open;
+      var hint=h.querySelector(".selhint"); if(hint) hint.textContent=open?"Hide details":"Show details";
+    }); });
+  }
   function glossary(){ var seen={}, out=[]; $$(".term").forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } });
     $$("template").forEach(function(tp){ var d=document.createElement("div"); d.appendChild(tp.content.cloneNode(true)); $$(".term",d).forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } }); });
     return out.sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}); }
 
-  return {$:$,$$:$$,el:el,state:state,ans:ans,setAns:setAns,save:function(){save(state)},FOLLOW:FOLLOW,SAVED:SAVED,initCards:initCards,initFooter:initFooter,openPart:openPart,scrollTo:scrollTo,glossary:glossary,showPop:showPop,hidePop:hidePop,reduce:reduce,closeMore:closeMore};
+  return {$:$,$$:$$,el:el,state:state,ans:ans,setAns:setAns,save:function(){save(state)},FOLLOW:FOLLOW,SAVED:SAVED,initCards:initCards,initSel:initSel,initFooter:initFooter,openPart:openPart,scrollTo:scrollTo,glossary:glossary,showPop:showPop,hidePop:hidePop,reduce:reduce,closeMore:closeMore};
 })();
 
 </script>
@@ -878,7 +900,7 @@ var SK = (function(){
     renderGraph();
   }
   $("#simbtn").addEventListener("click",function(){ sim=!sim; renderSim(); });
-  var rb=$("#recbtn"); function setRecipe(open){ $("#recipe").hidden=!open; rb.setAttribute("aria-expanded",open?"true":"false"); rb.textContent=open?"Hide the recipe":"Show the recipe the AI wrote"; }
+  var rb=$("#recbtn"); function setRecipe(open){ $("#recipe").hidden=!open; rb.setAttribute("aria-expanded",open?"true":"false"); rb.textContent=open?"Hide the recipe":"Show the recipe for this prepared example"; }
   rb.addEventListener("click",function(){ setRecipe($("#recipe").hidden); });
   var pinned=null;
   function hl(w,on){ $$('[data-w="'+w+'"]').forEach(function(n){ n.classList.toggle("hl",on); }); }
@@ -906,7 +928,7 @@ var SK = (function(){
    runtimeart:{n:"Runtime artifacts",b:"Small interactive pages an AI writes on the spot. Listed together with app builders, but a different job.",bd:[["r","an agent's reading of the discovery list","(agent's reading)"]],src:["The discovery list","https://github.com/narrowin/awesome-generative-ui"]},
    appbuilders:{n:"App builders (for example v0)",b:"Write an app's code while a developer builds it: a different job from answering your question while you work.",bd:[["r","an agent's reading of the discovery list","(agent's reading)"]],src:["v0","https://v0.app/"]},
    mcp:{n:"MCP",b:"The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects.",bd:[["v","Pharos's own docs","(Pharos docs)"]],src:["Model Context Protocol","https://modelcontextprotocol.io/"]},
-   mcpapps:{n:"MCP Apps",b:"Lets a chat app show an interactive view supplied by a tool, walled off from everything else. It doesn't need AI-written code: a developer's own view can run inside it.",bd:[["v","the official overview, read on 6 Oct","(official overview)"]],src:["MCP Apps","https://github.com/modelcontextprotocol/ext-apps"]},
+   mcpapps:{n:"MCP Apps",b:"Lets a chat app show an interactive view supplied by a tool. The view runs in a "+T("sandbox")+", which limits what it can reach. It doesn't need AI-written code: a developer's own view can run inside it.",bd:[["v","the official overview, read on 6 Oct","(official overview)"]],src:["MCP Apps","https://github.com/modelcontextprotocol/ext-apps"]},
    agui:{n:"AG-UI",b:"Lets an app follow what an agent is doing, step by step, and share state with it. Pharos only announces that data changed, and shows a simple answering status.",bd:[["v","its own documentation, read on 6 Oct","for the description"],["r","the comparison with Pharos is the review's judgment","for the comparison"]],src:["AG-UI","https://github.com/ag-ui-protocol/ag-ui"]},
    a2a:{n:"A2A",b:"For agents talking to other agents. Not needed for Generative UI.",bd:[["r","an agent's reading","(agent's reading)"]],src:["A2A","https://a2a-protocol.org/"]}
   };
@@ -954,12 +976,12 @@ var SK = (function(){
      d:"Pausing clears the questions waiting in line, but doesn't stop an answer that is already being written.",src:["The agent runner code","../../../apps/server/src/agent-runner.ts"]},
    {id:"keys",g:"Gap found",pill:"notyet",t:"Keyboard use of tabs inside views",e:"Arrow keys don't move between tabs. Only this part was checked, not the whole app.",k:"r",
      d:"The tabs drawn inside a view have no keyboard handling for moving between tabs. Nothing else about keyboard use was checked.",src:["The view renderer code","../../../apps/web/src/catalog/renderer.tsx"]},
-   {id:"quality",g:"Measured once",pill:"notyet",t:"Quality of AI-made views",e:"One trial: 6 questions, 6 clean views. No repeatable test yet; the paused "+G_+" work was meant to build one. <a href=\"case-a.html\">See the "+G_+" work</a>",k:"v",
-     d:"Six AI agents each answered one question about a copy of Pharos's own project. All six views were clean, and the two counts that were checked were exact. Too small to repeat or compare.",src:["The earlier trial's record in the project",""]}
+   {id:"quality",g:"Measured once",pill:"notyet",t:"Quality of AI-made views",e:"One trial: 6 questions, 6 clean views. Not enough runs to establish repeatable quality; the paused "+G_+" work was meant to build a repeatable test. <a href=\"case-a.html\">See the "+G_+" work</a>",k:"v",
+     d:"Six AI agents each answered one question about a copy of Pharos's own project. All six views were clean, and the two counts that were checked were exact. Not enough runs to establish repeatable quality.",src:["The earlier trial's record in the project",""]}
   ];
   var GROUPS=["Works","Works, with limits","Partly","Gap found","Measured once"];
   var PICKMAP={"Adjusting views myself":"adjust","Acting from a view":"act","Seeing what the agent is doing":"doing","Keyboard use":"keys"};
-  var openCaps={};
+  var openCaps={}, openGroups={};
   function renderCaps(){
     var host=$("#caps"), slot=$("#pickslot"); host.textContent=""; slot.textContent="";
     var a=SK.ans("b42"), pickId=a&&PICKMAP[a.v];
@@ -968,7 +990,7 @@ var SK = (function(){
       var hb=el("button","caphead"); hb.type="button"; hb.setAttribute("aria-expanded",openCaps[c.id]?"true":"false");
       var t=el("div","capt"); if(picked){ t.appendChild(el("span","pickmark","You said this matters most (10 Oct)")); }
       var tt=el("span",null,c.t); t.appendChild(tt); t.insertAdjacentHTML("beforeend",'<span class="pill p-'+c.pill+'">'+c.g+'</span>');
-      hb.appendChild(t); var e=el("div","cape"); e.innerHTML=c.e+" "+BADGE(c.k,c.k==="v"?"The record of the earlier trial.":"An agent read the code on 6 Oct; nobody ran this on screen.","6 Oct"); hb.appendChild(e);
+      hb.appendChild(t); var e=el("div","cape"); e.innerHTML=c.e+" "+(c.k==="v"?BADGE("v","The record of the earlier trial.","6 Oct"):BADGE("a","An agent read the code on 6 Oct; nobody ran this on screen.","6 Oct")); hb.appendChild(e);
       hb.appendChild(el("span","more-hint",openCaps[c.id]?"Hide details":"Show details"));
       hb.addEventListener("click",function(ev){ if(ev.target.closest(".term,.badge,a")) return; openCaps[c.id]=!openCaps[c.id]; renderCaps(); });
       w.appendChild(hb);
@@ -977,9 +999,19 @@ var SK = (function(){
         m.innerHTML="Assessed 6 Oct; spot-checked 10 Oct: unchanged · Source: "+srcHtml+" · "; var ab=el("button","linkbtn","Ask about this"); ab.type="button"; ab.addEventListener("click",function(){ askToast(d); }); m.appendChild(ab); d.appendChild(m); w.appendChild(d); }
       return w;
     }
-    if(pickId){ CAPS.forEach(function(c){ if(c.id===pickId) slot.appendChild(cardEl_(c,true)); }); }
-    GROUPS.forEach(function(g){ var list=CAPS.filter(function(c){ return c.g===g && c.id!==pickId; }); if(!list.length) return;
-      host.appendChild(el("div","grouph",g)); list.forEach(function(c){ host.appendChild(cardEl_(c,false)); }); });
+    if(pickId){ CAPS.forEach(function(c){ if(c.id===pickId) slot.appendChild(cardEl_(c,true)); });
+      slot.appendChild(el("p","small","Your answer moved this card to the top. Nothing is hidden: every finding is still listed below.")); }
+    GROUPS.forEach(function(g){ var all=CAPS.filter(function(c){ return c.g===g; }); if(!all.length) return;
+      var list=all.filter(function(c){ return c.id!==pickId; }); var open=!!openGroups[g];
+      var wrap=el("div","card selcard"); var id="grp-"+g.replace(/[^a-z]/gi,"");
+      var hb=el("button","selhead"); hb.type="button"; hb.setAttribute("aria-expanded",open?"true":"false"); hb.setAttribute("aria-controls",id);
+      hb.appendChild(el("span","selt",g+" ("+all.length+")")); hb.appendChild(el("span","sels",all.map(function(c){ return c.t; }).join("; "))); hb.appendChild(el("span","selhint",open?"Hide details":"Show details"));
+      hb.addEventListener("click",function(){ openGroups[g]=!openGroups[g]; renderCaps(); var nb=document.getElementById(id); if(nb&&nb.previousSibling) nb.previousSibling.focus(); });
+      wrap.appendChild(hb);
+      var body=el("div","selbody"); body.id=id; body.hidden=!open;
+      list.forEach(function(c){ body.appendChild(cardEl_(c,false)); });
+      if(!list.length) body.appendChild(el("p","small","Shown above, because you picked it."));
+      wrap.appendChild(body); host.appendChild(wrap); });
   }
 
   /* ---- answers, proposals, waiting count ---- */
@@ -1012,7 +1044,7 @@ var SK = (function(){
    ["A2UI over MCP","How to send A2UI views through MCP. Documentation existing doesn't mean a target app supports it.","v","https://a2ui.org/guides/a2ui_over_mcp/"],
    ["A2UI in MCP Apps","How to show A2UI views inside an MCP Apps window.","v","https://a2ui.org/guides/a2ui-in-mcp-apps/"],
    ["A2UI catalogs","How the set of blocks is agreed on and versioned.","v","https://a2ui.org/concepts/catalogs/"],
-   ["A2UI actions","How a view sends actions back to the agent.","v","https://a2ui.org/concepts/actions/"],
+   ["A2UI actions","Local actions or events sent to the server, from a view.","v","https://a2ui.org/concepts/actions/"],
    ["awesome-generative-ui","A reader's list of tools and papers. Good for finding things; not a ranking.","r","https://github.com/narrowin/awesome-generative-ui"],
    ["AG-UI","Lets an app follow an agent's steps and share state with it.","v","https://github.com/ag-ui-protocol/ag-ui"],
    ["A2A","How agents talk to other agents. Not needed for Generative UI.","v","https://a2a-protocol.org/"],
@@ -1022,7 +1054,7 @@ var SK = (function(){
    ["OpenUI","A compact language for views. The '67% fewer tokens' is its maker's claim.","v","https://github.com/thesysdev/openui"],
    ["mdocUI","Mixes explanation text with blocks. Listed only; not looked at in detail.","r","https://github.com/mdocui/mdocui"],
    ["Adaptive Cards","An older format for cards the app draws. A useful precedent; not tested with Pharos.","r","https://adaptivecards.microsoft.com/"],
-   ["MCP Apps","Interactive views inside a chat app, walled off from everything else.","v","https://github.com/modelcontextprotocol/ext-apps"],
+   ["MCP Apps","Interactive views inside a chat app, run in a sandbox that limits what they can reach.","v","https://github.com/modelcontextprotocol/ext-apps"],
    ["mcp-ui","Related tooling for MCP views. Listed only; not looked at in detail.","r","https://github.com/MCP-UI-Org/mcp-ui"],
    ["Vercel AI SDK","Shows a ready-made block for each result of a tool the AI uses.","v","https://ai-sdk.dev/"],
    ["Tambo","Lets an AI update blocks in an existing app. Its hosted service is closing.","v","https://github.com/tambo-ai/tambo"],
@@ -1041,7 +1073,7 @@ var SK = (function(){
   window.onMoreOpen=function(id,panel){
     if(id==="sources"){ var h=$("#srclist",panel);
       SRC.forEach(function(s){ var r=el("div","srcrow"); var nm=el("div","sn"); if(s[3]){ nm.innerHTML=A(s[3],esc(s[0])); } else nm.textContent=s[0]; r.appendChild(nm);
-        r.appendChild(el("div",null,s[1])); var m=el("div","small"); m.innerHTML=BADGE(s[2],s[2]==="v"?"Read against the source itself in the 6 Oct review.":"An agent's note or a listing that was not checked in detail.","Read 6 Oct")+" · Read 6 Oct"; r.appendChild(m); h.appendChild(r); }); }
+        r.appendChild(el("div",null,s[1])); var m=el("div","small"); m.textContent=(s[2]==="v"?"Read in the 6 Oct review. What it says is its authors' own account, not a checked fact. The note above is an agent's summary.":(s[3]?"Listed or summarised by an agent; not checked in detail. The note above is an agent's reading.":"A record in the research project, written by an agent. The note above summarises it.")); r.appendChild(m); h.appendChild(r); }); }
     if(id==="glossary"){ var g=$("#gloss",panel); SK.glossary().forEach(function(k){ g.appendChild(el("dt",null,k)); g.appendChild(el("dd",null,TERMS[k])); }); }
   };
 

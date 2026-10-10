@@ -7,8 +7,7 @@
 
 ## In short
 
-- **Case A** opens with "The models built a test for Pharos but haven't run it for real, so there
-  are no results yet." and a picture of the test whose last box, "Results", is empty. The owner
+- **Case A** opens with "The models built a test for Pharos. The new G1 tests have not run with a real agent." and a picture of the test whose last box, "Results", is empty. The owner
   then judges the work from the work itself: one real test with its answer key, five problems
   shown happening, the release check's actual results, what is left and what it would ask of them,
   and finally their own verdict.
@@ -90,12 +89,14 @@ any question, a line appears under the headline: "Your answers so far: …" with
 **Certainty badges** (a circle glyph plus a word; never colour alone). They follow principle 4 of
 the goal draft (confirmed by the owner, official source, agent's analysis), plus "not known":
 
-| Glyph | Word               | Popover says                                                                                                                       |
-| ----- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| ◆     | "Confirmed by you" | "You said so: an answer you gave or a decision you made." Plus the date.                                                           |
-| ●     | "Verified"         | "Matches an official source, or someone ran it and saw the result." Plus which source or run, who, and when.                       |
-| ◐     | "Agent's reading"  | "An AI agent's analysis, for example from reading code or documents. Reasonable, but not tried or confirmed." Plus agent and date. |
-| ○     | "Not known yet"    | "An open question." Plus who could answer it.                                                                                      |
+| Glyph | Word                 | Popover says                                                                                                                       |
+| ----- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ◆     | "Confirmed by you"   | "You said so: an answer you gave or a decision you made." Plus the date.                                                           |
+| ●     | "Verified"           | "Matches an official source, or someone ran it and saw the result." Plus which source or run, who, and when.                       |
+| ◐     | "Agent's reading"    | "An AI agent's analysis, for example from reading code or documents. Reasonable, but not tried or confirmed." Plus agent and date. |
+| ○     | "Not known yet"      | "An open question." Plus who could answer it.                                                                                      |
+| ◐     | "Agent's definition" | "A definition an AI agent wrote for this view. It is not an official standard." Used for the meaning of a term the review defined. |
+| ◐     | "Assessed from code" | "An AI agent read the code and concluded how it behaves. Nobody ran it on screen." Used for case B's capability assessment.        |
 
 Rules:
 
@@ -204,8 +205,8 @@ Desktop wireframe (the phone puts everything in one column, with the picture ver
 ```
 ┌─ Sketch with fixed content, 10 Oct 2026. Not live data. ───────────────────────────────┐
 │ What the models did in G1                                                               │
-│ The models built a test for Pharos but haven't run it for real, so there are no         │
-│ results yet. ●                                                                          │
+│ The models built a test for Pharos. The new G1 tests have not run with a real           │
+│ agent. ●                                                                                │
 │                                                                                         │
 │ [Practice projects]→[Questions and   ]→[An AI agent   ]→[Check the view  ]→┌ Results ┐ │
 │  Built: 2            answer keys        answers with a   against the key    │None yet │ │
@@ -214,10 +215,15 @@ Desktop wireframe (the phone puts everything in one column, with the picture ver
 │ └──────── Test runner: does all of this by itself. Built; tried only with a stand-in ───┘│
 │                                                                                         │
 │ Needs you: nothing now. G1 has been paused since 10 Oct while Pharos is reframed.  ◆    │
-│ ◐ Agent's reading: solid groundwork that already caught real problems, but no results  │
-│   yet, and more rules than one person can review.                                       │
-│ Also in G1: the published version was re-checked from scratch and passed, after seven │
-│   fixes to its instructions. One check waits for you if G1 restarts.  ●                 │
+│ Earlier evidence, limited: one six-question trial; not enough runs to establish         │
+│   repeatable quality.                                                                   │
+│ ◐ Agent's reading: Useful test material; whether it helps a reader is untested.         │
+│   Not independent: Opus 5.5 wrote this verdict and three of the test situations. The    │
+│   rules come to about 21,000 words and 26 questions (a count); that looks like more     │
+│   than one person can review (a reading).                                               │
+│ Also in G1: The public copy passed installation and code checks. The instructions were  │
+│   improved afterward; checking the updated release again and trying the background      │
+│   service remain open.  ●                                                               │
 │                                                                                         │
 │ Look closer, in this order:                                                             │
 │ 1 One test, up close · 2 Problems it turned up · 3 The release check ·                  │
@@ -228,20 +234,19 @@ Desktop wireframe (the phone puts everything in one column, with the picture ver
 
 ### 2.3 The path
 
-| Order | Label                        | Preview (small text)                               | What the reader can judge there           |
-| ----- | ---------------------------- | -------------------------------------------------- | ----------------------------------------- |
-| 1     | "One test, up close"         | "a practice project, a question, the right answer" | Does the test ask something worth asking? |
-| 2     | "Problems it turned up"      | "five ways Pharos can mislead you or lose work"    | Did the work find anything real?          |
-| 3     | "The release check"          | "the published version, installed from scratch"    | Can the published version be trusted?     |
-| 4     | "What's left before results" | "and what it would ask of you"                     | Is the rest worth its cost to the reader? |
-| 5     | "Your verdict"               | "is this work good?"                               | The reader's own answer, kept             |
+| Order | Label                        | Preview (small text)                                              | What the reader can judge there           |
+| ----- | ---------------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
+| 1     | "One test, up close"         | "a practice project, a question, the right answer"                | Does the test ask something worth asking? |
+| 2     | "Problems it turned up"      | "five ways Pharos can mislead you or lose work"                   | Did the work find anything real?          |
+| 3     | "The release check"          | "the public copy, installed from scratch, and what is still open" | Can the published version be trusted?     |
+| 4     | "What's left before results" | "and what it would ask of you"                                    | Is the rest worth its cost to the reader? |
+| 5     | "Your verdict"               | "is this work good?"                                              | The reader's own answer, kept             |
 
 ### 2.4 Elements on the first screen
 
 **A1 · Headline**
 
-- Sees: "The models built a test for Pharos but haven't run it for real, so there are no results
-  yet." followed by a ● badge.
+- Sees: "The models built a test for Pharos. The new G1 tests have not run with a real agent." followed by a ● badge.
 - Does: badge popover: "How we know: the work that would run the test isn't done, and the test
   runner has only been tried with a stand-in agent. Checked 10 Oct in the project records and the
   runner's notes."
@@ -300,11 +305,8 @@ Desktop wireframe (the phone puts everything in one column, with the picture ver
 
 **A4 · Agent's-reading line**
 
-- Sees: "◐ Agent's reading: solid groundwork that already caught real problems, but no results
-  yet, and more rules than one person can review."
-- Does: badge popover: "Written by Opus 5.5 on 10 Oct. Opus 5.5 also wrote three of the test
-  situations and the pass marks, so weigh this with that in mind. The evidence is in the five
-  parts below; 'Your verdict' is where you give yours."
+- Sees: "◐ Agent's reading: Useful test material; whether it helps a reader is untested. Not independent: Opus 5.5 wrote this verdict and also wrote three of the test situations and the pass marks. The rules and pass marks come to about 21,000 words and 26 questions for you (a count). That looks like more than one person can review (a reading)." The self-review disclosure is visible text beside the verdict, not only in the popover. A second small line follows the headline area: "Earlier evidence, limited: before G1, one trial had six AI agents each answer one question. All six views were clean, but six runs are not enough to establish repeatable quality." with a link to part 4.
+- Does: badge popover: "Written by Opus 5.5 on 10 Oct. The evidence is in the five parts below; 'Your verdict' is where you give yours."
 - Work or words: describes (a judgment).
 - Terms: none.
 - Certainty: ◐ Agent's reading.
@@ -314,8 +316,7 @@ Desktop wireframe (the phone puts everything in one column, with the picture ver
 
 **A5 · Release line**
 
-- Sees: "Also in G1: the published version was re-checked from scratch and passed, after seven
-  fixes to its instructions. One check waits for you if G1 restarts." with a ● badge.
+- Sees: "Also in G1: The public copy passed installation and code checks. The instructions were improved afterward; checking the updated release again and trying the background service remain open." with a ● badge.
 - Does: opens part 3.
 - Work or words: describes; part 3 shows the work.
 - Terms: none.
@@ -418,8 +419,7 @@ words: describes (navigation). Terms: none. Certainty: none. Asks: nothing.
 
 **A14 · How sure is the answer key?**
 
-- Sees: "● Verified: the answer key matches what Pharos's own filters return on this project. The
-  practice project's automated checks confirm it, and it was run again on 10 Oct." Then: "A second
+- Sees: two separate questions. "1. Does the answer key match its own rules?" "● Verified: yes, on the made-up practice projects. The answer key matches what Pharos's own filters return, and the automated checks confirm it." "2. Do the rules match what you mean by risk?" "○ Not known yet: nobody has checked these rules against what you mean; 'What counts as at risk?' is the first of the 26 questions for you." Then: "A second
   AI model, from another company, then checked all three test situations: 45 issues, each fixed
   or accepted with a reason. One of them:" and two panels:
   - Before: "First draft: the answer key used made-up task names, written before the practice
@@ -452,7 +452,7 @@ words: describes (navigation). Terms: none. Certainty: none. Asks: nothing.
 - Work or words: describes. Terms: none. Certainty: ● on "None is fixed yet". Asks: nothing.
 - Maps to: existing **Text**. Facts: A-F19.
 
-Each problem card has the same layout: a plain title; "What you'd see" (a small demonstration);
+Part 2 opens with one sentence: "In one sentence: one problem is confirmed by running it (cancelled work counted as late); the other four are findings from reading the code that nobody has yet seen on screen. Pick a problem to see the detail." Each problem is first a short selectable summary (title plus one sentence; for example "Confirmed by running it: a cancelled task is listed as late."); the detail below opens on selection. Each problem card has the same layout: a plain title; "What you'd see" (a small demonstration);
 "Why it matters" (one line); a certainty badge with "How we know"; "What happens next".
 
 **A21 · "Pharos's own example counts cancelled work as late"**
@@ -475,7 +475,7 @@ Each problem card has the same layout: a plain title; "What you'd see" (a small 
 - Maps to: **Exhibit** (compare) plus **new data** (a finding with certainty and status).
 - Facts: A-F13, A-F21.
 
-**A22 · "An empty list says 'No tasks yet' when there are tasks"**
+**A22 · "Some task views say 'No tasks yet' when nothing matches"**
 
 - Sees: (illustration, on the practice project "Catalog delivery")
   - Left: a task list titled "Blocked or late in Foundation" showing "No tasks yet".
@@ -531,10 +531,9 @@ without a warning"**
 **A25 · "Ticking a task done has no Undo, and a second click can reopen it"**
 
 - Sees: (illustration) a task row with a round checkbox. First click: the row shows "Done", and no
-  Undo appears. The view refreshes. Second click: the row is "Queued" again, with the note
-  "Recorded as a second change."
-  - "Why it matters: a slip of the mouse changes your project, and the only way back is
-    History."
+  Undo appears. The view refreshes. Second click: the task is reopened, shown as "Queued", with the note
+  "Recorded as a second change; the status may not be the one it had before."
+  - "Why it matters: a slip of the mouse changes your project, and No Undo button; a second click reopens the task as another change, or History can revert it."
   - "What happens next: planned in a later stage (one safe task action, with Undo), paused."
 - Work or words: shows the work as a re-enactment; labelled as an illustration.
 - Terms: history.
@@ -562,17 +561,15 @@ without a warning"**
 
 **A31 · What was run**
 
-- Sees: a list headed "Run on 7 Oct, on the published version", one line per check, each with a
-  pill "Passed":
+- Sees: first, beside the results, a box: "Open. Read this first. The public copy passed installation and code checks. The instructions were improved afterward; checking the updated release again and trying the background service remain open." Then a list headed "Run on 7 Oct, on the public copy, before the later instruction fixes", one line per check, each with a pill "Passed":
   - "Install, following the README"
   - "Code checks: types, style and formatting"
   - "207 automated checks, in about 5 seconds"
-  - "Build" — with "(one harmless warning: the app's main file is large)"
+  - "Build" — with "(one warning: the app's main file is large. It did not stop the build; nobody measured whether it slows the app.)"
   - "Connect an AI agent and read a project"
   - "GitHub's own automatic checks for the same version, on 3 versions of Node.js"
-  - "Settings view in a real browser: the dark theme stays after reloading; pausing automatic
-    answers in one tab shows in another; 'answering off' explains itself"
-- Does: "Show the raw output" toggles the actual check log table from the evidence.
+    - A separate small card, "Run later, on a newer version": "Settings view in a real browser: the dark theme stays after reloading; pausing automatic answers in one tab shows in another; 'answering off' explains itself" (Passed).
+- Does: "Show the recorded check summary" toggles the table of recorded summaries from the evidence (the full logs were kept elsewhere).
 - Work or words: **shows the work**: the actual outcomes.
 - Terms: automated checks, Node.js, AI agent.
 - Certainty: ● Verified (ran it).
@@ -582,7 +579,7 @@ without a warning"**
 
 **A32 · One of the fixes**
 
-- Sees: "Seven fixes to the README and the contributor guide. For example:" and two panels:
+- Sees: "Seven fixes to the README and the contributor guide, made after the 7 Oct checks. The checks above did not test them. For example:" and two panels:
   - Before: "…the web app picks up its changes within a second."
   - After: "Changes it makes are found by polling about once a second, so the web app normally
     shows them within a few seconds."
@@ -593,15 +590,13 @@ without a warning"**
 
 **A33 · Not checked**
 
-- Sees: a dashed box with the pill "Needs you": "Not checked: the background service, which
-  starts Pharos when you log in. Trying it would have replaced the copy you use, so it waits for
-  you, if G1 restarts. These checks covered the version published on 7 Oct."
+- Sees: a dashed box with the pills "Open" and "Needs you": "Not re-run: the fresh install and GitHub checks on the updated release." and "Not checked: the background service, which starts Pharos when you log in. Trying it would have replaced the copy you use, so it waits for you, if G1 restarts."
 - Work or words: describes a gap in the work. Asks: nothing.
 - Terms: background service. Certainty: ● Verified. Maps to: existing **Callout**. Facts: A-F26.
 
 **A34 · Question**
 
-- Sees: "Is this enough for you to trust the published version for now?" — "Yes" / "No" / "Not
+- Sees: "Is this enough for you to trust the public copy for now, with the repeat check and the service still open?" — "Yes" / "No" / "Not
   sure". "What happens: kept, and shown in 'Your verdict'."
 - Work or words: asks. Terms: none. Certainty: the answer counts as ◆ once given.
 - Maps to: **QuestionCard** (new) plus **new data**.
@@ -657,8 +652,7 @@ without a warning"**
 
 - Sees: a small box: "One earlier trial, before G1: six AI agents each answered one question about
   a copy of Pharos's own project. All six views were clean, and the two counts that were checked (overdue,
-  due this week) were exact. Too small to repeat or compare, which is why G1 set out to build a
-  proper test."
+  due this week) were exact. Not enough runs to establish repeatable quality, which is why G1 set out to build a proper test."
 - Terms: none. Asks: nothing.
 - Work or words: describes a result. Certainty: ● Verified. Maps to: existing **Callout** plus
   **new data** (claim). Facts: A-F1, A-F32.
@@ -695,15 +689,12 @@ without a warning"**
 
 - Sees: a box headed "◐ Agent's reading · Opus 5.5 · 10 Oct", with the note "Opus 5.5 also wrote
   three of the test situations and the pass marks." Four short points:
-  - "Worth keeping: the answer keys are concrete, were checked by running them, and a second model
-    caught real mistakes in the first drafts."
-  - "Already useful: writing the tests exposed problems you would hit, like the cancelled-work
-    example and the misleading 'No tasks yet'."
-  - "Not good yet: there are no results, and the rules grew to tens of thousands of words and 26
-    questions before you saw anything. The work ran ahead of you."
+  - "Worth keeping: the answer keys are concrete, were checked by running them on made-up data, and a second model caught real mistakes in the first drafts."
+  - "Already useful: writing the tests exposed one problem confirmed by running it (the cancelled-work example) and four more found by reading the code, like a task view saying 'No tasks yet' when nothing matches."
+  - "Not good yet: the new tests have not run with a real agent, and the rules grew to about 21,000 words and 26 questions before you saw anything. The work ran ahead of you."
   - "A gap: only one of the three test situations checks whether a person can read the view at a
     glance; the other two check that views are correct and keep your changes. None asks whether
-    you know where you stand."
+    you know where you stand." A fifth point: "Untested: whether a reader finds the results easier to understand. Nobody has tried it with you yet." The note under the heading reads "Not independent: Opus 5.5 also wrote three of the test situations and the pass marks."
 - Work or words: describes (a judgment), after the evidence.
 - Certainty: ◐ Agent's reading.
 - Terms: none. Asks: nothing (A51 asks).
@@ -742,9 +733,9 @@ the first screen. The bylines on each piece of work answer "which model did what
 
 **After 30 seconds the owner should be able to say:**
 
-1. "They built a test, but it hasn't been run, so there are no results."
+1. "They built a test, but the new tests haven't run with a real agent."
 2. "Nothing needs me now; G1 is paused."
-3. "The agent thinks it's solid but oversized, and I can check that myself in five parts."
+3. "The agent thinks it's useful test material but oversized, with no proof yet that it helps a reader, and I can check that myself in five parts."
 
 **Why it should pass:** the headline answers "what did they do" without jargon; the empty
 "Results" box shows the main fact without reading; the needs-you line comes before any detail;
@@ -843,16 +834,17 @@ Its sources are stored as deliverables with the category typed into the title ("
 ```
 ┌─ Sketch with fixed content, 10 Oct 2026. Not live data. ───────────────────────────────┐
 │ Generative UI, and where Pharos sits                                                    │
-│ Generative UI means an AI answers you by putting a view together; Pharos puts its       │
+│ Generative UI means an AI answers you by putting a view together ◐; Pharos puts its     │
 │ views together from tested building blocks and live project data. ●                     │
 │                                                                                         │
-│ How much of the view the AI makes                                                       │
+│ Four approaches, sorted by how much of the view the AI makes                            │
 │ [Writes text] — [Shows one ready-made] — [Arranges blocks    ] — [Writes the view's  ]  │
 │  ≡≡≡≡             block  ▭                 into a view  ▦▦      code itself  </>       │
 │                                            ★ Pharos is here                             │
 │  Not Generative UI └────────────────── Generative UI ──────────────────────────┘        │
-│ Different approaches, not stages of progress. Further right, the AI has more freedom,   │
-│ and what it makes needs more checking.                                                  │
+│ Different approaches, not stages of progress. They trade freedom against checking:      │
+│ where the AI makes more of the view, more of it needs checking. None is better in       │
+│ general.                                                                                │
 │                                                                                         │
 │ ◐ Based on a review of official documents and Pharos's code on 6 Oct. Where each       │
 │   approach sits is an agent's reading.                                                  │
@@ -880,13 +872,11 @@ Its sources are stored as deliverables with the category typed into the title ("
 
 **B1 · Headline**
 
-- Sees: "Generative UI means an AI answers you by putting a view together; Pharos puts its views
-  together from tested building blocks and live project data." with a ● badge.
-- Does: popovers on the terms; badge popover: "How we know: Pharos's own docs and code for how
-  Pharos works; the meaning of Generative UI follows the review of 6 Oct."
+- Sees: "Generative UI means an AI answers you by putting a view together ◐ Agent's definition; Pharos puts its views together from tested building blocks and live project data. ● Verified."
+- Does: popovers on the terms; the first badge's popover: "How we know: this is the 6 Oct review's own wording of the term, not an official definition."; the second: "How we know: Pharos's own docs and code for how Pharos works."
 - Work or words: describes; part 1 shows it.
 - Terms: Generative UI, view, building block, live project data.
-- Certainty: ● Verified (Pharos's part); the definition is the review's wording.
+- Certainty: ● Verified (Pharos's part); ◐ Agent's definition for the meaning of "Generative UI" (the review's wording).
 - Asks: nothing.
 - Maps to: existing **Text** plus **new data** (claim, terms).
 - Facts: B-F1, B-F2, B-F12, B-F13.
@@ -897,8 +887,7 @@ Its sources are stored as deliverables with the category typed into the title ("
   card; a grid of three blocks; code brackets): "Writes text", "Shows one ready-made block",
   "Arranges blocks into a view" (marked "★ Pharos is here"), "Writes the view's code itself".
   Under the first stop: "Not Generative UI". Under the other three, one bracket: "Generative
-  UI". Below: "Different approaches, not stages of progress. Further right, the AI has more
-  freedom, and what it makes needs more checking." No arrowheads pointing right; no words like
+  UI". Heading: "Four approaches, sorted by how much of the view the AI makes". Below: "Different approaches, not stages of progress. They trade freedom against checking: where the AI makes more of the view, more of what it makes needs checking. None is better in general." No arrowheads pointing right; no words like
   "level" or "advanced".
 - Does: tapping a stop opens a small card under the band:
   - "Writes text": "A chat answer in paragraphs. Nothing on screen is built for your question."
@@ -961,10 +950,8 @@ Asks: nothing.
     arrows: material order → fitting → inspection booking. Each node shows its status label.
     Small tags on the blocks: "Building block: one number" and "Building block: dependency graph".
 - Does: two toggles under the right panel:
-  - "Show the recipe the AI wrote": reveals the view's actual recipe (the JSON from the practice
-    project, verbatim). Hovering or tapping a block highlights its lines in the recipe, and the
-    reverse. Caption: "The AI doesn't draw anything. It writes this recipe: which blocks, where,
-    and which data each one shows. Pharos draws the view and keeps it current."
+  - "Show the recipe for this prepared example": reveals the recipe (the JSON from the practice project, verbatim; labelled "not a recording of a live answer"). Hovering or tapping a block highlights its lines in the recipe, and the reverse.
+  - Visible text between the two panels and the toggles, not inside the recipe: "In a live answer, the AI chooses which blocks to use, where they go and which data each one shows, and writes that down as a recipe. The AI doesn't draw anything: Pharos draws the view and keeps it current."
   - "Pretend the materials arrived" (label: "simulated change, for this sketch"): "Order lighting
     materials" becomes "Signed off" and "Fit workshop lighting" becomes "Queued"; the number turns
     to 0 and the graph updates. The text answer stays the same and gets a marker: "This text is
@@ -1007,8 +994,7 @@ map. Asks: nothing.
   | While you use the app    | Vercel AI SDK · Tambo      | **Pharos** (highlighted) · json-render · A2UI · OpenUI | Google research study · Runtime artifacts |
   | While a developer builds | "none in this review"      | "none in this review"                                  | App builders (for example v0)             |
 
-  Below the grid, a strip: "Connectors: not ways to make views. They link agents and apps, and
-  work with any of the above:" with chips "MCP (Pharos uses it)", "MCP Apps", "AG-UI", "A2A".
+  Below the grid, a strip: "Connectors: not ways to make views. They link agents and apps. In principle they could be used with any of the above, with extra integration work; none is verified here:" with chips "MCP (Pharos uses it)", "MCP Apps", "AG-UI", "A2A".
   Caption: "◐ Where each one sits is an agent's reading of its documents (6 Oct). The examples
   come from a discovery list, which is not a ranking."
 
@@ -1027,7 +1013,7 @@ map. Asks: nothing.
   | Runtime artifacts     | "Small interactive pages an AI writes on the spot. Listed together with app builders, but a different job."                                                                                                                     | ◐ Agent's reading                                          |
   | App builders          | "Write an app's code while a developer builds it: a different job from answering your question while you work."                                                                                                                 | ◐ Agent's reading                                          |
   | MCP                   | "The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects."                                                                                                                       | ● Verified (Pharos docs)                                   |
-  | MCP Apps              | "Lets a chat app show an interactive view supplied by a tool, walled off from everything else. It doesn't need AI-written code: a developer's own view can run inside it."                                                      | ● Verified (official overview)                             |
+  | MCP Apps              | "Lets a chat app show an interactive view supplied by a tool, The view runs in a sandbox (a restricted area), which limits what it can reach. It doesn't need AI-written code: a developer's own view can run inside it."       | ● Verified (official overview)                             |
   | AG-UI                 | "Lets an app follow what an agent is doing, step by step, and share state with it. Pharos only announces that data changed, and shows a simple answering status."                                                               | ● for the description; ◐ for the comparison                |
   | A2A                   | "For agents talking to other agents. Not needed for Generative UI."                                                                                                                                                             | ◐ Agent's reading                                          |
 
@@ -1096,24 +1082,23 @@ map. Asks: nothing.
 
 #### Part 4 · "How well Pharos does it"
 
-**B40 · Intro** — "Measured against the idea of Generative UI. Assessed on 6 Oct by an agent reading
-the code; spot-checked again on 10 Oct: unchanged." ◐. Maps to: existing **Text**. Facts: B-F18,
+**B40 · Intro** — "Compared with the idea of Generative UI. Assessed from code on 6 Oct by an agent reading it; spot-checked again on 10 Oct: unchanged." with the badge "◐ Assessed from code" (popover: an agent read the code; nobody ran these on screen). A one-sentence takeaway follows: "In one sentence: Pharos builds views and saves them well; adjusting them yourself, acting from them and seeing what the agent is doing are only partly there, and the only quality check so far is one small trial. Pick a group to see its findings." The eight cards are shown as five selectable group summaries (name, count, card titles); a group opens to show its cards. Maps to: existing **Text**. Facts: B-F18,
 B-F19. Work or words: describes. Terms: none. Asks: nothing.
 
 **B41 · Capability cards, grouped**
 
 - Sees: eight cards in five groups, each card a short title, a status pill and a one-line example:
 
-  | Group                | Card title                                      | Example line                                                                                                                                | Badge |
-  | -------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-  | "Works"              | "Builds a view for your question"               | "Agents choose the blocks, layout and data for each question."                                                                              | ◐     |
-  | "Works"              | "Saves views, and you and agents can edit them" | "Every change is kept and can be undone."                                                                                                   | ◐     |
-  | "Works, with limits" | "Shows live data"                               | "A misspelled field name is saved anyway, with only a warning; written text goes out of date."                                              | ◐     |
-  | "Partly"             | "You can adjust generated views yourself"       | "Only some settings; changing a table's filter or columns needs an agent." Plus the link "The G1 test found this too"                       | ◐     |
-  | "Partly"             | "You can act from a view"                       | "Asking questions and simple task edits work; forms and general buttons don't exist yet."                                                   | ◐     |
-  | "Partly"             | "It shows what the agent is doing"              | "Pausing can show 'Paused' while an agent is still answering."                                                                              | ◐     |
-  | "Gap found"          | "Keyboard use of tabs inside views"             | "Arrow keys don't move between tabs. Only this part was checked, not the whole app."                                                        | ◐     |
-  | "Measured once"      | "Quality of AI-made views"                      | "One trial: 6 questions, 6 clean views. No repeatable test yet; the paused G1 work was meant to build one." Plus the link "See the G1 work" | ●     |
+  | Group                | Card title                                      | Example line                                                                                                                                                                       | Badge |
+  | -------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+  | "Works"              | "Builds a view for your question"               | "Agents choose the blocks, layout and data for each question."                                                                                                                     | ◐     |
+  | "Works"              | "Saves views, and you and agents can edit them" | "Every change is kept and can be undone."                                                                                                                                          | ◐     |
+  | "Works, with limits" | "Shows live data"                               | "A misspelled field name is saved anyway, with only a warning; written text goes out of date."                                                                                     | ◐     |
+  | "Partly"             | "You can adjust generated views yourself"       | "Only some settings; changing a table's filter or columns needs an agent." Plus the link "The G1 test found this too"                                                              | ◐     |
+  | "Partly"             | "You can act from a view"                       | "Asking questions and simple task edits work; forms and general buttons don't exist yet."                                                                                          | ◐     |
+  | "Partly"             | "It shows what the agent is doing"              | "Pausing can show 'Paused' while an agent is still answering."                                                                                                                     | ◐     |
+  | "Gap found"          | "Keyboard use of tabs inside views"             | "Arrow keys don't move between tabs. Only this part was checked, not the whole app."                                                                                               | ◐     |
+  | "Measured once"      | "Quality of AI-made views"                      | "One trial: 6 questions, 6 clean views. Not enough runs to establish repeatable quality; the paused G1 work was meant to build a repeatable test." Plus the link "See the G1 work" | ●     |
 
 - Does: tapping a card opens its detail: the evidence in plain words, the date, the source link,
   and "Ask about this".
@@ -1129,10 +1114,9 @@ B-F19. Work or words: describes. Terms: none. Asks: nothing.
 
 - Sees: "Which gap matters most to you?" — "Adjusting views myself" / "Acting from a view" /
   "Seeing what the agent is doing" / "Keyboard use" / "None of these". "Why we ask: it helps
-  decide what to improve first." "What happens: the card you pick moves to the top of this part,
-  marked 'You said this matters most (date)'."
+  decide what to improve first." "What happens: the card you pick moves to the top of this part, marked 'You said this matters most (date)'. Every finding stays listed; your answer only changes the order."
 - Work or words: asks. Terms: view. Certainty: the answer counts as ◆ once given.
-- Asks: yes, kept; it **reorders** the view. Maps to: **QuestionCard** (new) plus **new data**.
+- Asks: yes, kept; it **reorders** the view and never hides a finding. Maps to: **QuestionCard** (new) plus **new data**.
 
 #### Part 5 · "Open questions and your two proposals"
 
@@ -1179,14 +1163,14 @@ B-F19. Work or words: describes. Terms: none. Asks: nothing.
 
 ### 3.6 One click away (the "More" row)
 
-| Link                          | Shows                                                   | Maps to                                                         |
-| ----------------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
-| "All sources"                 | Every source with a one-line plain note, badge and date | existing **DataTable** over artifacts; plain notes are new data |
-| "The full review (6 Oct)"     | The review document                                     | existing **ArtifactGallery** link                               |
-| "Pharos and A2UI in detail"   | The existing detailed view                              | existing view tab                                               |
-| "Keep, consider, leave alone" | The 12 scope items                                      | existing **ScopeBoard**                                         |
-| "Follow-up tasks"             | The remaining research tasks                            | existing **TaskTable**                                          |
-| "Glossary"                    | Every term on this view with its plain explanation      | **new data** (terms) in an existing **DataList**                |
+| Link                          | Shows                                                                                                                                                                                                                        | Maps to                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| "All sources"                 | Every source with a one-line plain note and what was done with it (read in the review, or only listed); what a source says is its authors' account, and the note is an agent's summary; no single certainty label per source | existing **DataTable** over artifacts; plain notes are new data |
+| "The full review (6 Oct)"     | The review document                                                                                                                                                                                                          | existing **ArtifactGallery** link                               |
+| "Pharos and A2UI in detail"   | The existing detailed view                                                                                                                                                                                                   | existing view tab                                               |
+| "Keep, consider, leave alone" | The 12 scope items                                                                                                                                                                                                           | existing **ScopeBoard**                                         |
+| "Follow-up tasks"             | The remaining research tasks                                                                                                                                                                                                 | existing **TaskTable**                                          |
+| "Glossary"                    | Every term on this view with its plain explanation                                                                                                                                                                           | **new data** (terms) in an existing **DataList**                |
 
 ### 3.7 How case B maps to the catalog
 
@@ -1217,8 +1201,7 @@ says how firm the picture is.
 
 **What would make it fail:**
 
-- The band is read as a ladder ("Pharos is behind the code-writing tools"). Guard: the caption,
-  equal-size stops, no arrows pointing right, no "levels" wording.
+- The band is read as a ladder ("Pharos is behind the code-writing tools"). Guard: the heading says "approaches, sorted by", the caption says the approaches trade freedom against checking and none is better in general, equal-size stops, no arrows pointing right, no "levels" wording.
 - "Building blocks" or "live project data" are not understood without opening the popovers.
 - The certainty line is overlooked, so the clean band looks settled.
 - The two proposals pull the owner into deciding before reading the map. Guard: "They're at the

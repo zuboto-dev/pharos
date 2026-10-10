@@ -1,0 +1,1055 @@
+<!doctype html>
+<!-- Sketch built 2026-10-10 by Sonnet 5.5 from docs/reframe/cases.md (commit 458ad52). Fixed content, no network. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Generative UI, and where Pharos sits</title>
+<style>
+:root{
+  --bg:#faf9f6; --surface:#ffffff; --sunk:#f2f0ea; --ink:#1f2328; --muted:#555d68; --line:#d9d5cb; --line-strong:#b9b4a8;
+  --accent:#1d5f7c; --accent-soft:#dcecf3; --on-accent:#ffffff;
+  --c-confirmed:#5a3b9b; --c-verified:#1b6a42; --c-reading:#35568f; --c-unknown:#555d68; --warm:#a84a0a; --warm-soft:#fbeadb;
+  --bad:#a02a2a; --bad-soft:#f8e3e1; --good-soft:#e0f0e6; --shadow:0 6px 24px rgba(30,30,20,.14);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#14161a; --surface:#1c1f24; --sunk:#23272d; --ink:#e9e6df; --muted:#a3abb6; --line:#343a42; --line-strong:#4b535d;
+    --accent:#7cc3e0; --accent-soft:#1f3a47; --on-accent:#0e1b21;
+    --c-confirmed:#bba8f2; --c-verified:#73d3a0; --c-reading:#93b5f0; --c-unknown:#a3abb6; --warm:#f2a566; --warm-soft:#3a2a1c;
+    --bad:#f0948f; --bad-soft:#3b2322; --good-soft:#1d3327; --shadow:0 6px 24px rgba(0,0,0,.5);
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;overflow-wrap:anywhere}
+.wrap{max-width:880px;margin:0 auto;padding:0 16px}
+.strip{background:var(--sunk);border-bottom:1px solid var(--line);color:var(--muted);font-size:13.5px;padding:8px 16px;text-align:center}
+.strip strong{color:var(--ink)}
+h1{font-size:clamp(26px,5.5vw,36px);line-height:1.15;margin:28px 0 14px;letter-spacing:-.01em;font-weight:700}
+h2{font-size:clamp(21px,4.2vw,26px);line-height:1.25;margin:0 0 8px;font-weight:700}
+h3{font-size:17px;margin:22px 0 6px}
+p{margin:0 0 12px}
+.headline{font-size:clamp(19px,3.6vw,23px);line-height:1.4;margin:0 0 22px;font-weight:550}
+.small{font-size:14.5px;color:var(--muted)}
+.muted{color:var(--muted)}
+a{color:var(--accent)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* terms and popover */
+.term{border-bottom:1.5px dotted var(--muted);cursor:help;white-space:normal}
+.term:hover,.term[aria-expanded=true]{background:var(--accent-soft)}
+#pop{position:absolute;z-index:50;max-width:min(340px,calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:10px;box-shadow:var(--shadow);padding:12px 14px;font-size:14.5px;line-height:1.45}
+#pop[hidden]{display:none}
+#pop .pt{font-weight:650;margin-bottom:4px}
+#pop .pk{color:var(--muted);margin-top:6px}
+#pop a{font-weight:550}
+/* badges (glyph + word; text, not a box) */
+.badge{appearance:none;background:none;border:0;border-bottom:1.5px solid currentColor;padding:0 1px;margin:0 0 0 4px;font-size:.78em;font-weight:650;letter-spacing:.01em;white-space:nowrap;vertical-align:baseline;line-height:1.3}
+.badge:hover,.badge[aria-expanded=true]{background:var(--sunk)}
+.b-c{color:var(--c-confirmed)}.b-v{color:var(--c-verified)}.b-r{color:var(--c-reading)}.b-n{color:var(--c-unknown)}
+.badge .g{font-size:1.05em;margin-right:3px}
+.b-n{border-bottom-style:dashed}
+.b-r{border-bottom-style:dotted}
+/* pills (rounded rectangles, text only) */
+.pill{display:inline-block;border-radius:6px;padding:1px 9px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap;border:1.5px solid var(--accent);color:var(--ink)}
+.p-built{background:var(--accent);color:var(--on-accent)}
+.p-partly{background:linear-gradient(90deg,var(--accent-soft) 50%,transparent 50%)}
+.p-notyet,.p-none{border-style:dashed;border-color:var(--line-strong);color:var(--muted);background:transparent}
+.p-needs{border-color:var(--warm);color:var(--warm);background:transparent}
+.p-ruled{border-color:var(--bad);color:var(--bad);background:transparent}
+.p-proposal{border:1.5px dashed var(--line-strong);color:var(--muted);background:transparent;border-radius:6px;padding:1px 9px;font-size:13px;font-weight:600;display:inline-block}
+.p-passed{background:var(--good-soft);border-color:var(--c-verified);color:var(--c-verified)}
+/* lines on first screen */
+.line{margin:0 0 10px;font-size:16.5px}
+.line .lead{font-weight:650}
+.needs{padding:12px 14px;border-left:4px solid var(--line-strong);background:var(--surface);border-radius:0 8px 8px 0;margin:20px 0 12px}
+.needs.warm{border-left-color:var(--warm)}
+/* path */
+.path{margin:26px 0 14px}
+.path .ptitle{font-weight:650;margin-bottom:8px}
+.path ol{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.path li button{width:100%;text-align:left;display:grid;grid-template-columns:30px 1fr;gap:2px 12px;align-items:start;padding:11px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.path li button:hover{border-color:var(--accent)}
+.path li button[aria-expanded=true]{border-color:var(--accent);background:var(--accent-soft)}
+.num{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);font-weight:700;font-size:14px;grid-row:span 2;margin-top:1px}
+.path .lbl{font-weight:650}
+.path .prev{color:var(--muted);font-size:14.5px;grid-column:2}
+.more{margin:18px 0 8px;font-size:15.5px;line-height:2}
+.more .mtitle{font-weight:650;margin-right:6px}
+.more button{background:none;border:0;border-bottom:1.5px solid var(--accent);color:var(--accent);padding:0;margin:0 4px 0 0;font-size:15.5px}
+.more button+button:before{content:"";}
+.more button[aria-expanded=true]{background:var(--accent-soft)}
+.more .sep{color:var(--muted);margin:0 6px 0 2px}
+.morepanel{margin:10px 0 0;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.morepanel[hidden]{display:none}
+.morepanel .close{float:right;background:none;border:1px solid var(--line-strong);border-radius:8px;padding:3px 10px;font-size:14px}
+/* parts */
+.parts{margin-top:20px}
+.part{margin:28px 0;padding-top:20px;border-top:2px solid var(--line)}
+.part[hidden]{display:none}
+.part h2{display:flex;gap:12px;align-items:center}
+.part .num{width:30px;height:30px;font-size:15px;flex:none;margin:0}
+.nav{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 8px}
+.btn{background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;padding:9px 16px;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.btn.quiet{border-color:var(--line);color:var(--muted);font-weight:500}
+/* generic cards and panels */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+.card h3{margin-top:0}
+.cmp{display:grid;gap:12px;margin:12px 0}
+@media (min-width:720px){.cmp.two{grid-template-columns:1fr 1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.panel .plabel{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.panel.after{border-color:var(--c-verified)}
+.panel.before{border-style:dashed}
+.illus{display:inline-block;font-size:12.5px;font-weight:650;color:var(--muted);border:1px dashed var(--line-strong);border-radius:6px;padding:0 8px;margin-bottom:8px}
+.why{margin:8px 0 2px}.why b,.next b{font-weight:650}
+.rowitem{display:grid;gap:2px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);margin:6px 0;font-size:15.5px}
+.rowitem.wrong{border:1.5px solid var(--bad);background:var(--bad-soft)}
+.rowitem .st{color:var(--muted);font-size:14.5px}
+.tag{font-weight:700;font-size:13.5px}
+.bubble{position:relative;display:inline-block;background:var(--accent-soft);border:1px solid var(--accent);border-radius:16px 16px 16px 4px;padding:8px 16px;margin:6px 0 12px;font-weight:600}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{margin:0;overflow:auto;max-width:100%;font-size:13px;line-height:1.5;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre}
+/* question card */
+.qcard{background:var(--surface);border:1.5px solid var(--accent);border-radius:14px;padding:16px;margin:26px 0 8px}
+.qcard .qk{font-size:12.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.qcard .qq{font-weight:650;font-size:18px;margin-bottom:10px}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.opt{background:var(--bg);border:1.5px solid var(--line-strong);border-radius:999px;padding:7px 15px;font-size:16px}
+.opt:hover{border-color:var(--accent)}
+.opt[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:650}
+.qcard .qwhy,.qcard .qwhat{font-size:14.5px;color:var(--muted);margin:2px 0}
+.qcard .qwhy b,.qcard .qwhat b{color:var(--ink);font-weight:650}
+.qcard .saved{margin:10px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:15.5px}
+.qcard .saved[hidden]{display:none}
+.linkbtn{background:none;border:0;color:var(--accent);text-decoration:underline;padding:0;font-size:inherit}
+.follow{margin:6px 0 10px;padding:10px 12px;background:var(--sunk);border-radius:10px}
+.follow label{display:flex;gap:10px;align-items:flex-start;padding:4px 0;font-size:15.5px}
+.follow input[type=checkbox]{width:20px;height:20px;margin-top:2px;flex:none}
+.follow textarea{width:100%;font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:8px;padding:8px;margin-top:6px}
+/* flow picture */
+.flowbox{margin:6px 0 16px}
+.flow{display:flex;flex-direction:column;gap:0;align-items:stretch}
+.fbox{background:var(--surface);border:1.5px solid var(--line-strong);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;cursor:pointer}
+.fbox:hover{border-color:var(--accent)}
+.fbox .fl{font-weight:700;line-height:1.3}
+.fbox .fs{font-size:14px;color:var(--muted);line-height:1.4}
+.fbox.empty{border-style:dashed;border-width:2px;background:transparent;min-height:130px;justify-content:center}
+.fbox.empty .fl{font-size:21px}
+.arr{align-self:center;color:var(--muted);font-size:22px;line-height:1;padding:3px 0}
+.arr:before{content:"\2193"}
+.bracket{margin-top:10px;border:1.5px solid var(--line-strong);border-top:0;border-radius:0 0 12px 12px;padding:8px 12px 10px;font-size:14.5px;color:var(--muted);text-align:center;cursor:pointer;background:transparent;width:100%}
+.bracket:hover{border-color:var(--accent)}
+.bracket b{color:var(--ink)}
+@media (min-width:820px){
+  .flow{flex-direction:row;align-items:stretch}
+  .fbox{flex:1 1 0;min-width:0}
+  .fbox.empty{flex:1.55 1 0}
+  .arr{align-self:center;padding:0 5px}
+  .arr:before{content:"\2192"}
+}
+/* chain (vertical, no numbers) */
+.chain{list-style:none;margin:14px 0;padding:0 0 0 22px;border-left:2px solid var(--line-strong)}
+.chain li{position:relative;margin:0 0 10px;padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.chain li:before{content:"";position:absolute;left:-30px;top:18px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--line-strong)}
+.chain li.you{border-color:var(--warm)}
+.chain li.you:before{border-color:var(--warm)}
+.chain .ct{font-weight:650}
+.chain .cs{font-size:14.5px;color:var(--muted)}
+.chain .you-tag{margin-left:8px}
+.callout{border:1.5px dashed var(--warm);border-radius:12px;padding:12px 14px;margin:14px 0;background:transparent}
+.callout.plain{border:1px solid var(--line);border-style:solid;background:var(--surface)}
+.agentbox{border:1.5px dotted var(--c-reading);border-radius:12px;padding:14px 16px;margin:16px 0;background:var(--surface)}
+.agentbox h3{margin:0 0 6px}
+.agentbox ul{margin:8px 0 0;padding-left:20px}
+.agentbox li{margin:6px 0}
+footer{margin:48px 0 40px;padding-top:20px;border-top:1px solid var(--line);font-size:14.5px;color:var(--muted)}
+footer details{margin-top:10px}
+footer summary{cursor:pointer;font-weight:600;color:var(--ink)}
+footer ul{padding-left:20px}
+table.plain{border-collapse:collapse;width:100%;font-size:15px;margin:8px 0}
+table.plain th,table.plain td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+table.plain th{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+@media (max-width:640px){
+  table.plain thead{display:none}
+  table.plain tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
+  table.plain td{display:block;border:0;padding:2px 0}
+  table.plain td[data-l]:before{content:attr(data-l) ": ";color:var(--muted);font-size:13.5px}
+}
+.bars{display:grid;gap:8px;margin:10px 0}
+.bar{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;font-size:15px}
+.bar .track{height:14px;background:var(--sunk);border-radius:7px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:7px}
+details.q{border-bottom:1px solid var(--line);padding:8px 0}
+details.q summary{cursor:pointer;font-weight:550}
+details.q p{margin:6px 0 0;font-size:15.5px}
+.toast{margin-top:8px;font-size:14.5px;color:var(--muted);border-left:3px solid var(--line-strong);padding-left:10px}
+.bandwrap{margin:6px 0 18px}
+.bandtitle{font-size:18px;margin:0 0 10px}
+.band{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:760px){.band{grid-template-columns:1fr 3fr;gap:14px}}
+.grp{display:flex;flex-direction:column}
+.stops{display:grid;grid-template-columns:1fr;gap:8px;flex:1}
+.grp.gen .stops{grid-template-columns:1fr}
+@media (min-width:760px){.grp.gen .stops{grid-template-columns:repeat(3,1fr)}}
+.stop{display:grid;grid-template-columns:64px 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;text-align:left;background:var(--surface);border:1.5px solid var(--line-strong);border-radius:12px;padding:12px 14px;color:var(--ink);width:100%}
+.stop svg{grid-row:span 2;color:var(--muted)}
+.stop .sl{font-weight:700;line-height:1.3}
+.stop .sm{font-size:13.5px;color:var(--warm);font-weight:700;min-height:1.3em}
+.stop:hover{border-color:var(--accent)}
+.stop[aria-expanded=true]{border-color:var(--accent);background:var(--accent-soft)}
+.stop.here{border-width:2.5px;border-color:var(--accent)}
+.stop.here svg{color:var(--accent)}
+@media (min-width:760px){
+  .stop{grid-template-columns:1fr;grid-template-rows:auto auto auto;justify-items:start;height:100%;align-content:start;row-gap:8px}
+  .stop svg{grid-row:auto}
+}
+.gl{margin-top:8px;font-size:14px;font-weight:700;color:var(--muted);text-align:center;border-top:2px solid var(--line-strong);padding-top:5px;position:relative}
+.gl:before,.gl:after{content:"";position:absolute;top:-2px;width:2px;height:8px;background:var(--line-strong)}
+.gl:before{left:0}.gl:after{right:0}
+.grp.non .gl{border-top-style:dashed}
+@media (max-width:759px){
+  .grp{flex-direction:column-reverse}
+  .gl{margin:0 0 8px;border-top:0;border-left:3px solid var(--line-strong);padding:0 0 0 10px;text-align:left}
+  .gl:before,.gl:after{display:none}
+  .grp.non .gl{border-left-style:dashed}
+}
+.stopcard{margin-top:10px;background:var(--surface);border:1.5px solid var(--accent);border-radius:12px;padding:14px 16px}
+.stopcard h3{margin:0 0 4px}
+.stopcard[hidden]{display:none}
+/* part 1 */
+.b11{align-items:start}
+@media (min-width:720px){.b11{grid-template-columns:1fr 1.9fr}}
+.stale{margin:10px 0 0;padding:8px 10px;border:1.5px solid var(--warm);border-radius:8px;color:var(--warm);background:var(--warm-soft)}
+.blk{position:relative;border:1.5px solid var(--line);border-radius:10px;padding:12px 12px 10px;margin:10px 0;background:var(--bg);cursor:pointer}
+.blk.hl{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.btag{display:inline-block;font-size:12px;font-weight:700;color:var(--muted);border:1px dashed var(--line-strong);border-radius:6px;padding:0 7px;margin-bottom:8px}
+.stat{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.statn{font-size:44px;font-weight:700;line-height:1;color:var(--warm);min-width:1.1ch}
+.stat.zero .statn{color:var(--muted)}
+.statl{font-weight:650}
+.gtitle{font-weight:650;margin-bottom:8px}
+.graph{position:relative;width:100%}
+.gnode{position:absolute;border:1.5px solid var(--line-strong);border-radius:9px;background:var(--surface);padding:5px 8px;font-size:13.5px;line-height:1.25;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.gnode b{font-weight:650}
+.gnode .gs{font-size:12.5px;color:var(--muted);font-weight:600}
+.gnode.wait{border-color:var(--warm);border-width:2px}
+.gnode.wait .gs{color:var(--warm)}
+.gnode.done{border-style:dashed}
+.graph svg{position:absolute;left:0;top:0;pointer-events:none;color:var(--muted)}
+.toggles{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn[aria-pressed=true]{background:var(--warm-soft);border-color:var(--warm)}
+pre{display:block}
+.rl{display:block;padding:0 4px;border-radius:3px;white-space:pre}
+.rl.hl{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.rl[data-w]{cursor:pointer}
+/* map */
+.gridmap{display:grid;gap:10px;margin:8px 0 14px}
+.gcol-h{display:none}
+.mrow{display:grid;gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface)}
+.mrow-h{font-weight:700;font-size:15px}
+.mcell{display:block}
+.mcell .mc-h{font-size:12.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.mcell .chips{min-height:34px}
+@media (min-width:760px){
+  .gridmap{gap:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+  .gcol-h{display:grid;grid-template-columns:150px repeat(3,1fr);font-size:13px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line);background:var(--sunk)}
+  .gcol-h span{padding:8px 10px}
+  .mrow{grid-template-columns:150px repeat(3,1fr);border:0;border-radius:0;gap:0;padding:0}
+  .mrow+.mrow{border-top:1px solid var(--line)}
+  .mrow-h{padding:12px 10px;background:var(--sunk);font-size:14px}
+  .mcell{padding:10px;border-left:1px solid var(--line)}
+  .mcell .mc-h{display:none}
+}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
+.chip{background:var(--bg);border:1.5px solid var(--line-strong);border-radius:999px;padding:3px 12px;font-size:15px}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);font-weight:650}
+.chip.pharos{border-color:var(--accent);border-width:2.5px;font-weight:700}
+.chip.inline{padding:0 10px;font-size:inherit}
+.chip.none{border-style:dashed;color:var(--muted);cursor:default;font-style:italic}
+.connectors{margin:10px 0;padding:12px;border:1px dashed var(--line-strong);border-radius:12px}
+.chipcard{margin-top:12px;background:var(--surface);border:1.5px solid var(--accent);border-radius:12px;padding:14px 16px}
+.chipcard h3{margin:0 0 6px}
+.chipcard .cc-b{margin:8px 0;font-size:15.5px}
+.chipcard .cc-b .nt{color:var(--muted);font-size:14px;margin-left:2px}
+/* part 3 */
+.bchain{list-style:none;margin:10px 0;padding:0;max-width:560px}
+.bchain li{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 22px}
+.bchain li:not(:last-child):after{content:"\2193";position:absolute;left:50%;bottom:-23px;transform:translateX(-50%);color:var(--muted);font-size:20px;line-height:1}
+.plainlist{padding-left:20px}
+.plainlist li{margin:8px 0}
+/* part 4 */
+.grouph{display:flex;align-items:center;gap:8px;margin:20px 0 6px;font-weight:700}
+.cap{background:var(--surface);border:1px solid var(--line);border-radius:12px;margin:8px 0;overflow:hidden}
+.cap.picked{border:2px solid var(--accent)}
+.cap .caphead{display:grid;gap:4px;width:100%;text-align:left;background:none;border:0;padding:12px 14px}
+.cap .capt{font-weight:650;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.cap .cape{color:var(--ink);font-size:15.5px}
+.cap .capd{padding:0 14px 12px;border-top:1px dashed var(--line)}
+.cap .capd p{margin:10px 0 6px;font-size:15.5px}
+.cap .pickmark{font-weight:700;color:var(--accent);font-size:14px}
+.cap .more-hint{font-size:13.5px;color:var(--muted)}
+/* part 5 */
+.proposal{border-style:dashed;border-color:var(--line-strong)}
+.proposal h3{font-size:18px;margin:10px 0 4px}
+.qcard.bare{border:0;padding:0;margin:12px 0 0;background:transparent}
+.gloss dt{font-weight:700;margin-top:10px}
+.gloss dd{margin:2px 0 0;color:var(--ink);font-size:15.5px}
+.srcrow{display:grid;gap:2px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15.5px}
+.srcrow .sn{font-weight:650}
+h4{margin:16px 0 4px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+
+</style>
+</head>
+<body data-sketch="b">
+<div class="strip">Sketch with fixed content, 10 Oct 2026. Not live data.</div>
+<main class="wrap" id="top">
+
+<h1><span class="term" tabindex="0" role="button" data-term="Generative UI">Generative UI</span>, and where Pharos sits</h1>
+<p class="headline">Generative UI means an AI answers you by putting a <span class="term" tabindex="0" role="button" data-term="view">view</span> together; Pharos puts its views together from tested <span class="term" tabindex="0" role="button" data-term="building block">building blocks</span> and <span class="term" tabindex="0" role="button" data-term="live project data">live project data</span>. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s own docs and code for how Pharos works; the meaning of Generative UI follows the review of 6 Oct." data-date="6 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+<div id="answers-line" class="line small" hidden></div>
+
+<section class="bandwrap" aria-labelledby="bandtitle">
+  <h2 class="bandtitle" id="bandtitle">How much of the view the AI makes</h2>
+  <div class="band">
+    <div class="grp non">
+      <div class="stops">
+        <button type="button" class="stop" data-stop="text" aria-expanded="false">
+          <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true" focusable="false"><g stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 8h52M6 17h52M6 26h40M6 35h28"/></g></svg>
+          <span class="sl">Writes text</span><span class="sm">&nbsp;</span>
+        </button>
+      </div>
+      <div class="gl">Not Generative UI</div>
+    </div>
+    <div class="grp gen">
+      <div class="stops">
+        <button type="button" class="stop" data-stop="one" aria-expanded="false">
+          <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true" focusable="false"><rect x="10" y="5" width="44" height="30" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M18 15h28M18 24h16" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+          <span class="sl">Shows one ready-made block</span><span class="sm">&nbsp;</span>
+        </button>
+        <button type="button" class="stop here" data-stop="arrange" aria-expanded="false">
+          <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="3"><rect x="5" y="5" width="16" height="14" rx="3"/><rect x="24" y="5" width="16" height="14" rx="3"/><rect x="43" y="5" width="16" height="14" rx="3"/><rect x="5" y="23" width="54" height="12" rx="3"/></g></svg>
+          <span class="sl">Arranges blocks into a view</span><span class="sm">&#9733; Pharos is here</span>
+        </button>
+        <button type="button" class="stop" data-stop="code" aria-expanded="false">
+          <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10L10 20l12 10M42 10l12 10-12 10M36 8l-8 24"/></g></svg>
+          <span class="sl">Writes the view's code itself</span><span class="sm">&nbsp;</span>
+        </button>
+      </div>
+      <div class="gl">Generative UI</div>
+    </div>
+  </div>
+  <div class="stopcard" id="stopcard" hidden></div>
+  <p class="small" style="margin-top:12px">Different approaches, not stages of progress. Further right, the AI has more freedom, and what it makes needs more checking.</p>
+</section>
+
+<p class="line"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="an agent read official documents and Pharos&#x27;s code on 6 Oct; where each approach sits is its judgment." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: based on a review of official documents and Pharos's code on 6 Oct. Where each approach sits is an agent's reading.</p>
+
+<p class="needs"><b>Waiting for you:</b> <span id="wait-text">2 proposals from this research, no deadline.</span> <a href="#part-5" data-open-part="5">They're at the end, after the map.</a> <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the project has two proposed decisions and a task for you to accept or reject them." data-date="10 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+<nav class="path" aria-label="Look closer">
+  <div class="ptitle">Look closer, in this order:</div>
+  <ol>
+    <li><button type="button" data-part="1"><span class="num">1</span><span class="lbl">See it happen</span><span class="prev">one question, answered as text and as a view</span></button></li>
+    <li><button type="button" data-part="2"><span class="num">2</span><span class="lbl">The map</span><span class="prev">the main approaches, with examples</span></button></li>
+    <li><button type="button" data-part="3"><span class="num">3</span><span class="lbl">Pharos's spot</span><span class="prev">what's particular about it, and what it rules out</span></button></li>
+    <li><button type="button" data-part="4"><span class="num">4</span><span class="lbl">How well Pharos does it</span><span class="prev">what works, what's partial, what's missing</span></button></li>
+    <li><button type="button" data-part="5"><span class="num">5</span><span class="lbl">Open questions and your two proposals</span><span class="prev">what nobody knows yet, and what waits for you</span></button></li>
+  </ol>
+</nav>
+
+<div class="more"><span class="mtitle">More:</span>
+  <button type="button" data-more="sources">All sources</button><span class="sep">&middot;</span>
+  <button type="button" data-more="review">The full review (6 Oct)</button><span class="sep">&middot;</span>
+  <button type="button" data-more="a2ui">Pharos and A2UI in detail</button><span class="sep">&middot;</span>
+  <button type="button" data-more="scope">Keep, consider, leave alone</button><span class="sep">&middot;</span>
+  <button type="button" data-more="tasks">Follow-up tasks</button><span class="sep">&middot;</span>
+  <button type="button" data-more="glossary">Glossary</button>
+</div>
+<div class="morepanel" id="morepanel" hidden></div>
+
+<div class="parts">
+
+<!-- ============ PART 1 ============ -->
+<section class="part" id="part-1" data-part="1" hidden>
+  <h2><span class="num">1</span>See it happen</h2>
+  <p>Same question, same <span class="term" tabindex="0" role="button" data-term="practice project">practice project</span>, two kinds of answer. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the practice project is a file in the repository; the answer view comes from it." data-date="10 Oct" data-src="The practice project file::../../../eval/fixtures/workshop-renovation.json"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+  <div class="bubble">What is holding up installation?</div>
+  <p class="small">Practice project: Workshop renovation, the same one used in the <span class="term" tabindex="0" role="button" data-term="G1">G1</span> test.</p>
+
+  <div class="cmp two b11">
+    <div class="panel" id="textpanel">
+      <div class="plabel">Answer as text</div>
+      <div class="illus">written for this example</div>
+      <p style="margin:0">Installation is held up by the lighting. 'Order lighting materials' was due on 6 Oct and is still queued. 'Fit workshop lighting', also due on 6 Oct, is waiting for those materials. 'Book inspection slot' can't start until the lighting is fitted.</p>
+      <p class="stale" id="stale" hidden><b>This text is now out of date.</b></p>
+    </div>
+    <div class="panel" id="viewpanel">
+      <div class="plabel">Answer as a view</div>
+      <div class="illus">from the practice project; made for testing, not by a live run</div>
+      <div class="blk" data-w="stat" tabindex="0" role="button" aria-label="Number block. Tap to show its lines in the recipe.">
+        <span class="btag">Building block: one number</span>
+        <div class="stat" id="stat"><div class="statn" id="statn">1</div><div class="statl">Waiting for materials</div></div>
+      </div>
+      <div class="blk" data-w="graph" tabindex="0" role="button" aria-label="Dependency graph block. Tap to show its lines in the recipe.">
+        <span class="btag">Building block: <span class="term" tabindex="0" role="button" data-term="dependency graph">dependency graph</span></span>
+        <div class="gtitle">Work package dependencies</div>
+        <div class="graph" id="graph"></div>
+        <div class="small" style="margin-top:6px">An arrow means: the next job waits for the one before it.</div>
+      </div>
+      <div class="toggles">
+        <button type="button" class="btn" id="recbtn" aria-expanded="false">Show the recipe the AI wrote</button>
+        <button type="button" class="btn" id="simbtn" aria-pressed="false">Pretend the materials arrived</button>
+      </div>
+      <div class="small" style="margin-top:6px">The second button is a <b>simulated change, for this sketch</b>.</div>
+    </div>
+  </div>
+
+  <div id="recipe" hidden>
+    <div class="card">
+      <div class="plabel small" style="font-weight:700;letter-spacing:.04em;text-transform:uppercase">The <span class="term" tabindex="0" role="button" data-term="recipe">recipe</span>: copied from the practice project, unchanged</div>
+      <pre id="recipepre" tabindex="0" aria-label="The recipe as JSON"><span class="rl">{</span><span class="rl">  &quot;component&quot;: &quot;Board&quot;,</span><span class="rl">  &quot;widgets&quot;: [</span><span class="rl" data-w="stat">    {</span><span class="rl" data-w="stat">      &quot;id&quot;: &quot;installation-waiting-stat&quot;,</span><span class="rl" data-w="stat">      &quot;w&quot;: 4,</span><span class="rl" data-w="stat">      &quot;h&quot;: 150,</span><span class="rl" data-w="stat">      &quot;node&quot;: {</span><span class="rl" data-w="stat">        &quot;component&quot;: &quot;Stat&quot;,</span><span class="rl" data-w="stat">        &quot;label&quot;: &quot;Waiting for materials&quot;,</span><span class="rl" data-w="stat">        &quot;query&quot;: {</span><span class="rl" data-w="stat">          &quot;type&quot;: &quot;task&quot;,</span><span class="rl" data-w="stat">          &quot;where&quot;: {</span><span class="rl" data-w="stat">            &quot;status&quot;: &quot;waiting_materials&quot;,</span><span class="rl" data-w="stat">            &quot;stageId&quot;: &quot;$currentStage&quot;</span><span class="rl" data-w="stat">          }</span><span class="rl" data-w="stat">        },</span><span class="rl" data-w="stat">        &quot;tone&quot;: &quot;warning&quot;</span><span class="rl" data-w="stat">      }</span><span class="rl" data-w="stat">    },</span><span class="rl" data-w="graph">    {</span><span class="rl" data-w="graph">      &quot;id&quot;: &quot;installation-dependencies&quot;,</span><span class="rl" data-w="graph">      &quot;w&quot;: 8,</span><span class="rl" data-w="graph">      &quot;h&quot;: 360,</span><span class="rl" data-w="graph">      &quot;node&quot;: {</span><span class="rl" data-w="graph">        &quot;component&quot;: &quot;DependencyGraph&quot;,</span><span class="rl" data-w="graph">        &quot;title&quot;: &quot;Work package dependencies&quot;,</span><span class="rl" data-w="graph">        &quot;filter&quot;: {</span><span class="rl" data-w="graph">          &quot;where&quot;: {</span><span class="rl" data-w="graph">            &quot;stageId&quot;: &quot;$currentStage&quot;</span><span class="rl" data-w="graph">          }</span><span class="rl" data-w="graph">        }</span><span class="rl" data-w="graph">      }</span><span class="rl" data-w="graph">    }</span><span class="rl">  ]</span><span class="rl">}</span></pre>
+      <p class="small" style="margin:8px 0 0">Tap or hover a block above, or a line here, to see which belongs to which.</p>
+      <p style="margin:8px 0 0">The AI doesn't draw anything. It writes this recipe: which blocks, where, and which data each one shows. Pharos draws the view and keeps it current.</p>
+    </div>
+  </div>
+  <p id="simcaption" class="toast" hidden>Building blocks read live data. Written text doesn't update by itself. <span class="small">(Simulated change, for this sketch.)</span></p>
+  <p>How sure: <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the recipe is the practice project&#x27;s own file; that blocks read live data and written text doesn&#x27;t is in Pharos&#x27;s docs and code." data-date="10 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+  <div class="qcard" data-qid="b12" data-q="For questions like this, which would you rather get?" data-opts="The text;;The view;;Both: a sentence, then the view;;Not sure" data-why="it tells agents how much to show and how much to say when they build views for you." data-what="kept as your preference." data-kind="A question for you"></div>
+
+  <div class="nav"><button type="button" class="btn primary" data-next="2">Next: The map</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
+</section>
+
+<!-- ============ PART 2 ============ -->
+<section class="part" id="part-2" data-part="2" hidden>
+  <h2><span class="num">2</span>The map</h2>
+  <p>Two questions sort the approaches: how much of the <span class="term" tabindex="0" role="button" data-term="view">view</span> the AI makes, and when it makes it. <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="the sorting is an agent&#x27;s reading of each tool&#x27;s documents." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
+
+  <div class="gridmap" id="gridmap" role="group" aria-label="Map of approaches"></div>
+
+  <div class="connectors">
+    <p style="margin:0 0 6px"><b>Connectors: not ways to make views.</b> They link agents and apps, and work with any of the above:</p>
+    <div class="chips" id="connchips"></div>
+    <p class="small" style="margin:8px 0 0"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="none of these connectors is required for Pharos to count as Generative UI; that is the review&#x27;s conclusion." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: none of these connectors is needed for Pharos to count as Generative UI.</p>
+  </div>
+  <p class="small" style="margin-top:10px"><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="each position is an agent&#x27;s reading of the tool&#x27;s own documents, read on 6 Oct." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button>: where each one sits is an agent's reading of its documents (6 Oct). The examples come from a discovery list, which is not a ranking.</p>
+
+  <div class="chipcard" id="chipcard" hidden aria-live="polite"></div>
+  <p class="small">Tap a name to read what it is.</p>
+
+  <div class="nav"><button type="button" class="btn primary" data-next="3">Next: Pharos's spot</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
+</section>
+
+<!-- ============ PART 3 ============ -->
+<section class="part" id="part-3" data-part="3" hidden>
+  <h2><span class="num">3</span>Pharos's spot</h2>
+  <h3 style="margin-top:6px">How Pharos does it</h3>
+  <ol class="bchain">
+    <li>You ask a question, in Pharos or to your agent</li>
+    <li>An <span class="term" tabindex="0" role="button" data-term="AI agent">AI agent</span> reads the project through <span class="term" tabindex="0" role="button" data-term="MCP">MCP</span></li>
+    <li>It writes a <span class="term" tabindex="0" role="button" data-term="recipe">recipe</span> using Pharos's <span class="term" tabindex="0" role="button" data-term="building block">building blocks</span></li>
+    <li>Pharos checks the recipe and draws the <span class="term" tabindex="0" role="button" data-term="view">view</span></li>
+    <li>The blocks read <span class="term" tabindex="0" role="button" data-term="live project data">live project data</span></li>
+    <li>The view is saved: you and agents can change it, and every change is kept in <span class="term" tabindex="0" role="button" data-term="history">history</span></li>
+  </ol>
+  <p class="small"><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s own docs describe each step." data-date="6 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+  <h3>What's particular about this spot (none of it is unique)</h3>
+  <ul class="plainlist">
+    <li>Blocks made for projects (stages, tasks, decisions), plus general blocks for any record. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the 26 kinds of building blocks are listed in the code." data-date="10 Oct" data-src="The block list::../../../packages/schema/src/views/catalog.ts"><span class="g" aria-hidden="true">●</span>Verified</button></li>
+    <li>Views read live data, so numbers stay current without asking the AI again. Written text on a view doesn't update. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s docs and code say so." data-date="10 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></li>
+    <li>Views are saved with a <span class="term" tabindex="0" role="button" data-term="history">history</span> of every change, and both you and agents can edit them. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="Pharos&#x27;s docs say so." data-date="10 Oct" data-src="Pharos&#x27;s scope notes::../../SCOPE.md"><span class="g" aria-hidden="true">●</span>Verified</button></li>
+    <li>Other tools can save their views too; this combination fits a project workspace, but it isn't exclusive to Pharos. <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="the review says saving views is not unique to Pharos; &quot;fits a project workspace&quot; is a judgment." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></li>
+  </ul>
+
+  <h3>What Pharos rules out, and why</h3>
+  <div class="cmp two">
+    <div class="panel"><span class="pill p-ruled">Ruled out</span><p style="margin:8px 0 0"><b>AI-written view code.</b> The AI may only arrange tested <span class="term" tabindex="0" role="button" data-term="building block">blocks</span>, so a view can't run code nobody reviewed.</p></div>
+    <div class="panel"><span class="pill p-ruled">Ruled out</span><p style="margin:8px 0 0"><b>Swapping its blocks for A2UI's basic set.</b> Pharos would lose its blocks made for projects.</p></div>
+  </div>
+  <p class="small"><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="both are marked &quot;out&quot; in the research project&#x27;s scope list." data-date="6 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+  <h3>Nearest relatives</h3>
+  <p>Nearest relatives: <button type="button" class="chip inline" data-chip-link="jsonrender">json-render</button> (closest in structure) and <button type="button" class="chip inline" data-chip-link="a2ui">A2UI</button> (closest in idea). <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="&quot;closest&quot; is a judgment from reading both." data-date="6 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button> Pharos can't exchange views with A2UI apps today; making it able to is a separate choice nobody has made. <button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="the research project says Pharos views are not A2UI-compatible today." data-date="6 Oct"><span class="g" aria-hidden="true">●</span>Verified</button></p>
+
+  <div class="nav"><button type="button" class="btn primary" data-next="4">Next: How well Pharos does it</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
+</section>
+
+<!-- ============ PART 4 ============ -->
+<section class="part" id="part-4" data-part="4" hidden>
+  <h2><span class="num">4</span>How well Pharos does it</h2>
+  <p>Measured against the idea of Generative UI. Assessed on 6 Oct by an agent reading the code; spot-checked again on 10 Oct: unchanged. <button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="an agent read the code; nobody ran these on screen." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button></p>
+  <div id="pickslot"></div>
+  <div id="caps"></div>
+
+  <div class="qcard" data-qid="b42" data-q="Which gap matters most to you?" data-opts="Adjusting views myself;;Acting from a view;;Seeing what the agent is doing;;Keyboard use;;None of these" data-why="it helps decide what to improve first." data-what="the card you pick moves to the top of this part, marked &#x27;You said this matters most (date)&#x27;." data-kind="A question for you"></div>
+
+  <div class="nav"><button type="button" class="btn primary" data-next="5">Next: Open questions and your two proposals</button><button type="button" class="btn quiet" data-top>Back to the top</button></div>
+</section>
+
+<!-- ============ PART 5 ============ -->
+<section class="part" id="part-5" data-part="5" hidden>
+  <h2><span class="num">5</span>Open questions and your two proposals</h2>
+  <h3 style="margin-top:6px">Not known yet</h3>
+  <ul class="plainlist">
+    <li><button type="button" class="badge b-n" data-k="n" aria-expanded="false" data-how="nobody has tried; it first needs a specific app to target." data-date="6 Oct"><span class="g" aria-hidden="true">○</span>Not known yet</button> Would letting other apps show Pharos views (through A2UI or MCP Apps) help you? Nobody has tried; it first needs a specific app to target. <button type="button" class="linkbtn askbtn">Ask about this</button></li>
+    <li><button type="button" class="badge b-n" data-k="n" aria-expanded="false" data-how="not measured." data-date="6 Oct"><span class="g" aria-hidden="true">○</span>Not known yet</button> Would it help to see a view appear while the agent is still building it? Not measured. <button type="button" class="linkbtn askbtn">Ask about this</button></li>
+    <li><button type="button" class="badge b-n" data-k="n" aria-expanded="false" data-how="not measured; the paused G1 test was meant to find out." data-date="6 Oct"><span class="g" aria-hidden="true">○</span>Not known yet</button> Do generated views help you understand and act better than a plain <span class="term" tabindex="0" role="button" data-term="Overview">Overview</span>? Not measured; the paused <span class="term" tabindex="0" role="button" data-term="G1">G1</span> test was meant to find out. <button type="button" class="linkbtn askbtn">Ask about this</button></li>
+  </ul>
+  <div class="toast" id="asknote" hidden></div>
+
+  <h3>Your two proposals</h3>
+  <p class="small">Nothing here is decided until you decide it. There is no deadline.</p>
+
+  <div class="card proposal">
+    <span class="p-proposal">Proposal, not approved</span>
+    <h3>Keep Pharos's own <span class="term" tabindex="0" role="button" data-term="building block">building blocks</span> and project data at the centre; treat outside standards as optional, adopted only for a clear need.</h3>
+    <p class="small">Original title: 'Preserve Pharos's catalog and project store; keep integrations optional'.</p>
+    <p><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="the reframe decision of 10 Oct keeps the fixed set of building blocks; the second half is not covered." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button> Your reframe decision of 10 Oct already keeps the fixed set of building blocks, which covers the first half.</p>
+    <div class="qcard" data-qid="b51" data-q="Decision on the first proposal" data-opts="Accept;;Reject;;Not now" data-why="" data-what="" data-kind="-"></div>
+  </div>
+
+  <div class="card proposal">
+    <span class="p-proposal">Proposal, not approved</span>
+    <h3>Before choosing the next new kind of building block, try forms and buttons that change project data on one real task, and compare them with asking and editing in place.</h3>
+    <p class="small">Original title: 'Evaluate structured actions before choosing the next catalog capability'.</p>
+    <p><button type="button" class="badge b-r" data-k="r" aria-expanded="false" data-how="the reframe puts blocks for explaining first; whether that changes &quot;next&quot; is a judgment." data-date="10 Oct"><span class="g" aria-hidden="true">◐</span>Agent's reading</button> The reframe (10 Oct) puts building blocks for explaining first, which may change what 'next' means here.</p>
+    <div class="qcard" data-qid="b52" data-q="Decision on the second proposal" data-opts="Accept;;Reject;;Not now" data-why="" data-what="" data-kind="-"></div>
+  </div>
+
+  <div class="nav"><button type="button" class="btn quiet" data-top>Back to the top</button></div>
+</section>
+
+</div><!-- /parts -->
+
+<!-- ============ MORE PANELS ============ -->
+<template id="more-sources">
+  <h3 style="margin-top:0">All sources</h3>
+  <p class="small">Every source the research used, with a one-line note, how sure we are, and the date.</p>
+  <div id="srclist"></div>
+</template>
+<template id="more-review">
+  <h3 style="margin-top:0">The full review (6 Oct)</h3>
+  <p>In the product this opens the review document, written on 6 Oct by an agent that read the official documents and Pharos's code. This sketch doesn't include the document.</p>
+  <p class="small">The map in part 2 and the assessment in part 4 are summaries of it.</p>
+</template>
+<template id="more-a2ui">
+  <h3 style="margin-top:0">Pharos and A2UI in detail</h3>
+  <p>In the product this opens the existing detailed view in the research project. This sketch doesn't include it. The short version is in part 2 and part 3: A2UI is the closest relative in idea, and Pharos views are not A2UI-compatible today.</p>
+</template>
+<template id="more-scope">
+  <h3 style="margin-top:0">Keep, consider, leave alone</h3>
+  <p class="small">The research project's 12 scope items, in plain words.</p>
+  <h4>Keep</h4>
+  <div class="rowitem">Views described as data, built from a fixed set of building blocks that Pharos draws</div>
+  <div class="rowitem">Building blocks made for projects (stages, tasks, decisions), plus general ones for any record</div>
+  <div class="rowitem">Views that read the project's saved data by queries</div>
+  <div class="rowitem">MCP as the agents' channel, and live updates to the web app</div>
+  <div class="rowitem">Testing whole workflows from start to finish, and letting you refine views</div>
+  <h4>Consider</h4>
+  <div class="rowitem">Trying forms and buttons that change project data</div>
+  <div class="rowitem">Exporting Pharos views in A2UI's format</div>
+  <div class="rowitem">Trying existing ways to deliver A2UI through MCP and MCP Apps</div>
+  <div class="rowitem">Showing a view while an agent is still building it</div>
+  <div class="rowitem">Simple screen state tied to tasks, and structured interaction</div>
+  <h4>Leave alone</h4>
+  <div class="rowitem">AI-written page code that runs as it is</div>
+  <div class="rowitem">Replacing Pharos's building blocks with A2UI's basic set</div>
+  <p class="small"><button type="button" class="badge b-v" data-k="v" aria-expanded="false" data-how="these are the research project&#x27;s scope items." data-date="6 Oct"><span class="g" aria-hidden="true">●</span>Verified</button> The plain wording is this view's.</p>
+</template>
+<template id="more-tasks">
+  <h3 style="margin-top:0">Follow-up tasks</h3>
+  <p class="small">The research tasks that are not finished.</p>
+  <div class="rowitem"><b>Accept or reject the two proposals</b><span class="st">Waiting for you</span></div>
+  <div class="rowitem"><b>Try the existing ways to deliver views through MCP, and track A2UI 1.0 separately</b><span class="st">To do</span></div>
+  <div class="rowitem"><b>Decide what A2UI compatibility would mean, and how to check it</b><span class="st">To do</span></div>
+  <div class="rowitem"><b>Set trust and data limits before connecting to outside apps</b><span class="st">To do</span></div>
+  <p class="small" style="margin-top:12px"><b>Moved to the main roadmap (7):</b></p>
+  <div class="rowitem">Design forms and actions that change project data</div>
+  <div class="rowitem">Define how fresh views stay, and what happens when two edits collide</div>
+  <div class="rowitem">Check field names before saving a generated view</div>
+  <div class="rowitem">Build a repeatable test of Generative UI workflows</div>
+  <div class="rowitem">Let you adjust views built from general data blocks</div>
+  <div class="rowitem">Make clear what the agent is doing, and the difference between pausing and cancelling</div>
+  <div class="rowitem">Check generated views for accessibility, starting with tabs inside views</div>
+</template>
+<template id="more-glossary">
+  <h3 style="margin-top:0">Glossary</h3>
+  <p class="small">Every term on this view, with its plain explanation.</p>
+  <dl class="gloss" id="gloss"></dl>
+</template>
+
+<footer>
+  <p><button type="button" class="btn quiet" id="reset">Reset my answers</button></p>
+  <p>This is a sketch of a view with fixed content, written on 10 Oct 2026. Nothing here reads or changes a real project, and "Accept" does not decide anything. Your answers stay in this browser only.</p>
+  <details><summary>Sketch notes: where this page differs from the written design</summary>
+    <ul>
+      <li>The certainty line says "Agent's reading:" before "based on a review&hellip;", so the badge word and the sentence read together.</li>
+      <li>"Waiting for you" counts proposals you have not yet accepted or rejected; "Not now" keeps a proposal waiting.</li>
+      <li>"Ask about this" does nothing real here; it explains that in the product it sends an ordinary question to an agent.</li>
+      <li>"The full review" and "Pharos and A2UI in detail" are stand-in notes, not the documents.</li>
+      <li>The one-line notes in "All sources", the plain wording in "Keep, consider, leave alone" and "Follow-up tasks", and the details inside the capability cards were written for this sketch from the research records and the code.</li>
+      <li>The simulated change moves the dependency graph's statuses; the arrows stay, because the jobs still depend on each other.</li>
+    </ul>
+  </details>
+</footer>
+</main>
+
+<script>
+/* Shared behaviour for the sketches. Plain JS, no network. */
+var TERMS = {
+ "G1":"The first stage of Pharos's roadmap: measure how well Pharos works today, so later changes can be compared. Paused since 10 Oct.",
+ "reframed":"Rethinking what Pharos views should show, so they help you understand rather than prove what the agents did. Started 10 Oct.",
+ "view":"A page inside a project, opened from a tab.",
+ "AI agent":"An AI program, such as Claude Code, that can read and change things through tools.",
+ "test situation":"A realistic thing a person does with Pharos, written down so it can be repeated exactly. (In the files: workflow case.)",
+ "practice project":"A made-up project built for testing, so the right answers are known in advance. (In the files: fixture.)",
+ "answer key":"The right answer to a test question, written down before any test runs. (In the files: expected facts.)",
+ "test runner":"A program that sets up a private copy of Pharos with a practice project, asks the question, waits for the agent's view, and records time, cost and correctness. (In the files: harness.)",
+ "stand-in agent":"A small fake program that behaves like an AI agent, so the test runner can be tried without a real one.",
+ "results":"How today's Pharos does on the tests, before any improvement. Later versions are compared with them. (In the files: baseline.)",
+ "pass mark":"The result Pharos must reach after improvements to count as better. (In the files: target.)",
+ "phase":"A group of jobs in a project. Pharos calls it a stage.",
+ "filter":"A rule that picks which items a building block shows, for example 'tasks due before today'.",
+ "widget":"One building block placed on a view.",
+ "README":"The instructions file at the top of the code, for people setting Pharos up.",
+ "automated checks":"Small programs that check the code still works.",
+ "Node.js":"The program Pharos runs on.",
+ "polling":"Checking for changes at a regular interval.",
+ "background service":"Runs Pharos by itself when you log in, and restarts it if it stops.",
+ "Overview":"The view every project gets automatically: stages, a task board and goals.",
+ "freeze":"Lock the tests so they can't change between the first results and later ones.",
+ "Generative UI":"The AI decides what a view shows and how it is laid out, for your question, instead of a developer designing every view in advance.",
+ "building block":"One piece of a view, such as a table, a chart or a number. Pharos has 26 kinds, built and tested in advance; an AI can arrange them but can't add its own. (In the files: component; the set is the closed catalog.)",
+ "live project data":"A building block looks up the project's current data when the view opens and whenever it changes. Nothing is copied into the view.",
+ "recipe":"What the AI actually writes: which building blocks go where, and which data each one shows. Pharos draws the view from it. (In the files: view spec.)",
+ "dependency graph":"A picture of which jobs wait for which.",
+ "MCP":"The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects. (Model Context Protocol.)",
+ "token":"The unit AI models read and write in. More tokens means more time and cost.",
+ "history":"Every change to a project or a view is saved with who made it and why, and can be undone.",
+ "field":"One piece of information on a record, such as a task's due date."
+};
+var KINDS = {
+ c:{g:"◆",w:"Confirmed by you",m:"You said so: an answer you gave or a decision you made."},
+ v:{g:"●",w:"Verified",m:"Matches an official source, or someone ran it and saw the result."},
+ r:{g:"◐",w:"Agent's reading",m:"An AI agent's analysis, for example from reading code or documents. Reasonable, but not tried or confirmed."},
+ n:{g:"○",w:"Not known yet",m:"An open question."}
+};
+var SK = (function(){
+  var NS = document.body.getAttribute("data-sketch");
+  var KEY = "pharos-sketch-" + NS;
+  var mem = {};
+  function $(s,r){return (r||document).querySelector(s)}
+  function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+  function load(){ try{ var t=window.localStorage.getItem(KEY); return t?JSON.parse(t):{} }catch(e){ return mem } }
+  function save(s){ mem=s; try{ window.localStorage.setItem(KEY,JSON.stringify(s)) }catch(e){} }
+  var state = load(); if(!state||typeof state!=="object") state={};
+  if(!state.a) state.a={};
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function scrollTo(el){ el.scrollIntoView({behavior:reduce?"auto":"smooth",block:"start"}); }
+  function el(tag,cls,text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+
+  /* ---------- popover ---------- */
+  var pop = el("div"); pop.id="pop"; pop.hidden=true; pop.setAttribute("role","dialog"); document.body.appendChild(pop);
+  var popAnchor=null, hideTimer=null;
+  function hidePop(refocus){
+    if(popAnchor){ popAnchor.setAttribute("aria-expanded","false"); if(refocus) popAnchor.focus(); }
+    pop.hidden=true; popAnchor=null;
+  }
+  function placePop(a){
+    pop.style.left="0px"; pop.style.top="0px"; pop.hidden=false;
+    var r=a.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight, vw=document.documentElement.clientWidth;
+    var x=r.left+window.pageXOffset, y=r.bottom+window.pageYOffset+6;
+    if(x+pw>window.pageXOffset+vw-12) x=window.pageXOffset+vw-12-pw;
+    if(x<window.pageXOffset+12) x=window.pageXOffset+12;
+    if(r.bottom+ph+12>window.innerHeight && r.top>ph+12) y=r.top+window.pageYOffset-ph-6;
+    pop.style.left=x+"px"; pop.style.top=y+"px";
+  }
+  function showPop(a,build){
+    clearTimeout(hideTimer);
+    if(popAnchor===a && !pop.hidden){ hidePop(false); return; }
+    if(popAnchor) popAnchor.setAttribute("aria-expanded","false");
+    pop.textContent=""; build(pop); popAnchor=a; a.setAttribute("aria-expanded","true"); placePop(a);
+  }
+  function termBuild(t){ return function(p){ p.appendChild(el("div","pt",t)); p.appendChild(document.createTextNode(TERMS[t]||"")); }; }
+  function badgeBuild(b){ return function(p){
+    var k=KINDS[b.getAttribute("data-k")];
+    p.appendChild(el("div","pt",k.g+" "+k.w));
+    p.appendChild(document.createTextNode(k.m));
+    var how=b.getAttribute("data-how"); if(how){ var d=el("div","pk"); var s=el("b",null,"How we know: "); d.appendChild(s); d.appendChild(document.createTextNode(how)); p.appendChild(d); }
+    var dt=b.getAttribute("data-date"); if(dt){ p.appendChild(el("div","pk","Date: "+dt)); }
+    var sl=b.getAttribute("data-src"); if(sl){ var d2=el("div","pk","Source: "); var h=b.getAttribute("data-href");
+      if(h){ var a=el("a",null,sl); a.href=h; a.target="_blank"; a.rel="noopener"; d2.appendChild(a); } else d2.appendChild(document.createTextNode(sl)); p.appendChild(d2); }
+  }; }
+  document.addEventListener("click",function(e){
+    var t=e.target.closest&&e.target.closest(".term");
+    if(t){ e.preventDefault(); e.stopPropagation(); showPop(t,termBuild(t.getAttribute("data-term")||t.textContent)); return; }
+    var b=e.target.closest&&e.target.closest(".badge");
+    if(b){ e.preventDefault(); e.stopPropagation(); showPop(b,badgeBuild(b)); return; }
+    var pp=e.target.closest&&e.target.closest("[data-pop]");
+    if(pp){ showPop(pp,function(p){ var ttl=pp.getAttribute("data-pop-title"); if(ttl) p.appendChild(el("div","pt",ttl)); p.appendChild(document.createTextNode(pp.getAttribute("data-pop"))); }); return; }
+    if(!pop.hidden && !pop.contains(e.target)) hidePop(false);
+  });
+  document.addEventListener("keydown",function(e){
+    if(e.key==="Escape" && !pop.hidden){ hidePop(true); }
+    if((e.key==="Enter"||e.key===" ") && e.target.classList && e.target.classList.contains("term")){ e.preventDefault(); e.target.click(); }
+  });
+  document.addEventListener("pointerover",function(e){
+    if(e.pointerType!=="mouse") return;
+    var t=e.target.closest&&e.target.closest(".term");
+    if(t){ clearTimeout(hideTimer); if(popAnchor!==t){ if(popAnchor) popAnchor.setAttribute("aria-expanded","false"); pop.textContent=""; termBuild(t.getAttribute("data-term")||t.textContent)(pop); popAnchor=t; t.setAttribute("aria-expanded","true"); placePop(t); } }
+  });
+  document.addEventListener("pointerout",function(e){
+    if(e.pointerType!=="mouse") return;
+    var t=e.target.closest&&e.target.closest(".term");
+    if(t && popAnchor===t){ hideTimer=setTimeout(function(){ hidePop(false); },250); }
+  });
+  pop.addEventListener("pointerover",function(){ clearTimeout(hideTimer); });
+  pop.addEventListener("pointerout",function(e){ if(e.pointerType==="mouse" && popAnchor && popAnchor.classList.contains("term")) hideTimer=setTimeout(function(){ hidePop(false); },250); });
+  window.addEventListener("resize",function(){ if(!pop.hidden && popAnchor) placePop(popAnchor); });
+
+  /* ---------- parts, path, more ---------- */
+  var parts=$$(".part");
+  function setExpanded(n,open){ $$('[data-part="'+n+'"]').forEach(function(b){ if(b.tagName==="BUTTON"&&b.closest(".path")) b.setAttribute("aria-expanded",open?"true":"false"); }); }
+  function openPart(n,go){
+    var p=$('.part[data-part="'+n+'"]'); if(!p) return;
+    p.hidden=false; setExpanded(n,true);
+    if(go!==false) scrollTo(p);
+    if(window.onPartOpen) window.onPartOpen(n);
+    try{ history.replaceState(null,"","#part-"+n); }catch(e){}
+  }
+  function openPartByName(n){ openPart(n,true); }
+  $$(".path li button").forEach(function(b){ b.setAttribute("aria-expanded","false"); b.addEventListener("click",function(){
+    var n=b.getAttribute("data-part"), p=$('.part[data-part="'+n+'"]');
+    if(!p.hidden && b.getAttribute("aria-expanded")==="true"){ scrollTo(p); } else openPart(n,true);
+  }); });
+  document.addEventListener("click",function(e){
+    var o=e.target.closest&&e.target.closest("[data-open-part]");
+    if(o && !e.target.closest(".term,.badge")){ e.preventDefault(); openPart(o.getAttribute("data-open-part"),true); return; }
+    var nx=e.target.closest&&e.target.closest("[data-next]");
+    if(nx){ openPart(nx.getAttribute("data-next"),true); return; }
+    var tp=e.target.closest&&e.target.closest("[data-top]");
+    if(tp){ window.scrollTo({top:0,behavior:reduce?"auto":"smooth"}); try{history.replaceState(null,"",location.pathname);}catch(x){} return; }
+  });
+  document.addEventListener("keydown",function(e){
+    if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches('[role="button"][data-open-part],[role="button"][data-pop]') ){ e.preventDefault(); e.target.click(); }
+  });
+  var morePanel=$("#morepanel"), moreCur=null;
+  $$(".more button[data-more]").forEach(function(b){ b.setAttribute("aria-expanded","false"); b.addEventListener("click",function(){
+    var id=b.getAttribute("data-more");
+    if(moreCur===id){ closeMore(); return; }
+    var t=document.getElementById("more-"+id); morePanel.textContent="";
+    var c=el("button","close","Close"); c.type="button"; c.addEventListener("click",closeMore); morePanel.appendChild(c);
+    morePanel.appendChild(t.content.cloneNode(true)); morePanel.hidden=false; moreCur=id;
+    $$(".more button[data-more]").forEach(function(x){ x.setAttribute("aria-expanded",x===b?"true":"false"); });
+    if(window.onMoreOpen) window.onMoreOpen(id,morePanel);
+    scrollTo(morePanel);
+  }); });
+  function closeMore(){ morePanel.hidden=true; morePanel.textContent=""; moreCur=null; $$(".more button[data-more]").forEach(function(x){ x.setAttribute("aria-expanded","false"); }); }
+
+  /* ---------- question cards ---------- */
+  var FOLLOW = {};  // qid -> {when:[...], title, items:[...], text:label}
+  var SAVED = {};   // qid -> function(answer)->string
+  function ans(qid){ return state.a[qid]; }
+  function setAns(qid,a){ if(a) state.a[qid]=a; else delete state.a[qid]; save(state); if(window.onAnswers) window.onAnswers(qid); }
+  function buildCard(c){
+    var qid=c.getAttribute("data-qid"), opts=c.getAttribute("data-opts").split(";;");
+    c.textContent="";
+    var bare=c.getAttribute("data-kind")==="-";
+    if(bare) c.classList.add("bare");
+    if(!bare) c.appendChild(el("div","qk",c.getAttribute("data-kind")||"A question for you"));
+    var q=el("div","qq",c.getAttribute("data-q")); q.id="q-"+qid; if(bare) q.hidden=true; c.appendChild(q);
+    var og=el("div","opts"); og.setAttribute("role","group"); og.setAttribute("aria-labelledby",q.id); c.appendChild(og);
+    var fo=el("div","followwrap"); c.appendChild(fo);
+    if(c.getAttribute("data-why")){ var why=el("div","qwhy"); why.appendChild(el("b",null,"Why we ask: ")); why.appendChild(document.createTextNode(c.getAttribute("data-why"))); c.appendChild(why); }
+    if(c.getAttribute("data-what")){ var wh=el("div","qwhat"); wh.appendChild(el("b",null,"What happens: ")); wh.appendChild(document.createTextNode(c.getAttribute("data-what"))); c.appendChild(wh); }
+    var sv=el("div","saved"); sv.hidden=true; c.appendChild(sv);
+    var btns=opts.map(function(o){ var b=el("button","opt",o); b.type="button"; b.setAttribute("aria-pressed","false");
+      b.addEventListener("click",function(){ var cur=ans(qid)||{}; var a={v:o,d:"10 Oct",x:(cur.v===o?cur.x:[]),t:(cur.v===o?cur.t:"")}; setAns(qid,a); refresh(); });
+      og.appendChild(b); return b; });
+    function refresh(){
+      var a=ans(qid);
+      btns.forEach(function(b){ b.setAttribute("aria-pressed",a&&a.v===b.textContent?"true":"false"); });
+      fo.textContent="";
+      var f=FOLLOW[qid];
+      if(a && f && f.when.indexOf(a.v)>=0){
+        var box=el("div","follow"); box.appendChild(el("div",null,f.title)); box.firstChild.style.fontWeight="650";
+        f.items.forEach(function(it){ var lb=el("label"); var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=(a.x||[]).indexOf(it)>=0;
+          cb.addEventListener("change",function(){ var cur=ans(qid); var x=(cur.x||[]).filter(function(y){return y!==it}); if(cb.checked) x.push(it); cur.x=x; setAns(qid,cur); refreshSaved(); });
+          lb.appendChild(cb); lb.appendChild(el("span",null,it)); box.appendChild(lb); });
+        if(f.text){ var ta=document.createElement("textarea"); ta.rows=2; ta.placeholder=f.text; ta.value=a.t||""; ta.setAttribute("aria-label",f.text);
+          ta.addEventListener("input",function(){ var cur=ans(qid); cur.t=ta.value; setAns(qid,cur); });
+          box.appendChild(ta); }
+        fo.appendChild(box);
+      }
+      refreshSaved();
+    }
+    function refreshSaved(){
+      var a=ans(qid); sv.textContent="";
+      if(!a){ sv.hidden=true; return; }
+      sv.hidden=false;
+      var fn=SAVED[qid];
+      var txt = fn? fn(a) : "Your answer ("+a.d+"): "+a.v+(a.x&&a.x.length?" ("+a.x.length+" picked)":"");
+      sv.appendChild(el("span",null,txt+" · "));
+      var ch=el("button","linkbtn","Change"); ch.type="button"; ch.addEventListener("click",function(){ setAns(qid,null); refresh(); btns[0].focus(); });
+      sv.appendChild(ch);
+    }
+    c._refresh=refresh; refresh();
+  }
+  function initCards(){ $$(".qcard").forEach(buildCard); }
+
+  /* ---------- footer ---------- */
+  function initFooter(){
+    var r=$("#reset"); if(r) r.addEventListener("click",function(){ state={a:{}}; save(state); try{ window.localStorage.removeItem(KEY); }catch(e){} location.reload(); });
+  }
+  function glossary(){ var seen={}, out=[]; $$(".term").forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } });
+    $$("template").forEach(function(tp){ var d=document.createElement("div"); d.appendChild(tp.content.cloneNode(true)); $$(".term",d).forEach(function(t){ var k=t.getAttribute("data-term")||t.textContent; if(!seen[k]&&TERMS[k]){ seen[k]=1; out.push(k); } }); });
+    return out.sort(function(a,b){return a.toLowerCase()<b.toLowerCase()?-1:1}); }
+
+  return {$:$,$$:$$,el:el,state:state,ans:ans,setAns:setAns,save:function(){save(state)},FOLLOW:FOLLOW,SAVED:SAVED,initCards:initCards,initFooter:initFooter,openPart:openPart,scrollTo:scrollTo,glossary:glossary,showPop:showPop,hidePop:hidePop,reduce:reduce,closeMore:closeMore};
+})();
+
+</script>
+<script>
+(function(){
+  var $=SK.$, $$=SK.$$, el=SK.el;
+  var GL={c:"◆",v:"●",r:"◐",n:"○"}, WD={c:"Confirmed by you",v:"Verified",r:"Agent's reading",n:"Not known yet"};
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function T(t,shown){ return '<span class="term" tabindex="0" role="button" data-term="'+esc(t)+'">'+(shown||t)+'</span>'; }
+  function BADGE(k,how,date,src,href){
+    return '<button type="button" class="badge b-'+k+'" data-k="'+k+'" aria-expanded="false"'+(how?' data-how="'+esc(how)+'"':'')+(date?' data-date="'+esc(date)+'"':'')+(src?' data-src="'+esc(src)+'"':'')+(href?' data-href="'+esc(href)+'"':'')+'><span class="g" aria-hidden="true">'+GL[k]+'</span>'+WD[k]+'</button>';
+  }
+  function A(href,t){ return '<a href="'+esc(href)+'" target="_blank" rel="noopener">'+t+'</a>'; }
+  var ASK="In Pharos this sends an ordinary question about this to an agent. It is not connected in this sketch.";
+  function askToast(host){ var n=$(".asktoast",host); if(!n){ n=el("div","toast asktoast"); host.appendChild(n); } n.textContent=ASK; }
+
+  /* ---- the band ---- */
+  var STOPS={
+    text:{t:"Writes text",b:"A chat answer in paragraphs. Nothing on screen is built for your question."},
+    one:{t:"Shows one ready-made block",b:"The app has prepared "+T("building block","blocks")+"; the AI picks one to show a result. Examples: Vercel AI SDK, Tambo."},
+    arrange:{t:"Arranges blocks into a view",b:"The AI chooses several blocks, lays them out and says which data each one shows; the app draws them. Pharos works this way. Others: json-render, A2UI, OpenUI."},
+    code:{t:"Writes the view's code itself",b:"The AI writes the page's code, so almost anything is possible, but each result needs checking. Examples: a Google research study, app builders. Pharos rules this out."}
+  };
+  var curStop=null, sc=$("#stopcard");
+  $$(".stop").forEach(function(b){ b.addEventListener("click",function(e){
+    var id=b.getAttribute("data-stop");
+    if(curStop===id){ sc.hidden=true; b.setAttribute("aria-expanded","false"); curStop=null; return; }
+    var s=STOPS[id]; sc.innerHTML='<h3>'+s.t+'</h3><p style="margin:0 0 8px">'+s.b+'</p><p style="margin:0 0 10px">'+BADGE("r","Where each example sits is an agent's reading of its documents, read on 6 Oct.","6 Oct")+'</p><button type="button" class="btn primary" data-open-part="2">See the map</button>';
+    sc.hidden=false; curStop=id; $$(".stop").forEach(function(x){ x.setAttribute("aria-expanded",x===b?"true":"false"); });
+  }); });
+
+  /* ---- part 1: graph, recipe, simulation ---- */
+  var sim=false;
+  var NODES={order:{n:"Order lighting materials",s:"Queued",s2:"Signed off"},paint:{n:"Paint prepared work area",s:"Queued",s2:"Queued"},fit:{n:"Fit workshop lighting",s:"Waiting for materials",s2:"Queued"},insp:{n:"Book inspection slot",s:"Queued",s2:"Queued"}};
+  var graph=$("#graph");
+  function renderGraph(){
+    var W=graph.clientWidth; if(!W) return;
+    graph.textContent="";
+    var vertical=W<340, nh=70, nw, pos={}, H;
+    if(!vertical){ nw=Math.min(160,Math.floor((W-40)/3)); var gap=(W-3*nw)/2;
+      pos.order={x:0,y:4}; pos.fit={x:nw+gap,y:4}; pos.insp={x:2*(nw+gap),y:4}; pos.paint={x:0,y:4+nh+16}; H=4+2*nh+16+4; }
+    else { nw=Math.floor((W-10)/2); pos.order={x:0,y:4}; pos.paint={x:nw+10,y:4}; pos.fit={x:0,y:4+nh+26}; pos.insp={x:0,y:4+2*(nh+26)}; H=4+3*nh+52+4; }
+    graph.style.height=H+"px";
+    var ns="http://www.w3.org/2000/svg", svg=document.createElementNS(ns,"svg"); svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("aria-hidden","true");
+    var defs=document.createElementNS(ns,"defs"), mk=document.createElementNS(ns,"marker"); mk.setAttribute("id","ah"); mk.setAttribute("viewBox","0 0 10 10"); mk.setAttribute("refX","9"); mk.setAttribute("refY","5"); mk.setAttribute("markerWidth","8"); mk.setAttribute("markerHeight","8"); mk.setAttribute("orient","auto");
+    var pp=document.createElementNS(ns,"path"); pp.setAttribute("d","M0 0L10 5L0 10z"); pp.setAttribute("fill","currentColor"); mk.appendChild(pp); defs.appendChild(mk); svg.appendChild(defs);
+    function edge(a,b){ var l=document.createElementNS(ns,"line"); l.setAttribute("stroke","currentColor"); l.setAttribute("stroke-width","2"); l.setAttribute("marker-end","url(#ah)");
+      if(!vertical){ l.setAttribute("x1",pos[a].x+nw+2); l.setAttribute("y1",pos[a].y+nh/2); l.setAttribute("x2",pos[b].x-3); l.setAttribute("y2",pos[b].y+nh/2); }
+      else { l.setAttribute("x1",pos[a].x+nw/2); l.setAttribute("y1",pos[a].y+nh+2); l.setAttribute("x2",pos[b].x+nw/2); l.setAttribute("y2",pos[b].y-3); }
+      svg.appendChild(l); }
+    edge("order","fit"); edge("fit","insp"); graph.appendChild(svg);
+    Object.keys(NODES).forEach(function(k){ var n=NODES[k], d=el("div","gnode"); d.style.left=pos[k].x+"px"; d.style.top=pos[k].y+"px"; d.style.width=nw+"px"; d.style.height=nh+"px";
+      var st=sim?n.s2:n.s; if(st==="Waiting for materials") d.classList.add("wait"); if(st==="Signed off") d.classList.add("done");
+      d.appendChild(el("b",null,n.n)); d.appendChild(el("span","gs",st)); graph.appendChild(d); });
+  }
+  function renderSim(){
+    $("#statn").textContent=sim?"0":"1"; $("#stat").classList.toggle("zero",sim);
+    $("#stale").hidden=!sim; $("#simcaption").hidden=!sim;
+    var sb=$("#simbtn"); sb.setAttribute("aria-pressed",sim?"true":"false"); sb.textContent=sim?"Put it back as it was":"Pretend the materials arrived";
+    renderGraph();
+  }
+  $("#simbtn").addEventListener("click",function(){ sim=!sim; renderSim(); });
+  var rb=$("#recbtn"); function setRecipe(open){ $("#recipe").hidden=!open; rb.setAttribute("aria-expanded",open?"true":"false"); rb.textContent=open?"Hide the recipe":"Show the recipe the AI wrote"; }
+  rb.addEventListener("click",function(){ setRecipe($("#recipe").hidden); });
+  var pinned=null;
+  function hl(w,on){ $$('[data-w="'+w+'"]').forEach(function(n){ n.classList.toggle("hl",on); }); }
+  function pin(w){ if(pinned) hl(pinned,false); pinned=(pinned===w)?null:w; if(pinned) hl(pinned,true); }
+  $$(".blk").forEach(function(b){ var w=b.getAttribute("data-w");
+    b.addEventListener("mouseenter",function(){ if(!pinned) hl(w,true); }); b.addEventListener("mouseleave",function(){ if(!pinned) hl(w,false); });
+    b.addEventListener("focus",function(){ if(!pinned) hl(w,true); }); b.addEventListener("blur",function(){ if(!pinned) hl(w,false); });
+    b.addEventListener("click",function(e){ if(e.target.closest(".term")) return; if($("#recipe").hidden) setRecipe(true); pin(w); });
+    b.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); b.click(); } });
+  });
+  $$(".rl[data-w]").forEach(function(r){ var w=r.getAttribute("data-w");
+    r.addEventListener("mouseenter",function(){ if(!pinned) hl(w,true); }); r.addEventListener("mouseleave",function(){ if(!pinned) hl(w,false); });
+    r.addEventListener("click",function(){ pin(w); }); });
+  var rt; window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(renderGraph,80); });
+
+  /* ---- part 2: the map ---- */
+  var CH={
+   vercel:{n:"Vercel AI SDK",b:"Shows a ready-made block for each result of a tool the AI uses, inside a chat app. A simpler form of Generative UI. Saving is left to the app.",bd:[["v","official documentation, read in the 6 Oct review","(official docs, 6 Oct)"]],src:["Vercel AI SDK","https://ai-sdk.dev/"]},
+   tambo:{n:"Tambo",b:"Lets an AI update blocks placed in an existing app, and stores them with the conversation. As of 6 Oct, its hosted service was announced to close on 31 Oct, with data deleted on 30 Nov; running it yourself stays possible.",bd:[["v","its README, read on 6 Oct","(its README, 6 Oct)"]],src:["Tambo's README","https://github.com/tambo-ai/tambo"]},
+   pharos:{n:"Pharos",b:"Arranges blocks from a fixed set of 26 kinds into a view, filled with live project data, and saves it with its history.",bd:[["v","the list of 26 kinds is in Pharos's code","(Pharos's code)"]],src:["Pharos's list of building blocks","../../../packages/schema/src/views/catalog.ts"],date:"10 Oct",local:true},
+   jsonrender:{n:"json-render",b:"Describes a view as data built from a fixed set of blocks. The closest to Pharos in structure.",bd:[["v","its own documentation, read on 6 Oct","for the description"],["r","\"closest\" is the review's judgment","for \"closest\""]],src:["json-render","https://github.com/vercel-labs/json-render"]},
+   a2ui:{n:"A2UI",b:"An open format, from Google, for describing a view from a set of blocks, which the app then draws. The closest to Pharos in idea. Current version 0.9.1; 1.0 is a candidate. Pharos views are not A2UI-compatible today.",bd:[["v","A2UI's official documentation and Pharos's code, read on 6 Oct","(official docs; Pharos's code)"],["r","\"closest\" is the review's judgment","for \"closest\""]],src:["A2UI","https://a2ui.org/"]},
+   openui:{n:"OpenUI",b:"Builds views from a fixed set of blocks using its own compact language, sent piece by piece as it is written. Its maker says it needs up to 67% fewer "+T("token","tokens")+"; not tested on Pharos.",bd:[["v","that the maker says so: its README, read on 6 Oct","(that the maker says so)"]],src:["OpenUI","https://github.com/thesysdev/openui"]},
+   google:{n:"Google research study",b:"A study of AI-generated pages. It reports an 83% preference over formatted text, with the time to make them left out. Not a test of Pharos.",bd:[["v","as read by the 6 Oct review","(as read by the 6 Oct review)"],["r","where it sits on the map is a judgment","for its place"]],src:["The study","https://generativeui.github.io/static/pdfs/paper.pdf"]},
+   runtimeart:{n:"Runtime artifacts",b:"Small interactive pages an AI writes on the spot. Listed together with app builders, but a different job.",bd:[["r","an agent's reading of the discovery list","(agent's reading)"]],src:["The discovery list","https://github.com/narrowin/awesome-generative-ui"]},
+   appbuilders:{n:"App builders (for example v0)",b:"Write an app's code while a developer builds it: a different job from answering your question while you work.",bd:[["r","an agent's reading of the discovery list","(agent's reading)"]],src:["v0","https://v0.app/"]},
+   mcp:{n:"MCP",b:"The standard way AI agents connect to apps and tools. Agents use it to read and change Pharos projects.",bd:[["v","Pharos's own docs","(Pharos docs)"]],src:["Model Context Protocol","https://modelcontextprotocol.io/"]},
+   mcpapps:{n:"MCP Apps",b:"Lets a chat app show an interactive view supplied by a tool, walled off from everything else. It doesn't need AI-written code: a developer's own view can run inside it.",bd:[["v","the official overview, read on 6 Oct","(official overview)"]],src:["MCP Apps","https://github.com/modelcontextprotocol/ext-apps"]},
+   agui:{n:"AG-UI",b:"Lets an app follow what an agent is doing, step by step, and share state with it. Pharos only announces that data changed, and shows a simple answering status.",bd:[["v","its own documentation, read on 6 Oct","for the description"],["r","the comparison with Pharos is the review's judgment","for the comparison"]],src:["AG-UI","https://github.com/ag-ui-protocol/ag-ui"]},
+   a2a:{n:"A2A",b:"For agents talking to other agents. Not needed for Generative UI.",bd:[["r","an agent's reading","(agent's reading)"]],src:["A2A","https://a2a-protocol.org/"]}
+  };
+  var COLS=[["one","Shows one ready-made block"],["arrange","Arranges blocks into a view"],["code","Writes the view's code itself"]];
+  var ROWS=[["use","While you use the app, to answer you",{one:["vercel","tambo"],arrange:["pharos","jsonrender","a2ui","openui"],code:["google","runtimeart"]}],
+            ["dev","While a developer builds",{one:[],arrange:[],code:["appbuilders"]}]];
+  function chipBtn(id){ var c=CH[id], b=el("button","chip"+(id==="pharos"?" pharos":""),(id==="pharos"?"★ ":"")+c.n.replace(/^MCP$/,"MCP")); b.type="button"; b.setAttribute("data-chip",id); b.setAttribute("aria-pressed","false"); b.addEventListener("click",function(){ pickChip(id,false); }); return b; }
+  var gm=$("#gridmap");
+  (function(){
+    var hd=el("div","gcol-h"); hd.setAttribute("aria-hidden","true"); hd.appendChild(el("span",null,"")); COLS.forEach(function(c){ hd.appendChild(el("span",null,c[1])); }); gm.appendChild(hd);
+    ROWS.forEach(function(r){ var row=el("div","mrow"); row.appendChild(el("div","mrow-h",r[1]));
+      COLS.forEach(function(c){ var cell=el("div","mcell"); cell.appendChild(el("div","mc-h",c[1])); var ch=el("div","chips"); var ids=r[2][c[0]];
+        if(!ids.length){ var n=el("span","chip none","none in this review"); ch.appendChild(n); } else ids.forEach(function(id){ ch.appendChild(chipBtn(id)); });
+        cell.appendChild(ch); row.appendChild(cell); }); gm.appendChild(row); });
+    var cc=$("#connchips"); [["mcp","MCP (Pharos uses it)"],["mcpapps","MCP Apps"],["agui","AG-UI"],["a2a","A2A"]].forEach(function(x){ var b=chipBtn(x[0]); b.textContent=x[1]; cc.appendChild(b); });
+  })();
+  var curChip=null, cardEl=$("#chipcard");
+  function pickChip(id,scroll){
+    if(curChip===id && !scroll){ cardEl.hidden=true; curChip=null; $$("[data-chip]").forEach(function(b){ b.setAttribute("aria-pressed","false"); }); return; }
+    var c=CH[id]; curChip=id; cardEl.hidden=false; cardEl.textContent="";
+    var h=el("h3",null,c.n); cardEl.appendChild(h);
+    var p=el("p"); p.style.margin="0"; p.innerHTML=c.b; cardEl.appendChild(p);
+    var bw=el("div","cc-b"); bw.innerHTML=c.bd.map(function(x){ return BADGE(x[0],"Matches: "+x[1]+".",c.date||"6 Oct",c.src[0],c.src[1])+' <span class="nt">'+esc(x[2])+'</span>'; }).join(" · "); cardEl.appendChild(bw);
+    var d=el("div","small"); d.innerHTML="Checked: "+(c.date||"6 Oct")+" · Source: "+(c.local?'<a href="'+esc(c.src[1])+'">'+esc(c.src[0])+'</a>':A(c.src[1],esc(c.src[0])))+" · "; 
+    var ab=el("button","linkbtn","Ask about this"); ab.type="button"; ab.addEventListener("click",function(){ askToast(cardEl); }); d.appendChild(ab); cardEl.appendChild(d);
+    $$("[data-chip]").forEach(function(b){ b.setAttribute("aria-pressed",b.getAttribute("data-chip")===id?"true":"false"); });
+    if(scroll) SK.scrollTo(cardEl);
+  }
+  $$("[data-chip-link]").forEach(function(b){ b.addEventListener("click",function(){ SK.openPart("2",false); pickChip(b.getAttribute("data-chip-link"),true); }); });
+
+  /* ---- part 4: capability cards ---- */
+  var G_=T("G1");
+  var CAPS=[
+   {id:"builds",g:"Works",pill:"built",t:"Builds a view for your question",e:"Agents choose the blocks, layout and data for each question.",k:"r",
+     d:"An agent reads the project through "+T("MCP")+" and writes a "+T("recipe")+" from Pharos's 26 kinds of "+T("building block","building blocks")+". Pharos checks the recipe against them and draws the view.",src:["Pharos's scope notes","../../SCOPE.md"]},
+   {id:"saves",g:"Works",pill:"built",t:"Saves views, and you and agents can edit them",e:"Every change is kept and can be undone.",k:"r",
+     d:"Every change to a view is saved with who made it and why, in "+T("history")+". Both you and agents can edit views.",src:["Pharos's scope notes","../../SCOPE.md"]},
+   {id:"live",g:"Works, with limits",pill:"partly",t:"Shows live data",e:"A misspelled "+T("field","field")+" name is saved anyway, with only a warning; written text goes out of date.",k:"r",
+     d:"If a recipe names a "+T("field")+" that doesn't exist, Pharos saves the view and shows a message about it, instead of refusing. Text written into a view does not update by itself.",src:["How a view is previewed","../../../apps/server/src/views/preview.ts"]},
+   {id:"adjust",g:"Partly",pill:"partly",t:"You can adjust generated views yourself",e:"Only some settings; changing a table's "+T("filter")+" or columns needs an agent. <a href=\"case-a.html#part-2\">The "+G_+" test found this too</a>",k:"r",
+     d:"For a table or chart an agent made, the settings dialog offers only the title. It says: 'Other settings for this widget can be changed by your agent.'",src:["The settings code","../../../apps/web/src/catalog/settings.tsx"]},
+   {id:"act",g:"Partly",pill:"partly",t:"You can act from a view",e:"Asking questions and simple task edits work; forms and general buttons don't exist yet.",k:"r",
+     d:"You can ask a question about a block and tick a task done from a view. There are no forms or general-purpose buttons yet.",src:["The task checkbox code","../../../apps/web/src/catalog/interactive.tsx"]},
+   {id:"doing",g:"Partly",pill:"partly",t:"It shows what the agent is doing",e:"Pausing can show 'Paused' while an agent is still answering.",k:"r",
+     d:"Pausing clears the questions waiting in line, but doesn't stop an answer that is already being written.",src:["The agent runner code","../../../apps/server/src/agent-runner.ts"]},
+   {id:"keys",g:"Gap found",pill:"notyet",t:"Keyboard use of tabs inside views",e:"Arrow keys don't move between tabs. Only this part was checked, not the whole app.",k:"r",
+     d:"The tabs drawn inside a view have no keyboard handling for moving between tabs. Nothing else about keyboard use was checked.",src:["The view renderer code","../../../apps/web/src/catalog/renderer.tsx"]},
+   {id:"quality",g:"Measured once",pill:"notyet",t:"Quality of AI-made views",e:"One trial: 6 questions, 6 clean views. No repeatable test yet; the paused "+G_+" work was meant to build one. <a href=\"case-a.html\">See the "+G_+" work</a>",k:"v",
+     d:"Six AI agents each answered one question about a copy of Pharos's own project. All six views were clean, and the two counts that were checked were exact. Too small to repeat or compare.",src:["The earlier trial's record in the project",""]}
+  ];
+  var GROUPS=["Works","Works, with limits","Partly","Gap found","Measured once"];
+  var PICKMAP={"Adjusting views myself":"adjust","Acting from a view":"act","Seeing what the agent is doing":"doing","Keyboard use":"keys"};
+  var openCaps={};
+  function renderCaps(){
+    var host=$("#caps"), slot=$("#pickslot"); host.textContent=""; slot.textContent="";
+    var a=SK.ans("b42"), pickId=a&&PICKMAP[a.v];
+    function cardEl_(c,picked){
+      var w=el("div","cap"+(picked?" picked":""));
+      var hb=el("button","caphead"); hb.type="button"; hb.setAttribute("aria-expanded",openCaps[c.id]?"true":"false");
+      var t=el("div","capt"); if(picked){ t.appendChild(el("span","pickmark","You said this matters most (10 Oct)")); }
+      var tt=el("span",null,c.t); t.appendChild(tt); t.insertAdjacentHTML("beforeend",'<span class="pill p-'+c.pill+'">'+c.g+'</span>');
+      hb.appendChild(t); var e=el("div","cape"); e.innerHTML=c.e+" "+BADGE(c.k,c.k==="v"?"The record of the earlier trial.":"An agent read the code on 6 Oct; nobody ran this on screen.","6 Oct"); hb.appendChild(e);
+      hb.appendChild(el("span","more-hint",openCaps[c.id]?"Hide details":"Show details"));
+      hb.addEventListener("click",function(ev){ if(ev.target.closest(".term,.badge,a")) return; openCaps[c.id]=!openCaps[c.id]; renderCaps(); });
+      w.appendChild(hb);
+      if(openCaps[c.id]){ var d=el("div","capd"); var p=el("p"); p.innerHTML=c.d; d.appendChild(p);
+        var m=el("div","small"); var srcHtml=c.src[1]?'<a href="'+esc(c.src[1])+'">'+esc(c.src[0])+'</a>':esc(c.src[0]);
+        m.innerHTML="Assessed 6 Oct; spot-checked 10 Oct: unchanged · Source: "+srcHtml+" · "; var ab=el("button","linkbtn","Ask about this"); ab.type="button"; ab.addEventListener("click",function(){ askToast(d); }); m.appendChild(ab); d.appendChild(m); w.appendChild(d); }
+      return w;
+    }
+    if(pickId){ CAPS.forEach(function(c){ if(c.id===pickId) slot.appendChild(cardEl_(c,true)); }); }
+    GROUPS.forEach(function(g){ var list=CAPS.filter(function(c){ return c.g===g && c.id!==pickId; }); if(!list.length) return;
+      host.appendChild(el("div","grouph",g)); list.forEach(function(c){ host.appendChild(cardEl_(c,false)); }); });
+  }
+
+  /* ---- answers, proposals, waiting count ---- */
+  SK.SAVED.b12=function(a){ return "Your preference (10 Oct): "+a.v; };
+  function decText(a){ if(a.v==="Accept") return "Recorded: you accepted this on 10 Oct."; if(a.v==="Reject") return "Recorded: you rejected this on 10 Oct."; return "Recorded: you chose 'Not now' on 10 Oct. It keeps waiting."; }
+  SK.SAVED.b51=decText; SK.SAVED.b52=decText;
+  window.onAnswers=function(){
+    renderCaps();
+    var open=0; ["b51","b52"].forEach(function(q){ var a=SK.ans(q); if(!a||a.v==="Not now") open++; });
+    $("#wait-text").textContent = open===0 ? "nothing from this research." : (open+" proposal"+(open>1?"s":"")+" from this research, no deadline.");
+    var line=$("#answers-line"); line.textContent="";
+    var items=[]; var b12=SK.ans("b12"), b42=SK.ans("b42"), p1=SK.ans("b51"), p2=SK.ans("b52");
+    if(b12) items.push(["1","Text or view: "+b12.v]);
+    if(b42) items.push(["4","Biggest gap: "+b42.v]);
+    var dec=[]; if(p1) dec.push("first proposal "+({Accept:"accepted",Reject:"rejected","Not now":"not now"})[p1.v]); if(p2) dec.push("second proposal "+({Accept:"accepted",Reject:"rejected","Not now":"not now"})[p2.v]);
+    if(dec.length) items.push(["5",dec.join(", ")]);
+    if(!items.length){ line.hidden=true; return; }
+    line.hidden=false; line.appendChild(document.createTextNode("Your answers so far: "));
+    items.forEach(function(it,i){ var b=el("button","linkbtn",it[1]); b.type="button"; b.setAttribute("data-open-part",it[0]); line.appendChild(b); if(i<items.length-1) line.appendChild(document.createTextNode(" · ")); });
+    line.appendChild(document.createTextNode(" · ")); var c=el("button","linkbtn","Change"); c.type="button"; c.setAttribute("data-open-part",items[0][0]); line.appendChild(c);
+  };
+  $$(".askbtn").forEach(function(b){ b.addEventListener("click",function(){ var n=$("#asknote"); n.hidden=false; n.textContent=ASK; }); });
+
+  /* ---- more panels ---- */
+  var SRC=[
+   ["A2UI home","Version, concepts and the programs that draw A2UI views.","v","https://a2ui.org/"],
+   ["A2UI specification v0.9.1","The format's exact rules. 0.9.1 is current; 1.0 is a candidate.","v","https://a2ui.org/specification/v0.9.1-a2ui/"],
+   ["A2UI: how it compares","A2UI's own comparison with MCP Apps, AG-UI and ChatKit. One side's view.","v","https://a2ui.org/introduction/agent-ui-ecosystem/"],
+   ["CopilotKit: the state of agentic UI","A vendor's article comparing AG-UI, MCP-UI and A2UI.","r","https://webflow.copilotkit.ai/blog/the-state-of-agentic-ui-comparing-ag-ui-mcp-ui-and-a2ui-protocols"],
+   ["A2UI over MCP","How to send A2UI views through MCP. Documentation existing doesn't mean a target app supports it.","v","https://a2ui.org/guides/a2ui_over_mcp/"],
+   ["A2UI in MCP Apps","How to show A2UI views inside an MCP Apps window.","v","https://a2ui.org/guides/a2ui-in-mcp-apps/"],
+   ["A2UI catalogs","How the set of blocks is agreed on and versioned.","v","https://a2ui.org/concepts/catalogs/"],
+   ["A2UI actions","How a view sends actions back to the agent.","v","https://a2ui.org/concepts/actions/"],
+   ["awesome-generative-ui","A reader's list of tools and papers. Good for finding things; not a ranking.","r","https://github.com/narrowin/awesome-generative-ui"],
+   ["AG-UI","Lets an app follow an agent's steps and share state with it.","v","https://github.com/ag-ui-protocol/ag-ui"],
+   ["A2A","How agents talk to other agents. Not needed for Generative UI.","v","https://a2a-protocol.org/"],
+   ["Model Context Protocol","How agents connect to apps and tools. Pharos's channel.","v","https://modelcontextprotocol.io/"],
+   ["A2UI (Google)","An open format for describing a view from a set of blocks.","v","https://a2ui.org/"],
+   ["json-render","Describes a view as data from a fixed set of blocks.","v","https://github.com/vercel-labs/json-render"],
+   ["OpenUI","A compact language for views. The '67% fewer tokens' is its maker's claim.","v","https://github.com/thesysdev/openui"],
+   ["mdocUI","Mixes explanation text with blocks. Listed only; not looked at in detail.","r","https://github.com/mdocui/mdocui"],
+   ["Adaptive Cards","An older format for cards the app draws. A useful precedent; not tested with Pharos.","r","https://adaptivecards.microsoft.com/"],
+   ["MCP Apps","Interactive views inside a chat app, walled off from everything else.","v","https://github.com/modelcontextprotocol/ext-apps"],
+   ["mcp-ui","Related tooling for MCP views. Listed only; not looked at in detail.","r","https://github.com/MCP-UI-Org/mcp-ui"],
+   ["Vercel AI SDK","Shows a ready-made block for each result of a tool the AI uses.","v","https://ai-sdk.dev/"],
+   ["Tambo","Lets an AI update blocks in an existing app. Its hosted service is closing.","v","https://github.com/tambo-ai/tambo"],
+   ["Hashbrown","A related framework from the list. Listed only; not looked at in detail.","r","https://github.com/liveloveapp/hashbrown"],
+   ["CopilotKit","A related framework from the list. Listed only; not looked at in detail.","r","https://github.com/CopilotKit/CopilotKit"],
+   ["assistant-ui","Related chat tooling from the list. Listed only; not looked at in detail.","r","https://github.com/assistant-ui/assistant-ui"],
+   ["Flutter GenUI","A related implementation for another platform. Listed only; not tested with Pharos.","r","https://github.com/flutter/genui"],
+   ["App builders and runtime artifacts","Two different jobs that were first grouped together.","r","https://v0.app/"],
+   ["Generative UI: LLMs are Effective UI Generators","The study behind the 83% preference figure. Not about Pharos.","v","https://generativeui.github.io/static/pdfs/paper.pdf"],
+   ["The Generative UI review (6 Oct)","The agent's full review. The map and the assessment come from it.","r",""],
+   ["The A2UI research review","An earlier review, corrected against current documents.","r",""],
+   ["Pharos M4 agent evaluation","The earlier trial: six agents, six clean views.","v",""],
+   ["Delivery roadmap","Seven research proposals moved to the main roadmap.","v",""],
+   ["'Why a closed catalog?'","Pharos's own answer on why its set of blocks is fixed.","r",""]
+  ];
+  window.onMoreOpen=function(id,panel){
+    if(id==="sources"){ var h=$("#srclist",panel);
+      SRC.forEach(function(s){ var r=el("div","srcrow"); var nm=el("div","sn"); if(s[3]){ nm.innerHTML=A(s[3],esc(s[0])); } else nm.textContent=s[0]; r.appendChild(nm);
+        r.appendChild(el("div",null,s[1])); var m=el("div","small"); m.innerHTML=BADGE(s[2],s[2]==="v"?"Read against the source itself in the 6 Oct review.":"An agent's note or a listing that was not checked in detail.","Read 6 Oct")+" · Read 6 Oct"; r.appendChild(m); h.appendChild(r); }); }
+    if(id==="glossary"){ var g=$("#gloss",panel); SK.glossary().forEach(function(k){ g.appendChild(el("dt",null,k)); g.appendChild(el("dd",null,TERMS[k])); }); }
+  };
+
+  window.onPartOpen=function(n){ if(n==="1"){ renderGraph(); setTimeout(renderGraph,50); } };
+  SK.initCards(); SK.initFooter(); renderSim(); renderCaps(); window.onAnswers();
+  var m=/^#part-(\d)$/.exec(location.hash); if(m) SK.openPart(m[1],true);
+})();
+
+</script>
+</body>
+</html>

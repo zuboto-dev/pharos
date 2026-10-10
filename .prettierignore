@@ -1,2 +1,5 @@
 dist/
 pnpm-lock.yaml
+
+# Generated, self-contained sketch pages
+docs/reframe/sketches/

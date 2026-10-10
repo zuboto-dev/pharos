@@ -1,0 +1,186 @@
+# What the sketches need from Pharos
+
+2026-10-10 · written by GPT-6-Astra · commit fd6fb4d
+
+**Supported / partly / not supported: 6 / 48 / 23 (77 elements).**
+
+Today's catalog can show the underlying tasks, scope and decisions. It cannot yet deliver either sketch as a live, guided explanation. The largest gaps are saved knowledge with visible certainty, captured demonstrations, and questions that keep the owner's answers.
+
+This is a code audit, not a browser test. No servers or live data were used. The sketches are fixed demonstrations; their browser-local answers are not product support. “Supported” means the intended function exists, allowing ordinary content preparation; “partly” means a useful part exists but data or behaviour is missing; “not supported” means the defining interaction or representation is absent. Static prose alone does not count as a working question, map or demonstration.
+
+The count covers one row per named element, each More destination, and shared controls counted once across both sketches. Repeated cards, flow boxes and question choices belong to their containing element; their distinct behaviours are named in its row. Element labels below trace back to [the case designs](cases.md); they are not proposed screen text. Shared certainty and term requirements apply to every relevant row.
+
+## Case A: judging the work
+
+| Element | Today | What works; what is missing | Code evidence¹ |
+| --- | --- | --- | --- |
+| A1 Headline | partly | Text shows the sentence; cannot read a claim or derive its weakest certainty. | Text, Knowledge |
+| A2 Test picture | not supported | Five boxes, arrows, runner bracket, status/source popovers and links to parts need Flow. StageTracker only draws stages. | Flow, Navigation, Knowledge |
+| A3 Needs-you line | partly | Can count unfinished tasks for a named assignee; cannot choose “nothing now”, infer the pause from a decision, or attach its certainty. | Text, Query, Knowledge |
+| A4 Agent's reading | partly | Callout shows prose; no binding to statement, author, checked date or certainty. | Callout, Knowledge |
+| A5 Release line | partly | Text and ordinary links work; opening part 3 and binding evidence do not. | Text, Navigation, Knowledge |
+| A6 Five-part path | not supported | Tabs switch children, but provide no ordered previews, open-part targets or shared navigation state. | Navigation |
+| A7 More row | partly | Links/Tabs can expose destinations; no catalog control opens and closes the sketch's shared inline panel. Destinations audited separately below. | Navigation, Text |
+| A10 Test introduction | partly | Static Text works; claim/term/certainty binding is missing. | Text, Knowledge |
+| A11 Practice project; try it first | not supported | No captured dataset, temporary row picks or reveal/reset action. A live DataTable opens records instead. | Exhibit, Table, Query |
+| A12 Answer key | not supported | No reveal state, per-row answer tags/reasons, or scoring picks against traps. | Exhibit, Query |
+| A13 Three test situations | partly | DataList can show artifact descriptions; truncates labels, opens a drawer, lacks bylines, “This one”, per-claim badges and direct evidence-link cards. | List, Artifact, Knowledge |
+| A14 Answer-key correction | partly | Grid + text can show two panels; no captured comparison with source/date and a bound supporting claim. | Exhibit, Callout, Knowledge |
+| A15 Is this a real question? | not supported | No reader-question record, choice control or saved answer. | Question |
+| A20 Problems introduction | partly | Text shows wording; “none fixed” is not a live claim. | Text, Knowledge |
+| A21 Cancelled work counted late | partly | Two static tables are possible in Markdown; no captured results tied to a finding, source and fixing status. | Exhibit, Knowledge |
+| A22 Misleading empty list | partly | Static before/after prose works; no captured illustration and evidence binding. This audits showing the problem, not fixing it. | Exhibit, Knowledge |
+| A23 Lost-change sequence | not supported | Timeline draws dated stages, not two actors and ordered events with a shared outcome. | Flow, Exhibit |
+| A24 Settings demonstration | partly | Can quote the dialog in Markdown; no catalog component renders a captured, non-editing dialog illustration. | Exhibit, Text |
+| A25 Checkbox demonstration | not supported | Real task toggles exist, but write project data; no isolated two-click simulation, explanation or Start over. | Task, Exhibit |
+| A26 Which problems matter? | not supported | Needs saved single choice plus conditional multiple-choice follow-up. | Question |
+| A30 Release introduction | partly | Static Text works; live claim and provenance do not. | Text, Knowledge |
+| A31 Checks and raw output | partly | Markdown can show the check table; no captured-output record or show/hide-raw control with provenance. | Exhibit, Text |
+| A32 Instructions before/after | partly | Grid + Markdown can show the words; cannot bind a dated captured comparison. | Exhibit |
+| A33 Not checked | partly | Callout renders the warning; dashed status treatment, terms and certainty popover are absent. | Callout, Knowledge |
+| A34 Trust the release? | not supported | No saved reader choice. | Question |
+| A40 What remains | partly | DependencyGraph reads task dependencies and opens tasks; lacks vertical reading order, plain labels, explanatory steps and pause-aware owner pills. | Flow, Task, Query |
+| A41 What it asks of the owner | partly | Static comparison/list works; word-count bars need numeric-value rendering, not CountChart's record counts. | Exhibit, Chart |
+| A42 Earlier trial | partly | Callout can show the result; no bound claim or evidence badge. | Callout, Knowledge |
+| A43 Is the rest worth it? | not supported | No saved reader choice. | Question |
+| A50 Answers so far | not supported | No queryable reader answers, dated summary or return-to-part action. | Question, Navigation |
+| A51 Overall verdict | not supported | Needs saved verdict, conditional checkboxes/text and headline reflection on return. | Question, Text |
+| A52 Full agent reading | partly | Callout shows the four points; no claim dependencies, byline or evidence popovers. | Callout, Knowledge |
+
+## Case B: understanding the landscape
+
+| Element | Today | What works; what is missing | Code evidence¹ |
+| --- | --- | --- | --- |
+| B1 Headline | partly | Text works; claim and term binding do not. | Text, Knowledge |
+| B2 Four-approach band | not supported | No categorical band, grouped bracket, highlighted position or expandable stop card. It is not a progress tracker. | Map, Knowledge |
+| B3 Certainty line | partly | Text displays it; cannot derive the map's certainty or open its provenance. | Text, Knowledge |
+| B4 Waiting-for-you line | partly | Text counts proposed decisions; cannot switch zero/singular/plural wording or open part 5. | Text, Decision, Navigation |
+| B5 Five-part path | not supported | Needs ordered previews and addressable parts. | Navigation |
+| B6 More row | partly | Ordinary links/Tabs exist; shared inline destination panel and Close do not. | Navigation, Text |
+| B10 Intro and question bubble | partly | Can show the words; bubble styling, terms and evidence binding need extensions. | Text, Knowledge |
+| B11 Text versus view | partly | Renderer, Stat and DependencyGraph can draw the recipe. Missing captured-data embedding, recipe-to-block highlighting, frozen date, simulated change/reset and stale-text marker. | Exhibit, Task, Query |
+| B12 Preferred answer style | not supported | No saved reader preference available to agents. | Question |
+| B20 Map introduction | partly | Text works; its interpreted claim and terms are unbound. | Text, Knowledge |
+| B21 Map and connectors | not supported | No two-axis placement, connector strip, selected chip/details panel, or joining placement claims by approach. Ask itself exists. | Map, Query, Ask |
+| B30 How Pharos works | not supported | StageTracker and DependencyGraph cannot represent six explanatory steps without inventing stages/tasks. | Flow, Knowledge |
+| B31 What distinguishes Pharos | partly | DataList is reusable scaffolding; claims are not queryable and each sentence needs its own provenance. | List, Knowledge, Query |
+| B32 Ruled-out choices | partly | ScopeBoard can show only out-of-scope records and reasons. Plain wording can be edited today; certainty and the exact two-card treatment are missing. | Scope, Knowledge |
+| B33 Nearest relatives | partly | Can list existing approach artifacts; cannot attach separate factual/interpretive claims or open selected map cards. | List, Artifact, Map |
+| B40 Assessment introduction | partly | Static Text works; checked date and certainty are not bound data. | Text, Knowledge |
+| B41 Eight capability cards | partly | DataList can list records, but has no grouping, inline expandable cards, rich claim details, or answer-dependent placement. | List, Query, Knowledge |
+| B42 Most important gap | not supported | Needs a saved choice that promotes one card while retaining the others, with answer date. | Question, List, Query |
+| B50 Open questions | partly | List rendering and Ask infrastructure exist; research questions are not a queryable type and “not known” provenance is absent. | List, Question, Ask |
+| B51 First proposal | partly | DecisionLog displays it; schema already has status/date/decider. Missing inline Accept/Reject/Not now, attribution to the owner, original/plain title and contextual claim. | Decision, Knowledge |
+| B52 Second proposal | partly | Same supported decision storage; same action, identity, wording and provenance gaps. | Decision, Knowledge |
+
+## More destinations
+
+Opening/closing these panels is counted in A7/B6. These rows assess their contents and destination behaviour.
+
+| Element | Today | What works; what is missing | Code evidence¹ |
+| --- | --- | --- | --- |
+| A — All finished tasks | partly | DataTable can show tasks and assignee names. No plainTitle or reverse task-to-artifact lookup for the evidence link; URI cells are plain strings. | Table, Task, Artifact, Query |
+| A — Proposed pass marks | partly | Decisions can hold proposed text today; separate queryable targets/claims and the dashed proposal presentation are missing. | Decision, List, Knowledge |
+| A — The 26 questions | partly | Sketch actually shows read-only expandable questions/suggested answers, not answer cards. Markdown can show the text, but no such disclosure list or structured questions exists. | Text, Question, Navigation |
+| A — Test runner | partly | Static Text/list works; live claims and provenance do not. | Text, Knowledge |
+| A — Code changes | partly | Can show the fixed file summary; no captured excerpt tied to source/date. | Exhibit |
+| A — Earlier views | supported | Existing view routes/tabs open the saved views. Sketch uses stand-in notes; no new component needed for the real destination. | View |
+| B — All sources | partly | Artifacts already hold descriptions and URIs. DataTable lacks clickable URI rendering, certainty and checked-on date; createdAt is not the review date. | Table, Artifact, Knowledge |
+| B — Full review | partly | ArtifactGallery opens HTTP(S) links; local paths are code text. A stored description can be read in a drawer, but the mapping does not guarantee opening the review document. | Artifact |
+| B — Detailed comparison view | supported | A link to the existing saved view is already possible. | View |
+| B — Keep, consider, leave alone | partly | ScopeBoard groups by option meaning and shows reasons; plain labels can be supplied. Shared certainty still needs work. | Scope, Knowledge |
+| B — Follow-up tasks | partly | TaskTable supports filtered research tasks. Plain titles and the separate moved-to-main summary need preparation; cannot query live tasks across projects. | Task, Query |
+| B — Glossary | partly | DataList can eventually list terms, but none exist in schema/query. A static Markdown definition list is possible now. | List, Text, Knowledge, Query |
+
+## Shared elements and sketch-only controls
+
+| Element | Today | What works; what is missing | Code evidence¹ |
+| --- | --- | --- | --- |
+| Page and part headings | supported | Section/title and Markdown headings render plain titles; inline terms are assessed separately. | Navigation, Text |
+| Fixed-content/date notice | supported | A static Callout can state that this is a dated demonstration. Exact strip styling is not required. | Callout |
+| Certainty badges and source popovers | not supported | OptionBadge shows a label/colour, not evidence, weakest-support certainty or a source/date popover. | Knowledge, List |
+| Built/partial/empty/owner status pills | partly | Existing option badges convey task status; not the distinct existence states and pause-aware labels used here. | Task, Knowledge |
+| Inline term explanations | not supported | Entity hover cards exist, but no term lookup or inline term renderer in Markdown. | Text, Knowledge |
+| Answers line under headline; Change | not supported | Text cannot read saved answers; neither answers nor open-part targets exist. | Question, Text, Navigation |
+| Next / Back to top / deep links | not supported | Catalog children have no addressable part contract; ordinary Markdown links do not reveal hidden content. | Navigation |
+| Ask about this | supported | Existing Ask opens a dialog and saves a request with entity/widget/view context. New cards must expose that action; the sketch's button is only a placeholder. | Ask |
+| Reset my answers | not supported | No reader-answer model or scoped reset action. Product reset must create history; it must not silently undo accepted decisions. | Question, Decision |
+| Footer disclaimer | supported | Static Markdown can explain demonstration limits. | Text |
+| Expandable sketch notes | partly | Markdown renders the notes, but no catalog disclosure element implements the footer's details/summary. | Text, Navigation |
+| Phone layout and dark theme | partly | Existing grid stacks and uses dark styles; maps/flows/exhibits need their own responsive and keyboard implementations. No visual verification performed. | Navigation, Exhibit |
+
+## Evidence key
+
+¹ Each key expands to the catalog contract, implementation and relevant data/query limits. Lines refer to the commit above. Absence findings use the complete closed registries, not a failed text search.
+
+| Key | File and line evidence |
+| --- | --- |
+| Text | `packages/schema/src/views/catalog.ts:275–292`: values are only count, percent or selected project fields. `apps/web/src/catalog/components/generic.tsx:321–334`: substitution only. `apps/web/src/catalog/ui.tsx:142–146`: Markdown renderer, no term/claim/disclosure integration. |
+| Callout | `packages/schema/src/views/catalog.ts:98–110`: literal body/content, only project.description as a Markdown source. `apps/web/src/catalog/components/overview.tsx:183–202`: renders that text directly. |
+| Knowledge | `packages/schema/src/entities.ts:112–132,159–183`: artifacts/decisions/requests, no claim/question/excerpt/term types. `packages/schema/src/views/catalog.ts:296–333`: complete 26-component registry, none of the proposed explanatory components. `packages/schema/src/views/run-query.ts:78–86`: stored fields/metadata only, no applies or shownCertainty. |
+| Query | `packages/schema/src/views/query.ts:44–83`: six queryable types, one project dataset. `packages/schema/src/views/run-query.ts:5–26,192–232`: fixed dataset keys/reference hops, today-only context, filter/sort/limit; no join, reader-answer context or cross-project fetch. |
+| List | `packages/schema/src/views/catalog.ts:266–273`; `apps/web/src/catalog/components/generic.tsx:267–296`: flat list, label plus secondary fields, opens entity. `generic.tsx:65–95`: option badges/reference chips, truncated prose, other values stringified. |
+| Table | `packages/schema/src/views/catalog.ts:226–236`; `apps/web/src/catalog/components/generic.tsx:98–146`: query/columns, row opens drawer. `generic.tsx:48–95`: URI has no special link renderer. |
+| Chart | `packages/schema/src/views/catalog.ts:238–252`; `apps/web/src/catalog/components/generic.tsx:152–191,194–231`: adds one per record/value, draws counts, never reads a numeric measure as bar length. |
+| Artifact | `packages/schema/src/entities.ts:112–121,260–269`: description and URI, taskId points from artifact to task. `apps/web/src/catalog/components/outputs.tsx:23–37,40–106`: only HTTP(S) URIs become links; local paths remain text. |
+| Task | `packages/schema/src/entities.ts:96–110,248–258`: title/dependencies, no plainTitle or evidence reference. `packages/schema/src/views/catalog.ts:163–188`; `apps/web/src/catalog/components/work.tsx:310–394,528–639`: task table and task-only graph. `apps/web/src/catalog/interactive.tsx:212–247`: checkbox applies real status changes. |
+| Scope | `packages/schema/src/entities.ts:80–87`; `packages/schema/src/views/catalog.ts:122–127`; `apps/web/src/catalog/components/goals.tsx:85–133`: columns filtered by meaning, title and rationale rendered. |
+| Decision | `packages/schema/src/entities.ts:123–132`; `packages/schema/src/views/catalog.ts:204–206`; `apps/web/src/catalog/components/outputs.tsx:109–166`: DecisionLog displays and opens decisions; no inline decision buttons. Creation sets date but not decider at line 115. |
+| Question | `packages/schema/src/entities.ts:159–183`: request means a person asking an agent, not a view asking a person. `packages/schema/src/views/query.ts:57–83`: no reader questions/answers. `apps/web/src/catalog/context.tsx:13–29`: generic apply exists, but no question component in `catalog.ts:296–333`. |
+| Navigation | `packages/schema/src/views/catalog.ts:33–64`: Grid/Section/Tabs, no part IDs/actions. `apps/web/src/catalog/renderer.tsx:66–144`: responsive Grid and local Tabs state only. `apps/web/src/catalog/context.tsx:4,22–23`: open targets entity/revision/history, not parts. Widget IDs exist (`packages/schema/src/views/board.ts:6–33`) but are not a navigation API. |
+| Flow | `packages/schema/src/views/catalog.ts:131–152,184–188`: trackers/timelines bind stages, graph binds tasks. `apps/web/src/catalog/components/plan.tsx:66–133,135–216`; `apps/web/src/catalog/components/work.tsx:551–639`: no arbitrary explanatory nodes, brackets, actor lanes or part targets. |
+| Map | `packages/schema/src/views/catalog.ts:238–252,296–333`: count bars but no position map. `apps/web/src/catalog/components/generic.tsx:152–231`: grouping produces counts, not placements. `packages/schema/src/entities.ts:112–121`: no artifact position fields; Query evidence explains missing joins. |
+| Exhibit | `packages/schema/src/views/catalog.ts:33–55,103–110,296–333`: static layouts/text, no captured-work component. `packages/schema/src/entities.ts:112–121`: no typed captured content. `apps/web/src/catalog/renderer.tsx:148–202` and `context.tsx:42–81`: renderer/provider can be reused with supplied data and inert actions, but no embedding contract; `run-query.ts:23–26,203–209` exposes frozen today only to callers. |
+| Ask | `apps/web/src/catalog/context.tsx:11–15`; `apps/web/src/catalog/drawer.tsx:570–583`; `apps/web/src/catalog/board.tsx:258–271`; `apps/web/src/pages/requests.tsx:46–63`: ask context becomes a request. Schema: `packages/schema/src/entities.ts:159–168`. |
+| View | `packages/schema/src/entities.ts:134–157`; `apps/web/src/pages/ProjectPage.tsx:147,274–278,469`: route selects a saved view. This is the outer view frame, not catalog Tabs or a part jump. |
+
+## Candidate additions
+
+These are proposed contracts, not implemented props. IDs and queries refer to stored records; components must not copy claim text into the view. Each sketch below has two lines. Reuse the existing renderer and apply/Ask actions.
+
+| Candidate; needed by | Two-line props sketch |
+| --- | --- |
+| **ReadingPath** — both five-part paths, More panels and return links | `parts: {id, label, preview, children: ViewNode[]}[]; more?: Part[]`<br>`start?: PartId; navigation: {next: true, backToTop: true, deepLinks: true}` |
+| **Flow** — A2, A40, B30 | `steps: {id, recordId, target?: PartId}[]; edges: {from, to}[]`<br>`direction: "auto"; brackets?: {from, to, claimId}[]; statusField?: string` |
+| **Exhibit** — A11–12, A14, A21–25, A31–32, A41, code changes; B11 | `excerptId: Id; mode: "read" / "compare" / "try" / "sequence" / "view" / "bars"`<br>`interaction?: {keyFields?, revealFields?, simulation?, recipeHighlight?, numericField?}` |
+| **PositionMap** — B2, B21, B33 | `axes: QuestionId[]; placements: ClaimQuery; descriptions: ClaimQuery`<br>`layout: "band" / "grid"; highlight: ArtifactId; separateValues?: string[]` |
+| **QuestionCard** — all reader questions, A50 summary, B51–52 decisions | `source: {questionId: Id} / {decisionId: Id} / {query: QuestionQuery}`<br>`mode: "answer" / "summary" / "decision"; followups?: QuestionQuery; returnTo?: PartId` |
+| **Claim display** — headlines, judgments, capability cards, open questions | `query: ClaimOrQuestionQuery; presentation: "sentence" / "callout" / "cards"`<br>`groupBy?: Field; promoteFrom?: QuestionId; details: "inline"; provenance: "always"` |
+
+Claim display could be extensions to Text, Callout and DataList rather than a sixth catalog name. It must read statements and computed certainty, support source/date popovers and keep uncertain/open labels visible. A reusable inline-term renderer must serve these components and Markdown; adding term records alone does not produce popovers.
+
+Exhibit interaction configuration must be a validated, finite set of operations, never supplied script. It needs row keys, answer-key fields, sequence actor/order fields, a numeric bar field, and declared before/after simulation changes. Pass the captured date through to **every** nested query. Read-only provider actions prevent writes but do not automatically remove edit controls or stop components such as ActivityFeed from fetching live history (`outputs.tsx:184–190`); limit captured recipes to supported display components.
+
+Small extensions: conditional wording in Text (A3 **and B4**); grouped, expandable, non-truncated DataList cards; safe source links; shared certainty/term rendering; addressable parts. A branch map is justified only by the held decision pattern, not these two sketches: defer it until that case is supplied. No private case content was inspected.
+
+## Cross-check with the knowledge-model proposal
+
+The [knowledge-model proposal](knowledge-model.md) describes future work. None of its four new record types is present at this commit.
+
+| Need | Judgment | Reason and required adjustment |
+| --- | --- | --- |
+| Claims, provenance and weakest-support certainty (§§3, 7) | **Agree** | Today's strict entity types and evaluator lack these (Knowledge, Query). Keep statement, source, author, checked date and dependency-based certainty in data. |
+| Reader questions, preferences and open research questions (§§3, 9) | **Agree** | Requests go in the other direction. Use question records and normal revisioned writes; never treat sketch localStorage as the answer store (Question, Ask). |
+| Conditions, unknown answers and hypothetical branches (§7) | **Agree** | Actual applicability needs yes/open/no, distinct from certainty. QueryContext currently only carries today. Held-pattern execution remains deferred. |
+| Sources reused as artifacts (§2) | **Agree** | URI/description already exist (Artifact). Add source presentation; do not give an entire source one certainty when individual claims differ. |
+| Captured excerpts (§§3, 10) | **Agree** | Typed text/table/compare/view covers the material; source/date/illustration labels are essential (Exhibit). Captured data needs validation, as the proposal's save checks acknowledge. |
+| Complete demonstration contract (§10) | **Missing** | “Simulation belongs to the component” leaves its stored inputs unspecified. Define row identity, correct/trap fields, actor/order, numeric measures and allowed simulation deltas. Claims with word-count sentences alone cannot drive A41 bars (Chart). |
+| Frozen-date rendering (§10) | **Missing** | excerpt.today has no route through ViewDataProvider to component runQuery calls; generic.tsx:101,270 omit context. Add that route and restrict live-fetching/mutating controls inside captured recipes. |
+| Terms (§3) | **Agree** | New term data is warranted. Still requires inline lookup, first-use-per-part placement and accessible popovers (Text, Knowledge). |
+| Plain titles (§11) | **Agree** | Keep worker titles while adding reader wording. Update direct title readers too: work.tsx:528–548 and outputs.tsx:81–83,146 bypass labelOf. Descriptions already hold summaries; a new summary field is optional. |
+| Approach positions as axis claims (§12) | **Agree** | Reusing artifacts plus placement claims avoids another entity type. PositionMap must join by approach and preserve separate certainty for each axis and description; existing runQuery cannot do that join (Map, Query). |
+| “Generic building blocks … no further change” (§7) | **Disagree** | New types make queries possible, not the designed presentation. DataList truncates and opens a drawer; Text/Callout cannot bind statements; OptionBadge has no provenance popover. Shared component extensions remain required (List, Text, Callout). |
+| Automatic editing of new schema fields (§1) | **Disagree** | The drawer supports selected scalar/list shapes, not arbitrary nested knowledge. Conditions/choices and excerpt content need deliberate editors; reference rendering assumes arrays of IDs, not objects (`apps/web/src/catalog/drawer.tsx:149–221`; `generic.tsx:70–79`). |
+| Certainty range filters (§4) | **Disagree** | Fixed semantic ranking for weakest certainty is right, but today's range filters use reorderable project option order (`run-query.ts:110–129`). “Verified or better” needs semantic comparison or explicit meanings, not an unqualified gte filter. |
+| B42 preference stored as applicability conditions (§12) | **Disagree** | Picking the gap that matters most does not make other capability findings inapplicable. Keep all findings true/visible; store a choice-to-card association and promote the selected card without changing claim.applies. |
+| Proposal acceptance reused as decisions (§§2, 12) | **Agree** | Existing status/date/decider fields fit; map actions through project option meanings. Needs dedicated action UI and owner identity resolution (Decision). |
+| “Not now”, reset and attribution | **Missing** | Unchanged proposed status cannot preserve the sketch's dated “Not now” response. Specify whether deferral is session-only or saved separately. Reset answers must not reset accepted decisions. The proposal defers identifying the owner, so attribution remains incomplete. |
+| Protected references and validation (§§5–6) | **Agree** | Current RefSpec allows only unset/cascade (`entities.ts:187–192`); add nested-reference, restrict and cycle checks before conditions/supports can be trusted. These are required storage changes, not catalog props. |
+| Questions used as axes versus unknown research (§§3, 12) | **Missing** | Axis questions are also askedOf:others; a broad “open research questions” query can show map axes. Give axes a distinct role or require an explicit tag exclusion in every open-question query. |
+| Deferred disagreements/action gate (§14) | **Agree** | Neither sketch requires a private decision branch. Keep these as explicit held-pattern needs, not evidence that today's catalog supports them. |
+
+One baseline correction: despite the documented “one hop”, field resolution recursively follows recognised reference names (`run-query.ts:66–75`). This does not provide the reverse lookup or join needed by evidence tables and position maps.
+
+## Check performed
+
+Read the brief, goal, case element descriptions/mapping tables, both HTML sketches (including their event handlers and sketch notes), and the knowledge proposal; checked the schema, catalog implementations and query evaluator cited above. Checked coverage against every named A/B element, twelve More destinations and twelve shared-element rows. Historical facts quoted inside the sketches and outside tools' current capabilities were not re-researched: this audit concerns whether Pharos can represent and operate the sketches. No product code was changed.

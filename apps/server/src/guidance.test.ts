@@ -3,13 +3,18 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Board, toBoard } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { EXAMPLES, answerBrief } from './guidance.js';
+import { EXAMPLES, VIEW_GUIDELINES, answerBrief } from './guidance.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { answerView, effectiveBoard, previewView, requestContext } from './views/service.js';
 import { projectSnapshot } from './store/snapshot.js';
 
 describe('guidance', () => {
+  it('keeps cancelled tasks out of the blocked-or-overdue example', () => {
+    const line = VIEW_GUIDELINES.split('\n').find((l) => l.startsWith('- Blocked or overdue'))!;
+    expect(line).toContain('status: {not: ["done", "cancelled"]}');
+  });
+
   it('briefs the answering agent with the open questions and everything it needs to answer', () => {
     const store = new Store(openDatabase(':memory:'));
     const person = { kind: 'human' as const, name: 'me' };

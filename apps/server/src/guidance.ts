@@ -40,7 +40,7 @@ good view replaces a paragraph you would otherwise write.
 - Overdue: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}
 - Due this week: {dueDate: {gte: "$today", lte: "$today+7d"}}
 - Late stages' work: {"stage.targetDate": {lt: "$today"}, status: {not: "done"}}
-- Blocked or overdue: anyOf [{status: "blocked"}, {dueDate: {lt: "$today"}, status: {not: "done"}}]
+- Blocked or overdue: anyOf [{status: "blocked"}, {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}]
 - Current stage: {stageId: "$currentStage"}
 - High priority and up: {priority: {gte: "high"}}
 

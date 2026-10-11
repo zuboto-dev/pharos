@@ -131,7 +131,9 @@ export const ViewAnswerInput = z.object({
     .describe('Short tab label (default: from the question)'),
   widgets: z
     .array(z.unknown())
-    .describe('Board widgets that answer it; lead with the answer (e.g. a Text or Callout)'),
+    .describe(
+      'Board widgets that answer it; lead with the answer (a Text or Callout, or a headline ClaimCard when explaining)',
+    ),
   requestId: z
     .string()
     .optional()

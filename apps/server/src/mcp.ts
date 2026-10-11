@@ -32,7 +32,7 @@ import {
 /** Agents edit views with the view tools, which keeps apply's schema small. */
 const AgentApplyInput = applyInputFor(ENTITY_TYPES.filter((t) => t !== 'view'));
 
-const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.
+const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions, claims) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.
 
 Getting oriented:
 - list {type: "project"} to find projects, then project_snapshot for the full picture in one call (including its views, custom options, and open requests from people).
@@ -44,6 +44,7 @@ Changing data:
 - Prefer updating existing entities over creating duplicates; check project_snapshot first.
 - Statuses, priorities, scope groups, and artifact kinds can be customized per project (project.options); use values from the project's options, shown in project_snapshot.
 - When you start work on a task, claim it in one apply: set its assigneeId to you and its status to in progress (project_snapshot lists assignees; if none has your name, create one in the same apply with kind "agent" and use its ref). Mark it done when you finish, and leave tasks assigned to someone else alone unless the user hands them to you.
+- Findings are claims (one plain sentence, with checkedOn, sourceIds and authorId) and terms explain a word. A claim's certainty is "reading" (your analysis; the default), "verified" (From source: needs a source artifact with an http(s) uri and a checkedOn date that is not in the future) or "confirmed" (Confirmed by you: needs confirmedById, a decision the owner accepted in Pharos themselves; you can't confirm one yourself). Pharos refuses a claim that doesn't meet its certainty: without a linked source you read and a checkedOn date, keep it at "reading". For a finding the owner should confirm, create the decision with status "proposed" (the default, "accepted", records no acceptance by the owner, so it can never back a confirmed claim), ask the owner to accept it in Pharos, and only then set the claim to "confirmed" with confirmedById. apply warns about a claim with no source, so add sourceIds.
 - Record meaningful choices as decisions so the reasoning stays traceable: set decidedById (the assignee who made the call, usually the person who asked, not you unless you decided) and decisionDate.
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
@@ -54,8 +55,9 @@ Generating views (what the user sees):
 - view_list / view_get show existing views; view_create makes a new one; view_update edits one with small ops (add, update, move, remove widgets) or resets it to its template; view_delete removes one.
 - People can also ask questions from the Pharos UI: project_snapshot lists them under "requests". Answer each open one with view_answer and its requestId (that marks it answered), or dismiss it with apply (request status "dismissed") if it no longer applies.
 - When the user asks a question about the project ("what's overdue?", "what's blocking stage 2?", "who is on what?"), answer with view_answer: a focused answer view that leads with the answer (a Text or Callout), then the evidence (a table, chart, or list). Then reply in at most two sentences (the answer and the link); the view carries the details, so don't restate it in chat. Answers expire after a week unless the user keeps them.
+- When the user needs to understand something (research, a concept, what a result means) rather than track work, build an explanation view: the point first in one short sentence (a ClaimCard with size "headline"), then the picture (Layers), every finding stored as a claim with its source, words the reader may not know stored as terms, certainty always shown, and detail on demand. The "Explanation views" part of pharos://guide/views has the rules and a worked example; the preview warns when a rule is broken. Ordinary project views (task boards, stages) are not checked.
 - Prefer adjusting an existing view when the user asks to change "the board" or "the overview"; create a new view when they want a different angle (e.g. "a view for this week's work").
-- view_create, view_answer, and view_update return a preview of the saved view: read it before telling the user the view is ready, and fix unknown fields and empty widgets you didn't intend. Use view_preview for drafts or other views.
+- view_create, view_answer, and view_update return a preview of the saved view: read it before telling the user the view is ready, and fix unknown fields, empty widgets you didn't intend, and its warnings (per widget, and for the whole view). Use view_preview for drafts or other views.
 - People can rearrange views too, so read a view with view_get before editing it, and keep widget ids stable.
 
 History:
@@ -147,7 +149,7 @@ export function createMcpServer(store: Store): McpServer {
     {
       title: 'Apply changes',
       description:
-        "Create, update, or delete entities atomically as one revision. Updates are partial; set a field to null to clear it. Deletes cascade (e.g. deleting a project deletes its tasks) and clear references (e.g. deleting a stage unsets tasks' stageId).",
+        "Create, update, or delete entities atomically as one revision. Updates are partial; set a field to null to clear it. Deletes cascade (e.g. deleting a project deletes its tasks) and clear references (e.g. deleting a stage unsets tasks' stageId). The result's warnings list things to fix that didn't block the save, e.g. a claim without a source.",
       inputSchema: AgentApplyInput.shape,
       annotations: { destructiveHint: true },
     },
@@ -285,7 +287,7 @@ export function createMcpServer(store: Store): McpServer {
     {
       title: 'Create view',
       description:
-        'Add a saved view (a new tab) made of widgets; to answer a question, use view_answer instead. Example widget: {"id": "work", "w": 8, "node": {"component": "KanbanBoard", "filter": {"where": {"stageId": "$currentStage"}}}}.',
+        'Add a saved view (a new tab) made of widgets; to answer a question, use view_answer instead. Example widget: {"id": "work", "w": 8, "node": {"component": "KanbanBoard", "filter": {"where": {"stageId": "$currentStage"}}}}. Returns a preview with warnings that did not block the save; fix them.',
       inputSchema: ViewCreateInput.shape,
     },
     (input) => run(() => createView(store, author(), input)),
@@ -307,7 +309,7 @@ export function createMcpServer(store: Store): McpServer {
     {
       title: 'Preview a view',
       description:
-        'Check a view (saved, or a draft before saving) against live data: what each widget shows (counts, values, filled text), which would be empty, and warnings such as unknown fields, widths below the minimum, or rows that leave columns unused.',
+        'Check a view (saved, or a draft before saving) against live data: what each widget shows (counts, values, filled text), which would be empty, and warnings such as unknown fields, widths below the minimum, or rows that leave columns unused. For an explanation view (one with a ClaimCard or Layers) it also warns when the point comes too late (no headline ClaimCard first, or more than 30 words or another block before it), a claim is shown without a source, a claim id is not in the project, or a layer shows nothing.',
       inputSchema: ViewPreviewInput.shape,
       annotations: { readOnlyHint: true },
     },

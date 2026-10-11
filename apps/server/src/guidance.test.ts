@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Board, toBoard } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { EXAMPLES, VIEW_GUIDELINES, answerBrief } from './guidance.js';
+import { EXAMPLES, EXPLAIN_EXAMPLE, VIEW_GUIDELINES, answerBrief } from './guidance.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { answerView, effectiveBoard, previewView, requestContext } from './views/service.js';
@@ -60,6 +60,8 @@ describe('guidance', () => {
     expect(brief).toContain('# Designing Pharos views');
     expect(brief).toContain('**KanbanBoard**');
     expect(brief).toContain("## What's overdue?");
+    expect(brief).toContain('## Explanation views');
+    expect(brief).toContain(`## Explaining: ${EXPLAIN_EXAMPLE.question}`);
   });
 
   it('spells out the widget and item a request was asked about', () => {
@@ -139,6 +141,66 @@ describe('guidance', () => {
     }
   });
 
+  it('teaches explanation views: the six rules, and a worked example that passes its own checks', () => {
+    const explaining = VIEW_GUIDELINES.slice(VIEW_GUIDELINES.indexOf('## Explanation views'));
+    for (const rule of [
+      'The point first, in one short sentence',
+      'Then the picture',
+      'Every claim stored and sourced',
+      'Terms explained in place',
+      'Certainty visible',
+      'Detail on demand',
+    ])
+      expect(explaining).toContain(`**${rule}**`);
+
+    const store = new Store(openDatabase(':memory:'));
+    const claim = (ref: string, tags: string[] = []) => ({
+      op: 'create' as const,
+      type: 'claim' as const,
+      ref,
+      data: {
+        projectId: '$p',
+        statement: `Claim ${ref}.`,
+        checkedOn: '2026-10-01',
+        sourceIds: ['$src'],
+        tags,
+      },
+    });
+    const { created } = store.apply(
+      { kind: 'agent', name: 't' },
+      {
+        message: 'Set up',
+        operations: [
+          { op: 'create', type: 'project', ref: 'p', data: { name: 'P' } },
+          {
+            op: 'create',
+            type: 'artifact',
+            ref: 'src',
+            data: { projectId: '$p', title: 'Report', kind: 'link', uri: 'https://example.com' },
+          },
+          claim('headline'),
+          claim('gap'),
+          claim('keep'),
+          claim('build'),
+          claim('l1', ['layer-1']),
+          claim('l2', ['layer-2']),
+          claim('l3', ['layer-3']),
+        ],
+      },
+    );
+    const widgets = JSON.parse(
+      JSON.stringify(EXPLAIN_EXAMPLE.widgets).replace(
+        /<(headline|gap|keep|build) claim id>/g,
+        (_, ref: string) => created[ref]!,
+      ),
+    ) as unknown[];
+    expect(Board.safeParse({ component: 'Board', widgets }).success).toBe(true);
+    const preview = previewView(store, { projectId: created.p!, widgets });
+    expect(preview.warnings).toEqual([]);
+    expect(preview.widgets.flatMap((w) => w.warnings)).toEqual([]);
+    expect(preview.summary).toBe('5 widgets; none empty');
+  });
+
   it('serves guidelines, examples, snapshots, and prompts over MCP', async () => {
     const store = new Store(openDatabase(':memory:'));
     const projectId = store.apply(
@@ -152,6 +214,9 @@ describe('guidance', () => {
         fetch: async (url, init) => app.fetch(new Request(url, init)),
       }),
     );
+
+    expect(client.getInstructions()).toContain('build an explanation view');
+    expect(client.getInstructions()).toContain('create the decision with status "proposed"');
 
     const { resources } = await client.listResources();
     expect(resources.map((r) => r.uri)).toEqual(

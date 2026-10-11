@@ -5,12 +5,14 @@ import {
   fieldReader,
   findOption,
   meaningOf,
+  optionsFor,
   optionKeyOf,
   runQuery,
   stageProgress,
   taskProgress,
   type Board,
   type ComponentName,
+  type Entity,
   type EntityType,
   type Filter,
   type NodeOf,
@@ -20,7 +22,7 @@ import {
   type ViewNode,
   type Where,
 } from '@pharos/schema';
-import type { Store } from '../store/store.js';
+import { claimSourceWarning, type Store } from '../store/store.js';
 
 /** One widget's preview: what it shows right now, and anything that looks wrong. */
 export type WidgetPreview = {
@@ -104,6 +106,7 @@ function describeLeaf(
     return q;
   };
   const n = node as Record<string, unknown> & { component: ComponentName };
+  if (isExplaining(node)) return describeExplaining(node, ctx, warnings);
   switch (node.component) {
     case 'ProjectHeader': {
       const p = taskProgress(ctx.data.tasks, ctx.data.project);
@@ -361,6 +364,165 @@ function describeLeaf(
   }
 }
 
+// ------------------------------------------------------------------ explanation views
+
+/**
+ * Blocks that show stored claims. A view that uses one is an explanation view, and only those get
+ * the reader checks below; task boards and other project views stay quiet.
+ */
+const EXPLAINING = ['ClaimCard', 'Layers'] as const;
+/** Text blocks that may come before the point. */
+const LEAD_IN = new Set<string>(['Markdown', 'Text', 'Callout']);
+const CONTAINERS = new Set<string>(['Grid', 'Section', 'Tabs']);
+/** Most words allowed before the first ClaimCard: about two short sentences (slice-1.md §5). */
+export const POINT_WORDS = 30;
+
+type Explaining = NodeOf<'ClaimCard'> | NodeOf<'Layers'>;
+
+function isExplaining(node: ViewNode): node is Explaining {
+  return (EXPLAINING as readonly string[]).includes(node.component);
+}
+
+/** How the reader sees a claim: its statement and its certainty mark. */
+function claimLine(ctx: Context, claim: Entity<'claim'>): string {
+  const { statement, certainty, checkedOn, sourceIds } = claim.data;
+  const label =
+    optionsFor(ctx.data.project, 'claim.certainty').find((o) => o.value === certainty)?.label ??
+    certainty;
+  return `“${statement}” (${label}, ${checkedOn}, ${plural(sourceIds.length, 'source')})`;
+}
+
+/** What a ClaimCard or Layers shows, warning about missing claims, claims without a source, and empty layers. */
+function describeExplaining(
+  node: Explaining,
+  ctx: Context,
+  warnings: string[],
+): { shows: string; empty: boolean; warnings: string[] } {
+  const byId = new Map(ctx.data.claims.map((c) => [c.id, c]));
+  const shown: Entity<'claim'>[] = [];
+  const find = (id: string) => {
+    const claim = byId.get(id);
+    if (claim) shown.push(claim);
+    else warnings.push(`claim ${id} not found in this project`);
+    return claim;
+  };
+  const sourceWarnings = () => {
+    const seen = new Set<string>();
+    for (const claim of shown) {
+      if (seen.has(claim.id)) continue;
+      seen.add(claim.id);
+      const warning = claimSourceWarning(claim, ctx.data.project);
+      if (warning) warnings.push(warning);
+    }
+  };
+  if (node.component === 'ClaimCard') {
+    const claim = find(node.claim);
+    sourceWarnings();
+    return {
+      shows: claim ? claimLine(ctx, claim) : 'a missing claim (shows an empty state)',
+      empty: !claim,
+      warnings,
+    };
+  }
+  const parts = node.layers.map((layer) => {
+    warnings.push(...filterProblems('claim', layer.items));
+    const pill = layer.pill?.claim ? find(layer.pill.claim) : undefined;
+    const rows = runQuery(
+      ctx.data,
+      'claim',
+      { sort: [{ field: 'order' }], ...layer.items },
+      { today: ctx.today },
+    );
+    shown.push(...rows);
+    if (!rows.length) warnings.push(`layer "${layer.key}" shows nothing`);
+    return {
+      rows,
+      text: `${layer.key} ${layer.title}: ${rows.length ? plural(rows.length, 'claim') : 'nothing'}${pill ? ` (pill: ${claimLine(ctx, pill)})` : ''}`,
+    };
+  });
+  sourceWarnings();
+  return {
+    shows: parts.map((p) => p.text).join(' · '),
+    empty: parts.every((p) => !p.rows.length),
+    warnings,
+  };
+}
+
+/** Every node in the order the reader meets it: depth-first, and only a Tabs' first tab (the others start hidden). */
+function readingOrder(nodes: ViewNode[]): ViewNode[] {
+  return nodes.flatMap((node) => [
+    node,
+    ...readingOrder(
+      node.component === 'Tabs'
+        ? (node.tabs[0]?.children ?? [])
+        : node.component === 'Grid' || node.component === 'Section'
+          ? node.children
+          : [],
+    ),
+  ]);
+}
+
+function allNodes(nodes: ViewNode[]): ViewNode[] {
+  return nodes.flatMap((node) => [
+    node,
+    ...allNodes(
+      node.component === 'Tabs'
+        ? node.tabs.flatMap((t) => t.children)
+        : node.component === 'Grid' || node.component === 'Section'
+          ? node.children
+          : [],
+    ),
+  ]);
+}
+
+/** Words a reader reads, leaving out Markdown symbols and link targets. */
+export function countWords(text: string): number {
+  return text
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/** The text a node shows on its own (not its children's): title, then body. */
+function nodeText(node: ViewNode, ctx: Context): string {
+  const body =
+    node.component === 'Text'
+      ? describeLeaf(node, ctx).shows
+      : node.component === 'Markdown'
+        ? (node.content ?? (node.source ? ctx.data.project.data.description : '') ?? '')
+        : node.component === 'Callout'
+          ? node.body
+          : node.component === 'Section'
+            ? (node.description ?? '')
+            : '';
+  return `${node.title ?? ''} ${body}`;
+}
+
+/**
+ * The reader should meet the view's point at once: in an explanation view, a ClaimCard comes
+ * first, after at most POINT_WORDS words of text and no other block (slice-1.md §5).
+ */
+function pointWarning(board: Board, ctx: Context): string | null {
+  const roots = board.widgets.map((w) => w.node);
+  if (!allNodes(roots).some(isExplaining)) return null;
+  const fix = `put a ClaimCard with size "headline" first and keep what comes before it to ${POINT_WORDS} words or fewer`;
+  const order = readingOrder(roots);
+  if (!order.some((n) => n.component === 'ClaimCard'))
+    return `the point comes too late: no ClaimCard states it where the reader starts; ${fix}`;
+  let words = 0;
+  for (const node of order) {
+    words += countWords(nodeText(node, ctx));
+    if (node.component === 'ClaimCard') {
+      return words > POINT_WORDS
+        ? `the point comes too late: ${words} words before the first ClaimCard; ${fix}`
+        : null;
+    }
+    if (!CONTAINERS.has(node.component) && !LEAD_IN.has(node.component))
+      return `the point comes too late: a ${node.component} comes before the first ClaimCard; ${fix}`;
+  }
+  return null;
+}
+
 function describeNode(
   node: ViewNode,
   ctx: Context,
@@ -427,15 +589,22 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
   if (row > 0 && row < BOARD_COLUMNS && board.widgets.length > 1)
     layout.push(`the last row uses ${row} of ${BOARD_COLUMNS} columns`);
 
+  // View-level: what a reader would trip over in an explanation view.
+  const point = pointWarning(board, ctx);
+  const warnings = point ? [point] : [];
+
   const empty = widgets.filter((w) => w.empty).map((w) => w.id);
   return {
     widgets,
     layout,
+    warnings,
     summary:
       `${plural(widgets.length, 'widget')}` +
       (empty.length
         ? `; ${empty.length} show an empty state (${empty.join(', ')})`
         : '; none empty') +
-      (widgets.some((w) => w.warnings.length) || layout.length ? '; see warnings' : ''),
+      (widgets.some((w) => w.warnings.length) || layout.length || warnings.length
+        ? '; see warnings'
+        : ''),
   };
 }

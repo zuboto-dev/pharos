@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { answerView, isExpired, listViews } from './service.js';
+import { answerView, createView, isExpired, listViews, updateView } from './service.js';
 
 const agent = { kind: 'agent', name: 'test' } as const;
 
@@ -30,5 +30,64 @@ describe('answer views', () => {
     expect(listViews(store, projectId, true).find((v) => v.id === old.view.id)).toMatchObject({
       expired: true,
     });
+  });
+});
+
+describe('explanation views', () => {
+  it('are saved with warnings, never refused, and warn again on update until fixed', () => {
+    const store = new Store(openDatabase(':memory:'));
+    const { created } = store.apply(agent, {
+      message: 'p',
+      operations: [
+        { op: 'create', type: 'project', ref: 'p', data: { name: 'P' } },
+        {
+          op: 'create',
+          type: 'claim',
+          ref: 'c',
+          data: { projectId: '$p', statement: 'The point.', checkedOn: '2026-10-01', tags: ['a'] },
+        },
+      ],
+    });
+    const layers = {
+      id: 'layers',
+      node: {
+        component: 'Layers',
+        layers: [
+          { key: '1', title: 'One', items: { where: { tags: 'a' } } },
+          { key: '2', title: 'Two', items: { where: { tags: 'b' } } },
+        ],
+      },
+    };
+    const saved = createView(store, agent, {
+      projectId: created.p!,
+      name: 'Map',
+      widgets: [layers],
+      message: 'Explain',
+    });
+    expect(store.getOfType('view', saved.view.id).data.spec).toBeTruthy();
+    expect(saved.preview.warnings).toEqual([
+      expect.stringMatching(/^the point comes too late: no ClaimCard/),
+    ]);
+    expect(saved.preview.widgets[0]!.warnings).toEqual([
+      'layer "2" shows nothing',
+      `claim ${created.c} "The point." has no source: add sourceIds so the reader can check it`,
+    ]);
+    expect(saved.preview.summary).toMatch(/see warnings$/);
+
+    const fixed = updateView(store, agent, {
+      viewId: saved.view.id,
+      message: 'Point first',
+      ops: [
+        {
+          op: 'add',
+          widget: { id: 'point', node: { component: 'ClaimCard', claim: 'clm_missing' } },
+          before: 'layers',
+        },
+      ],
+    });
+    expect(fixed.preview.warnings).toEqual([]);
+    expect(fixed.preview.widgets[0]!.warnings).toEqual([
+      'claim clm_missing not found in this project',
+    ]);
   });
 });

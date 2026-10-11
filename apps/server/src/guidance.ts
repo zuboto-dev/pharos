@@ -21,7 +21,8 @@ good view replaces a paragraph you would otherwise write.
 
 ## Shape
 1. **Lead with the answer.** The first widget says it in one or two sentences: a Text with live
-   numbers, or a Callout when it is a warning, blocker, or recommendation.
+   numbers, or a Callout when it is a warning, blocker, or recommendation. (Explaining something?
+   See "Explanation views" below.)
 2. **Then the evidence**, most important first: the table, chart, or list that proves the answer.
 3. **One question per view, 3–8 widgets.** If you need more, it is two questions.
 4. **Widths in a row add up to 12.** Typical rows: 12 · 6+6 · 4+8 · 3+3+3+3 (stats).
@@ -36,6 +37,31 @@ good view replaces a paragraph you would otherwise write.
 - Filter instead of copying: never put counts or names into text by hand; use Text values or a
   query so the view stays right as the project changes.
 
+## Explanation views
+Use one when the reader needs to understand something (research, a concept, what a result
+means) rather than track work. Any view with a ClaimCard or Layers is an explanation view, and its
+preview checks the rules marked "checked"; task boards and other views without them are not checked.
+
+1. **The point first, in one short sentence** (checked): a ClaimCard with size "headline" opens
+   the view. At most 30 words of text and no other block may come before it.
+2. **Then the picture**: right under the point, Layers shows how the parts fit (a stack the reader
+   taps open, or steps in a row), before any list or long text.
+3. **Every claim stored and sourced** (checked): each finding is a claim record (one finding, one
+   plain sentence) with checkedOn, sourceIds and authorId. Views show claims by id or tag and
+   never copy their words. "From source" only with a linked (http/https) source you read and
+   checkedOn; otherwise keep "Our reading". "Confirmed by you" only after the owner accepts a
+   decision in Pharos: create it with status "proposed" (the default, "accepted", can't back it).
+4. **Terms explained in place**: store each word the reader may not know as a term (word,
+   explanation, alsoCalled). Pharos marks its first use in each widget and explains it on tap.
+5. **Certainty visible**: every claim shows its mark (Our reading, From source, Confirmed by you).
+   Don't word a reading as a fact; a clean view must not look surer than the research.
+6. **Detail on demand**: put more in a claim's detail, in layers the reader opens, and in a sources
+   list at the bottom, not in text up front.
+
+The preview also warns about a claim id that isn't in the project and a layer whose items match
+nothing. These are warnings, not refusals: fix them before you say the view is ready. Worked
+example: "Explaining" in pharos://examples/answers.
+
 ## Queries that answer common questions
 - Overdue: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}
 - Due this week: {dueDate: {gte: "$today", lte: "$today+7d"}}
@@ -46,7 +72,8 @@ good view replaces a paragraph you would otherwise write.
 
 ## Before you say it is ready
 - Read the preview that view_answer, view_create, and view_update return (or run view_preview on
-  a draft). Fix unknown fields, unintended empty widgets, and width warnings. An empty widget is fine only when "nothing" is the answer, and then
+  a draft). Fix unknown fields, unintended empty widgets, width warnings, and the view-level
+  warnings of an explanation view. An empty widget is fine only when "nothing" is the answer, and then
   say so in the headline.
 - In chat, keep it short: one or two sentences with the answer and the link. The view carries the detail.
 `;
@@ -211,6 +238,88 @@ export const EXAMPLES: { question: string; why: string; widgets: unknown[] }[] =
   },
 ];
 
+/**
+ * A worked explanation view: the point, the picture, two takeaways, then the sources. Ids in
+ * angle brackets stand for claims the agent stores first (tags pick a layer's claims).
+ */
+export const EXPLAIN_EXAMPLE: {
+  question: string;
+  why: string;
+  claims: string;
+  widgets: unknown[];
+} = {
+  question: 'What is <topic>, and where does this project stand?',
+  why: 'The headline claim states the point; the layers show how the parts fit, each holding its claims; two cards say what it means; the sources list lets the reader check.',
+  claims:
+    'First store, with apply, the claims (statement, checkedOn, sourceIds, authorId, tags such as "layer-2") and terms the view shows; the ids below are theirs.',
+  widgets: [
+    {
+      id: 'point',
+      node: {
+        component: 'ClaimCard',
+        claim: '<headline claim id>',
+        size: 'headline',
+        kicker: '<topic>',
+      },
+    },
+    {
+      id: 'layers',
+      node: {
+        component: 'Layers',
+        title: 'How it is built',
+        prompt: 'Tap a layer to see what is in it.',
+        open: '2',
+        legend: [
+          { tone: 'own', label: 'We have it' },
+          { tone: 'gap', label: 'Nobody offers it' },
+        ],
+        layers: [
+          {
+            key: '3',
+            title: '<top layer name>',
+            hint: '<what it does, in one line>',
+            pill: { label: 'We have it', tone: 'own' },
+            items: { where: { tags: 'layer-3' } },
+          },
+          {
+            key: '2',
+            title: '<middle layer name>',
+            hint: '<what it does, in one line>',
+            pill: { label: 'Nobody offers it', tone: 'gap', claim: '<gap claim id>' },
+            highlight: true,
+            items: { where: { tags: 'layer-2' } },
+          },
+          {
+            key: '1',
+            title: '<bottom layer name>',
+            hint: '<what it does, in one line>',
+            items: { where: { tags: 'layer-1' } },
+          },
+        ],
+      },
+    },
+    {
+      id: 'keep',
+      w: 6,
+      node: { component: 'ClaimCard', claim: '<keep claim id>', kicker: 'Keep', tone: 'own' },
+    },
+    {
+      id: 'build',
+      w: 6,
+      node: { component: 'ClaimCard', claim: '<build claim id>', kicker: 'Build', tone: 'gap' },
+    },
+    {
+      id: 'sources',
+      node: {
+        component: 'DataList',
+        title: 'Sources',
+        query: { type: 'artifact', where: { kind: 'link' } },
+        secondary: ['uri'],
+      },
+    },
+  ],
+};
+
 function examplesMarkdown(): string {
   return [
     '# Example answer views',
@@ -226,6 +335,15 @@ function examplesMarkdown(): string {
       JSON.stringify(e.widgets, null, 2),
       '```',
     ]),
+    '',
+    `## Explaining: ${EXPLAIN_EXAMPLE.question}`,
+    '',
+    EXPLAIN_EXAMPLE.why,
+    EXPLAIN_EXAMPLE.claims,
+    '',
+    '```json',
+    JSON.stringify(EXPLAIN_EXAMPLE.widgets, null, 2),
+    '```',
   ].join('\n');
 }
 

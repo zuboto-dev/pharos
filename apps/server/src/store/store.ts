@@ -742,6 +742,21 @@ class Transaction {
         }
       }
     }
+    // request.aboutId can point at any entity type, so it isn't a typed ref; clear it by hand.
+    for (const entity of doomed) {
+      const asked = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'request' AND json_extract(data, '$.aboutId') = ?",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of asked) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id)!;
+        const next: Data = { ...current.data };
+        delete next.aboutId;
+        this.update(current, next);
+      }
+    }
     for (const entity of doomed) {
       this.db.prepare('DELETE FROM entities WHERE id = ?').run(entity.id);
       const projectId = this.projectIdOf(entity.type, entity.id, entity.data);

@@ -3,6 +3,7 @@ import {
   optionsFor,
   stageProgress,
   taskProgress,
+  meaningOf,
   type EntityDataMap,
 } from '@pharos/schema';
 import { isExpired, requestContext } from '../views/service.js';
@@ -90,9 +91,9 @@ export function projectSnapshot(store: Store, projectId: string) {
     },
     goals: goalTree,
     scope: {
-      in: scope.filter((s) => s.kind === 'in'),
-      out: scope.filter((s) => s.kind === 'out'),
-      maybe: scope.filter((s) => s.kind === 'maybe'),
+      in: scope.filter((s) => meaningOf(project, 'scope_item.kind', s.kind) === 'in'),
+      out: scope.filter((s) => meaningOf(project, 'scope_item.kind', s.kind) === 'out'),
+      maybe: scope.filter((s) => meaningOf(project, 'scope_item.kind', s.kind) === 'maybe'),
     },
     stages: stages.map((s) => {
       const { percent, done, total, basis } = stageProgress(s, tasks, project);

@@ -271,6 +271,45 @@ describe('custom options', () => {
     expect(snap.options).not.toHaveProperty('task.priority');
   });
 
+  it('sorts scope items by meaning when the project has custom scope options', () => {
+    const ids = seedProject();
+    apply(
+      'Custom scope',
+      {
+        op: 'update',
+        type: 'project',
+        id: ids.p,
+        data: {
+          options: {
+            'scope_item.kind': [
+              { value: 'core', label: 'Core', meaning: 'in' },
+              { value: 'later', label: 'Later', meaning: 'maybe' },
+              { value: 'never', label: 'Never', meaning: 'out' },
+            ],
+          },
+        },
+      },
+      { op: 'create', type: 'scope_item', data: { projectId: ids.p, title: 'A', kind: 'core' } },
+      { op: 'create', type: 'scope_item', data: { projectId: ids.p, title: 'B', kind: 'later' } },
+      { op: 'create', type: 'scope_item', data: { projectId: ids.p, title: 'C', kind: 'never' } },
+    );
+    const { scope } = projectSnapshot(store, ids.p);
+    expect(scope.in.map((s) => s.title)).toEqual(['A']);
+    expect(scope.maybe.map((s) => s.title)).toEqual(['B']);
+    expect(scope.out.map((s) => s.title)).toEqual(['C']);
+  });
+
+  it('clears request.aboutId when the item it was about is deleted', () => {
+    const ids = seedProject();
+    const { created } = apply('Ask', {
+      op: 'create',
+      type: 'request',
+      data: { projectId: ids.p, question: 'Why?', aboutId: ids.t2 },
+    });
+    apply('Drop task', { op: 'delete', type: 'task', id: ids.t2 });
+    expect(store.getOfType('request', created['0']!).data.aboutId).toBeUndefined();
+  });
+
   it('lists assignees with ids, so an agent can assign a task to itself', () => {
     const ids = seedProject();
     const { created } = apply('Codex joins', {

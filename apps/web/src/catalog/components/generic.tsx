@@ -18,7 +18,7 @@ import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
 import { useMarkdownTerms } from '../terms';
-import { DOT_TONES, Empty, Markdown, StatusBadge } from '../ui';
+import { DOT_TONES, Empty, Markdown, StatusBadge, Uri } from '../ui';
 
 type Reader = ReturnType<typeof fieldReader>;
 
@@ -68,6 +68,9 @@ function FieldValue({
     return <OptionBadge field={optionKey} value={value} />;
   if (type === 'project' && field === 'status' && typeof value === 'string')
     return <StatusBadge value={value} />;
+  // An artifact's address opens as a link when it's http(s); a path stays plain text.
+  if (type === 'artifact' && field === 'uri' && typeof value === 'string')
+    return <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />;
   const ref = (ENTITIES[type].refs as Record<string, { many?: boolean } | undefined>)[field];
   if (ref) {
     const ids = Array.isArray(value) ? (value as string[]) : [value as string];

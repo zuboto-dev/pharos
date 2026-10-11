@@ -123,4 +123,36 @@ describe('generic data components', () => {
     );
     expect(filled).toBe('6 open in M2 Catalog + renderer (33% done), ${typo}');
   });
+
+  it("DataList and DataTable show an artifact's http(s) uri as a link and a path as text", () => {
+    const withLink: ProjectDataset = {
+      ...data,
+      artifacts: data.artifacts.map((a) =>
+        a.id === 'art_41ae8bd418f4'
+          ? { ...a, data: { ...a.data, uri: 'https://example.com/mcp-server' } }
+          : a,
+      ),
+    };
+    const nodes: Parameters<typeof ViewRenderer>[0]['spec'][] = [
+      { component: 'DataList', query: { type: 'artifact' }, secondary: ['uri'] },
+      {
+        component: 'DataTable',
+        query: { type: 'artifact' },
+        columns: [{ field: 'title' }, { field: 'uri' }],
+      },
+    ];
+    for (const node of nodes) {
+      render(
+        <ViewDataProvider data={withLink} version={1}>
+          <ViewRenderer spec={node} />
+        </ViewDataProvider>,
+      );
+      const link = screen.getByRole('link', { name: /example\.com\/mcp-server/ });
+      expect(link.getAttribute('href')).toBe('https://example.com/mcp-server');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(screen.getByText('docs/SCOPE.md', { selector: 'code' })).toBeTruthy();
+      expect(screen.getAllByRole('link')).toHaveLength(1);
+      cleanup();
+    }
+  });
 });

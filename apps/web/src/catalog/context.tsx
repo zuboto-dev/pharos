@@ -65,6 +65,8 @@ export function ViewDataProvider({
       ...data.tasks,
       ...data.artifacts,
       ...data.decisions,
+      ...data.claims,
+      ...data.terms,
       ...data.views,
     ];
     return {

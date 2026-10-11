@@ -37,6 +37,8 @@ export const TYPE_LABELS: Record<EntityType, string> = {
   decision: 'Decision',
   view: 'View',
   request: 'Request',
+  claim: 'Claim',
+  term: 'Term',
 };
 
 export function labelOf(entity: Entity): string {

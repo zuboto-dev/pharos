@@ -61,6 +61,8 @@ export const QueryableType = z.enum([
   'task',
   'artifact',
   'decision',
+  'claim',
+  'term',
 ]);
 export type QueryableType = z.infer<typeof QueryableType>;
 
@@ -80,4 +82,6 @@ export type ProjectDataset = {
   decisions: Entity<'decision'>[];
   views: Entity<'view'>[];
   requests: Entity<'request'>[];
+  claims: Entity<'claim'>[];
+  terms: Entity<'term'>[];
 };

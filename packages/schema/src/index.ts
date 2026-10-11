@@ -5,6 +5,7 @@ export {
   OPTION_FIELDS,
   OPTION_KEYS,
   OptionValue,
+  RANKED_MEANINGS,
   ProjectOptions,
   defaultOptions,
   findOption,

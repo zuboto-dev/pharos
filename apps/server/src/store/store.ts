@@ -19,8 +19,10 @@ import {
   type RevisionSummary,
   OPTION_FIELDS,
   OPTION_KEYS,
+  findOption,
   hasOrder,
   isProjectScoped,
+  meaningOf,
   optionsFor,
   valueFor,
   type OptionKey,
@@ -66,6 +68,8 @@ export type ApplyResult = {
   /** Ids of created entities, by `ref` (or by operation index when no ref was given). */
   created: Record<string, string>;
   changes: EntityDiff[];
+  /** Things worth fixing that didn't stop the save, e.g. a claim without a source. */
+  warnings: string[];
 };
 
 export type HistoryQuery = {
@@ -113,6 +117,24 @@ function labelOf(type: EntityType, data: Data | null | undefined): string | null
 function describe(type: EntityType, id: string, data?: Data | null): string {
   const label = labelOf(type, data);
   return label ? `${type} ${id} ("${label}")` : `${type} ${id}`;
+}
+
+/** Warns about a claim that rests on no source (From-source and confirmed claims can't). */
+export function claimSourceWarning(
+  claim: Entity<'claim'>,
+  project: Entity<'project'> | null,
+): string | null {
+  const { sourceIds, certainty, statement } = claim.data;
+  if (sourceIds.length > 0 || meaningOf(project, 'claim.certainty', certainty) !== 'reading')
+    return null;
+  const text = statement.length > 60 ? `${statement.slice(0, 60)}…` : statement;
+  return `claim ${claim.id} "${text}" has no source: add sourceIds so the reader can check it`;
+}
+
+/** YYYY-MM-DD on the server's clock, like "$today" in queries. */
+function localDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function toEntity(row: EntityRow): Entity {
@@ -343,6 +365,8 @@ export class Store {
       decisions: this.list('decision', { projectId }),
       views: this.list('view', { projectId }),
       requests: this.list('request', { projectId }),
+      claims: this.list('claim', { projectId }),
+      terms: this.list('term', { projectId }),
     };
   }
 
@@ -476,11 +500,12 @@ export class Store {
       tx.validate();
       if (tx.changes.length === 0) {
         this.db.exec('ROLLBACK');
-        return { revision: null, created, changes: [] };
+        return { revision: null, created, changes: [], warnings: [] };
       }
+      const warnings = tx.warnings();
       this.db.exec('COMMIT');
       for (const listener of this.commitListeners) listener();
-      return { revision, created, changes: foldChanges(tx.changes) };
+      return { revision, created, changes: foldChanges(tx.changes), warnings };
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;
@@ -828,8 +853,133 @@ class Transaction {
         issues.push(`${prefix}: dependsOn creates a cycle`);
       }
       issues.push(...this.optionIssues(entity, prefix));
+      if (entity.type === 'term') issues.push(...this.termIssues(entity as Entity<'term'>, prefix));
+    }
+    for (const [id, context] of this.claimsToCheck()) {
+      const claim = this.store.get(id) as Entity<'claim'>;
+      const prefix = `${context}: ${describe('claim', id, claim.data)}`;
+      issues.push(...this.certaintyIssues(claim, prefix));
     }
     if (issues.length) throw new PharosError('invalid', 'Invalid changes', issues);
+  }
+
+  /**
+   * Claims written in this transaction, claims resting on an artifact or decision written in it,
+   * and every claim of a project written in it (its options decide what a certainty means).
+   */
+  private claimsToCheck(): Map<string, string> {
+    const claims = new Map<string, string>();
+    const add = (related: Entity[], context: string) => {
+      for (const claim of related) if (!claims.has(claim.id)) claims.set(claim.id, context);
+    };
+    for (const [id, context] of this.touched) {
+      const entity = this.store.get(id);
+      if (!entity) continue;
+      if (entity.type === 'claim') claims.set(id, context);
+      else if (entity.type === 'project') add(this.store.list('claim', { projectId: id }), context);
+      else if (entity.type === 'artifact')
+        add(this.referrers('claim', 'sourceIds', ENTITIES.claim.refs.sourceIds, id), context);
+      else if (entity.type === 'decision')
+        add(
+          this.referrers('claim', 'confirmedById', ENTITIES.claim.refs.confirmedById, id),
+          context,
+        );
+    }
+    return claims;
+  }
+
+  /** A claim's certainty must be earned: see the rules in docs/reframe/slice-1.md §3. */
+  private certaintyIssues(claim: Entity<'claim'>, prefix: string): string[] {
+    const { certainty, checkedOn, sourceIds, confirmedById } = claim.data;
+    const project = this.store.get(claim.data.projectId) as Entity<'project'> | null;
+    const meaning = meaningOf(project, 'claim.certainty', certainty);
+    const quoted = `"${findOption(project, 'claim.certainty', certainty)?.label ?? certainty}"`;
+    if (meaning === 'verified') {
+      const issues: string[] = [];
+      const linked = sourceIds.some((id) => {
+        const uri = (this.store.get(id)?.data as Data | undefined)?.uri;
+        return typeof uri === 'string' && /^https?:\/\//i.test(uri);
+      });
+      if (!linked) {
+        issues.push(
+          `${prefix}: ${quoted} needs sourceIds with at least one artifact whose uri starts with http:// or https://`,
+        );
+      }
+      const today = localDate(this.revision.createdAt);
+      if (checkedOn > today) {
+        issues.push(
+          `${prefix}: ${quoted} needs checkedOn no later than today (${today}), but it is ${checkedOn}`,
+        );
+      }
+      return issues;
+    }
+    if (meaning === 'confirmed') {
+      const fix = 'confirmedById → a decision the owner accepted in Pharos';
+      if (!confirmedById) return [`${prefix}: ${quoted} needs ${fix}`];
+      const target = this.store.get(confirmedById);
+      if (target?.type !== 'decision') return []; // the reference check reports it
+      const decision = target as Entity<'decision'>;
+      const status = decision.data.status;
+      if (meaningOf(project, 'decision.status', status) !== 'accepted') {
+        const statusLabel = findOption(project, 'decision.status', status)?.label ?? status;
+        return [
+          `${prefix}: ${quoted} needs ${fix}, but ${describe('decision', decision.id, decision.data)} is "${statusLabel}"`,
+        ];
+      }
+      if (this.lastStatusAuthorKind(decision.id) !== 'human') {
+        return [
+          `${prefix}: ${quoted} needs ${fix}, but the status of ${describe('decision', decision.id, decision.data)} was not set by a person; ask the owner to accept it in the app`,
+        ];
+      }
+    }
+    return [];
+  }
+
+  /** Who last changed an entity's status (or created it); changes of this call are included. */
+  private lastStatusAuthorKind(entityId: string): string | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT r.author_kind AS kind FROM changes c JOIN revisions r ON r.id = c.revision_id
+         WHERE c.entity_id = ? AND c.after IS NOT NULL
+           AND (c.before IS NULL OR json_extract(c.before, '$.status') IS NOT json_extract(c.after, '$.status'))
+         ORDER BY c.revision_id DESC, c.seq DESC LIMIT 1`,
+      )
+      .get(entityId) as { kind: string } | undefined;
+    return row?.kind;
+  }
+
+  /** Two terms in a project can't share a word or another form, ignoring case. */
+  private termIssues(term: Entity<'term'>, prefix: string): string[] {
+    const forms = (t: Entity<'term'>) =>
+      [t.data.word, ...t.data.alsoCalled].map((f) => f.toLowerCase());
+    const mine = new Set(forms(term));
+    const issues: string[] = [];
+    for (const other of this.store.list('term', { projectId: term.data.projectId })) {
+      if (other.id === term.id) continue;
+      const shared = forms(other).filter((f) => mine.has(f));
+      if (shared.length) {
+        issues.push(
+          `${prefix}: "${[...new Set(shared)].join('", "')}" is already used by ${describe('term', other.id, other.data)}`,
+        );
+      }
+    }
+    return issues;
+  }
+
+  /** Warnings for what this transaction wrote: claims that rest on no source. */
+  warnings(): string[] {
+    const out: string[] = [];
+    for (const id of this.touched.keys()) {
+      const claim = this.store.get(id);
+      if (claim?.type !== 'claim') continue;
+      const project = this.store.get((claim.data as Data).projectId as string);
+      const warning = claimSourceWarning(
+        claim as Entity<'claim'>,
+        project as Entity<'project'> | null,
+      );
+      if (warning) out.push(warning);
+    }
+    return out;
   }
 
   /** Option fields must use the project's options; a project's options must cover what's in use. */

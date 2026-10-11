@@ -4,6 +4,7 @@ import { ViewSpec } from './views/board.js';
 
 export {
   ArtifactKind,
+  Certainty,
   ArtifactStatus,
   DecisionStatus,
   GoalStatus,
@@ -167,6 +168,38 @@ export const RequestData = z.strictObject({
   answerViewId: Id.optional().describe('The answer view that answers it'),
 });
 
+export const ClaimData = z.strictObject({
+  projectId: Id,
+  statement: Text.max(200).describe(
+    'One plain sentence the reader sees; no task codes. When a source speaks about itself, write "X says …"',
+  ),
+  detail: z
+    .string()
+    .max(400)
+    .optional()
+    .describe('One or two more plain sentences, shown under the statement'),
+  certainty: optionField('claim.certainty'),
+  checkedOn: IsoDate.describe('YYYY-MM-DD it was last checked against its sources'),
+  sourceIds: z.array(Id).describe('Artifacts it comes from; a link needs an http(s) uri'),
+  confirmedById: Id.optional().describe('For "Confirmed by you": the decision the owner accepted'),
+  aboutId: Id.optional().describe(
+    'The artifact it is about (a tool, Pharos); its title heads the card',
+  ),
+  authorId: Id.optional().describe('Assignee (agent or person) whose claim it is'),
+  tags: z.array(z.string()).describe('Keys views pick claims by, e.g. "layer-4"; never shown'),
+  order: Order,
+});
+
+export const TermData = z.strictObject({
+  projectId: Id,
+  word: Text.max(40).describe('As it appears in text, e.g. "recipe"'),
+  explanation: Text.max(240).describe('One or two plain sentences'),
+  alsoCalled: z.array(z.string().min(1).max(40)).describe('Other forms to match, e.g. ["recipes"]'),
+  sourceId: Id.optional().describe(
+    'Artifact the explanation comes from; without one it says "Our wording"',
+  ),
+});
+
 export const ENTITY_TYPES = [
   'section',
   'repository',
@@ -180,6 +213,8 @@ export const ENTITY_TYPES = [
   'decision',
   'view',
   'request',
+  'claim',
+  'term',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -292,6 +327,27 @@ export const ENTITIES = {
       answerViewId: { type: 'view', onDelete: 'unset' },
     },
     label: 'question',
+  },
+  claim: {
+    prefix: 'clm',
+    data: ClaimData,
+    // A meaning; the store picks the project's value for it.
+    defaults: { certainty: 'reading', sourceIds: [], tags: [] },
+    refs: {
+      projectId: projectRef,
+      sourceIds: { type: 'artifact', many: true, onDelete: 'unset' },
+      confirmedById: { type: 'decision', onDelete: 'unset' },
+      aboutId: { type: 'artifact', onDelete: 'unset' },
+      authorId: { type: 'assignee', onDelete: 'unset' },
+    },
+    label: 'statement',
+  },
+  term: {
+    prefix: 'term',
+    data: TermData,
+    defaults: { alsoCalled: [] },
+    refs: { projectId: projectRef, sourceId: { type: 'artifact', onDelete: 'unset' } },
+    label: 'word',
   },
 } satisfies Record<EntityType, EntityDef>;
 

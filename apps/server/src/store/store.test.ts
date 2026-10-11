@@ -413,3 +413,373 @@ describe('projectSnapshot', () => {
     expect(snap.project.repository?.name).toBe('pharos');
   });
 });
+
+describe('claims and terms', () => {
+  // The store compares checkedOn with the server's local date.
+  const localDate = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = localDate(new Date());
+  const asHuman = (message: string, ...operations: Operation[]) =>
+    store.apply(human, { message, operations });
+
+  function seedClaims() {
+    const { created } = apply(
+      'Set up',
+      { op: 'create', type: 'project', ref: 'p', data: { name: 'Map' } },
+      {
+        op: 'create',
+        type: 'artifact',
+        ref: 'web',
+        data: { projectId: '$p', title: 'Report', uri: 'https://example.com/report' },
+      },
+      {
+        op: 'create',
+        type: 'artifact',
+        ref: 'file',
+        data: { projectId: '$p', title: 'Notes', uri: '/notes/report.md' },
+      },
+    );
+    return created as Record<'p' | 'web' | 'file', string>;
+  }
+  const claim = (ids: { p: string }, data: Record<string, unknown> = {}): Operation => ({
+    op: 'create',
+    type: 'claim',
+    ref: 'c',
+    data: { projectId: ids.p, statement: 'Tambo is open source', checkedOn: today, ...data },
+  });
+
+  it('stores claims and terms with defaults, in the dataset, snapshot and history', () => {
+    const ids = seedClaims();
+    const { created } = apply('Findings', claim(ids, { sourceIds: [ids.web], tags: ['layer-4'] }), {
+      op: 'create',
+      type: 'term',
+      ref: 't',
+      data: { projectId: ids.p, word: 'recipe', explanation: 'A saved description of a view' },
+    });
+    expect(store.getOfType('claim', created.c!).data).toMatchObject({
+      certainty: 'reading',
+      sourceIds: [ids.web],
+      order: 0,
+    });
+    expect(store.getOfType('term', created.t!).data.alsoCalled).toEqual([]);
+    const data = store.dataset(ids.p);
+    expect(data.claims.map((c) => c.id)).toEqual([created.c]);
+    expect(data.terms.map((t) => t.data.word)).toEqual(['recipe']);
+    const snap = projectSnapshot(store, ids.p);
+    expect(snap.claims).toEqual([
+      {
+        id: created.c,
+        statement: 'Tambo is open source',
+        certainty: 'reading',
+        checkedOn: today,
+        sources: 1,
+        tags: ['layer-4'],
+      },
+    ]);
+    expect(snap.terms).toEqual([{ id: created.t, word: 'recipe' }]);
+    // History shows the claim by its statement, and a revert removes both again.
+    expect(store.history({ entityId: created.c })[0]!.changes[0]).toMatchObject({
+      label: 'Tambo is open source',
+    });
+    const revision = store.history({ limit: 1 })[0]!.id;
+    store.revert(revision, human);
+    expect(store.dataset(ids.p).claims).toEqual([]);
+  });
+
+  it('warns about a claim without a source, but still saves it', () => {
+    const ids = seedClaims();
+    const result = apply('No source', claim(ids));
+    expect(result.warnings).toEqual([
+      `claim ${result.created.c} "Tambo is open source" has no source: add sourceIds so the reader can check it`,
+    ]);
+    expect(apply('Source', claim(ids, { sourceIds: [ids.web] })).warnings).toEqual([]);
+    expect(
+      apply('Other', { op: 'update', type: 'project', id: ids.p, data: { summary: 'x' } }).warnings,
+    ).toEqual([]);
+  });
+
+  it('refuses "From source" without an http(s) source', () => {
+    const ids = seedClaims();
+    const noSource = errorOf(() => apply('x', claim(ids, { certainty: 'verified' })));
+    expect(noSource.issues?.[0]).toMatch(/"From source" needs sourceIds .*http/);
+    expect(noSource.issues?.[0]).toContain('Tambo is open source');
+    // A local path doesn't open as a link.
+    expect(
+      errorOf(() => apply('x', claim(ids, { certainty: 'verified', sourceIds: [ids.file] })))
+        .issues,
+    ).toHaveLength(1);
+    const ok = apply('ok', claim(ids, { certainty: 'verified', sourceIds: [ids.file, ids.web] }));
+    expect(store.getOfType('claim', ok.created.c!).data.certainty).toBe('verified');
+    expect(ok.warnings).toEqual([]);
+  });
+
+  it('refuses "From source" checked after the save', () => {
+    const ids = seedClaims();
+    const tomorrow = localDate(new Date(Date.now() + 86_400_000));
+    const err = errorOf(() =>
+      apply('x', claim(ids, { certainty: 'verified', sourceIds: [ids.web], checkedOn: tomorrow })),
+    );
+    expect(err.issues?.[0]).toMatch(/checkedOn no later than today .* but it is /);
+    // "Our reading" may carry any date: nothing was read from a source.
+    apply('ok', claim(ids, { checkedOn: tomorrow }));
+  });
+
+  it('refuses changes that take a source away from a "From source" claim', () => {
+    const ids = seedClaims();
+    const { created } = apply('c', claim(ids, { certainty: 'verified', sourceIds: [ids.web] }));
+    const err = errorOf(() => apply('x', { op: 'delete', type: 'artifact', id: ids.web }));
+    expect(err.issues?.[0]).toContain(`claim ${created.c}`);
+    expect(store.get(ids.web)).not.toBeNull();
+    // Pointing the artifact at a file path has the same effect.
+    expect(
+      errorOf(() =>
+        apply('x', { op: 'update', type: 'artifact', id: ids.web, data: { uri: '/tmp/a.md' } }),
+      ).issues?.[0],
+    ).toContain(`claim ${created.c}`);
+    // Unless the same call makes the claim "Our reading".
+    apply(
+      'Retire the source',
+      { op: 'delete', type: 'artifact', id: ids.web },
+      { op: 'update', type: 'claim', id: created.c!, data: { certainty: 'reading' } },
+    );
+    const after = store.getOfType('claim', created.c!).data;
+    expect(after).toMatchObject({ certainty: 'reading', sourceIds: [] });
+  });
+
+  it('re-checks claims when the project changes what a certainty means', () => {
+    const ids = seedClaims();
+    const { created } = apply('c', claim(ids));
+    const options = (readingMeans: string) => ({
+      op: 'update' as const,
+      type: 'project' as const,
+      id: ids.p,
+      data: {
+        options: {
+          'claim.certainty': [
+            { value: 'reading', label: 'Sure', meaning: readingMeans },
+            { value: 'guess', label: 'Guess', meaning: 'reading' },
+            { value: 'checked', label: 'Checked', meaning: 'verified' },
+            { value: 'owner', label: 'Owner says', meaning: 'confirmed' },
+          ],
+        },
+      },
+    });
+    // Turning the stored "reading" into a From-source meaning would skip the source check.
+    const err = errorOf(() => apply('x', options('verified')));
+    expect(err.issues?.[0]).toContain(`claim ${created.c}`);
+    expect(err.issues?.[0]).toContain('"Sure" needs sourceIds');
+    apply('Rename only', options('reading'));
+  });
+
+  it('judges certainty by meaning when the project renames the options', () => {
+    const ids = seedClaims();
+    apply('Rename', {
+      op: 'update',
+      type: 'project',
+      id: ids.p,
+      data: {
+        options: {
+          'claim.certainty': [
+            { value: 'guess', label: 'Guess', meaning: 'reading' },
+            { value: 'checked', label: 'Checked', meaning: 'verified' },
+            { value: 'owner', label: 'Owner says', meaning: 'confirmed' },
+          ],
+        },
+      },
+    });
+    // The default is the project's value for "reading".
+    const { created } = apply('c', claim(ids));
+    expect(store.getOfType('claim', created.c!).data.certainty).toBe('guess');
+    expect(errorOf(() => apply('x', claim(ids, { certainty: 'checked' }))).issues?.[0]).toContain(
+      '"Checked" needs sourceIds',
+    );
+    expect(errorOf(() => apply('x', claim(ids, { certainty: 'owner' }))).issues?.[0]).toContain(
+      '"Owner says" needs confirmedById',
+    );
+  });
+
+  describe('"Confirmed by you"', () => {
+    function seedDecision(ids: { p: string }, status = 'proposed') {
+      return apply('Decision', {
+        op: 'create',
+        type: 'decision',
+        ref: 'd',
+        data: { projectId: ids.p, title: 'Keep our own format', status },
+      }).created.d!;
+    }
+    const confirmed = (ids: { p: string }, confirmedById?: string): Operation =>
+      claim(ids, { certainty: 'confirmed', ...(confirmedById ? { confirmedById } : {}) });
+
+    it('needs a decision', () => {
+      const ids = seedClaims();
+      expect(errorOf(() => apply('x', confirmed(ids))).issues?.[0]).toContain(
+        '"Confirmed by you" needs confirmedById → a decision the owner accepted in Pharos',
+      );
+    });
+
+    it('refuses a decision that is not accepted', () => {
+      const ids = seedClaims();
+      const decision = seedDecision(ids);
+      asHuman('Owner proposes', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { body: 'Still open' },
+      });
+      expect(errorOf(() => apply('x', confirmed(ids, decision))).issues?.[0]).toContain(
+        'is "Proposed"',
+      );
+    });
+
+    it('refuses a decision an agent accepted, and takes one the owner accepted', () => {
+      const ids = seedClaims();
+      const decision = seedDecision(ids);
+      apply('Agent accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      });
+      expect(errorOf(() => apply('x', confirmed(ids, decision))).issues?.[0]).toContain(
+        'not set by a person',
+      );
+      // Created already accepted by an agent counts the same.
+      const direct = seedDecision(ids, 'accepted');
+      expect(errorOf(() => apply('x', confirmed(ids, direct))).issues).toHaveLength(1);
+
+      asHuman('Owner accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      });
+      // The status did not change from accepted, so the agent's acceptance still counts.
+      expect(errorOf(() => apply('x', confirmed(ids, decision))).issues).toHaveLength(1);
+
+      const proposed = seedDecision(ids);
+      asHuman('Owner accepts', {
+        op: 'update',
+        type: 'decision',
+        id: proposed,
+        data: { status: 'accepted' },
+      });
+      const { created } = apply('ok', confirmed(ids, proposed));
+      expect(store.getOfType('claim', created.c!).data.certainty).toBe('confirmed');
+      // Editing other fields later, even by an agent, keeps it valid.
+      apply('Edit', {
+        op: 'update',
+        type: 'decision',
+        id: proposed,
+        data: { body: 'More context' },
+      });
+    });
+
+    it('refuses turning the decision down while the claim stays confirmed', () => {
+      const ids = seedClaims();
+      const decision = seedDecision(ids);
+      asHuman('Owner accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      });
+      const { created } = apply('ok', confirmed(ids, decision));
+      for (const author of [human, agent]) {
+        const err = errorOf(() =>
+          store.apply(author, {
+            message: 'Reject',
+            operations: [
+              { op: 'update', type: 'decision', id: decision, data: { status: 'rejected' } },
+            ],
+          }),
+        );
+        expect(err.issues?.[0]).toContain(`claim ${created.c}`);
+      }
+      // An agent flipping it away and back doesn't pass as the owner either.
+      apply(
+        'Same call: claim goes back to a reading',
+        { op: 'update', type: 'decision', id: decision, data: { status: 'rejected' } },
+        { op: 'update', type: 'claim', id: created.c!, data: { certainty: 'reading' } },
+      );
+      expect(store.getOfType('claim', created.c!).data.certainty).toBe('reading');
+      apply('Agent re-accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      });
+      expect(
+        errorOf(() =>
+          apply('x', {
+            op: 'update',
+            type: 'claim',
+            id: created.c!,
+            data: { certainty: 'confirmed' },
+          }),
+        ).issues?.[0],
+      ).toContain('not set by a person');
+    });
+
+    it("refuses reverting the owner's acceptance while the claim stays confirmed", () => {
+      const ids = seedClaims();
+      const decision = seedDecision(ids);
+      const accepted = asHuman('Owner accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      }).revision!.id;
+      const { created, revision } = apply('ok', confirmed(ids, decision));
+      expect(errorOf(() => store.revert(accepted, human)).issues?.[0]).toContain(
+        `claim ${created.c}`,
+      );
+      // Reverting the claim first, then the acceptance, works.
+      store.revert(revision!.id, human);
+      store.revert(accepted, human);
+      expect(store.getOfType('decision', decision).data.status).toBe('proposed');
+    });
+
+    it('refuses deleting the decision', () => {
+      const ids = seedClaims();
+      const decision = seedDecision(ids);
+      asHuman('Owner accepts', {
+        op: 'update',
+        type: 'decision',
+        id: decision,
+        data: { status: 'accepted' },
+      });
+      const { created } = apply('ok', confirmed(ids, decision));
+      expect(
+        errorOf(() => apply('x', { op: 'delete', type: 'decision', id: decision })).issues?.[0],
+      ).toContain(`claim ${created.c}`);
+    });
+  });
+
+  it('refuses two terms sharing a word or another form, ignoring case', () => {
+    const ids = seedClaims();
+    const term = (word: string, alsoCalled: string[] = []): Operation => ({
+      op: 'create',
+      type: 'term',
+      data: { projectId: ids.p, word, explanation: 'x', alsoCalled },
+    });
+    apply('First', term('recipe', ['recipes']));
+    expect(errorOf(() => apply('x', term('Recipe'))).issues?.[0]).toContain(
+      '"recipe" is already used',
+    );
+    expect(errorOf(() => apply('x', term('format', ['RECIPES']))).issues?.[0]).toContain(
+      '"recipes" is already used',
+    );
+    apply('Fine', term('format', ['formats']));
+    // Another project may reuse a word.
+    const other = apply('Other project', {
+      op: 'create',
+      type: 'project',
+      data: { name: 'Other' },
+    });
+    apply('Same word', {
+      op: 'create',
+      type: 'term',
+      data: { projectId: Object.values(other.created)[0]!, word: 'recipe', explanation: 'x' },
+    });
+  });
+});

@@ -105,3 +105,75 @@ describe('custom options', () => {
     expect(newOptionValue('Review', 'task.status', list)).toBe('review_2');
   });
 });
+
+describe('ranked options (certainty)', () => {
+  // The owner reordered the list: the strongest comes first, and one option has its own value.
+  const certaintyProject = {
+    data: {
+      name: 'P',
+      status: 'active',
+      options: {
+        'claim.certainty': [
+          { value: 'confirmed', label: 'Confirmed by you', meaning: 'confirmed' },
+          { value: 'sourced', label: 'From source', meaning: 'verified' },
+          { value: 'reading', label: 'Our reading', meaning: 'reading' },
+        ],
+      } satisfies ProjectOptions,
+    },
+  } as unknown as Entity<'project'>;
+  const claim = (id: string, certainty: string, order: number) =>
+    ({
+      id,
+      type: 'claim',
+      data: {
+        projectId: 'p',
+        statement: id,
+        certainty,
+        checkedOn: '2026-10-11',
+        sourceIds: [],
+        tags: [],
+        order,
+      },
+    }) as unknown as Entity<'claim'>;
+  const claimData = {
+    project: certaintyProject,
+    assignees: [],
+    goals: [],
+    stages: [],
+    tasks: [],
+    claims: [
+      claim('read', 'reading', 0),
+      claim('sourced', 'sourced', 1),
+      claim('confirmed', 'confirmed', 2),
+    ],
+  } as unknown as ProjectDataset;
+
+  it('uses meanings, labels and colours from the defaults', () => {
+    expect(optionsFor(null, 'claim.certainty').map((o) => [o.value, o.label, o.color])).toEqual([
+      ['reading', 'Our reading', 'amber'],
+      ['verified', 'From source', 'green'],
+      ['confirmed', 'Confirmed by you', 'violet'],
+    ]);
+  });
+
+  it('compares by meaning strength, not list order', () => {
+    expect(
+      ids(runQuery(claimData, 'claim', { where: { certainty: { gte: 'verified' } } })),
+    ).toEqual(['sourced', 'confirmed']);
+    expect(ids(runQuery(claimData, 'claim', { where: { certainty: { lt: 'verified' } } }))).toEqual(
+      ['read'],
+    );
+    expect(ids(runQuery(claimData, 'claim', { where: { certainty: { gt: 'sourced' } } }))).toEqual([
+      'confirmed',
+    ]);
+  });
+
+  it('sorts by strength and still matches by value or meaning', () => {
+    expect(
+      ids(runQuery(claimData, 'claim', { sort: [{ field: 'certainty', dir: 'desc' }] })),
+    ).toEqual(['confirmed', 'sourced', 'read']);
+    expect(ids(runQuery(claimData, 'claim', { where: { certainty: 'verified' } }))).toEqual([
+      'sourced',
+    ]);
+  });
+});

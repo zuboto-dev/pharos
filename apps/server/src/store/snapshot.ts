@@ -130,6 +130,17 @@ export function projectSnapshot(store: Store, projectId: string) {
       stageId: a.data.stageId,
       taskId: a.data.taskId,
     })),
+    /** Findings with how sure they are; `sources` counts linked artifacts. Long text is left out. */
+    claims: store.list('claim', { projectId }).map((c) => ({
+      id: c.id,
+      statement: c.data.statement,
+      certainty: c.data.certainty,
+      checkedOn: c.data.checkedOn,
+      sources: c.data.sourceIds.length,
+      ...(c.data.aboutId ? { aboutId: c.data.aboutId } : {}),
+      ...(c.data.tags.length ? { tags: c.data.tags } : {}),
+    })),
+    terms: store.list('term', { projectId }).map((t) => ({ id: t.id, word: t.data.word })),
     // People and agents work can be assigned to (shared across projects), with ids for assigneeId.
     assignees: store
       .list('assignee')

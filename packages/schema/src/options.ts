@@ -12,6 +12,8 @@ export const ScopeKind = z.enum(['in', 'maybe', 'out']);
 export const ArtifactKind = z.enum(['file', 'link', 'doc', 'design', 'other']);
 export const ArtifactStatus = z.enum(['expected', 'in_progress', 'delivered']);
 export const DecisionStatus = z.enum(['proposed', 'accepted', 'rejected', 'superseded']);
+/** How sure a claim is, weakest first. */
+export const Certainty = z.enum(['reading', 'verified', 'confirmed']);
 
 export const OPTION_FIELDS = {
   'task.status': {
@@ -62,6 +64,12 @@ export const OPTION_FIELDS = {
     meanings: DecisionStatus.options,
     label: 'Decision status',
   },
+  'claim.certainty': {
+    type: 'claim',
+    field: 'certainty',
+    meanings: Certainty.options,
+    label: 'Certainty',
+  },
 } as const;
 
 export type OptionKey = keyof typeof OPTION_FIELDS;
@@ -104,6 +112,9 @@ const MEANING_COLORS: Record<string, OptionColor> = {
   accepted: 'green',
   rejected: 'red',
   superseded: 'muted',
+  reading: 'amber',
+  verified: 'green',
+  confirmed: 'violet',
 };
 
 export const OptionValue = z
@@ -158,6 +169,16 @@ function humanize(value: string): string {
 /** Default labels where the plain meaning name would be unclear. */
 const DEFAULT_LABELS: Partial<Record<OptionKey, Record<string, string>>> = {
   'scope_item.kind': { in: 'In scope', out: 'Out of scope' },
+  'claim.certainty': {
+    reading: 'Our reading',
+    verified: 'From source',
+    confirmed: 'Confirmed by you',
+  },
+};
+
+/** Meanings with a fixed strength, weakest first. Ranges and sorting use this, never list order. */
+export const RANKED_MEANINGS: Partial<Record<OptionKey, readonly string[]>> = {
+  'claim.certainty': Certainty.options,
 };
 
 export function defaultOptions(key: OptionKey): Option[] {

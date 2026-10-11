@@ -101,6 +101,7 @@ function useUsage(field: OptionKey): Map<string, string[]> {
     scope_item: data.scopeItems,
     artifact: data.artifacts,
     decision: data.decisions,
+    claim: data.claims,
   } as const;
   const usage = new Map<string, string[]>();
   for (const entity of lists[type]) {

@@ -1,5 +1,5 @@
 import type { Entity, EntityType } from '../entities.js';
-import { meaningOf, optionKeyOf, optionsFor, type OptionKey } from '../options.js';
+import { RANKED_MEANINGS, meaningOf, optionKeyOf, optionsFor, type OptionKey } from '../options.js';
 import type { Condition, Filter, ProjectDataset, QueryableType, Scalar, Where } from './query.js';
 
 const DATASET_KEYS = {
@@ -9,6 +9,8 @@ const DATASET_KEYS = {
   task: 'tasks',
   artifact: 'artifacts',
   decision: 'decisions',
+  claim: 'claims',
+  term: 'terms',
 } as const satisfies Record<QueryableType, keyof ProjectDataset>;
 
 /** References a field path may follow one hop through, e.g. "stage.status" via `stageId`. */
@@ -107,8 +109,17 @@ function matchesValue(
   return Array.isArray(actual) ? actual.some(hit) : hit(actual);
 }
 
-/** Position in the project's option list; a meaning ("high") ranks as its first option. */
+/**
+ * Position in the project's option list; a meaning ("high") ranks as its first option. Keys with
+ * a fixed strength (RANKED_MEANINGS) rank by their value's meaning instead, never list order.
+ */
 function optionPosition(run: Run, key: OptionKey, value: unknown): number | undefined {
+  const ranked = RANKED_MEANINGS[key];
+  if (ranked) {
+    const meaning = typeof value === 'string' ? meaningOf(run.data.project, key, value) : undefined;
+    const rank = ranked.indexOf(meaning as string);
+    return rank === -1 ? undefined : rank;
+  }
   const options = optionsFor(run.data.project, key);
   const i = options.findIndex((o) => o.value === value);
   if (i !== -1) return i;

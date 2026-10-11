@@ -56,7 +56,7 @@ describe('MCP', () => {
     // View editing lives in the view tools, keeping apply's schema small.
     const apply = JSON.stringify(tools.find((t) => t.name === 'apply')!.inputSchema);
     expect(apply).not.toContain('"Board"');
-    expect(apply.length).toBeLessThan(40_000);
+    expect(apply.length).toBeLessThan(45_000);
     expect(client.getInstructions()).toContain('apply');
   });
 
@@ -111,6 +111,136 @@ describe('MCP', () => {
     expect(result.content[0]).toMatchObject({
       text: expect.stringContaining('task task_missing not found'),
     });
+  });
+});
+
+describe('claims over MCP and REST', () => {
+  const post = (body: unknown) =>
+    app.request('/api/apply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('stores findings, warns about missing sources, and leaves confirming to the owner', async () => {
+    const client = await connect('claude-code');
+    const { created, warnings } = await call(client, 'apply', {
+      message: 'Record findings',
+      operations: [
+        { op: 'create', type: 'project', ref: 'p', data: { name: 'Map' } },
+        {
+          op: 'create',
+          type: 'artifact',
+          ref: 'src',
+          data: { projectId: '$p', title: 'Report', uri: 'https://example.com/report' },
+        },
+        {
+          op: 'create',
+          type: 'decision',
+          ref: 'd',
+          // Decisions default to accepted; one for the owner to accept starts as proposed.
+          data: { projectId: '$p', title: 'Keep our own format', status: 'proposed' },
+        },
+        {
+          op: 'create',
+          type: 'claim',
+          ref: 'read',
+          data: { projectId: '$p', statement: 'Nobody offers layer 5', checkedOn: '2026-10-01' },
+        },
+        {
+          op: 'create',
+          type: 'claim',
+          ref: 'sourced',
+          data: {
+            projectId: '$p',
+            statement: 'The report covers five layers',
+            certainty: 'verified',
+            checkedOn: '2026-10-01',
+            sourceIds: ['$src'],
+          },
+        },
+        {
+          op: 'create',
+          type: 'term',
+          data: { projectId: '$p', word: 'recipe', explanation: 'What a view is drawn from' },
+        },
+      ],
+    });
+    expect(warnings).toEqual([
+      `claim ${created.read} "Nobody offers layer 5" has no source: add sourceIds so the reader can check it`,
+    ]);
+
+    const confirm = {
+      message: 'Confirm',
+      operations: [
+        {
+          op: 'update',
+          type: 'claim',
+          id: created.read,
+          data: { certainty: 'confirmed', confirmedById: created.d },
+        },
+      ],
+    };
+    // An agent can't accept the decision and confirm the claim itself...
+    const refused = (await client.callTool({
+      name: 'apply',
+      arguments: {
+        ...confirm,
+        operations: [
+          { op: 'update', type: 'decision', id: created.d, data: { status: 'accepted' } },
+          ...confirm.operations,
+        ],
+      },
+    })) as CallToolResult;
+    expect(refused.isError).toBe(true);
+    expect(refused.content[0]).toMatchObject({
+      text: expect.stringContaining('not set by a person'),
+    });
+
+    // ...but once the owner accepts it in the app, the claim can say "Confirmed by you".
+    const accept = await post({
+      message: 'Accept',
+      operations: [{ op: 'update', type: 'decision', id: created.d, data: { status: 'accepted' } }],
+    });
+    expect(accept.status).toBe(200);
+    expect((await call(client, 'apply', confirm)).warnings).toEqual([]);
+
+    const data = (await (await app.request(`/api/projects/${created.p}/data`)).json()) as {
+      claims: { data: { certainty: string } }[];
+      terms: { data: { word: string } }[];
+    };
+    expect(data.claims.map((c) => c.data.certainty)).toEqual(['confirmed', 'verified']);
+    expect(data.terms.map((t) => t.data.word)).toEqual(['recipe']);
+    const snapshot = await call(client, 'project_snapshot', { projectId: created.p });
+    expect(snapshot.claims).toHaveLength(2);
+    expect(snapshot.terms).toEqual([{ id: expect.any(String), word: 'recipe' }]);
+  });
+
+  it('refuses a From-source claim without a link over REST', async () => {
+    const project = (await (
+      await post({
+        message: 'Project',
+        operations: [{ op: 'create', type: 'project', ref: 'p', data: { name: 'Map' } }],
+      })
+    ).json()) as { created: { p: string } };
+    const res = await post({
+      message: 'Claim',
+      operations: [
+        {
+          op: 'create',
+          type: 'claim',
+          data: {
+            projectId: project.created.p,
+            statement: 'It is open source',
+            certainty: 'verified',
+            checkedOn: '2026-10-01',
+          },
+        },
+      ],
+    });
+    expect(res.status).toBe(400);
+    const { error } = (await res.json()) as { error: { issues: string[] } };
+    expect(error.issues[0]).toContain('"From source" needs sourceIds');
   });
 });
 

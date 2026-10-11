@@ -90,6 +90,8 @@ const data: ProjectDataset = {
   decisions: [],
   views: [],
   requests: [],
+  claims: [],
+  terms: [],
 };
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
 const q = (filter: Filter) => ids(runQuery(data, 'task', filter, { today: TODAY }));

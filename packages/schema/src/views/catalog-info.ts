@@ -1,7 +1,7 @@
 import type { ComponentName, ViewNode } from './catalog.js';
 
 export type ComponentCategory =
-  'data' | 'overview' | 'goals & scope' | 'plan & time' | 'work' | 'outputs' | 'layout';
+  'data' | 'overview' | 'goals & scope' | 'plan & time' | 'work' | 'outputs' | 'explain' | 'layout';
 
 export type ComponentInfo = {
   category: ComponentCategory;
@@ -267,6 +267,48 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       },
     },
   },
+  ClaimCard: {
+    category: 'explain',
+    use: 'One stored finding (a `claim`) with its certainty mark ("Our reading", "From source", "Confirmed by you"), checked date and source link. Start a knowledge view with one at `size: "headline"`, full width: its statement is the point of the page. Use `size: "card"` in a row for takeaways. Write the words in the claim, never in the view.',
+    minColumns: 3,
+    suggestedColumns: 6,
+    example: {
+      component: 'ClaimCard',
+      claim: 'clm_headline',
+      size: 'headline',
+      kicker: 'Generative UI',
+    },
+  },
+  Layers: {
+    category: 'explain',
+    use: 'A picture of how something is built, as ordered layers the reader taps open (`orientation: "stack"`), or a few steps side by side (`"row"`, e.g. a spectrum with an `axis`). Each layer picks stored claims by tag with `items`; claims with an `aboutId` group into one card per tool, the others show as lines. Name layers, never state facts in `title` or `hint`.',
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: {
+      component: 'Layers',
+      prompt: 'Tap a layer to see the tools in it.',
+      open: '2',
+      legend: [
+        { tone: 'own', label: 'Pharos has its own' },
+        { tone: 'gap', label: 'Nobody offers it' },
+      ],
+      layers: [
+        {
+          key: '2',
+          title: 'The recipe format',
+          hint: 'How the AI writes down which blocks go where',
+          pill: { label: 'Pharos has its own', tone: 'own' },
+          items: { where: { tags: 'layer-2' } },
+        },
+        {
+          key: '1',
+          title: 'The AI model',
+          hint: 'It writes the text or the recipe',
+          items: { where: { tags: 'layer-1' } },
+        },
+      ],
+    },
+  },
   Tabs: {
     category: 'layout',
     use: 'Several alternative views of the same thing in one widget (e.g. Board / Table). Each tab holds components.',
@@ -304,7 +346,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
 export const BOARD_GUIDE = `A view is a Board: a 12-column grid of widgets laid out left to right, top to bottom.
 Each widget is {id, w?, x?, h?, node}: a stable id, a width in columns (1–12, default 12), an optional start column (0–11; omit to flow), an optional minimum height in px (omit to fit content), and one catalog component as \`node\`.
 Widths in a row should add up to 12 (e.g. 4 + 8, 6 + 6). Never go below a component's minColumns.
-Components read live project data; never copy data into a view. Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
+Components read live project data; never copy data into a view. Findings live in \`claim\` records and words to explain in \`term\` records: ClaimCard and Layers show claims, and text blocks explain terms where they first appear (\`terms: false\` turns that off). Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
 - where values: exact value, array (any of), {not: value|array}, {exists: bool}, {contains: text}, or a range {gt|gte|lt|lte: value}
 - dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
 - fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"

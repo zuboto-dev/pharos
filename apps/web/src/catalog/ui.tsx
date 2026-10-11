@@ -1,6 +1,7 @@
 import clsx from 'clsx';
+import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { humanize } from '../lib/format';
 
@@ -139,12 +140,63 @@ export function Empty({ children }: { children: ReactNode }) {
   );
 }
 
-export function Markdown({ children, className }: { children: string; className?: string }) {
+/** Extra Markdown plugins and element renderers, e.g. tap-to-explain terms (`useMarkdownTerms`). */
+export type MarkdownExtras = { remarkPlugins?: Options['remarkPlugins']; components?: Components };
+
+export function Markdown({
+  children,
+  className,
+  remarkPlugins,
+  components,
+}: { children: string; className?: string } & MarkdownExtras) {
   return (
     <div className={clsx('md', className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm, ...(remarkPlugins ?? [])]} components={components}>
+        {children}
+      </ReactMarkdown>
     </div>
   );
+}
+
+/** Only http(s) addresses open as links; anything else (a path, a file name) is shown as text. */
+export function isHttp(uri: string | undefined): uri is string {
+  return !!uri && /^https?:\/\//.test(uri);
+}
+
+/**
+ * An artifact's address: a link that opens in a new tab when it's http(s), plain text otherwise.
+ * `children` replaces the shown address, e.g. "Source".
+ */
+export function Uri({
+  uri,
+  children,
+  className,
+  title,
+}: {
+  uri: string;
+  children?: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  if (isHttp(uri)) {
+    return (
+      <a
+        href={uri}
+        target="_blank"
+        rel="noreferrer"
+        title={title ?? uri}
+        className={clsx(
+          'inline-flex min-w-0 items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-400',
+          className,
+        )}
+      >
+        <span className="truncate">{children ?? uri.replace(/^https?:\/\//, '')}</span>
+        <ExternalLink className="size-3 shrink-0" aria-hidden />
+        <span className="sr-only">(opens in a new tab)</span>
+      </a>
+    );
+  }
+  return <code className={clsx('truncate text-xs text-neutral-500', className)}>{uri}</code>;
 }
 
 const BUTTON_BASE =

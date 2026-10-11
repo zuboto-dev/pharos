@@ -17,6 +17,12 @@ const common = {
     .describe('Columns to span when inside a Grid (default 1)'),
 };
 
+/** Shared by text blocks and the explain blocks: mark project terms the reader can tap. */
+const terms = z
+  .boolean()
+  .optional()
+  .describe('Explain project terms where they first appear in this widget (default true)');
+
 function component<C extends string, S extends z.ZodRawShape>(
   name: C,
   description: string,
@@ -98,6 +104,7 @@ export const ProgressRingNode = component(
 export const CalloutNode = component('Callout', 'A highlighted note, e.g. a risk or key message.', {
   tone: z.enum(['info', 'success', 'warning', 'danger']).optional(),
   body: z.string().describe('Markdown'),
+  terms,
 });
 
 export const MarkdownNode = component('Markdown', 'Formatted text.', {
@@ -106,6 +113,7 @@ export const MarkdownNode = component('Markdown', 'Formatted text.', {
     .enum(['project.description'])
     .optional()
     .describe('Show a stored field instead of fixed content'),
+  terms,
 });
 
 // ------------------------------------------------------------------ goals & scope
@@ -288,6 +296,93 @@ export const TextNode = component(
       .record(z.string().regex(/^\w+$/), TextValue)
       .optional()
       .describe('Named values: {count: query}, {percent: {query, of}}, or {project: field}'),
+    terms,
+  },
+);
+
+// ------------------------------------------------------------------ explain
+// Stored claims (findings) and terms, shown so a reader sees the point, how sure it is, and where
+// it comes from. The spec holds claim ids, tags and filters only, never a claim's words.
+
+const ExplainTone = z
+  .enum(['neutral', 'own', 'watch', 'gap'])
+  .describe('own: Pharos has it · watch: take care · gap: missing');
+
+const Layer = z.strictObject({
+  key: z.string().min(1).max(3).describe('Marker in the circle, e.g. "5"; `open` refers to it'),
+  title: z.string().min(1).max(60).describe('A name, not a claim, e.g. "The recipe format"'),
+  hint: z
+    .string()
+    .max(90)
+    .optional()
+    .describe('One line under the title, e.g. "How the AI writes down which blocks go where"'),
+  pill: z
+    .strictObject({
+      label: z.string().min(1).max(30),
+      tone: ExplainTone,
+      claim: z
+        .string()
+        .optional()
+        .describe('Id of the claim behind the label; shown first in the layer with its mark'),
+    })
+    .optional(),
+  highlight: z.boolean().optional().describe('Draw this one as the layer that matters most'),
+  items: Filter.describe(
+    'Which claims it holds, e.g. {"where": {"tags": "layer-4"}}; sorted by order unless sort is given',
+  ),
+});
+
+export const LayersNode = component(
+  'Layers',
+  'Ordered layers or steps, each holding stored claims: a stack the reader taps open, or steps side by side.',
+  {
+    layers: z.array(Layer).min(2).max(7).describe('Top to bottom (stack) or left to right (row)'),
+    orientation: z
+      .enum(['stack', 'row'])
+      .optional()
+      .describe('stack (default): one layer open at a time; row: every step shown'),
+    open: z.string().optional().describe('stack: key of the layer open at first (default none)'),
+    prompt: z
+      .string()
+      .max(80)
+      .optional()
+      .describe('What to do, e.g. "Tap a layer to see the tools in it."'),
+    legend: z
+      .array(z.strictObject({ tone: ExplainTone, label: z.string().min(1).max(30) }))
+      .max(4)
+      .optional(),
+    axis: z
+      .strictObject({ from: z.string().max(30), to: z.string().max(30) })
+      .optional()
+      .describe('row: labels at the two ends, e.g. "more control" and "more freedom"'),
+    highlightAbout: z
+      .string()
+      .optional()
+      .describe('Artifact id; the card about it is drawn in the accent colour'),
+    warnTag: z
+      .string()
+      .optional()
+      .describe('Claims with this tag show as a warning in their card (default "watch")'),
+    terms,
+  },
+);
+
+export const ClaimCardNode = component(
+  'ClaimCard',
+  'One stored claim: its statement, how sure it is (a mark with a word and the checked date) and its source link.',
+  {
+    claim: z.string().min(1).describe('Id of a claim in this project'),
+    size: z
+      .enum(['headline', 'card'])
+      .optional()
+      .describe("headline: the view's point, large, first on the page; card (default)"),
+    kicker: z
+      .string()
+      .max(30)
+      .optional()
+      .describe('One to three words above the statement, e.g. "Build"'),
+    tone: ExplainTone.optional(),
+    terms,
   },
 );
 
@@ -317,6 +412,8 @@ const LEAF_NODES = [
   StatNode,
   DataListNode,
   TextNode,
+  LayersNode,
+  ClaimCardNode,
 ] as const;
 
 type Common = { title?: string; span?: number };

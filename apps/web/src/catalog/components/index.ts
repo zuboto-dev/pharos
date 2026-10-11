@@ -2,6 +2,7 @@ import type { ComponentName, NodeOf } from '@pharos/schema';
 import type { ReactNode } from 'react';
 import { CountChart, DataList, DataTable, Stat, TextBlock } from './generic';
 import { GoalTree, ScopeBoard } from './goals';
+import { ClaimCard, Layers } from './knowledge';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
 import { MilestoneList, StageTracker, Timeline } from './plan';
@@ -43,4 +44,6 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   Stat: { render: Stat, bare: true },
   DataList: { render: DataList },
   Text: { render: TextBlock, bare: true },
+  Layers: { render: Layers, bare: true },
+  ClaimCard: { render: ClaimCard, bare: true },
 };

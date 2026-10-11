@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { FolderGit2, Info, CircleCheck, TriangleAlert, OctagonAlert, Flag } from 'lucide-react';
 import { useViewData } from '../context';
 import { EntityRef } from '../interactive';
+import { useMarkdownTerms } from '../terms';
 import { Empty, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
 
 export function ProjectHeader() {
@@ -182,12 +183,15 @@ const CALLOUTS: Record<string, { icon: typeof Info; className: string; tone: Ton
 
 export function Callout({ node }: { node: NodeOf<'Callout'> }) {
   const { icon: Icon, className } = CALLOUTS[node.tone ?? 'info']!;
+  const terms = useMarkdownTerms(node.terms);
   return (
     <div className={clsx('flex gap-3 rounded-xl border p-4', className)}>
       <Icon className="mt-0.5 size-5 shrink-0" />
       <div className="min-w-0 space-y-1">
         {node.title && <div className="font-semibold">{node.title}</div>}
-        <Markdown className="!text-current">{node.body}</Markdown>
+        <Markdown className="!text-current" {...terms}>
+          {node.body}
+        </Markdown>
       </div>
     </div>
   );
@@ -195,7 +199,8 @@ export function Callout({ node }: { node: NodeOf<'Callout'> }) {
 
 export function MarkdownBlock({ node }: { node: NodeOf<'Markdown'> }) {
   const { project } = useViewData();
+  const terms = useMarkdownTerms(node.terms);
   const content = node.source === 'project.description' ? project.data.description : node.content;
   if (!content?.trim()) return <Empty>No description yet</Empty>;
-  return <Markdown>{content}</Markdown>;
+  return <Markdown {...terms}>{content}</Markdown>;
 }

@@ -17,6 +17,7 @@ import { formatDate, humanize } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
+import { useMarkdownTerms } from '../terms';
 import { DOT_TONES, Empty, Markdown, StatusBadge } from '../ui';
 
 type Reader = ReturnType<typeof fieldReader>;
@@ -330,5 +331,10 @@ export function fillTemplate(node: NodeOf<'Text'>, data: ViewData): string {
 
 export function TextBlock({ node }: { node: NodeOf<'Text'> }) {
   const data = useViewData();
-  return <Markdown className="text-base!">{fillTemplate(node, data)}</Markdown>;
+  const terms = useMarkdownTerms(node.terms);
+  return (
+    <Markdown className="text-base!" {...terms}>
+      {fillTemplate(node, data)}
+    </Markdown>
+  );
 }

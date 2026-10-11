@@ -1,41 +1,14 @@
 import { runQuery, type EntityDiff, type NodeOf, type RevisionSummary } from '@pharos/schema';
-import {
-  Bot,
-  Cog,
-  ExternalLink,
-  File,
-  FileText,
-  Link2,
-  Package,
-  Palette,
-  User,
-} from 'lucide-react';
+import { Bot, Cog, File, FileText, Link2, Package, Palette, User } from 'lucide-react';
 import { useResource } from '../../lib/api';
 import { formatDate, localToday, plural, timeAgo } from '../../lib/format';
 import { useViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
 import { OptionBadge, useOptions } from '../options';
-import { Empty } from '../ui';
+import { Empty, Uri } from '../ui';
 
 const ARTIFACT_ICONS = { file: File, link: Link2, doc: FileText, design: Palette, other: Package };
-
-function Uri({ uri }: { uri: string }) {
-  if (/^https?:\/\//.test(uri)) {
-    return (
-      <a
-        href={uri}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex min-w-0 items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-400"
-      >
-        <span className="truncate">{uri.replace(/^https?:\/\//, '')}</span>
-        <ExternalLink className="size-3 shrink-0" />
-      </a>
-    );
-  }
-  return <code className="truncate text-xs text-neutral-500">{uri}</code>;
-}
 
 export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
   const data = useViewData();

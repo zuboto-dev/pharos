@@ -66,6 +66,8 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   Stat: COMPONENT_INFO.Stat.example,
   DataList: COMPONENT_INFO.DataList.example,
   Text: COMPONENT_INFO.Text.example,
+  Layers: COMPONENT_INFO.Layers.example,
+  ClaimCard: COMPONENT_INFO.ClaimCard.example,
 };
 
 const empty: ProjectDataset = {

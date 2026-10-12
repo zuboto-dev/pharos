@@ -62,7 +62,13 @@ const data: ProjectDataset = {
     artifact('art_new', 'README on main', 'README.md'),
   ],
   claims: [
-    claim('clm_change', { statement: 'The guide now starts the server as a service.' }),
+    claim('clm_change', {
+      statement: 'The guide now starts the server as a service.',
+      certainty: 'reading',
+      quote: 'Run pnpm service install to start the server.',
+      assumption: 'The change is not yet published.',
+      sourceIds: ['art_new'],
+    }),
     claim('clm_before', {
       quote: OLD.join('\n'),
       locator: 'commit 8bb6b32, line 12',
@@ -72,6 +78,8 @@ const data: ProjectDataset = {
     claim('clm_added', { quote: [...OLD, 'Stop it with Ctrl+C.'].join('\n') }),
     claim('clm_same', { quote: OLD.join('\n') }),
     claim('clm_unquoted', {}),
+    claim('clm_ab', { quote: 'Line A\nLine B' }),
+    claim('clm_ba', { quote: 'Line B\nLine A' }),
   ],
 };
 
@@ -163,6 +171,25 @@ describe('BeforeAfter', () => {
     expect(container.textContent).toContain('The two passages are the same.');
     expect(container.querySelector('del, ins')).toBeNull();
     expect(pane('After').textContent).toContain('Open the app.');
+  });
+
+  it('gives the stated change its own mark and quote/assumption, beneath its statement', () => {
+    const { container } = renderSpec(spec());
+    const statement = screen.getByText('The guide now starts the server as a service.');
+    const evidence = statement.nextElementSibling as HTMLElement;
+    const basis = within(evidence).getByRole('button', { name: /Quote and assumption/ });
+    fireEvent.click(basis);
+    expect(container.textContent).toContain('The change is not yet published.');
+    fireEvent.click(within(evidence).getAllByRole('button', { name: /reading/i })[0]!);
+    expect(screen.getByRole('dialog').textContent).toContain('README on main');
+  });
+
+  it('treats reordered lines as a change and shows both passages whole', () => {
+    const { container } = renderSpec(spec({ before: 'clm_ab', after: 'clm_ba' }));
+    expect(container.textContent).not.toContain('The two passages are the same.');
+    expect(container.textContent).toContain('The same lines, in a different order.');
+    expect(pane('Before').querySelector('blockquote')!.textContent).toBe('Line A\nLine B');
+    expect(pane('After').querySelector('blockquote')!.textContent).toBe('Line B\nLine A');
   });
 
   it('says when a passage is missing or unquoted', () => {

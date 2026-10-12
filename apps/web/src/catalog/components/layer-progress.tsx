@@ -136,10 +136,12 @@ export function OpenTasks({ progress, id }: { progress: StepProgress; id?: strin
             <button
               type="button"
               onClick={() => actions.open({ entity: task.id })}
-              className="flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm text-neutral-800 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-100 dark:hover:bg-neutral-800"
+              className="flex w-full min-w-0 items-baseline gap-2 rounded-md px-1.5 py-1 text-left text-sm text-neutral-800 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-100 dark:hover:bg-neutral-800"
             >
               <OptionDot field="task.status" value={task.data.status} className="shrink-0" />
-              <span className="min-w-0 truncate">{stripWorkCode(task.data.title)}</span>
+              <span className="min-w-0 break-words whitespace-normal">
+                {stripWorkCode(task.data.title)}
+              </span>
             </button>
           </li>
         ))}

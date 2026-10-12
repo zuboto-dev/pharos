@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -9,6 +10,42 @@ import {
 import { createPortal } from 'react-dom';
 
 const WIDTH = 288;
+/** The gap between the button and the panel. */
+const GAP = 6;
+/** The panel keeps at least this far from every edge of the screen. */
+const INSET = 8;
+
+export type Placement = {
+  left: number;
+  width: number;
+  top?: number;
+  bottom?: number;
+  /** The panel scrolls past this, so it never runs off the screen. */
+  maxHeight: number;
+};
+
+/**
+ * Where a panel of `height` goes beside `anchor` in a `viewport`: below the button when it fits
+ * there or there's more room below than above, otherwise above; always inside an 8px inset, with
+ * a height cap so a tall panel (a claim with seven sources) scrolls instead of leaving the screen.
+ */
+export function placePanel(
+  anchor: Pick<DOMRect, 'top' | 'bottom' | 'left'>,
+  viewport: { width: number; height: number },
+  height: number,
+): Placement {
+  const width = Math.max(0, Math.min(WIDTH, viewport.width - 2 * INSET));
+  const left = Math.max(INSET, Math.min(anchor.left, viewport.width - width - INSET));
+  const roomBelow = viewport.height - anchor.bottom - GAP - INSET;
+  const roomAbove = anchor.top - GAP - INSET;
+  const clampEdge = (edge: number) => Math.max(INSET, Math.min(edge, viewport.height - INSET));
+  if (height <= roomBelow || roomBelow >= roomAbove) {
+    const top = clampEdge(anchor.bottom + GAP);
+    return { left, width, top, maxHeight: Math.max(0, viewport.height - INSET - top) };
+  }
+  const bottom = clampEdge(viewport.height - anchor.top + GAP);
+  return { left, width, bottom, maxHeight: Math.max(0, viewport.height - INSET - bottom) };
+}
 
 /**
  * A small panel that opens from a button: on tap, Enter or Space; it closes on a second tap,
@@ -71,8 +108,17 @@ export function Popover({
       onClose(true);
     }
   };
-  const below = anchor.bottom + 240 < window.innerHeight;
-  const left = Math.max(8, Math.min(anchor.left, window.innerWidth - WIDTH - 8));
+  // Measured once open (before paint), so the side is chosen by the panel's real height.
+  const [height, setHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = panel.current;
+    if (el) setHeight(el.scrollHeight + el.offsetHeight - el.clientHeight);
+  }, []);
+  const place = placePanel(
+    anchor,
+    { width: window.innerWidth, height: window.innerHeight },
+    height,
+  );
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60]" aria-hidden onClick={() => onClose(false)} />
@@ -83,12 +129,8 @@ export function Popover({
         tabIndex={-1}
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
-        style={
-          below
-            ? { left, top: anchor.bottom + 6 }
-            : { left, bottom: window.innerHeight - anchor.top + 6 }
-        }
-        className="fixed z-[61] w-72 max-w-[calc(100vw-16px)] space-y-2 rounded-xl border border-neutral-200 bg-white p-3 text-left text-sm font-normal text-neutral-700 shadow-lg outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+        style={place}
+        className="fixed z-[61] space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white p-3 text-left text-sm font-normal text-neutral-700 shadow-lg outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
       >
         {children}
       </div>

@@ -659,6 +659,11 @@ describe('Layers progress', () => {
     expect(panel.textContent).not.toContain('W3.8');
     expect(panel.textContent).not.toContain('Agree the test');
     expect(panel.textContent).not.toContain('Dropped idea');
+    // The whole title wraps on a narrow screen instead of being cut off.
+    const title = items[0]!.lastElementChild!;
+    expect(title.className).toContain('whitespace-normal');
+    expect(title.className).toContain('break-words');
+    expect(title.className).not.toContain('truncate');
     fireEvent.click(items[0]!);
     expect(open).toHaveBeenCalledWith({ entity: 'task_a2' });
     // Every task done: says so instead of an empty list.

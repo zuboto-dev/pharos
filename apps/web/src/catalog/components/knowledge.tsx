@@ -283,7 +283,7 @@ export function CertaintyMark({
  * its source ("From source") and the assumption ("Our reading"). Renders a button and, when open,
  * a full-width panel; the parent is a wrapping flex row, so the panel drops to its own line.
  */
-function ClaimBasis({ claim }: { claim: Claim }) {
+export function ClaimBasis({ claim }: { claim: Claim }) {
   const { entityById } = useViewData();
   const [open, setOpen] = useState(false);
   const panelId = useId();

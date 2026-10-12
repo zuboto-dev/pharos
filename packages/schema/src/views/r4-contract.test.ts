@@ -133,6 +133,29 @@ describe('text helpers', () => {
   });
 
   it('lists the lines each passage has that the other lacks', () => {
-    expect(changedLines('a\nb\nc', 'a\nB\nc\nd')).toEqual({ before: ['b'], after: ['B', 'd'] });
+    expect(changedLines('a\nb\nc', 'a\nB\nc\nd')).toEqual({
+      before: ['b'],
+      after: ['B', 'd'],
+      same: false,
+    });
+  });
+
+  it('diffs lines in order, so a reordered passage is a change', () => {
+    const swap = changedLines('A\nB', 'B\nA');
+    expect(swap.same).toBe(false);
+    expect(swap.before).toHaveLength(1);
+    expect(swap.after).toEqual(swap.before);
+    expect(changedLines('a\nb\nc', 'c\na\nb')).toEqual({
+      before: ['c'],
+      after: ['c'],
+      same: false,
+    });
+    expect(changedLines('a\nb\na', 'a\nb')).toEqual({ before: ['a'], after: [], same: false });
+  });
+
+  it('calls passages the same only when every line matches in order', () => {
+    expect(changedLines('a\n  b  \n\n', 'a\nb')).toEqual({ before: [], after: [], same: true });
+    expect(changedLines('', '')).toEqual({ before: [], after: [], same: true });
+    expect(changedLines('a', '').same).toBe(false);
   });
 });

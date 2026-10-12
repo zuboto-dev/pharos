@@ -8,11 +8,12 @@ import {
 } from '@pharos/schema';
 import { useViewData, type ViewData } from '../context';
 import { Empty } from '../ui';
-import { CertaintyMark } from './knowledge';
+import { CertaintyMark, ClaimBasis } from './knowledge';
 
 // R4 block 3 (docs/reframe/r4-plan.md): a change shown, not told. The stated change sits on top;
-// below it two panes, before and after, show only the lines of each claim's quoted passage that
-// changed, with removed words struck and added words underlined. Colour is never the only cue:
+// beneath it its own certainty mark and quote/assumption; below that two panes, before and after,
+// show only the lines of each claim's quoted passage that changed (in order, so a moved line
+// counts), with removed words struck and added words underlined. Colour is never the only cue:
 // the words sit in <del>/<ins>, with a spoken "removed"/"added" for screen readers.
 
 type Claim = Entity<'claim'>;
@@ -144,39 +145,53 @@ export function BeforeAfter({ node }: { node: NodeOf<'BeforeAfter'> }) {
   const beforeQuote = before?.data.quote ?? '';
   const afterQuote = after?.data.quote ?? '';
   const changed = changedLines(beforeQuote, afterQuote);
+  const both = Boolean(beforeQuote && afterQuote);
+  const same = both && changed.same;
+  // Only the order changed: every line taken out is put back elsewhere. Show both passages whole.
+  const sorted = (lines: string[]) => [...lines].sort().join('\n');
+  const moved = both && !same && sorted(changed.before) === sorted(changed.after);
+  const showWhole = same || moved;
   const was = changed.before.join('\n');
   const now = changed.after.join('\n');
-  const same = Boolean(beforeQuote && afterQuote && !was && !now);
   return (
     <div className="@container space-y-3">
       {stated && (
-        <p className="font-semibold text-neutral-900 dark:text-neutral-50">
-          {stated.data.statement}
-        </p>
+        <div className="space-y-1">
+          <p className="font-semibold text-neutral-900 dark:text-neutral-50">
+            {stated.data.statement}
+          </p>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <CertaintyMark claim={stated} />
+            <ClaimBasis claim={stated} />
+          </div>
+        </div>
       )}
       <div className="grid gap-3 @lg:grid-cols-2">
         <Pane
           side="Before"
           label={node.beforeLabel}
           claim={before}
-          parts={same ? whole(beforeQuote) : was ? paneParts('Before', was, now) : []}
-          hidden={same ? 0 : lineCount(beforeQuote) - changed.before.length}
+          parts={showWhole ? whole(beforeQuote) : was ? paneParts('Before', was, now) : []}
+          hidden={showWhole ? 0 : lineCount(beforeQuote) - changed.before.length}
         />
         <Pane
           side="After"
           label={node.afterLabel}
           claim={after}
-          parts={same ? whole(afterQuote) : now ? paneParts('After', was, now) : []}
-          hidden={same ? 0 : lineCount(afterQuote) - changed.after.length}
+          parts={showWhole ? whole(afterQuote) : now ? paneParts('After', was, now) : []}
+          hidden={showWhole ? 0 : lineCount(afterQuote) - changed.after.length}
         />
       </div>
       {same ? (
         <p className="text-xs text-neutral-500 dark:text-neutral-400">
           The two passages are the same.
         </p>
+      ) : moved ? (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          The same lines, in a different order.
+        </p>
       ) : (
-        beforeQuote &&
-        afterQuote && (
+        both && (
           <p aria-hidden className="flex gap-3 text-xs text-neutral-500 dark:text-neutral-400">
             <span>
               <span className="rounded-sm bg-rose-50 px-0.5 text-rose-800 line-through decoration-rose-500/70 dark:bg-rose-950/60 dark:text-rose-200">

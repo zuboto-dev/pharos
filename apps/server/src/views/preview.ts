@@ -684,7 +684,7 @@ function describeBeforeAfter(
       `the stated change is ${statedWords} words; keep it to ${R4.findingTitleWords} or fewer: one line, and let the panes show the rest`,
     );
   const words = beforeAfterText(node, ctx).reduce((sum, t) => sum + countWords(t), 0);
-  if (a && b && a.trim() === b.trim())
+  if (a && b && changedLines(a, b).same)
     warnings.push('before and after quote the same passage, so nothing shows as changed');
   else if (words > R4.beforeAfterWords)
     warnings.push(

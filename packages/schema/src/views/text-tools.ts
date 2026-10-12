@@ -58,8 +58,16 @@ export function diffWords(before: string, after: string): DiffPart[] {
   return parts;
 }
 
-/** The lines of each passage that the other doesn't have: what a BeforeAfter shows. */
-export function changedLines(before: string, after: string): { before: string[]; after: string[] } {
+/**
+ * The lines that changed between two passages: a line-level diff (longest common subsequence) of
+ * their non-blank, trimmed lines, so order counts. `before` holds the lines taken out, `after` the
+ * lines put in, each in reading order; `same` is true only when both passages have the same lines
+ * in the same order. A moved line shows on both sides, so "A\nB" → "B\nA" is a change.
+ */
+export function changedLines(
+  before: string,
+  after: string,
+): { before: string[]; after: string[]; same: boolean } {
   const lines = (text: string) =>
     text
       .split('\n')
@@ -67,5 +75,26 @@ export function changedLines(before: string, after: string): { before: string[];
       .filter(Boolean);
   const a = lines(before);
   const b = lines(after);
-  return { before: a.filter((l) => !b.includes(l)), after: b.filter((l) => !a.includes(l)) };
+  // lcs[i][j]: length of the longest common subsequence of a[i..] and b[j..].
+  const lcs = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      lcs[i]![j] =
+        a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+  const removed: string[] = [];
+  const added: string[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      i++;
+      j++;
+    } else if (j >= b.length || (i < a.length && lcs[i + 1]![j]! >= lcs[i]![j + 1]!)) {
+      removed.push(a[i++]!);
+    } else {
+      added.push(b[j++]!);
+    }
+  }
+  const same = a.length === b.length && a.every((l, k) => l === b[k]);
+  return { before: removed, after: added, same };
 }

@@ -491,8 +491,12 @@ describe('claims and terms', () => {
     const result = apply('No source', claim(ids));
     expect(result.warnings).toEqual([
       `claim ${result.created.c} "Tambo is open source" has no source: add sourceIds so the reader can check it`,
+      `claim ${result.created.c} "Tambo is open source" is "Our reading" but states no assumption: add assumption, what this reading takes for granted`,
     ]);
-    expect(apply('Source', claim(ids, { sourceIds: [ids.web] })).warnings).toEqual([]);
+    expect(
+      apply('Source', claim(ids, { sourceIds: [ids.web], assumption: 'The repo is current.' }))
+        .warnings,
+    ).toEqual([]);
     expect(
       apply('Other', { op: 'update', type: 'project', id: ids.p, data: { summary: 'x' } }).warnings,
     ).toEqual([]);
@@ -510,7 +514,72 @@ describe('claims and terms', () => {
     ).toHaveLength(1);
     const ok = apply('ok', claim(ids, { certainty: 'verified', sourceIds: [ids.file, ids.web] }));
     expect(store.getOfType('claim', ok.created.c!).data.certainty).toBe('verified');
-    expect(ok.warnings).toEqual([]);
+    expect(ok.warnings).toEqual([
+      `claim ${ok.created.c} "Tambo is open source" is "From source" but quotes nothing: add quote, the exact passage from the source that supports it`,
+    ]);
+  });
+
+  it('warns, without refusing, about a missing quote or assumption and a quote from an unlisted source', () => {
+    const ids = seedClaims();
+    const quoted = apply(
+      'Quoted',
+      claim(ids, {
+        certainty: 'verified',
+        sourceIds: [ids.file, ids.web],
+        quote: 'Tambo is MIT licensed.',
+        quoteSourceId: ids.web,
+      }),
+    );
+    expect(quoted.warnings).toEqual([]);
+    expect(store.getOfType('claim', quoted.created.c!).data).toMatchObject({
+      quote: 'Tambo is MIT licensed.',
+      quoteSourceId: ids.web,
+    });
+    // A quote credited to a source the claim doesn't list is saved, with a warning.
+    const stray = apply(
+      'Stray',
+      claim(ids, {
+        certainty: 'verified',
+        sourceIds: [ids.web],
+        quote: 'Tambo is MIT licensed.',
+        quoteSourceId: ids.file,
+      }),
+    );
+    expect(stray.warnings).toEqual([
+      `claim ${stray.created.c} "Tambo is open source" credits its quote to ${ids.file}, which isn't in its sourceIds`,
+    ]);
+    // An assumption silences the reading warning; a quote isn't asked of a reading.
+    expect(
+      apply('Reading', claim(ids, { sourceIds: [ids.web], assumption: 'The license is current.' }))
+        .warnings,
+    ).toEqual([]);
+    // Clearing the quote warns again; the label comes from the project's options.
+    apply('Rename', {
+      op: 'update',
+      type: 'project',
+      id: ids.p,
+      data: {
+        options: {
+          'claim.certainty': [
+            { value: 'reading', label: 'Our reading', meaning: 'reading' },
+            { value: 'verified', label: 'Checked', meaning: 'verified' },
+            { value: 'confirmed', label: 'Confirmed by you', meaning: 'confirmed' },
+          ],
+        },
+      },
+    });
+    const cleared = apply('Clear', {
+      op: 'update',
+      type: 'claim',
+      id: quoted.created.c!,
+      data: { quote: null, quoteSourceId: null },
+    });
+    expect(cleared.warnings).toEqual([
+      `claim ${quoted.created.c} "Tambo is open source" is "Checked" but quotes nothing: add quote, the exact passage from the source that supports it`,
+    ]);
+    // Deleting the quoted source unsets quoteSourceId with it.
+    apply('Delete', { op: 'delete', type: 'artifact', id: ids.file });
+    expect(store.getOfType('claim', stray.created.c!).data.quoteSourceId).toBeUndefined();
   });
 
   it('refuses "From source" checked after the save', () => {

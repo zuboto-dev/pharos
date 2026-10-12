@@ -150,14 +150,19 @@ function knowledge() {
         data: { projectId: '$p', title: 'Report', kind: 'link', uri: 'https://example.com/r' },
       },
       { op: 'create', type: 'task', data: { projectId: '$p', title: 'Read the report' } },
-      claim('point', 'Three layers; we have two.', { sourceIds: ['$src'] }),
+      claim('point', 'Three layers; we have two.', { sourceIds: ['$src'], assumption: 'A' }),
       claim('top', 'The top layer is ours.', {
         certainty: 'verified',
         sourceIds: ['$src'],
+        quote: 'The top layer is ours.',
         tags: ['layer-1'],
       }),
-      claim('mid', 'Nobody offers the middle layer.', { sourceIds: ['$src'], tags: ['layer-2'] }),
-      claim('guess', 'The middle layer is the hard one.', { tags: ['layer-3'] }),
+      claim('mid', 'Nobody offers the middle layer.', {
+        sourceIds: ['$src'],
+        assumption: 'A',
+        tags: ['layer-2'],
+      }),
+      claim('guess', 'The middle layer is the hard one.', { assumption: 'A', tags: ['layer-3'] }),
     ],
   });
   return { store, projectId: created.p!, ids: created };

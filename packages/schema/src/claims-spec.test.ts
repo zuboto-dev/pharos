@@ -67,6 +67,21 @@ describe('claim schema from the slice spec', () => {
     expect(ClaimData.safeParse({ ...validClaim, checkedOn: '2026-02-30' }).success).toBe(false);
     expect(ClaimData.safeParse({ ...validClaim, uncheckedFact: true }).success).toBe(false);
   });
+
+  it('keeps quote, quoteSourceId and assumption optional and short', () => {
+    const full = {
+      ...validClaim,
+      quote: 'q'.repeat(300),
+      quoteSourceId: 'art_source',
+      assumption: 'a'.repeat(200),
+    };
+    expect(ClaimData.safeParse(full).success).toBe(true);
+    expect(ClaimData.safeParse({ ...full, quote: 'q'.repeat(301) }).success).toBe(false);
+    expect(ClaimData.safeParse({ ...full, assumption: 'a'.repeat(201) }).success).toBe(false);
+    expect(ClaimData.safeParse({ ...full, quote: '' }).success).toBe(false);
+    expect(ClaimData.safeParse({ ...full, assumption: '' }).success).toBe(false);
+    expect(ENTITIES.claim.refs.quoteSourceId).toEqual({ type: 'artifact', onDelete: 'unset' });
+  });
 });
 
 describe('certainty queries with owner-renamed options', () => {

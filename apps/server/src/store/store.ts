@@ -119,16 +119,31 @@ function describe(type: EntityType, id: string, data?: Data | null): string {
   return label ? `${type} ${id} ("${label}")` : `${type} ${id}`;
 }
 
-/** Warns about a claim that rests on no source (From-source and confirmed claims can't). */
-export function claimSourceWarning(
-  claim: Entity<'claim'>,
-  project: Entity<'project'> | null,
-): string | null {
-  const { sourceIds, certainty, statement } = claim.data;
-  if (sourceIds.length > 0 || meaningOf(project, 'claim.certainty', certainty) !== 'reading')
-    return null;
+/**
+ * Warnings for a claim that doesn't show the reader what it rests on: no source for "Our reading"
+ * (From-source and confirmed claims can't lack one), no quoted passage for "From source", no stated
+ * assumption for "Our reading", or a quote credited to a source the claim doesn't list.
+ */
+export function claimWarnings(claim: Entity<'claim'>, project: Entity<'project'> | null): string[] {
+  const { sourceIds, certainty, statement, quote, quoteSourceId, assumption } = claim.data;
+  const meaning = meaningOf(project, 'claim.certainty', certainty);
+  const label = findOption(project, 'claim.certainty', certainty)?.label ?? certainty;
   const text = statement.length > 60 ? `${statement.slice(0, 60)}…` : statement;
-  return `claim ${claim.id} "${text}" has no source: add sourceIds so the reader can check it`;
+  const name = `claim ${claim.id} "${text}"`;
+  const out: string[] = [];
+  if (meaning === 'reading' && sourceIds.length === 0)
+    out.push(`${name} has no source: add sourceIds so the reader can check it`);
+  if (meaning === 'verified' && !quote)
+    out.push(
+      `${name} is "${label}" but quotes nothing: add quote, the exact passage from the source that supports it`,
+    );
+  if (meaning === 'reading' && !assumption)
+    out.push(
+      `${name} is "${label}" but states no assumption: add assumption, what this reading takes for granted`,
+    );
+  if (quoteSourceId && !sourceIds.includes(quoteSourceId))
+    out.push(`${name} credits its quote to ${quoteSourceId}, which isn't in its sourceIds`);
+  return out;
 }
 
 /** YYYY-MM-DD on the server's clock, like "$today" in queries. */
@@ -966,18 +981,14 @@ class Transaction {
     return issues;
   }
 
-  /** Warnings for what this transaction wrote: claims that rest on no source. */
+  /** Warnings for what this transaction wrote: claims that don't show what they rest on. */
   warnings(): string[] {
     const out: string[] = [];
     for (const id of this.touched.keys()) {
       const claim = this.store.get(id);
       if (claim?.type !== 'claim') continue;
       const project = this.store.get((claim.data as Data).projectId as string);
-      const warning = claimSourceWarning(
-        claim as Entity<'claim'>,
-        project as Entity<'project'> | null,
-      );
-      if (warning) out.push(warning);
+      out.push(...claimWarnings(claim as Entity<'claim'>, project as Entity<'project'> | null));
     }
     return out;
   }

@@ -168,6 +168,8 @@ describe('claims over MCP and REST', () => {
     });
     expect(warnings).toEqual([
       `claim ${created.read} "Nobody offers layer 5" has no source: add sourceIds so the reader can check it`,
+      `claim ${created.read} "Nobody offers layer 5" is "Our reading" but states no assumption: add assumption, what this reading takes for granted`,
+      `claim ${created.sourced} "The report covers five layers" is "From source" but quotes nothing: add quote, the exact passage from the source that supports it`,
     ]);
 
     const confirm = {

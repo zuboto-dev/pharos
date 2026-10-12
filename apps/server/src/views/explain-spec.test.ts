@@ -38,18 +38,26 @@ beforeEach(() => {
           data: { projectId: '$p', title: 'Keep it', status: 'accepted' },
         },
         ...[
-          { ref: 'reading', statement: 'An interpretation.', certainty: 'reading', sourceIds: [] },
+          {
+            ref: 'reading',
+            statement: 'An interpretation.',
+            certainty: 'reading',
+            sourceIds: [],
+            assumption: 'Nothing changed since.',
+          },
           {
             ref: 'linked',
             statement: 'Linked interpretation.',
             certainty: 'reading',
             sourceIds: ['$source'],
+            assumption: 'The source is current.',
           },
           {
             ref: 'verified',
             statement: 'A sourced fact.',
             certainty: 'verified',
             sourceIds: ['$source'],
+            quote: 'The fact, in the words of the source.',
           },
           {
             ref: 'confirmed',
@@ -58,7 +66,13 @@ beforeEach(() => {
             confirmedById: '$decision',
             sourceIds: [],
           },
-          { ref: 'long', statement: 'x'.repeat(80), certainty: 'reading', sourceIds: [] },
+          {
+            ref: 'long',
+            statement: 'x'.repeat(80),
+            certainty: 'reading',
+            sourceIds: [],
+            assumption: 'Long statements stay readable.',
+          },
         ].map(({ ref, ...data }) => ({
           op: 'create' as const,
           type: 'claim' as const,
@@ -248,7 +262,12 @@ describe('slice 1 §5: finding warnings', () => {
           op: 'create',
           type: 'claim',
           ref: 'new',
-          data: { projectId: ids.p!, statement: 'New interpretation.', checkedOn: '2026-01-01' },
+          data: {
+            projectId: ids.p!,
+            statement: 'New interpretation.',
+            checkedOn: '2026-01-01',
+            assumption: 'It still holds.',
+          },
         },
       ],
     });

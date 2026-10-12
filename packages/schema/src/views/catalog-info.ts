@@ -269,7 +269,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   ClaimCard: {
     category: 'explain',
-    use: 'One stored finding (a `claim`) with its certainty mark ("Our reading", "From source", "Confirmed by you"), checked date and source link. Start a knowledge view with one at `size: "headline"`, full width: its statement is the point of the page. Use `size: "card"` in a row for takeaways. Write the words in the claim, never in the view.',
+    use: 'One stored finding (a `claim`) with its certainty mark ("Our reading", "From source", "Confirmed by you"), checked date and source link. After the StartHere opening, use `size: "headline"`, full width, for the main finding. Use `size: "card"` in a row for takeaways. Write the words in the claim, never in the view.',
     minColumns: 3,
     suggestedColumns: 6,
     example: {

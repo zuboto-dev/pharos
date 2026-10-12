@@ -1,8 +1,8 @@
 import type { Entity, ProjectDataset, ViewNode } from '@pharos/schema';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import dataset from './__fixtures__/dataset.json';
-import { ViewDataProvider } from './context';
+import { ViewDataProvider, type ViewActions } from './context';
 import { ViewRenderer } from './renderer';
 import { firstUses, termMatcher } from './terms';
 
@@ -111,9 +111,9 @@ const terms = [term('term_recipe', 'recipe', ['recipes'], 'art_report'), term('t
 
 const data: ProjectDataset = { ...base, artifacts, claims, terms };
 
-function renderSpec(spec: ViewNode, d: ProjectDataset = data) {
+function renderSpec(spec: ViewNode, d: ProjectDataset = data, actions?: ViewActions) {
   return render(
-    <ViewDataProvider data={d} version={1}>
+    <ViewDataProvider data={d} version={1} actions={actions}>
       <ViewRenderer spec={spec} />
     </ViewDataProvider>,
   );
@@ -199,6 +199,83 @@ describe('Layers', () => {
     renderSpec(stack);
     // Pharos (one source) and Kit's two claims each carry their own mark.
     expect(screen.getAllByRole('button', { name: /From source/ })).toHaveLength(3);
+  });
+
+  it('opens the quote and assumption of each line inside a layer', () => {
+    const quoted = {
+      ...data,
+      claims: [
+        ...claims.filter((c) => !c.id.startsWith('clm_step_')),
+        ...['a', 'b'].map((k, i) =>
+          claim(`clm_step_${k}`, {
+            statement: `Step ${k}`,
+            certainty: 'verified',
+            checkedOn: '2026-06-10',
+            sourceIds: ['art_report'],
+            tags: [`step-${k}`],
+            order: i,
+            ...(k === 'a' ? { quote: 'Step a is the first.' } : { assumption: 'B follows A.' }),
+          }),
+        ),
+      ],
+    } as ProjectDataset;
+    // Stack: the line without an "about" carries its own toggle.
+    renderSpec(
+      {
+        component: 'Layers',
+        open: 'a',
+        layers: [{ key: 'a', title: 'A', items: { where: { tags: 'step-a' } } }],
+      },
+      quoted,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Quote' }));
+    expect(screen.getByText(/Step a is the first/).tagName).toBe('BLOCKQUOTE');
+    cleanup();
+
+    // Row with one shared mark: each line still opens its own quote or assumption.
+    renderSpec(
+      {
+        component: 'Layers',
+        orientation: 'row',
+        layers: ['a', 'b'].map((k) => ({
+          key: k,
+          title: `Step ${k} title`,
+          items: { where: { tags: `step-${k}` } },
+        })),
+      },
+      quoted,
+    );
+    expect(screen.getAllByRole('button', { name: /From source/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Assumption' }));
+    expect(screen.getByText('Assumes:').parentElement!.textContent).toBe('Assumes: B follows A.');
+    expect(screen.getByRole('button', { name: 'Quote' })).toBeTruthy();
+  });
+
+  it("shows a layer's status claim first, in a row as in a stack", () => {
+    const withStatus = {
+      ...data,
+      claims: [
+        ...claims,
+        claim('clm_status', { statement: 'Two of three parts done.', tags: ['layer-3'], order: 9 }),
+      ],
+    } as ProjectDataset;
+    const layer = {
+      key: '3',
+      title: 'What the reader sees',
+      pill: { label: 'In progress', tone: 'watch' as const, claim: 'clm_status' },
+      items: { where: { tags: 'layer-3' } },
+    };
+    for (const orientation of ['row', 'stack'] as const) {
+      renderSpec({ component: 'Layers', orientation, open: '3', layers: [layer] }, withStatus);
+      const text = document.body.textContent!;
+      expect(text.indexOf('Two of three parts done.')).toBeGreaterThan(-1);
+      expect(text.indexOf('Two of three parts done.')).toBeLessThan(
+        text.indexOf('Nobody decides what to show.'),
+      );
+      // Shown once, not again among the items.
+      expect(screen.getAllByText('Two of three parts done.')).toHaveLength(1);
+      cleanup();
+    }
   });
 });
 
@@ -298,6 +375,51 @@ describe('ClaimCard', () => {
     // Nothing to open: no toggle.
     renderSpec({ component: 'ClaimCard', claim: 'clm_bare' }, withBasis);
     expect(screen.queryByRole('button', { name: /Quote|Assumption/ })).toBeNull();
+  });
+
+  it('opens a local source with its path and passage instead of "(no link)"', () => {
+    const local = {
+      ...data,
+      claims: [
+        claim('clm_local', {
+          certainty: 'verified',
+          sourceIds: ['art_local'],
+          quote: 'Every answer cites its file.',
+        }),
+        claim('clm_mixed', { sourceIds: ['art_report', 'art_local'] }),
+      ],
+    } as ProjectDataset;
+    const open = vi.fn();
+    renderSpec({ component: 'ClaimCard', claim: 'clm_local' }, local, {
+      apply: async () => ({ ok: false }),
+      open,
+    });
+    expect(screen.queryByRole('link')).toBeNull();
+    const button = screen.getByRole('button', { name: 'Source' });
+    fireEvent.click(button);
+    const popover = screen.getByRole('dialog');
+    expect(popover.textContent).not.toContain('(no link)');
+    expect(within(popover).getByText('docs/notes.md').tagName).toBe('CODE');
+    expect(within(popover).getByText(/Every answer cites its file/).tagName).toBe('BLOCKQUOTE');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Notes' }));
+    expect(open).toHaveBeenCalledWith({ entity: 'art_local' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    // The quote toggle names the local source too, and opens it.
+    fireEvent.click(screen.getByRole('button', { name: 'Quote' }));
+    const panel = document.getElementById(
+      screen.getByRole('button', { name: 'Quote' }).getAttribute('aria-controls')!,
+    )!;
+    fireEvent.click(within(panel).getByRole('button', { name: 'Notes' }));
+    expect(open).toHaveBeenCalledTimes(2);
+    cleanup();
+
+    // Local sources count with web ones.
+    renderSpec({ component: 'ClaimCard', claim: 'clm_mixed' }, local);
+    fireEvent.click(screen.getByRole('button', { name: /Sources \(2\)/ }));
+    const list = screen.getByRole('dialog');
+    expect(within(list).getByRole('link', { name: /The report/ })).toBeTruthy();
+    expect(within(list).getByRole('button', { name: 'Notes' })).toBeTruthy();
   });
 
   it('says so when the claim is missing', () => {

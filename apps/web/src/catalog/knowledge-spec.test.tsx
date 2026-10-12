@@ -335,7 +335,7 @@ describe('Layers from the slice-1 contract', () => {
     expect(screen.getByRole('note').textContent).toContain(warning.data.statement);
   });
 
-  it('links the first http(s) source even when an earlier source has no web URI', () => {
+  it('counts a local source with web ones and links the web one from the list', () => {
     const local = artifact('art_local_first', 'Local notes', 'notes/research.md');
     const web = artifact('art_web_second', 'Web source', 'https://example.test/source');
     const finding = claim('clm_http_source', {
@@ -346,8 +346,11 @@ describe('Layers from the slice-1 contract', () => {
       dataWith({ artifacts: [local, web], claims: [finding] }),
     );
 
-    const link = screen.getByRole('link', { name: /^Source/ });
+    fireEvent.click(screen.getByRole('button', { name: /Sources \(2\)/ }));
+    const list = screen.getByRole('dialog');
+    const link = within(list).getByRole('link', { name: /Web source/ });
     expect(link.getAttribute('href')).toBe('https://example.test/source');
+    expect(within(list).getByRole('button', { name: 'Local notes' })).toBeTruthy();
   });
 
   it('explains a term on first use and leaves linked and code text unmarked', () => {

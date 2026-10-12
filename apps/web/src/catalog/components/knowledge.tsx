@@ -1,6 +1,6 @@
 import { runQuery, type Entity, type EntityType, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { ChevronDown, ExternalLink, TriangleAlert } from 'lucide-react';
+import { ChevronDown, ExternalLink, FileText, TriangleAlert } from 'lucide-react';
 import { useId, useState, type CSSProperties } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
@@ -81,6 +81,41 @@ function findClaim(data: ViewData, id: string): Claim | undefined {
   return runQuery(data, 'claim', { where: { id } })[0];
 }
 
+/** The claim's sources that exist, in order. */
+function sourcesOf(byId: ViewData['entityById'], claim: Claim): Artifact[] {
+  return claim.data.sourceIds
+    .map((id) => entityOf(byId, id, 'artifact'))
+    .filter((s): s is Artifact => !!s);
+}
+
+/** The source the claim's quote comes from: `quoteSourceId`, else its first source. */
+function quoteSourceOf(byId: ViewData['entityById'], claim: Claim): Artifact | undefined {
+  return entityOf(byId, claim.data.quoteSourceId, 'artifact') ?? sourcesOf(byId, claim)[0];
+}
+
+/**
+ * A source's title: a link that opens in a new tab for a web address, otherwise a button that
+ * opens the artifact in the drawer (a local file can't be opened from the browser).
+ */
+function SourceTitle({ source, onOpen }: { source: Artifact; onOpen?: () => void }) {
+  const { actions } = useViewData();
+  if (isHttp(source.data.uri)) return <Uri uri={source.data.uri}>{source.data.title}</Uri>;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen?.();
+        actions.open({ entity: source.id });
+      }}
+      className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+    >
+      <FileText className="size-3 shrink-0" aria-hidden />
+      <span className="truncate">{source.data.title}</span>
+    </button>
+  );
+}
+
 /** "Oct 11", with the year when it isn't this year. */
 function shortDate(date: string): string {
   return formatDate(date, date.slice(0, 4) === localToday().slice(0, 4));
@@ -89,16 +124,20 @@ function shortDate(date: string): string {
 // ------------------------------------------------------------------ certainty mark
 
 /**
- * "◐ Our reading, Oct 11" and a source link. Tapping the mark explains it: what the word means,
- * who said it, and every source.
+ * "◐ Our reading, Oct 11" and its source: a link for one web source, otherwise a "Source" or
+ * "Sources (n)" button. Tapping the mark or that button explains it: what the word means, who
+ * said it, and every source, with a local file's path and the quoted passage under its source.
  */
 export function CertaintyMark({
   claim,
   sourceLabel = 'short',
+  passage = true,
 }: {
   claim: Claim;
   /** short: "Source ↗"; title: the source's title, for a mark shared by a whole block. */
   sourceLabel?: 'short' | 'title';
+  /** Show the quoted passage under its source; off for a mark that stands for several claims. */
+  passage?: boolean;
 }) {
   const { entityById } = useViewData();
   const options = useOptions();
@@ -110,10 +149,11 @@ export function CertaintyMark({
     meaning === 'confirmed'
       ? (decision?.data.decisionDate ?? claim.data.checkedOn)
       : claim.data.checkedOn;
-  const sources = claim.data.sourceIds
-    .map((id) => entityOf(entityById, id, 'artifact'))
-    .filter((s): s is Artifact => !!s);
-  const linked = sources.filter((s) => isHttp(s.data.uri));
+  const sources = sourcesOf(entityById, claim);
+  const [only] = sources;
+  // A single web source is a plain link; a local one, or several, open the list with the passage.
+  const singleLink = sources.length === 1 && isHttp(only!.data.uri) ? only : undefined;
+  const quoteSource = passage && claim.data.quote ? quoteSourceOf(entityById, claim) : undefined;
   const author = entityOf(entityById, claim.data.authorId, 'assignee');
   const glyph = GLYPHS[meaning] ?? '○';
   return (
@@ -131,23 +171,32 @@ export function CertaintyMark({
           {option.label}, {shortDate(date)}
         </span>
       </button>
-      {linked.length === 1 && (
-        <>
-          {sourceLabel === 'title' && <span aria-hidden>·</span>}
-          <Uri uri={linked[0]!.data.uri!} title={linked[0]!.data.title}>
-            {sourceLabel === 'title' ? linked[0]!.data.title : 'Source'}
-          </Uri>
-        </>
-      )}
-      {linked.length > 1 && (
-        <button
-          type="button"
-          {...trigger}
-          className="inline-flex items-center gap-1 rounded-sm text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
-        >
-          Sources ({linked.length})
-          <ExternalLink className="size-3" aria-hidden />
-        </button>
+      {sources.length > 0 && sourceLabel === 'title' && <span aria-hidden>·</span>}
+      {singleLink ? (
+        <Uri uri={singleLink.data.uri!} title={singleLink.data.title}>
+          {sourceLabel === 'title' ? singleLink.data.title : 'Source'}
+        </Uri>
+      ) : (
+        sources.length > 0 && (
+          <button
+            type="button"
+            {...trigger}
+            className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+          >
+            <span className="truncate">
+              {sources.length > 1
+                ? `Sources (${sources.length})`
+                : sourceLabel === 'title'
+                  ? only!.data.title
+                  : 'Source'}
+            </span>
+            {sources.every((s) => isHttp(s.data.uri)) ? (
+              <ExternalLink className="size-3 shrink-0" aria-hidden />
+            ) : (
+              <FileText className="size-3 shrink-0" aria-hidden />
+            )}
+          </button>
+        )
       )}
       {anchor && (
         <Popover anchor={anchor} label={option.label} onClose={close}>
@@ -167,15 +216,21 @@ export function CertaintyMark({
             Checked {formatDate(claim.data.checkedOn)}
           </p>
           {sources.length > 0 && (
-            <ul className="space-y-1 border-t border-neutral-100 pt-2 dark:border-neutral-800">
+            <ul className="space-y-2 border-t border-neutral-100 pt-2 dark:border-neutral-800">
               {sources.map((s) => (
-                <li key={s.id} className="flex min-w-0">
-                  {isHttp(s.data.uri) ? (
-                    <Uri uri={s.data.uri}>{s.data.title}</Uri>
-                  ) : (
-                    <span className="text-xs">
-                      {s.data.title} <span className="text-neutral-400">(no link)</span>
-                    </span>
+                <li key={s.id} className="min-w-0 space-y-1">
+                  <div className="flex min-w-0">
+                    <SourceTitle source={s} onOpen={() => close(false)} />
+                  </div>
+                  {s.data.uri && !isHttp(s.data.uri) && (
+                    <code className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
+                      {s.data.uri}
+                    </code>
+                  )}
+                  {s.id === quoteSource?.id && (
+                    <blockquote className="border-l-2 border-neutral-300 pl-2 text-xs break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
+                      “{claim.data.quote}”
+                    </blockquote>
                   )}
                 </li>
               ))}
@@ -198,11 +253,9 @@ function ClaimBasis({ claim }: { claim: Claim }) {
   const { entityById } = useViewData();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const { quote, quoteSourceId, assumption, sourceIds } = claim.data;
+  const { quote, assumption } = claim.data;
   if (!quote && !assumption) return null;
-  const source =
-    entityOf(entityById, quoteSourceId, 'artifact') ??
-    sourceIds.map((id) => entityOf(entityById, id, 'artifact')).find((s) => !!s);
+  const source = quoteSourceOf(entityById, claim);
   const label = quote && assumption ? 'Quote and assumption' : quote ? 'Quote' : 'Assumption';
   return (
     <>
@@ -229,11 +282,7 @@ function ClaimBasis({ claim }: { claim: Claim }) {
               {source && (
                 <figcaption className="flex min-w-0 items-baseline gap-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
                   <span aria-hidden>—</span>
-                  {isHttp(source.data.uri) ? (
-                    <Uri uri={source.data.uri}>{source.data.title}</Uri>
-                  ) : (
-                    <span className="truncate">{source.data.title}</span>
-                  )}
+                  <SourceTitle source={source} />
                 </figcaption>
               )}
             </figure>
@@ -404,6 +453,14 @@ function ClaimLine({
   const detail = claim.data.detail && (
     <TermText text={claim.data.detail} ranges={shared.terms.get(`${prefix}:${claim.id}:d`)} />
   );
+  // The quote and assumption open per line, even when the block shares one mark.
+  const hasBasis = !!(claim.data.quote || claim.data.assumption);
+  const evidence = (mark || hasBasis) && (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      {mark && <CertaintyMark claim={claim} />}
+      <ClaimBasis claim={claim} />
+    </div>
+  );
   if (claim.data.tags.includes(shared.warnTag)) {
     return (
       <div
@@ -417,7 +474,7 @@ function ClaimLine({
             {statement}
           </p>
           {detail && <p className="text-xs">{detail}</p>}
-          {mark && <CertaintyMark claim={claim} />}
+          {evidence}
         </div>
       </div>
     );
@@ -433,7 +490,7 @@ function ClaimLine({
         {statement}
       </p>
       {detail && <p className="text-sm text-neutral-500 dark:text-neutral-400">{detail}</p>}
-      {mark && <CertaintyMark claim={claim} />}
+      {evidence}
     </div>
   );
 }
@@ -623,8 +680,8 @@ function Row({
     models.flatMap((m): [string, string][] => [
       [`${m.layer.key}:title`, m.layer.title],
       [`${m.layer.key}:hint`, m.layer.hint ?? ''],
-      ...m.claims.flatMap((c) => claimTexts(m.layer.key, c)),
       ...(m.pill ? claimTexts(m.layer.key, m.pill) : []),
+      ...m.claims.flatMap((c) => claimTexts(m.layer.key, c)),
     ]),
     matcher,
   );
@@ -667,11 +724,12 @@ function Row({
                   <TermText text={layer.hint} ranges={terms.get(`${layer.key}:hint`)} />
                 </p>
               )}
+              {/* The claim behind the pill comes first, as in the stack: it's the part's status. */}
+              {m.pill && <ClaimLine claim={m.pill} prefix={layer.key} shared={shared} mark />}
               {m.claims.map((c) => (
                 <ClaimLine key={c.id} claim={c} prefix={layer.key} shared={shared} strong />
               ))}
               {!m.claims.length && !m.pill && <NothingYet />}
-              {m.pill && <ClaimLine claim={m.pill} prefix={layer.key} shared={shared} mark />}
             </section>
           );
         })}
@@ -724,7 +782,7 @@ export function Layers({ node }: { node: NodeOf<'Layers'> }) {
       <Body node={node} models={models} hideMarks={!!shared} />
       {shared && (
         <p>
-          <CertaintyMark claim={shared} sourceLabel="title" />
+          <CertaintyMark claim={shared} sourceLabel="title" passage={false} />
         </p>
       )}
     </div>

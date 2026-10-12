@@ -489,3 +489,266 @@ describe('terms', () => {
     );
   });
 });
+
+const task = (id: string, stageId: string, title: string, status: string, order = 0) =>
+  ({
+    id,
+    type: 'task',
+    data: { projectId: P, stageId, title, status, priority: 'medium', dependsOn: [], order },
+    ...meta,
+  }) as Entity<'task'>;
+
+// Step A: 1 done, 2 open, 1 cancelled (left out) → "1 of 3". Step B: 6 tasks, all done.
+const tasks = [
+  task('task_a1', 'stg_a', 'W3.1 · Agree the test', 'done', 0),
+  task('task_a2', 'stg_a', 'W3.8 · Measure the baseline', 'todo', 1),
+  task('task_a3', 'stg_a', 'Write it up', 'in_progress', 2),
+  task('task_a4', 'stg_a', 'W3.9 · Dropped idea', 'cancelled', 3),
+  ...[1, 2, 3, 4, 5, 6].map((n) => task(`task_b${n}`, 'stg_b', `B ${n}`, 'done', n)),
+];
+
+const flow: ViewNode = {
+  component: 'Layers',
+  orientation: 'flow',
+  layers: [
+    { key: 'q', title: 'Your question about a recipe' },
+    {
+      key: 'a',
+      title: 'AI arranges blocks',
+      hint: 'It picks from a closed catalog',
+      pill: { label: 'Pharos has its own', tone: 'own' },
+      items: { where: { tags: 'layer-2' } },
+      progress: { stageId: 'stg_a' },
+    },
+    {
+      key: 'b',
+      title: 'Pharos draws the screen',
+      items: { where: { tags: 'layer-3' } },
+      progress: { stageId: 'stg_b' },
+    },
+  ],
+};
+
+const withTasks: ProjectDataset = { ...data, tasks };
+
+describe('Layers flow', () => {
+  it('draws boxes joined by arrows; a label-only step holds no claims and is no button', () => {
+    renderSpec(flow, withTasks);
+    const steps = screen.getAllByRole('listitem');
+    expect(steps).toHaveLength(3);
+    expect(steps[0]!.textContent).toBe('Your question about a recipe');
+    expect(within(steps[0]!).queryByRole('button')).toBeNull();
+    // Arrows sit between the boxes, hidden from assistive tech.
+    expect(steps[0]!.querySelector('svg')).toBeNull();
+    expect(steps[1]!.querySelector('[aria-hidden] svg')).toBeTruthy();
+    // Nothing is open at first: no claims anywhere.
+    expect(screen.queryByText('Pharos draws its own blocks.')).toBeNull();
+    expect(screen.queryByText('Nobody decides what to show.')).toBeNull();
+  });
+
+  it('opens the tapped box below the row, one at a time', () => {
+    renderSpec(flow, withTasks);
+    const a = screen.getByRole('button', { name: /^AI arranges blocks/ });
+    const b = screen.getByRole('button', { name: /^Pharos draws the screen/ });
+    expect(a.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(a);
+    expect(a.getAttribute('aria-expanded')).toBe('true');
+    const panel = document.getElementById(a.getAttribute('aria-controls')!)!;
+    expect(panel.hidden).toBe(false);
+    expect(within(panel).getByText('Pharos draws its own blocks.')).toBeTruthy();
+    expect(within(panel).getByText('It picks from a closed catalog')).toBeTruthy();
+    fireEvent.click(b);
+    expect(a.getAttribute('aria-expanded')).toBe('false');
+    expect(within(panel).getByText('Nobody decides what to show.')).toBeTruthy();
+    expect(within(panel).queryByText('Pharos draws its own blocks.')).toBeNull();
+    fireEvent.click(b);
+    expect(panel.hidden).toBe(true);
+  });
+
+  it('moves between boxes with arrow keys, Home and End, skipping label-only steps', () => {
+    renderSpec(flow, withTasks);
+    const a = screen.getByRole('button', { name: /^AI arranges blocks/ });
+    const b = screen.getByRole('button', { name: /^Pharos draws the screen/ });
+    expect(a.tagName).toBe('BUTTON'); // Enter and Space work natively
+    a.focus();
+    fireEvent.keyDown(a, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(b);
+    fireEvent.keyDown(b, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(b);
+    fireEvent.keyDown(b, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(a);
+    fireEvent.keyDown(a, { key: 'ArrowLeft' });
+    expect(document.activeElement).toBe(a);
+    fireEvent.keyDown(a, { key: 'End' });
+    expect(document.activeElement).toBe(b);
+    fireEvent.keyDown(b, { key: 'Home' });
+    expect(document.activeElement).toBe(a);
+  });
+
+  it('leaves terms off unless the view asks for them', () => {
+    renderSpec(flow, withTasks);
+    expect(screen.queryByRole('button', { name: 'recipe' })).toBeNull();
+    cleanup();
+    renderSpec({ ...flow, terms: true } as ViewNode, withTasks);
+    expect(screen.getByRole('button', { name: 'recipe' })).toBeTruthy();
+  });
+
+  it('opens at the step named by `open`', () => {
+    renderSpec({ ...flow, open: 'b' } as ViewNode, withTasks);
+    expect(
+      screen
+        .getByRole('button', { name: /^Pharos draws the screen/ })
+        .getAttribute('aria-expanded'),
+    ).toBe('true');
+    expect(screen.getByText('Nobody decides what to show.')).toBeTruthy();
+  });
+});
+
+describe('Layers progress', () => {
+  it('counts done of the tasks not cancelled, on one scale for every step', () => {
+    renderSpec(flow, withTasks);
+    const a = screen.getByRole('button', { name: /^AI arranges blocks/ });
+    expect(a.getAttribute('aria-labelledby')).toMatch(/progress/);
+    const steps = screen.getAllByRole('listitem');
+    expect(steps[1]!.textContent).toContain('1 of 3 tasks done');
+    expect(steps[2]!.textContent).toContain('6 of 6 tasks done');
+    // Step A's track is half the length of step B's (3 against 6 tasks); its fill is a third.
+    const track = (step: HTMLElement) =>
+      step.querySelector<HTMLElement>('[aria-hidden] > span[style]')!;
+    expect(track(steps[1]!).style.width).toBe('50%');
+    expect(track(steps[2]!).style.width).toBe('100%');
+    expect((track(steps[1]!).firstElementChild as HTMLElement).style.width).toMatch(/^33\.3/);
+  });
+
+  it('counts by meaning, so a custom status named otherwise still counts', () => {
+    const custom = {
+      ...withTasks,
+      project: {
+        ...data.project,
+        data: {
+          ...data.project.data,
+          options: {
+            'task.status': [
+              { value: 'open', label: 'Open', meaning: 'todo' },
+              { value: 'shipped', label: 'Shipped', meaning: 'done' },
+              { value: 'dropped', label: 'Dropped', meaning: 'cancelled' },
+            ],
+          },
+        },
+      },
+      tasks: [
+        task('task_x1', 'stg_a', 'X 1', 'shipped'),
+        task('task_x2', 'stg_a', 'X 2', 'open'),
+        task('task_x3', 'stg_a', 'X 3', 'dropped'),
+      ],
+    } as ProjectDataset;
+    renderSpec(flow, custom);
+    expect(screen.getAllByRole('listitem')[1]!.textContent).toContain('1 of 2 tasks done');
+    fireEvent.click(screen.getByRole('button', { name: /^AI arranges blocks/ }));
+    expect(screen.getByRole('button', { name: 'X 2' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'X 3' })).toBeNull();
+  });
+
+  it("lists a step's open tasks without codes, each opening the task drawer", () => {
+    const open = vi.fn();
+    renderSpec(flow, withTasks, { apply: async () => ({ ok: false }), open });
+    fireEvent.click(screen.getByRole('button', { name: /^AI arranges blocks/ }));
+    const panel = screen.getByRole('region');
+    const items = within(panel).getAllByRole('button', { name: /Measure|Write/ });
+    expect(items.map((b) => b.textContent)).toEqual(['Measure the baseline', 'Write it up']);
+    expect(panel.textContent).not.toContain('W3.8');
+    expect(panel.textContent).not.toContain('Agree the test');
+    expect(panel.textContent).not.toContain('Dropped idea');
+    fireEvent.click(items[0]!);
+    expect(open).toHaveBeenCalledWith({ entity: 'task_a2' });
+    // Every task done: says so instead of an empty list.
+    fireEvent.click(screen.getByRole('button', { name: /^Pharos draws the screen/ }));
+    expect(within(panel).getByText('All done')).toBeTruthy();
+  });
+
+  it('opens the open tasks from "x of y" in a row', () => {
+    renderSpec({ ...flow, orientation: 'row' } as ViewNode, withTasks);
+    expect(screen.queryByRole('button', { name: 'Measure the baseline' })).toBeNull();
+    const count = screen.getByRole('button', { name: '1 of 3 tasks done' });
+    expect(count.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(count);
+    expect(count.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(count.getAttribute('aria-controls')!)!.textContent).toContain(
+      'Measure the baseline',
+    );
+    // The label-only step shows no claims and no "Nothing here yet" for the progress steps.
+    expect(screen.getAllByText('Nothing here yet')).toHaveLength(1);
+  });
+
+  it('shows progress in a stack header and the open tasks in the open layer', () => {
+    renderSpec({ ...flow, orientation: 'stack', open: 'a' } as ViewNode, withTasks);
+    const a = screen.getByRole('button', { name: /^Layer a AI arranges blocks/ });
+    expect(a.getAttribute('aria-labelledby')).toMatch(/progress/);
+    expect(screen.getByRole('button', { name: 'Measure the baseline' })).toBeTruthy();
+    // A label-only layer is empty, not a list of every claim.
+    fireEvent.click(screen.getByRole('button', { name: /^Layer q/ }));
+    expect(screen.getByText('Nothing here yet')).toBeTruthy();
+    expect(screen.queryByText('Five layers, and the one you need is missing.')).toBeNull();
+  });
+
+  it('says "No tasks yet" for a step whose filter matches none', () => {
+    renderSpec(
+      {
+        component: 'Layers',
+        orientation: 'flow',
+        layers: [
+          { key: '1', title: 'One', progress: { stageId: 'stg_none' } },
+          { key: '2', title: 'Two', progress: { stageId: 'stg_a' } },
+        ],
+      },
+      withTasks,
+    );
+    expect(screen.getAllByRole('listitem')[0]!.textContent).toContain('No tasks yet');
+  });
+});
+
+describe('evidence in the mark', () => {
+  const evidence = {
+    ...data,
+    claims: [
+      claim('clm_none', { statement: 'Unsourced.' }),
+      claim('clm_weak', {
+        statement: 'Thin.',
+        certainty: 'verified',
+        sourceIds: ['art_report'],
+        weakBecause: 'one-source',
+      }),
+      claim('clm_where', {
+        statement: 'Located.',
+        certainty: 'verified',
+        sourceIds: ['art_local'],
+        quote: 'Every answer cites its file.',
+        locator: '§2 Metrics',
+      }),
+    ],
+  } as ProjectDataset;
+
+  it('says "no source yet" in grey when a claim has none', () => {
+    renderSpec({ component: 'ClaimCard', claim: 'clm_none' }, evidence);
+    expect(screen.getByText('no source yet').className).toMatch(/neutral-400/);
+    cleanup();
+    renderSpec({ component: 'ClaimCard', claim: 'clm_weak' }, evidence);
+    expect(screen.queryByText('no source yet')).toBeNull();
+  });
+
+  it('names why the evidence is weak after the mark', () => {
+    renderSpec({ component: 'ClaimCard', claim: 'clm_weak' }, evidence);
+    expect(screen.getByText('one source')).toBeTruthy();
+  });
+
+  it('shows the locator with the quote, in the card and in the source list (F2)', () => {
+    renderSpec({ component: 'ClaimCard', claim: 'clm_where' }, evidence);
+    fireEvent.click(screen.getByRole('button', { name: 'Quote' }));
+    const panel = document.getElementById(
+      screen.getByRole('button', { name: 'Quote' }).getAttribute('aria-controls')!,
+    )!;
+    expect(panel.querySelector('figcaption')!.textContent).toBe('—Notes·§2 Metrics');
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    expect(within(screen.getByRole('dialog')).getByText('§2 Metrics')).toBeTruthy();
+  });
+});

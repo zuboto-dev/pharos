@@ -247,7 +247,8 @@ export async function run(options: Options) {
     };
     const dirtyFiles = git(['ls-files', '--modified', '--others', '--exclude-standard'])
       .split('\n')
-      .filter(Boolean);
+      // Nested repositories (e.g. agent worktrees) are listed as directories ending in "/".
+      .filter((path) => path && !path.endsWith('/'));
     const dirty = Object.fromEntries(
       dirtyFiles.map((path) => [
         path,

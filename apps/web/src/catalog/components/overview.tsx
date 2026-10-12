@@ -68,6 +68,37 @@ const STAT_TONES: Record<string, string> = {
   bad: 'text-rose-600 dark:text-rose-400',
 };
 
+/**
+ * A word-sized bar (block 6): how much of `total` `value` is. Decoration only; whoever draws it
+ * also shows the numbers as text, so it is hidden from screen readers.
+ */
+export function MiniBar({
+  value,
+  total,
+  className,
+}: {
+  value: number;
+  total: number;
+  className?: string;
+}) {
+  const share = total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
+  return (
+    <span
+      aria-hidden
+      data-mini-bar=""
+      className={clsx(
+        'inline-block h-1.5 overflow-hidden rounded-full bg-neutral-200 align-middle dark:bg-neutral-700',
+        className,
+      )}
+    >
+      <span
+        className="block h-full rounded-full bg-sky-500 dark:bg-sky-400"
+        style={{ width: `${share * 100}%` }}
+      />
+    </span>
+  );
+}
+
 export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
   const data = useViewData();
   return (
@@ -93,9 +124,16 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
             >
               {value}
               {total !== undefined && (
-                <span className="text-base font-normal text-neutral-400"> / {total}</span>
+                <span className="text-base font-normal text-neutral-400">
+                  <span aria-hidden> / </span>
+                  <span className="sr-only"> of </span>
+                  {total}
+                </span>
               )}
             </div>
+            {count !== undefined && total !== undefined && (
+              <MiniBar value={count} total={total} className="mt-2 w-full" />
+            )}
           </div>
         );
       })}

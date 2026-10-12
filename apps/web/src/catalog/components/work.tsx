@@ -1,4 +1,4 @@
-import { runQuery, type Entity, type NodeOf } from '@pharos/schema';
+import { runQuery, stripWorkCode, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
 import { Bot, GitBranch, Play, User } from 'lucide-react';
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
@@ -7,6 +7,7 @@ import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, TaskCheck, useGlance, useTaskActions } from '../interactive';
 import { EditOptionsButton, OptionBadge, OptionDot, useOptions } from '../options';
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
+import { firstUses, TermText, useTermMatcher } from '../terms';
 import { Badge, Empty } from '../ui';
 
 type Task = Entity<'task'>;
@@ -312,6 +313,9 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
   const create = useCreate();
   const options = useOptions();
   const tasks = runQuery(data, 'task', node.filter);
+  // F6: titles without their work codes when asked; terms in rows only when asked.
+  const titles = tasks.map((t) => (node.hideCodes ? stripWorkCode(t.data.title) : t.data.title));
+  const termRanges = firstUses(titles, useTermMatcher(node.terms ?? false));
   const addTask = (
     <QuickAdd
       label="Add task"
@@ -377,8 +381,12 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => (
-            <TaskRow key={task.id} task={task}>
+          {tasks.map((task, i) => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              title={<TermText text={titles[i]!} ranges={termRanges[i]} />}
+            >
               {columns.map((c) => (
                 <td key={c} className="px-3 py-2 text-neutral-600 dark:text-neutral-300">
                   {cell(task, c)}
@@ -393,7 +401,7 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
   );
 }
 
-function TaskRow({ task, children }: { task: Task; children: ReactNode }) {
+function TaskRow({ task, title, children }: { task: Task; title: ReactNode; children: ReactNode }) {
   const { actions } = useViewData();
   const meaning = useOptions().meaning('task.status', task.data.status);
   return (
@@ -413,7 +421,7 @@ function TaskRow({ task, children }: { task: Task; children: ReactNode }) {
               meaning === 'done' && 'text-neutral-400',
             )}
           >
-            {task.data.title}
+            {title}
           </span>
         </span>
       </td>

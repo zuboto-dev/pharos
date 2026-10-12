@@ -5,6 +5,7 @@ import {
   optionKeyOf,
   optionsFor,
   runQuery,
+  stripWorkCode,
   type Entity,
   type EntityType,
   type NodeOf,
@@ -13,12 +14,14 @@ import {
 } from '@pharos/schema';
 import clsx from 'clsx';
 import { useMemo, type ReactNode } from 'react';
+import type { Components } from 'react-markdown';
 import { formatDate, humanize } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
-import { useMarkdownTerms } from '../terms';
+import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
 import { DOT_TONES, Empty, Markdown, StatusBadge, Uri } from '../ui';
+import { MiniBar } from './overview';
 
 type Reader = ReturnType<typeof fieldReader>;
 
@@ -272,16 +275,21 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
   const data = useViewData();
   const read = useReader();
   const rows = runQuery(data, node.query.type, node.query);
+  // F6: labels without their work codes when asked; terms in rows only when asked.
+  const labels = rows.map((row) => (node.hideCodes ? stripWorkCode(labelOf(row)) : labelOf(row)));
+  const termRanges = firstUses(labels, useTermMatcher(node.terms ?? false));
   if (!rows.length) return <Empty>Nothing matches</Empty>;
   return (
     <ul className="-mx-2 space-y-0.5">
-      {rows.map((row) => (
+      {rows.map((row, i) => (
         <li key={row.id}>
           <Clickable
             id={row.id}
             className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{labelOf(row)}</span>
+            <span className="min-w-0 flex-1 truncate text-sm">
+              <TermText text={labels[i]!} ranges={termRanges[i]} />
+            </span>
             {node.secondary?.map((path) => {
               const { value, type, field } = read(row, path);
               return (
@@ -321,6 +329,12 @@ function projectValue(
   }
 }
 
+/**
+ * A `{bar}` value goes into the Markdown as a link to this fragment, e.g. `[2 of 9](#pharos-bar-2-9)`,
+ * which `TextBlock` draws as a word-sized bar beside its "2 of 9".
+ */
+const BAR_HREF = /^#pharos-bar-(\d+)-(\d+)$/;
+
 /** Fills ${name} placeholders from the node's values; unknown names stay visible so mistakes show. */
 export function fillTemplate(node: NodeOf<'Text'>, data: ViewData): string {
   return node.content.replace(/\$\{(\w+)\}/g, (match, name: string) => {
@@ -328,17 +342,44 @@ export function fillTemplate(node: NodeOf<'Text'>, data: ViewData): string {
     if (!v) return match;
     if ('count' in v) return String(count(data, v.count));
     if ('percent' in v) return `${percent(data, v.percent.query, v.percent.of)}%`;
-    // R4.2: "2/9" in text until the inline bar renders.
-    if ('bar' in v) return `${count(data, v.bar.query)}/${count(data, v.bar.of)}`;
+    if ('bar' in v) {
+      const [n, total] = [count(data, v.bar.query), count(data, v.bar.of)];
+      return `[${n} of ${total}](#pharos-bar-${n}-${total})`;
+    }
     return projectValue(data, v.project);
   });
 }
 
+/** "2 of 9" with a word-sized bar before it; the words are the bar's text equivalent. */
+function InlineBar({ value, total }: { value: number; total: number }) {
+  return (
+    <span data-inline-bar="" className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <MiniBar value={value} total={total} className="w-10 sm:w-12" />
+      <span className="tabular-nums">
+        {value} of {total}
+      </span>
+    </span>
+  );
+}
+
+const TEXT_COMPONENTS: Components = {
+  a: ({ href, title, children }) => {
+    const bar = href ? BAR_HREF.exec(href) : null;
+    if (bar) return <InlineBar value={Number(bar[1])} total={Number(bar[2])} />;
+    return (
+      <a href={href} title={title}>
+        {children}
+      </a>
+    );
+  },
+};
+
 export function TextBlock({ node }: { node: NodeOf<'Text'> }) {
   const data = useViewData();
   const terms = useMarkdownTerms(node.terms);
+  const components = useMemo(() => ({ ...terms.components, ...TEXT_COMPONENTS }), [terms]);
   return (
-    <Markdown className="text-base!" {...terms}>
+    <Markdown className="text-base!" remarkPlugins={terms.remarkPlugins} components={components}>
       {fillTemplate(node, data)}
     </Markdown>
   );

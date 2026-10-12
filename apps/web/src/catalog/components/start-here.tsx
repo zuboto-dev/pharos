@@ -1,4 +1,11 @@
-import { ENTITIES, evidenceId, runQuery, type Entity, type NodeOf } from '@pharos/schema';
+import {
+  ENTITIES,
+  evidenceId,
+  runQuery,
+  type Entity,
+  type EvidenceItem,
+  type NodeOf,
+} from '@pharos/schema';
 import clsx from 'clsx';
 import { ArrowDown } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -72,28 +79,45 @@ export function scrollToWidget(from: HTMLElement, id: string): boolean {
   return true;
 }
 
-/** What backs the headline: a link for an artifact with a web address, otherwise a button that opens the record. */
-function Evidence({ ids }: { ids: string[] }) {
+/**
+ * What backs the headline: a link for an artifact with a web address, otherwise a button that
+ * opens the record. An item's short `label` (F5) is shown instead of its title; the title stays as
+ * the tooltip and in the accessible name.
+ */
+function Evidence({ items }: { items: readonly EvidenceItem[] }) {
   const { entityById, actions } = useViewData();
-  const items = ids.map((id) => entityById.get(id)).filter((e): e is Entity => !!e);
-  if (!items.length) return null;
+  const shown = items.flatMap((item) => {
+    const entity = entityById.get(evidenceId(item));
+    if (!entity) return [];
+    const title = labelOf(entity);
+    const label = typeof item === 'string' ? undefined : item.label.trim() || undefined;
+    return [{ entity, title, label: label === title ? undefined : label }];
+  });
+  if (!shown.length) return null;
   return (
     <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
       <span>Evidence</span>
-      {items.map((e) => {
+      {shown.map(({ entity: e, title, label }) => {
         const uri = e.type === 'artifact' ? (e as Entity<'artifact'>).data.uri : undefined;
+        const text = (
+          <>
+            {label ?? title}
+            {label && <span className="sr-only"> ({title})</span>}
+          </>
+        );
         return isHttp(uri) ? (
-          <Uri key={e.id} uri={uri}>
-            {labelOf(e)}
+          <Uri key={e.id} uri={uri} title={label ? title : undefined}>
+            {text}
           </Uri>
         ) : (
           <button
             key={e.id}
             type="button"
+            title={label ? title : undefined}
             onClick={() => actions.open({ entity: e.id })}
             className="max-w-full truncate rounded-sm text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
           >
-            {labelOf(e)}
+            {text}
           </button>
         );
       })}
@@ -218,8 +242,7 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
           </p>
         )}
         {claim && <CertaintyMark claim={claim} />}
-        {/* R4.2: titles, not the short labels, until F5 renders them. */}
-        {node.evidence && <Evidence ids={node.evidence.map(evidenceId)} />}
+        {node.evidence && <Evidence items={node.evidence} />}
       </div>
       {node.yourPart && (
         <p

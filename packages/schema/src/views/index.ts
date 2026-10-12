@@ -6,3 +6,4 @@ export * from './run-query.js';
 export * from './progress.js';
 export * from './catalog-info.js';
 export * from './similar.js';
+export * from './text-tools.js';

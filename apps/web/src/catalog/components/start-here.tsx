@@ -1,4 +1,4 @@
-import { ENTITIES, runQuery, type Entity, type NodeOf } from '@pharos/schema';
+import { ENTITIES, evidenceId, runQuery, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
 import { ArrowDown } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -218,7 +218,8 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
           </p>
         )}
         {claim && <CertaintyMark claim={claim} />}
-        {node.evidence && <Evidence ids={node.evidence} />}
+        {/* R4.2: titles, not the short labels, until F5 renders them. */}
+        {node.evidence && <Evidence ids={node.evidence.map(evidenceId)} />}
       </div>
       {node.yourPart && (
         <p

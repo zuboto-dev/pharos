@@ -143,7 +143,23 @@ export function claimWarnings(claim: Entity<'claim'>, project: Entity<'project'>
     );
   if (quoteSourceId && !sourceIds.includes(quoteSourceId))
     out.push(`${name} credits its quote to ${quoteSourceId}, which isn't in its sourceIds`);
+  const { figure, weakBecause } = claim.data;
+  if (meaning === 'verified' && figure && quote && !quoteHasNumber(quote, figure.value))
+    out.push(
+      `${name} is "${label}" but its figure ${figure.value} isn't in its quote: quote the passage that gives the number, or correct the figure`,
+    );
+  if (weakBecause === 'one-source' && sourceIds.length !== 1)
+    out.push(
+      `${name} says its evidence is weak because of one source, but it has ${sourceIds.length}: fix sourceIds or weakBecause`,
+    );
   return out;
+}
+
+/** Whether a quote gives a number, written as 4800, 4,800, 4 800 or 82.8 (R4 figures). */
+export function quoteHasNumber(quote: string, value: number): boolean {
+  const plain = quote.replace(/(\d)[,\u00a0\u202f ](?=\d{3}(?!\d))/g, '$1');
+  const form = String(value).replace('.', '\\.');
+  return new RegExp(`(?<![\\d.])${form}(?!\\d|\\.\\d)`).test(plain);
 }
 
 /** YYYY-MM-DD on the server's clock, like "$today" in queries. */

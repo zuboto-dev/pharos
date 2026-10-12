@@ -168,6 +168,24 @@ export const RequestData = z.strictObject({
   answerViewId: Id.optional().describe('The answer view that answers it'),
 });
 
+/** A number a claim states, drawn as one bar in a FindingChart (R4). */
+export const ClaimFigure = z.strictObject({
+  value: z.number().describe('The number as the source gives it, e.g. 4800 or 82.8'),
+  unit: z.string().min(1).max(12).optional().describe('e.g. "tokens", "%", "ms"'),
+  label: z.string().min(1).max(24).describe('What the bar is, on the bar, e.g. "OpenUI"'),
+});
+export type ClaimFigure = z.infer<typeof ClaimFigure>;
+
+/** Named reasons the evidence behind a claim is weak (GRADE's downgrade reasons, R4). */
+export const WeakBecause = z.enum(['one-source', 'indirect', 'disagree']);
+export type WeakBecause = z.infer<typeof WeakBecause>;
+/** How each reason reads after the certainty mark. */
+export const WEAK_BECAUSE_LABELS: Record<WeakBecause, string> = {
+  'one-source': 'one source',
+  indirect: 'indirect',
+  disagree: 'sources disagree',
+};
+
 export const ClaimData = z.strictObject({
   projectId: Id,
   statement: Text.max(200).describe(
@@ -192,6 +210,20 @@ export const ClaimData = z.strictObject({
   assumption: Text.max(200)
     .optional()
     .describe('For "Our reading": the assumption it rests on, in one plain sentence'),
+  locator: z
+    .string()
+    .min(1)
+    .max(60)
+    .optional()
+    .describe(
+      'Where in the source the quote sits, e.g. "§7 Completion", "line 42", "commit deb7096"; shown with the quote',
+    ),
+  figure: ClaimFigure.optional().describe(
+    'The number this claim states, drawn as a bar in a FindingChart; for "From source" the value must appear in the quote',
+  ),
+  weakBecause: WeakBecause.optional().describe(
+    'Why the evidence is weak, shown after the mark: one-source, indirect (the source speaks about something close), or disagree (sources disagree)',
+  ),
   confirmedById: Id.optional().describe('For "Confirmed by you": the decision the owner accepted'),
   aboutId: Id.optional().describe(
     'The artifact it is about (a tool, Pharos); its title heads the card',

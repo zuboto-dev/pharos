@@ -328,6 +328,8 @@ export function fillTemplate(node: NodeOf<'Text'>, data: ViewData): string {
     if (!v) return match;
     if ('count' in v) return String(count(data, v.count));
     if ('percent' in v) return `${percent(data, v.percent.query, v.percent.of)}%`;
+    // R4.2: "2/9" in text until the inline bar renders.
+    if ('bar' in v) return `${count(data, v.bar.query)}/${count(data, v.bar.of)}`;
     return projectValue(data, v.project);
   });
 }

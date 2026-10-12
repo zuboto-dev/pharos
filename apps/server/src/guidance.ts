@@ -49,7 +49,8 @@ marked "checked"; task boards and other views without them are not checked.
   The reader needs to know why the work exists before what it produced.
 - **Headline** (checked): the outcome in one sentence with a verb, under 160 characters. Back it:
   on a found page set \`claim\` (its statement, mark and sources show); otherwise list \`evidence\`
-  ids (artifacts such as test results and links, tasks, decisions).
+  ids (artifacts such as test results and links, tasks, decisions), or \`{id, label}\` with a
+  short label (24 characters or fewer) instead of renaming the artifact.
 - **The reader's part, once** (checked): \`yourPart\`, one line under 120 characters, even when it
   is "Nothing now." ("Nothing now. When G1 resumes: approve the 3 test cases and targets."). No
   other widget says what the reader has to do: no "Your part" card, no "nothing needs you" in text.
@@ -80,7 +81,7 @@ also checks the rules marked "checked" here.
    \`claim\` set to the headline claim opens the view (on its own, a ClaimCard with size "headline"
    also states the point). At most 30 words of text and no other block may come before it.
 2. **Then the picture**: right under the point, Layers shows how the parts fit (a stack the reader
-   taps open, or steps in a row), before any list or long text.
+   taps open, steps in a row, or a flow of boxes), before any list or long text. See "Pictures".
 3. **Every claim stored and sourced** (checked): each finding is a claim record (one finding, one
    plain sentence) with checkedOn, sourceIds and authorId. Views show claims by id or tag and
    never copy their words. "From source" only with a linked (http/https) source you read and
@@ -99,6 +100,34 @@ also checks the rules marked "checked" here.
 The preview also warns about a claim id that isn't in the project and a layer whose items match
 nothing. These are warnings, not refusals: fix them before you say the view is ready. Worked
 example: "Explaining" in pharos://examples/answers.
+
+## Pictures
+Less words, more pictures: a picture replaces a paragraph. Every picture reads stored claims or
+project queries; the view holds ids, tags, filters and short labels, never a finding's words or
+numbers. Labels go on the picture, not in a paragraph beside it. Pictures don't underline terms
+unless \`terms: true\`. Every item opens to its claim's mark, quote and source.
+
+- **A process: Layers \`orientation: "flow"\`** (checked): 2–5 boxes joined by arrows, each label
+  under 30 characters ("Your question", "AI arranges blocks", "Pharos draws the screen"), with
+  its pill colour. A tapped box opens its claims below the row. A step may leave \`items\` out and
+  be a label only. Use it instead of columns of sentences.
+- **Where each part stands: a layer's \`progress\`** (checked): a task where per step, e.g.
+  {"stageId": "stg_1"}, draws a bar and "2 of 9" on one scale for every step (cancelled left out);
+  tapping it lists the step's open tasks without work codes.
+- **What changed: BeforeAfter** (checked): two claims whose \`quote\` is the passage before and
+  after, word for word, each with \`locator\` (file and line, or commit) and its source;
+  \`claim\` states the change in 15 words or fewer; \`beforeLabel\`/\`afterLabel\` such as a commit
+  and "main". About 40 words in all: quote only the lines that changed.
+- **A number-backed finding: FindingChart** (checked): the title is the stored \`claim\` stating
+  the finding (15 words or fewer), never free \`title\` text. Bars from claims with \`bars\` (each
+  claim's \`figure\` {value, unit, label} is one bar; on "From source" the value must appear in the
+  quote) or from a query with \`count\` ({query, by}). 2–12 bars, one unit, one \`highlight\`.
+- **Shares at a glance: mini bars**: StatCards with \`of\` draw a word-sized bar; in Text, a value
+  \`{bar: {query, of}}\` draws one inline.
+- **How strong the evidence is**: the mark shows how many sources back a claim, or "no source
+  yet". Set a claim's \`weakBecause\` ("one-source", "indirect", "disagree") when it is thin.
+- **Work codes**: on a report page, TaskTable and DataList take \`hideCodes: true\` so
+  "W3.8 · Measure the baseline" reads "Measure the baseline".
 
 ## Queries that answer common questions
 - Overdue: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}

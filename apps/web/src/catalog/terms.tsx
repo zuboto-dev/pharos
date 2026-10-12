@@ -73,22 +73,63 @@ export function useTermMatcher(enabled: boolean | undefined = true): TermMatcher
   );
 }
 
+/** A marked use with the punctuation that touches it, e.g. `(` + `MCP` + `),`. */
+export type TermPiece = { term: Term; before: string; word: string; after: string };
+
+// Opening brackets and quotes right before a term, and closing ones or other punctuation right
+// after it, stay on its line: a button is an atomic inline, so the browser would otherwise allow
+// a break between it and a "," or ";".
+const OPENING = /[\p{Ps}\p{Pi}"']+$/u;
+const CLOSING = /^[\p{Pe}\p{Pf}.,;:!?…%"']+/u;
+
+/** Splits a text at its marks into plain strings and marked uses with their punctuation. */
+export function termPieces(text: string, ranges: readonly TermRange[]): (string | TermPiece)[] {
+  const pieces: (string | TermPiece)[] = [];
+  let at = 0;
+  ranges.forEach(({ start, end, term }, i) => {
+    const next = ranges[i + 1]?.start ?? text.length;
+    const before = OPENING.exec(text.slice(at, start))?.[0] ?? '';
+    const after = CLOSING.exec(text.slice(end, next))?.[0] ?? '';
+    if (start - before.length > at) pieces.push(text.slice(at, start - before.length));
+    pieces.push({ term, before, word: text.slice(start, end), after });
+    at = end + after.length;
+  });
+  if (at < text.length) pieces.push(text.slice(at));
+  return pieces;
+}
+
+/** Keeps a term on one line with the punctuation around it. */
+function Glued({
+  before,
+  after,
+  children,
+}: {
+  before: string;
+  after: string;
+  children: ReactNode;
+}) {
+  if (!before && !after) return children;
+  return (
+    <span className="whitespace-nowrap">
+      {before}
+      {children}
+      {after}
+    </span>
+  );
+}
+
 /** Plain text with its term marks. */
 export function TermText({ text, ranges = [] }: { text: string; ranges?: TermRange[] }) {
   if (!ranges.length) return text;
-  const parts: ReactNode[] = [];
-  let at = 0;
-  for (const { start, end, term } of ranges) {
-    if (start > at) parts.push(text.slice(at, start));
-    parts.push(
-      <TermButton key={start} term={term}>
-        {text.slice(start, end)}
-      </TermButton>,
-    );
-    at = end;
-  }
-  if (at < text.length) parts.push(text.slice(at));
-  return parts;
+  return termPieces(text, ranges).map((piece, i) =>
+    typeof piece === 'string' ? (
+      piece
+    ) : (
+      <Glued key={i} before={piece.before} after={piece.after}>
+        <TermButton term={piece.term}>{piece.word}</TermButton>
+      </Glued>
+    ),
+  );
 }
 
 /** A marked word: dotted underline, same colour; tap or Enter explains it. */
@@ -138,7 +179,8 @@ const SKIP = new Set(['link', 'linkReference', 'inlineCode', 'code', 'html', 'de
 
 /**
  * A remark plugin: splits text nodes at each term's first use, in document order, into an element
- * rendered as a `span[data-term]` (see `useMarkdownTerms`).
+ * rendered as a `span[data-term]`, wrapped with the punctuation touching it in a
+ * `span[data-term-glue]` (see `useMarkdownTerms`).
  */
 function remarkTerms(matcher: TermMatcher) {
   return () => (tree: { type: string }) => {
@@ -150,22 +192,26 @@ function remarkTerms(matcher: TermMatcher) {
           walk(child);
           return [child];
         }
-        const text = child.value;
-        const ranges = marksIn(text, matcher, seen);
+        const ranges = marksIn(child.value, matcher, seen);
         if (!ranges.length) return [child];
-        const out: MdNode[] = [];
-        let at = 0;
-        for (const { start, end, term } of ranges) {
-          if (start > at) out.push({ type: 'text', value: text.slice(at, start) });
-          out.push({
+        return termPieces(child.value, ranges).map((piece): MdNode => {
+          if (typeof piece === 'string') return { type: 'text', value: piece };
+          const mark: MdNode = {
             type: 'pharosTerm',
-            data: { hName: 'span', hProperties: { dataTerm: term.id } },
-            children: [{ type: 'text', value: text.slice(start, end) }],
-          });
-          at = end;
-        }
-        if (at < text.length) out.push({ type: 'text', value: text.slice(at) });
-        return out;
+            data: { hName: 'span', hProperties: { dataTerm: piece.term.id } },
+            children: [{ type: 'text', value: piece.word }],
+          };
+          if (!piece.before && !piece.after) return mark;
+          return {
+            type: 'pharosTermGlue',
+            data: { hName: 'span', hProperties: { dataTermGlue: '' } },
+            children: [
+              ...(piece.before ? [{ type: 'text', value: piece.before }] : []),
+              mark,
+              ...(piece.after ? [{ type: 'text', value: piece.after }] : []),
+            ],
+          };
+        });
       });
     };
     walk(tree as MdNode);
@@ -183,7 +229,9 @@ export function useMarkdownTerms(enabled: boolean | undefined): MarkdownExtras {
       span: ({ children, ...props }) => {
         const id = (props as Record<string, unknown>)['data-term'];
         const term = typeof id === 'string' ? termById.get(id) : undefined;
-        return term ? <TermButton term={term}>{children}</TermButton> : <span>{children}</span>;
+        if (term) return <TermButton term={term}>{children}</TermButton>;
+        if ('data-term-glue' in props) return <span className="whitespace-nowrap">{children}</span>;
+        return <span>{children}</span>;
       },
     };
     return { remarkPlugins: [remarkTerms(matcher)], components };

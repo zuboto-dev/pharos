@@ -79,6 +79,28 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
   );
 }
 
+/**
+ * Markdown as one line of plain text, for a short excerpt: keeps the words of links, emphasis and
+ * code, drops the marks, headings, list bullets, quotes, images and HTML.
+ */
+export function plainExcerpt(markdown: string): string {
+  return markdown
+    .replace(/```[^\n]*\n?/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')
+    .replace(/^[ \t]*(?:#{1,6}[ \t]+|>[ \t]?|[-*+][ \t]+(?:\[[ xX]\][ \t]+)?|\d+[.)][ \t]+)/gm, '')
+    .replace(/^[ \t]*(?:[-*_][ \t]*){3,}$/gm, ' ')
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, '$2')
+    .replace(/(?<![\p{L}\p{N}])(\*|_)(?=\S)([\s\S]*?\S)\1(?![\p{L}\p{N}])/gu, '$2')
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+    .replace(/`+([^`]*)`+/g, '$1')
+    .replace(/\\([\\`*_{}[\]()#+\-.!~>|])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
   const data = useViewData();
   const create = useCreate();
@@ -108,6 +130,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
           ? data.assigneeById.get(decision.data.decidedById)
           : undefined;
         const decider = decidedBy?.data.name;
+        const excerpt = decision.data.body ? plainExcerpt(decision.data.body) : '';
         return (
           <li key={decision.id}>
             <Clickable
@@ -116,9 +139,9 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
             >
               <span className="min-w-0">
                 <span className="block text-sm font-medium">{decision.data.title}</span>
-                {decision.data.body && (
+                {excerpt && (
                   <span className="line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">
-                    {decision.data.body}
+                    {excerpt}
                   </span>
                 )}
               </span>

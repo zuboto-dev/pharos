@@ -97,7 +97,7 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                 status === 'skipped' && 'opacity-50',
               )}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-start gap-2">
                 <span
                   className={clsx(
                     'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
@@ -110,11 +110,14 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                 >
                   {finished ? <Check className="size-3.5" /> : i + 1}
                 </span>
-                <span className="min-w-0 truncate text-sm font-medium" title={stage.data.name}>
+                <span
+                  className="line-clamp-2 min-w-0 pt-0.5 text-sm leading-5 font-medium break-words"
+                  title={stage.data.name}
+                >
                   {stage.data.name}
                 </span>
                 {current && (
-                  <span className="ml-auto text-xs font-medium text-sky-600 dark:text-sky-400">
+                  <span className="ml-auto shrink-0 text-xs leading-6 font-medium text-sky-600 dark:text-sky-400">
                     Current
                   </span>
                 )}

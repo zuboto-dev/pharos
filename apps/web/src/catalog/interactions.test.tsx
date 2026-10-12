@@ -159,6 +159,24 @@ describe('stage progress', () => {
     expect(within(m5).getByText('No tasks yet')).toBeTruthy();
     expect(m5.querySelector('[style*="width"]')).toBeNull();
   });
+
+  it('keeps a long stage name whole, wrapping it instead of cutting it short', () => {
+    const name = 'R3 · Readable agent reports that explain where the project stands';
+    const long = { ...data.stages[0]!, data: { ...data.stages[0]!.data, name } };
+    render(
+      <ViewDataProvider
+        data={{ ...data, stages: [long, ...data.stages.slice(1)] }}
+        version={1}
+        actions={{ apply, open }}
+      >
+        <ViewRenderer spec={{ component: 'StageTracker' }} />
+      </ViewDataProvider>,
+    );
+    const label = screen.getByText(name);
+    expect(label.getAttribute('title')).toBe(name);
+    expect(label.className).toContain('line-clamp-2');
+    expect(label.className).not.toContain('truncate');
+  });
 });
 
 describe('detail drawer', () => {

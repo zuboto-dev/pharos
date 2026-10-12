@@ -1,13 +1,33 @@
-import { runQuery, type Entity, type EntityType, type NodeOf } from '@pharos/schema';
+import {
+  runQuery,
+  WEAK_BECAUSE_LABELS,
+  type Entity,
+  type EntityType,
+  type NodeOf,
+} from '@pharos/schema';
 import clsx from 'clsx';
-import { ChevronDown, ExternalLink, FileText, TriangleAlert } from 'lucide-react';
-import { useId, useState, type CSSProperties } from 'react';
+import {
+  ArrowDown,
+  ArrowRight,
+  ChevronDown,
+  ExternalLink,
+  FileText,
+  TriangleAlert,
+} from 'lucide-react';
+import { useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { useOptions } from '../options';
 import { Popover, usePopover } from '../popover';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
 import { Badge, Dot, Empty, isHttp, Uri, type Tone } from '../ui';
+import {
+  OpenTasks,
+  ProgressLine,
+  progressScale,
+  stepProgress,
+  type StepProgress,
+} from './layer-progress';
 
 /**
  * The explain blocks: stored claims (findings) with how sure each is and where it comes from.
@@ -153,7 +173,9 @@ export function CertaintyMark({
   const [only] = sources;
   // A single web source is a plain link; a local one, or several, open the list with the passage.
   const singleLink = sources.length === 1 && isHttp(only!.data.uri) ? only : undefined;
-  const quoteSource = passage && claim.data.quote ? quoteSourceOf(entityById, claim) : undefined;
+  const { quote, locator, weakBecause } = claim.data;
+  // The source the passage (or just where it sits) comes from; off for a shared mark.
+  const quoteSource = passage && (quote || locator) ? quoteSourceOf(entityById, claim) : undefined;
   const author = entityOf(entityById, claim.data.authorId, 'assignee');
   const glyph = GLYPHS[meaning] ?? '○';
   return (
@@ -198,6 +220,15 @@ export function CertaintyMark({
           </button>
         )
       )}
+      {/* "Confirmed by you" rests on the owner's decision, so it needs no source to be sound. */}
+      {!sources.length && meaning !== 'confirmed' && (
+        <span className="text-neutral-400 dark:text-neutral-500">no source yet</span>
+      )}
+      {weakBecause && (
+        <span title="Why the evidence is thin" className="text-amber-700 dark:text-amber-400">
+          {WEAK_BECAUSE_LABELS[weakBecause]}
+        </span>
+      )}
       {anchor && (
         <Popover anchor={anchor} label={option.label} onClose={close}>
           <div className="flex items-baseline gap-1.5 font-semibold text-neutral-900 dark:text-neutral-100">
@@ -227,10 +258,13 @@ export function CertaintyMark({
                       {s.data.uri}
                     </code>
                   )}
-                  {s.id === quoteSource?.id && (
+                  {s.id === quoteSource?.id && quote && (
                     <blockquote className="border-l-2 border-neutral-300 pl-2 text-xs break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
-                      “{claim.data.quote}”
+                      “{quote}”
                     </blockquote>
+                  )}
+                  {s.id === quoteSource?.id && locator && (
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{locator}</p>
                   )}
                 </li>
               ))}
@@ -253,7 +287,7 @@ function ClaimBasis({ claim }: { claim: Claim }) {
   const { entityById } = useViewData();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const { quote, assumption } = claim.data;
+  const { quote, assumption, locator } = claim.data;
   if (!quote && !assumption) return null;
   const source = quoteSourceOf(entityById, claim);
   const label = quote && assumption ? 'Quote and assumption' : quote ? 'Quote' : 'Assumption';
@@ -279,10 +313,12 @@ function ClaimBasis({ claim }: { claim: Claim }) {
               <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
                 “{quote}”
               </blockquote>
-              {source && (
-                <figcaption className="flex min-w-0 items-baseline gap-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
+              {(source || locator) && (
+                <figcaption className="flex min-w-0 flex-wrap items-baseline gap-x-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
                   <span aria-hidden>—</span>
-                  <SourceTitle source={source} />
+                  {source && <SourceTitle source={source} />}
+                  {source && locator && <span aria-hidden>·</span>}
+                  {locator && <span>{locator}</span>}
                 </figcaption>
               )}
             </figure>
@@ -367,15 +403,20 @@ type LayerModel = {
   lines: Claim[];
   /** Items grouped by the artifact they're about, in first-seen order. */
   cards: { about: Artifact; claims: Claim[] }[];
+  /** The step's tasks, when it counts progress. */
+  progress?: StepProgress;
 };
 
 function layerModels(data: ViewData, node: NodeOf<'Layers'>): LayerModel[] {
   return node.layers.map((layer) => {
     const pillId = layer.pill?.claim;
     const pill = pillId ? findClaim(data, pillId) : undefined;
-    const claims = runQuery(data, 'claim', { sort: [{ field: 'order' }], ...layer.items }).filter(
-      (c) => c.id !== pillId,
-    );
+    // A step without `items` is a label only: it holds no claims (an empty filter would match all).
+    const claims = layer.items
+      ? runQuery(data, 'claim', { sort: [{ field: 'order' }], ...layer.items }).filter(
+          (c) => c.id !== pillId,
+        )
+      : [];
     const lines: Claim[] = [];
     const cards = new Map<string, { about: Artifact; claims: Claim[] }>();
     for (const claim of claims) {
@@ -388,7 +429,14 @@ function layerModels(data: ViewData, node: NodeOf<'Layers'>): LayerModel[] {
       card.claims.push(claim);
       cards.set(about.id, card);
     }
-    return { layer, pill, claims, lines, cards: [...cards.values()] };
+    return {
+      layer,
+      pill,
+      claims,
+      lines,
+      cards: [...cards.values()],
+      progress: stepProgress(data, layer),
+    };
   });
 }
 
@@ -509,9 +557,10 @@ function LayerPanel({
   highlightAbout?: string;
 }) {
   const key = m.layer.key;
-  if (!m.pill && !m.claims.length) return <NothingYet />;
+  if (!m.pill && !m.claims.length && !m.progress) return <NothingYet />;
   return (
     <>
+      {m.progress && <OpenTasks progress={m.progress} />}
       {m.pill && <ClaimLine claim={m.pill} prefix={key} shared={shared} mark />}
       {m.lines.map((c) => (
         <ClaimLine key={c.id} claim={c} prefix={key} shared={shared} />
@@ -570,6 +619,7 @@ function Stack({
     matcher,
   );
   const shared: Shared = { terms, hideMarks, warnTag: node.warnTag ?? 'watch' };
+  const scale = progressScale(models.map((m) => m.progress));
   return (
     <div className="space-y-1.5">
       {models.map((m, i) => {
@@ -582,8 +632,15 @@ function Stack({
           title: `${id}-${i}-title`,
           hint: `${id}-${i}-hint`,
           pill: `${id}-${i}-pill`,
+          progress: `${id}-${i}-progress`,
         };
-        const labelledBy = [ids.key, ids.title, layer.hint && ids.hint, layer.pill && ids.pill]
+        const labelledBy = [
+          ids.key,
+          ids.title,
+          layer.hint && ids.hint,
+          layer.pill && ids.pill,
+          m.progress && ids.progress,
+        ]
           .filter(Boolean)
           .join(' ');
         const tone = layer.pill?.tone ?? 'neutral';
@@ -593,7 +650,7 @@ function Stack({
                 stay buttons of their own (a button can't hold another). */}
             <div
               className={clsx(
-                'relative rounded-xl bg-white transition dark:bg-neutral-900',
+                'relative rounded-xl bg-white motion-safe:transition dark:bg-neutral-900',
                 isOpen
                   ? 'border border-sky-500 ring-1 ring-sky-500 dark:border-sky-400 dark:ring-sky-400'
                   : layer.highlight
@@ -633,6 +690,11 @@ function Stack({
                       <TermText text={layer.hint} ranges={terms.get(`${layer.key}:hint`)} />
                     </span>
                   )}
+                  {m.progress && (
+                    <span className="mt-1.5 block max-w-xs">
+                      <ProgressLine progress={m.progress} scale={scale} id={ids.progress} />
+                    </span>
+                  )}
                 </span>
                 <span className="col-start-2 flex items-center gap-2 justify-self-start sm:col-start-auto sm:justify-self-end">
                   {layer.pill && (
@@ -643,7 +705,7 @@ function Stack({
                   <ChevronDown
                     aria-hidden
                     className={clsx(
-                      'hidden size-4 text-neutral-400 transition sm:block',
+                      'hidden size-4 text-neutral-400 motion-safe:transition sm:block',
                       isOpen && 'rotate-180',
                     )}
                   />
@@ -686,6 +748,9 @@ function Row({
     matcher,
   );
   const shared: Shared = { terms, hideMarks, warnTag: node.warnTag ?? 'watch' };
+  const scale = progressScale(models.map((m) => m.progress));
+  const [tasksOpen, setTasksOpen] = useState<string | null>(null);
+  const id = useId();
   const { axis } = node;
   const columns = { '--cols': `repeat(${models.length}, minmax(0, 1fr))` } as CSSProperties;
   const axisLabel =
@@ -702,8 +767,10 @@ function Row({
         style={columns}
         className="grid grid-cols-1 overflow-hidden rounded-xl border border-neutral-200 bg-white sm:grid-cols-(--cols) dark:border-neutral-800 dark:bg-neutral-900"
       >
-        {models.map((m) => {
+        {models.map((m, i) => {
           const { layer } = m;
+          const tasksId = `${id}-${i}-tasks`;
+          const showTasks = tasksOpen === layer.key;
           return (
             <section
               key={layer.key}
@@ -724,12 +791,28 @@ function Row({
                   <TermText text={layer.hint} ranges={terms.get(`${layer.key}:hint`)} />
                 </p>
               )}
+              {m.progress && (
+                <ProgressLine
+                  progress={m.progress}
+                  scale={scale}
+                  toggle={
+                    m.progress.total
+                      ? {
+                          open: showTasks,
+                          controls: tasksId,
+                          onToggle: () => setTasksOpen(showTasks ? null : layer.key),
+                        }
+                      : undefined
+                  }
+                />
+              )}
+              {m.progress && showTasks && <OpenTasks progress={m.progress} id={tasksId} />}
               {/* The claim behind the pill comes first, as in the stack: it's the part's status. */}
               {m.pill && <ClaimLine claim={m.pill} prefix={layer.key} shared={shared} mark />}
               {m.claims.map((c) => (
                 <ClaimLine key={c.id} claim={c} prefix={layer.key} shared={shared} strong />
               ))}
-              {!m.claims.length && !m.pill && <NothingYet />}
+              {!m.claims.length && !m.pill && !m.progress && <NothingYet />}
             </section>
           );
         })}
@@ -756,11 +839,199 @@ function Row({
   );
 }
 
+/** Box layouts by step count: a few steps sit side by side sooner than five do. */
+const FLOW_WIDE = {
+  narrow: {
+    list: '@md:flex-row',
+    item: '@md:flex-1 @md:flex-row',
+    down: '@md:hidden',
+    right: '@md:block',
+  },
+  wide: {
+    list: '@2xl:flex-row',
+    item: '@2xl:flex-1 @2xl:flex-row',
+    down: '@2xl:hidden',
+    right: '@2xl:block',
+  },
+};
+
+const STEP_KEYS: Record<string, number> = {
+  ArrowRight: 1,
+  ArrowDown: 1,
+  ArrowLeft: -1,
+  ArrowUp: -1,
+};
+
+/**
+ * A process as a picture: labelled boxes joined by arrows (stacked with down arrows where the
+ * block is narrow). A box with something behind it is a button; the tapped one opens below the
+ * row with its open tasks and claims. Arrow keys, Home and End move between the boxes.
+ */
+function Flow({
+  node,
+  models,
+  hideMarks,
+}: {
+  node: NodeOf<'Layers'>;
+  models: LayerModel[];
+  hideMarks: boolean;
+}) {
+  const [open, setOpen] = useState<string | null>(node.open ?? null);
+  // A flow is a picture: no dotted underlines unless the view asks for them.
+  const matcher = useTermMatcher(node.terms === true);
+  const id = useId();
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const openModel = models.find((m) => m.layer.key === open && hasDetail(m));
+  const terms = firstUsesByKey(
+    models.flatMap((m): [string, string][] => [
+      [`${m.layer.key}:title`, m.layer.title],
+      ...(m === openModel ? [[`${m.layer.key}:hint`, m.layer.hint ?? ''] as [string, string]] : []),
+      ...(m === openModel ? panelTexts(m) : []),
+    ]),
+    matcher,
+  );
+  const shared: Shared = { terms, hideMarks, warnTag: node.warnTag ?? 'watch' };
+  const scale = progressScale(models.map((m) => m.progress));
+  const wide = FLOW_WIDE[models.length <= 3 ? 'narrow' : 'wide'];
+  const panelId = `${id}-panel`;
+  const live = models.flatMap((m, i) => (hasDetail(m) ? [i] : []));
+
+  function onKeyDown(e: KeyboardEvent<HTMLButtonElement>, i: number) {
+    const at = live.indexOf(i);
+    const step = STEP_KEYS[e.key];
+    const target =
+      step !== undefined
+        ? live[Math.max(0, Math.min(live.length - 1, at + step))]
+        : e.key === 'Home'
+          ? live[0]
+          : e.key === 'End'
+            ? live.at(-1)
+            : undefined;
+    if (target === undefined) return;
+    e.preventDefault();
+    buttons.current[target]?.focus();
+  }
+
+  return (
+    <div className="@container space-y-3">
+      <ol className={clsx('flex flex-col', wide.list)}>
+        {models.map((m, i) => {
+          const { layer } = m;
+          const interactive = hasDetail(m);
+          const isOpen = m === openModel;
+          const tone = layer.pill?.tone ?? 'neutral';
+          const ids = {
+            title: `${id}-${i}-title`,
+            pill: `${id}-${i}-pill`,
+            progress: `${id}-${i}-progress`,
+          };
+          return (
+            <li key={layer.key} className={clsx('flex min-w-0 flex-col items-stretch', wide.item)}>
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  className="flex shrink-0 items-center justify-center p-1 text-neutral-400 dark:text-neutral-500"
+                >
+                  <ArrowDown className={clsx('size-4', wide.down)} />
+                  <ArrowRight className={clsx('hidden size-4', wide.right)} />
+                </span>
+              )}
+              <div
+                className={clsx(
+                  'relative min-w-0 flex-1 rounded-xl bg-white motion-safe:transition dark:bg-neutral-900',
+                  isOpen
+                    ? 'border border-sky-500 ring-1 ring-sky-500 dark:border-sky-400 dark:ring-sky-400'
+                    : layer.highlight
+                      ? clsx('border-2 border-dashed', STRONG_BORDER[tone])
+                      : clsx('border', BORDER[tone]),
+                  interactive && !isOpen && 'hover:shadow-sm',
+                )}
+              >
+                {interactive && (
+                  <button
+                    type="button"
+                    ref={(el) => {
+                      buttons.current[i] = el;
+                    }}
+                    aria-expanded={isOpen}
+                    aria-controls={panelId}
+                    aria-labelledby={[ids.title, layer.pill && ids.pill, m.progress && ids.progress]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => setOpen(isOpen ? null : layer.key)}
+                    onKeyDown={(e) => onKeyDown(e, i)}
+                    className="absolute inset-0 cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950"
+                  />
+                )}
+                <div className="pointer-events-none relative flex h-full flex-col gap-2 p-3">
+                  <span className="flex items-start justify-between gap-2">
+                    <span
+                      id={ids.title}
+                      className="min-w-0 text-sm font-semibold break-words text-neutral-900 dark:text-neutral-50"
+                    >
+                      <TermText text={layer.title} ranges={terms.get(`${layer.key}:title`)} />
+                    </span>
+                    {interactive && (
+                      <ChevronDown
+                        aria-hidden
+                        className={clsx(
+                          'mt-0.5 size-4 shrink-0 text-neutral-400 motion-safe:transition-transform',
+                          isOpen && 'rotate-180',
+                        )}
+                      />
+                    )}
+                  </span>
+                  {layer.pill && (
+                    <span id={ids.pill} className="flex">
+                      <Badge tone={BADGE_TONE[layer.pill.tone]}>{layer.pill.label}</Badge>
+                    </span>
+                  )}
+                  {m.progress && (
+                    <span className="mt-auto block">
+                      <ProgressLine progress={m.progress} scale={scale} id={ids.progress} />
+                    </span>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <div
+        id={panelId}
+        role="region"
+        aria-labelledby={openModel ? `${id}-${models.indexOf(openModel)}-title` : undefined}
+        hidden={!openModel}
+        className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+      >
+        {openModel && (
+          <>
+            {openModel.layer.hint && (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <TermText
+                  text={openModel.layer.hint}
+                  ranges={terms.get(`${openModel.layer.key}:hint`)}
+                />
+              </p>
+            )}
+            <LayerPanel m={openModel} shared={shared} highlightAbout={node.highlightAbout} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Whether a step has anything to open: its status claim, claims or tasks. */
+function hasDetail(m: LayerModel): boolean {
+  return !!(m.pill || m.claims.length || m.progress);
+}
+
 export function Layers({ node }: { node: NodeOf<'Layers'> }) {
   const data = useViewData();
   const models = layerModels(data, node);
   const shared = sharedMarkOf(models.flatMap((m) => m.claims));
-  const Body = node.orientation === 'row' ? Row : Stack;
+  const Body = node.orientation === 'row' ? Row : node.orientation === 'flow' ? Flow : Stack;
   return (
     <div className="space-y-3">
       {node.prompt && (

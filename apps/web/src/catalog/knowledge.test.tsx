@@ -257,6 +257,49 @@ describe('ClaimCard', () => {
     expect(document.activeElement).toBe(mark);
   });
 
+  it('opens the quoted passage with its source and the assumption behind a reading', () => {
+    const withBasis = {
+      ...data,
+      claims: [
+        claim('clm_quoted', {
+          certainty: 'verified',
+          sourceIds: ['art_report', 'art_kit'],
+          quote: 'Kit ships a recipe format.',
+          quoteSourceId: 'art_kit',
+        }),
+        claim('clm_read', { sourceIds: ['art_report'], assumption: 'The report is current.' }),
+        claim('clm_bare', { sourceIds: ['art_report'] }),
+      ],
+    } as ProjectDataset;
+    renderSpec({ component: 'ClaimCard', claim: 'clm_quoted' }, withBasis);
+    const toggle = screen.getByRole('button', { name: 'Quote' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText(/Kit ships a recipe format/)).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const quote = screen.getByText(/Kit ships a recipe format/);
+    expect(quote.tagName).toBe('BLOCKQUOTE');
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    // The quote names the source it came from, not just the first one.
+    expect(within(panel).getByRole('link', { name: /Kit/ }).getAttribute('href')).toBe(
+      'https://example.com/kit',
+    );
+    fireEvent.click(toggle);
+    expect(screen.queryByText(/Kit ships a recipe format/)).toBeNull();
+    cleanup();
+
+    renderSpec({ component: 'ClaimCard', claim: 'clm_read', size: 'headline' }, withBasis);
+    fireEvent.click(screen.getByRole('button', { name: 'Assumption' }));
+    expect(screen.getByText('Assumes:').parentElement!.textContent).toBe(
+      'Assumes: The report is current.',
+    );
+    cleanup();
+
+    // Nothing to open: no toggle.
+    renderSpec({ component: 'ClaimCard', claim: 'clm_bare' }, withBasis);
+    expect(screen.queryByRole('button', { name: /Quote|Assumption/ })).toBeNull();
+  });
+
   it('says so when the claim is missing', () => {
     renderSpec({ component: 'ClaimCard', claim: 'clm_gone' });
     expect(screen.getByText(/This finding was deleted or isn’t in this project/)).toBeTruthy();

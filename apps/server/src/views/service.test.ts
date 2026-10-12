@@ -44,7 +44,13 @@ describe('explanation views', () => {
           op: 'create',
           type: 'claim',
           ref: 'c',
-          data: { projectId: '$p', statement: 'The point.', checkedOn: '2026-10-01', tags: ['a'] },
+          data: {
+            projectId: '$p',
+            statement: 'The point.',
+            checkedOn: '2026-10-01',
+            assumption: 'It holds.',
+            tags: ['a'],
+          },
         },
       ],
     });

@@ -163,6 +163,7 @@ describe('guidance', () => {
         statement: `Claim ${ref}.`,
         checkedOn: '2026-10-01',
         sourceIds: ['$src'],
+        assumption: 'The report is current.',
         tags,
       },
     });

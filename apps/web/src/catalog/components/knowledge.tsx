@@ -189,6 +189,67 @@ export function CertaintyMark({
 
 // ------------------------------------------------------------------ claim card
 
+/**
+ * What a claim rests on, behind a small toggle so the card stays short: the quoted passage with
+ * its source ("From source") and the assumption ("Our reading"). Renders a button and, when open,
+ * a full-width panel; the parent is a wrapping flex row, so the panel drops to its own line.
+ */
+function ClaimBasis({ claim }: { claim: Claim }) {
+  const { entityById } = useViewData();
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const { quote, quoteSourceId, assumption, sourceIds } = claim.data;
+  if (!quote && !assumption) return null;
+  const source =
+    entityOf(entityById, quoteSourceId, 'artifact') ??
+    sourceIds.map((id) => entityOf(entityById, id, 'artifact')).find((s) => !!s);
+  const label = quote && assumption ? 'Quote and assumption' : quote ? 'Quote' : 'Assumption';
+  return (
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-0.5 rounded-sm text-xs font-medium text-neutral-500 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-400 dark:hover:text-white"
+      >
+        {label}
+        <ChevronDown
+          aria-hidden
+          className={clsx('size-3 transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && (
+        <div id={panelId} className="basis-full space-y-1.5 pt-1 text-sm">
+          {quote && (
+            <figure className="min-w-0 space-y-0.5">
+              <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
+                “{quote}”
+              </blockquote>
+              {source && (
+                <figcaption className="flex min-w-0 items-baseline gap-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
+                  <span aria-hidden>—</span>
+                  {isHttp(source.data.uri) ? (
+                    <Uri uri={source.data.uri}>{source.data.title}</Uri>
+                  ) : (
+                    <span className="truncate">{source.data.title}</span>
+                  )}
+                </figcaption>
+              )}
+            </figure>
+          )}
+          {assumption && (
+            <p className="break-words text-neutral-600 dark:text-neutral-400">
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">Assumes:</span>{' '}
+              {assumption}
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
   const data = useViewData();
   const matcher = useTermMatcher(node.terms);
@@ -214,7 +275,10 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
             <TermText text={detail} ranges={detailTerms} />
           </p>
         )}
-        <CertaintyMark claim={claim} />
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <CertaintyMark claim={claim} />
+          <ClaimBasis claim={claim} />
+        </div>
       </header>
     );
   }
@@ -234,8 +298,9 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
           <TermText text={detail} ranges={detailTerms} />
         </p>
       )}
-      <div className="mt-auto pt-1">
+      <div className="mt-auto flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
         <CertaintyMark claim={claim} />
+        <ClaimBasis claim={claim} />
       </div>
     </article>
   );

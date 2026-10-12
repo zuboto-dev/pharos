@@ -181,6 +181,17 @@ export const ClaimData = z.strictObject({
   certainty: optionField('claim.certainty'),
   checkedOn: IsoDate.describe('YYYY-MM-DD it was last checked against its sources'),
   sourceIds: z.array(Id).describe('Artifacts it comes from; a link needs an http(s) uri'),
+  quote: Text.max(300)
+    .optional()
+    .describe(
+      'For "From source": the exact passage from the source that supports it, copied word for word',
+    ),
+  quoteSourceId: Id.optional().describe(
+    'Which of sourceIds the quote comes from, when it has several (default: the first)',
+  ),
+  assumption: Text.max(200)
+    .optional()
+    .describe('For "Our reading": the assumption it rests on, in one plain sentence'),
   confirmedById: Id.optional().describe('For "Confirmed by you": the decision the owner accepted'),
   aboutId: Id.optional().describe(
     'The artifact it is about (a tool, Pharos); its title heads the card',
@@ -336,6 +347,7 @@ export const ENTITIES = {
     refs: {
       projectId: projectRef,
       sourceIds: { type: 'artifact', many: true, onDelete: 'unset' },
+      quoteSourceId: { type: 'artifact', onDelete: 'unset' },
       confirmedById: { type: 'decision', onDelete: 'unset' },
       aboutId: { type: 'artifact', onDelete: 'unset' },
       authorId: { type: 'assignee', onDelete: 'unset' },

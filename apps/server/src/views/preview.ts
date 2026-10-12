@@ -22,7 +22,7 @@ import {
   type ViewNode,
   type Where,
 } from '@pharos/schema';
-import { claimSourceWarning, type Store } from '../store/store.js';
+import { claimWarnings, type Store } from '../store/store.js';
 
 /** One widget's preview: what it shows right now, and anything that looks wrong. */
 export type WidgetPreview = {
@@ -411,8 +411,7 @@ function describeExplaining(
     for (const claim of shown) {
       if (seen.has(claim.id)) continue;
       seen.add(claim.id);
-      const warning = claimSourceWarning(claim, ctx.data.project);
-      if (warning) warnings.push(warning);
+      warnings.push(...claimWarnings(claim, ctx.data.project));
     }
   };
   if (node.component === 'ClaimCard') {

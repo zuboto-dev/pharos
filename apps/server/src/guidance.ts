@@ -51,6 +51,8 @@ preview checks the rules marked "checked"; task boards and other views without t
    never copy their words. "From source" only with a linked (http/https) source you read and
    checkedOn; otherwise keep "Our reading". "Confirmed by you" only after the owner accepts a
    decision in Pharos: create it with status "proposed" (the default, "accepted", can't back it).
+   Give "From source" its quote, the passage word for word (quoteSourceId if it has several
+   sources), and "Our reading" its assumption, so the reader sees what each rests on.
 4. **Terms explained in place**: store each word the reader may not know as a term (word,
    explanation, alsoCalled). Pharos marks its first use in each widget and explains it on tap.
 5. **Certainty visible**: every claim shows its mark (Our reading, From source, Confirmed by you).
@@ -251,7 +253,7 @@ export const EXPLAIN_EXAMPLE: {
   question: 'What is <topic>, and where does this project stand?',
   why: 'The headline claim states the point; the layers show how the parts fit, each holding its claims; two cards say what it means; the sources list lets the reader check.',
   claims:
-    'First store, with apply, the claims (statement, checkedOn, sourceIds, authorId, tags such as "layer-2") and terms the view shows; the ids below are theirs.',
+    'First store, with apply, the claims (statement, checkedOn, sourceIds, quote or assumption, authorId, tags such as "layer-2") and terms the view shows; the ids below are theirs.',
   widgets: [
     {
       id: 'point',

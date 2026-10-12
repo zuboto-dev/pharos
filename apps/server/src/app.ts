@@ -42,6 +42,8 @@ export type ServerInfo = {
   port?: number;
   /** A built web app to serve from this process (its index.html answers every page route). */
   webDir?: string;
+  /** Identifies the web app build being served (see `webBuildId`), sent to tabs on connect. */
+  buildId?: string;
 };
 
 export function createApp(
@@ -109,7 +111,13 @@ export function createApp(
       });
       await stream.writeSSE({
         event: 'ready',
-        data: JSON.stringify({ latest: store.latestRevisionId() }),
+        // `version` and `build` let an open tab notice, on reconnecting after an update, that
+        // it is running old code.
+        data: JSON.stringify({
+          latest: store.latestRevisionId(),
+          version: VERSION,
+          ...(info.buildId ? { build: info.buildId } : {}),
+        }),
       });
       // Keep the connection alive through proxies until the client goes away.
       while (!stream.aborted) {

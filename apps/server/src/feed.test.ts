@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Author } from '@pharos/schema';
@@ -7,6 +7,7 @@ import { createApp } from './app.js';
 import { RevisionFeed, type RevisionEvent } from './feed.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
+import { VERSION, webBuildId } from './version.js';
 
 const agent: Author = { kind: 'agent', name: 'test' };
 const dirs: string[] = [];
@@ -102,5 +103,42 @@ describe('GET /api/events', () => {
     expect(text).toContain(`data: {"id":1,"projectIds":["${id}"]}`);
     controller.abort();
     await reader.cancel();
+  });
+});
+
+describe('build id on the events stream', () => {
+  const readReady = async (app: ReturnType<typeof createApp>) => {
+    const controller = new AbortController();
+    const res = await app.request('/api/events', { signal: controller.signal });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!/event: ready\ndata: .*\n/.test(text))
+      text += decoder.decode((await reader.read()).value);
+    controller.abort();
+    await reader.cancel();
+    return JSON.parse(/event: ready\ndata: (.*)\n/.exec(text)![1]!) as Record<string, unknown>;
+  };
+
+  it('sends the version, and the web build when one is served', async () => {
+    const store = new Store(openDatabase(':memory:'));
+    expect(await readReady(createApp(store, new RevisionFeed(store, 0)))).toEqual({
+      latest: 0,
+      version: VERSION,
+    });
+    const built = createApp(store, new RevisionFeed(store, 0), undefined, { buildId: 'abc123' });
+    expect(await readReady(built)).toMatchObject({ version: VERSION, build: 'abc123' });
+  });
+
+  it('changes when the built web app changes', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pharos-web-'));
+    dirs.push(dir);
+    expect(webBuildId(dir)).toBeUndefined();
+    writeFileSync(join(dir, 'index.html'), '<script src="/assets/index-a1.js"></script>');
+    const first = webBuildId(dir);
+    expect(first).toMatch(/^[0-9a-f]{12}$/);
+    expect(webBuildId(dir)).toBe(first);
+    writeFileSync(join(dir, 'index.html'), '<script src="/assets/index-b2.js"></script>');
+    expect(webBuildId(dir)).not.toBe(first);
   });
 });

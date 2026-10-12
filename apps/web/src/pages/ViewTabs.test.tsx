@@ -52,8 +52,9 @@ function renderTabs(active = overview!, onCreated = vi.fn()) {
 describe('view tabs', () => {
   it('tells when each view was last updated, so similar names can be told apart', () => {
     renderTabs();
+    // Relative to today's date, so only its start is fixed; tabTitle's wording is checked below.
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('title')).toMatch(
-      /Updated .*ago/,
+      /^Updated \S/,
     );
     const now = Date.parse(overview!.updatedAt) + 3 * 3_600_000;
     expect(

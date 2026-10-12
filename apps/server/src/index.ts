@@ -10,6 +10,7 @@ import { RevisionFeed } from './feed.js';
 import { answerBrief } from './guidance.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
+import { webBuildId } from './version.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
 // `pnpm dev` waits for a file change). A stray rejection is logged and doesn't end it.
@@ -57,7 +58,7 @@ if (agent.configured) agent.watch(feed);
 const app = createApp(store, feed, agent, {
   dataPath: dbPath,
   port,
-  ...(serveWeb ? { webDir } : {}),
+  ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
 });
 
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {

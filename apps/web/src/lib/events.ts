@@ -23,9 +23,30 @@ export type AgentStatus = {
   };
 };
 
+/** Sent each time the feed (re)connects: which version of Pharos is answering. */
+type ReadyEvent = { latest?: number; version?: string; build?: string };
+
 const listeners = new Set<(event: RevisionEvent) => void>();
 const agentListeners = new Set<(status: AgentStatus) => void>();
+const updateListeners = new Set<(build: string | undefined) => void>();
 let source: EventSource | null = null;
+/** The build this page was loaded with (the first one the server reported), and a newer one. */
+let loadedBuild: string | undefined;
+let newerBuild: string | undefined;
+
+/**
+ * Notes the version a (re)connected server reports. The first one is taken as what this page
+ * runs; a different one later means Pharos was updated and restarted underneath the page.
+ */
+function noticeBuild(ready: ReadyEvent) {
+  const build = ready.build ?? ready.version;
+  if (!build) return;
+  if (loadedBuild === undefined) loadedBuild = build;
+  else if (build !== loadedBuild && build !== newerBuild) {
+    newerBuild = build;
+    for (const listener of updateListeners) listener(build);
+  }
+}
 
 /** One shared connection to the server's change feed, opened while anyone is listening. */
 function connect() {
@@ -39,11 +60,18 @@ function connect() {
     const status = JSON.parse((e as MessageEvent<string>).data) as AgentStatus;
     for (const listener of agentListeners) listener(status);
   });
+  source.addEventListener('ready', (e) => {
+    try {
+      noticeBuild(JSON.parse((e as MessageEvent<string>).data) as ReadyEvent);
+    } catch {
+      // An unreadable ready event just isn't a version signal.
+    }
+  });
   // EventSource reconnects by itself after network errors or server restarts.
 }
 
 function disconnect() {
-  if (listeners.size || agentListeners.size || !source) return;
+  if (listeners.size || agentListeners.size || updateListeners.size || !source) return;
   source.close();
   source = null;
 }
@@ -97,4 +125,21 @@ export function useAgentStatus(): AgentStatus {
     };
   }, []);
   return status;
+}
+
+/**
+ * A newer build of Pharos than the one this page is running, once the server has been updated
+ * and restarted (the page keeps its old code until reloaded); undefined until then.
+ */
+export function useNewerBuild(): string | undefined {
+  const [build, setBuild] = useState(newerBuild);
+  useEffect(() => {
+    updateListeners.add(setBuild);
+    connect();
+    return () => {
+      updateListeners.delete(setBuild);
+      disconnect();
+    };
+  }, []);
+  return build;
 }

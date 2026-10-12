@@ -5,6 +5,7 @@ import { useAgentStatus } from '../lib/events';
 import { useTheme } from '../lib/theme';
 import { PharosLogo } from './Logo';
 import { Sidebar } from './Sidebar';
+import { UpdateNotice } from './UpdateNotice';
 
 /** Opens Settings; a dot shows when automatic answering is paused. */
 function SettingsLink() {
@@ -54,6 +55,7 @@ export function AppShell() {
       <main className="min-w-0 flex-1">
         <Outlet />
       </main>
+      <UpdateNotice />
     </div>
   );
 }

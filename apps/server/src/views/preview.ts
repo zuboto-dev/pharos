@@ -1,6 +1,12 @@
 import {
   BOARD_COLUMNS,
+  R4,
   START_HERE,
+  WEAK_BECAUSE_LABELS,
+  changedLines,
+  diffWords,
+  evidenceId,
+  stripWorkCode,
   COMPONENT_INFO,
   ENTITIES,
   fieldReader,
@@ -84,10 +90,15 @@ function count(ctx: Context, query: Query): number {
   return runQuery(ctx.data, query.type, query, { today: ctx.today }).length;
 }
 
-function sample(ctx: Context, query: Query, n = 3): string {
-  const label = ENTITIES[query.type].label;
+/** What a row is called, as a list shows it; `hideCodes` drops a leading work code (F6). */
+function rowName(type: EntityType, data: unknown, hideCodes = false): string {
+  const name = String((data as Record<string, unknown>)[ENTITIES[type].label] ?? '');
+  return hideCodes ? stripWorkCode(name) : name;
+}
+
+function sample(ctx: Context, query: Query, n = 3, hideCodes = false): string {
   const rows = runQuery(ctx.data, query.type, query, { today: ctx.today });
-  const names = rows.slice(0, n).map((r) => `“${(r.data as Record<string, unknown>)[label]}”`);
+  const names = rows.slice(0, n).map((r) => `“${rowName(query.type, r.data, hideCodes)}”`);
   return rows.length
     ? `${plural(rows.length, query.type.replace('_', ' '))}: ${names.join(', ')}${rows.length > n ? ', …' : ''}`
     : 'nothing';
@@ -109,6 +120,8 @@ function describeLeaf(
   };
   const n = node as Record<string, unknown> & { component: ComponentName };
   if (node.component === 'StartHere') return describeStartHere(node, ctx, warnings);
+  if (node.component === 'BeforeAfter') return describeBeforeAfter(node, ctx, warnings);
+  if (node.component === 'FindingChart') return describeFindingChart(node, ctx, warnings);
   if (isExplaining(node)) return describeExplaining(node, ctx, warnings);
   switch (node.component) {
     case 'ProjectHeader': {
@@ -122,6 +135,8 @@ function describeLeaf(
     case 'StatCards': {
       const stats = (node as NodeOf<'StatCards'>).stats.map((s) => {
         const value = s.value ?? (s.query ? count(ctx, queryOf(s.query)) : '—');
+        if (s.of && typeof value === 'number')
+          return `${s.label} ${miniBar(value, count(ctx, queryOf(s.of)))}`;
         const total = s.of ? ` / ${count(ctx, queryOf(s.of))}` : '';
         return `${s.label} ${value}${total}`;
       });
@@ -159,6 +174,8 @@ function describeLeaf(
           const of = count(ctx, queryOf(v.percent.of));
           return `${of ? Math.round((count(ctx, queryOf(v.percent.query)) / of) * 100) : 0}%`;
         }
+        if ('bar' in v)
+          return miniBar(count(ctx, queryOf(v.bar.query)), count(ctx, queryOf(v.bar.of)));
         const stage = ctx.data.stages.find((s) => s.id === ctx.data.project.data.currentStageId);
         return {
           name: ctx.data.project.data.name,
@@ -267,7 +284,7 @@ function describeLeaf(
       const tasks = tasksOf(n.filter as Filter | undefined);
       return {
         shows: tasks.length
-          ? sample(ctx, { type: 'task', ...(n.filter as Filter) })
+          ? sample(ctx, { type: 'task', ...(n.filter as Filter) }, 3, n.hideCodes === true)
           : 'No tasks match',
         empty: !tasks.length,
         warnings,
@@ -315,40 +332,18 @@ function describeLeaf(
       warnings.push(
         ...fields.map((f) => pathProblem(q.type, f)).filter((p): p is string => p !== null),
       );
-      return { shows: sample(ctx, q), empty: !count(ctx, q), warnings };
+      return {
+        shows: sample(ctx, q, 3, n.hideCodes === true),
+        empty: !count(ctx, q),
+        warnings,
+      };
     }
     case 'CountChart': {
       const c = node as NodeOf<'CountChart'>;
       const q = queryOf(c.query);
       const problem = pathProblem(q.type, c.by);
       if (problem) warnings.push(problem);
-      const read = fieldReader(ctx.data, { today: ctx.today });
-      // Show what people see: names for references, labels for options, not raw ids or values.
-      const byId = new Map<string, { type: EntityType; data: Record<string, unknown> }>(
-        [
-          ctx.data.project,
-          ...ctx.data.assignees,
-          ...ctx.data.stages,
-          ...ctx.data.tasks,
-          ...ctx.data.goals,
-        ].map((e) => [e.id, e]),
-      );
-      const display = (v: unknown, type: EntityType, field: string): string => {
-        if (v === undefined || v === null || v === '') return 'None';
-        const target = typeof v === 'string' ? byId.get(v) : undefined;
-        if (target) return String(target.data[ENTITIES[target.type].label] ?? v);
-        const key = optionKeyOf(type, field);
-        return (key && findOption(ctx.data.project, key, String(v))?.label) || String(v);
-      };
-      const groups = new Map<string, number>();
-      for (const row of runQuery(ctx.data, q.type, q, { today: ctx.today })) {
-        const { value, type, field } = read(row, c.by);
-        for (const v of Array.isArray(value) ? value : [value]) {
-          const label = display(v, type, field);
-          groups.set(label, (groups.get(label) ?? 0) + 1);
-        }
-      }
-      const parts = [...groups].map(([k, v]) => `${k} ${v}`);
+      const parts = countGroups(ctx, q, c.by).map((g) => `${g.label} ${g.count}`);
       return {
         shows: parts.length ? parts.join(' · ') : 'Nothing matches',
         empty: !parts.length,
@@ -367,20 +362,62 @@ function describeLeaf(
   }
 }
 
+/** "▰▰▱▱▱ 2/5": a word-sized bar (R4 mini bars); the glyphs count as no words. */
+function miniBar(value: number, of: number): string {
+  const filled = of ? Math.round((Math.min(value, of) / of) * 5) : 0;
+  return `${'▰'.repeat(filled)}${'▱'.repeat(5 - filled)} ${value}/${of}`;
+}
+
+type Group = { label: string; values: Set<string>; count: number };
+
+/** Items counted by a field, labelled as people see them: names for references, labels for options. */
+function countGroups(ctx: Context, q: Query, by: string): Group[] {
+  const read = fieldReader(ctx.data, { today: ctx.today });
+  const byId = new Map<string, { type: EntityType; data: Record<string, unknown> }>(
+    [
+      ctx.data.project,
+      ...ctx.data.assignees,
+      ...ctx.data.stages,
+      ...ctx.data.tasks,
+      ...ctx.data.goals,
+    ].map((e) => [e.id, e]),
+  );
+  const display = (v: unknown, type: EntityType, field: string): string => {
+    if (v === undefined || v === null || v === '') return 'None';
+    const target = typeof v === 'string' ? byId.get(v) : undefined;
+    if (target) return String(target.data[ENTITIES[target.type].label] ?? v);
+    const key = optionKeyOf(type, field);
+    return (key && findOption(ctx.data.project, key, String(v))?.label) || String(v);
+  };
+  const groups = new Map<string, Group>();
+  for (const row of runQuery(ctx.data, q.type, q, { today: ctx.today })) {
+    const { value, type, field } = read(row, by);
+    for (const v of Array.isArray(value) ? value : [value]) {
+      const label = display(v, type, field);
+      const group = groups.get(label) ?? { label, values: new Set<string>(), count: 0 };
+      group.values.add(String(v ?? ''));
+      group.count++;
+      groups.set(label, group);
+    }
+  }
+  return [...groups.values()];
+}
+
 // ------------------------------------------------------------------ explanation views
 
 /**
  * Blocks that show stored claims. A view that uses one is an explanation view, and only those get
  * the reader checks below; task boards and other project views stay quiet.
  */
-const EXPLAINING = ['ClaimCard', 'Layers'] as const;
+const EXPLAINING = ['ClaimCard', 'Layers', 'BeforeAfter', 'FindingChart'] as const;
 /** Text blocks that may come before the point. */
 const LEAD_IN = new Set<string>(['Markdown', 'Text', 'Callout']);
 const CONTAINERS = new Set<string>(['Grid', 'Section', 'Tabs']);
 /** Most words allowed before the first ClaimCard: about two short sentences (slice-1.md §5). */
 export const POINT_WORDS = 30;
 
-type Explaining = NodeOf<'ClaimCard'> | NodeOf<'Layers'>;
+type Explaining =
+  NodeOf<'ClaimCard'> | NodeOf<'Layers'> | NodeOf<'BeforeAfter'> | NodeOf<'FindingChart'>;
 
 function isExplaining(node: ViewNode): node is Explaining {
   return (EXPLAINING as readonly string[]).includes(node.component);
@@ -388,11 +425,12 @@ function isExplaining(node: ViewNode): node is Explaining {
 
 /** How the reader sees a claim: its statement and its certainty mark. */
 function claimLine(ctx: Context, claim: Entity<'claim'>): string {
-  const { statement, certainty, checkedOn, sourceIds } = claim.data;
+  const { statement, certainty, checkedOn, sourceIds, weakBecause } = claim.data;
   const label =
     optionsFor(ctx.data.project, 'claim.certainty').find((o) => o.value === certainty)?.label ??
     certainty;
-  return `“${statement}” (${label}, ${checkedOn}, ${plural(sourceIds.length, 'source')})`;
+  const weak = weakBecause ? `, weak: ${WEAK_BECAUSE_LABELS[weakBecause]}` : '';
+  return `“${statement}” (${label}, ${checkedOn}, ${plural(sourceIds.length, 'source')}${weak})`;
 }
 
 /** The words a ClaimCard shows: its kicker, the claim's statement and its detail. */
@@ -402,7 +440,7 @@ function cardText(node: NodeOf<'ClaimCard'>, claim: Entity<'claim'>): string {
 
 /** What a ClaimCard or Layers shows, warning about missing claims, claims without a source, and empty layers. */
 function describeExplaining(
-  node: Explaining,
+  node: NodeOf<'ClaimCard'> | NodeOf<'Layers'>,
   ctx: Context,
   warnings: string[],
 ): { shows: string; empty: boolean; warnings: string[] } {
@@ -436,20 +474,27 @@ function describeExplaining(
       warnings,
     };
   }
+  const flow = node.orientation === 'flow';
+  if (flow) warnings.push(...flowWarnings(node));
   const parts = node.layers.map((layer) => {
     warnings.push(...filterProblems('claim', layer.items));
     const pill = layer.pill?.claim ? find(layer.pill.claim) : undefined;
-    const rows = runQuery(
-      ctx.data,
-      'claim',
-      { sort: [{ field: 'order' }], ...layer.items },
-      { today: ctx.today },
-    );
+    const rows = layerClaims(ctx, layer);
     shown.push(...rows);
-    if (!rows.length) warnings.push(`layer "${layer.key}" shows nothing`);
+    if (!layer.items && !flow)
+      warnings.push(
+        `layer "${layer.key}" has no items: pick its claims with items (only a flow step may be a label alone)`,
+      );
+    else if (layer.items && !rows.length) warnings.push(`layer "${layer.key}" shows nothing`);
+    const progress = layerProgress(ctx, layer, warnings);
+    const holds = rows.length
+      ? plural(rows.length, 'claim')
+      : layer.items
+        ? 'nothing'
+        : 'label only';
     return {
       rows,
-      text: `${layer.key} ${layer.title}: ${rows.length ? plural(rows.length, 'claim') : 'nothing'}${pill ? ` (pill: ${claimLine(ctx, pill)})` : ''}`,
+      text: `${layer.key} ${layer.title}: ${holds}${progress ? `, ${progress}` : ''}${pill ? ` (pill: ${claimLine(ctx, pill)})` : ''}`,
     };
   });
   sourceWarnings();
@@ -458,6 +503,49 @@ function describeExplaining(
     empty: parts.every((p) => !p.rows.length),
     warnings,
   };
+}
+
+type LayerSpec = NodeOf<'Layers'>['layers'][number];
+
+/** A layer's claims; a label-only flow step (no items) holds none, not every claim. */
+function layerClaims(ctx: Context, layer: LayerSpec): Entity<'claim'>[] {
+  if (!layer.items) return [];
+  return runQuery(
+    ctx.data,
+    'claim',
+    { sort: [{ field: 'order' }], ...layer.items },
+    { today: ctx.today },
+  );
+}
+
+/** A step's task progress, "2 of 9 done" (cancelled left out, by meaning), when it sets progress. */
+function layerProgress(ctx: Context, layer: LayerSpec, warnings?: string[]): string | undefined {
+  if (!layer.progress) return undefined;
+  warnings?.push(...filterProblems('task', { where: layer.progress }));
+  const tasks = runQuery(ctx.data, 'task', { where: layer.progress }, { today: ctx.today });
+  const p = taskProgress(tasks, ctx.data.project);
+  if (!p.total)
+    warnings?.push(
+      `layer "${layer.key}" progress counts no tasks: check its where, or leave progress out`,
+    );
+  return `${p.done} of ${p.total} done`;
+}
+
+/** A flow is 2–5 short labelled boxes (r4-plan.md block 1). */
+function flowWarnings(node: NodeOf<'Layers'>): string[] {
+  const out: string[] = [];
+  const n = node.layers.length;
+  if (n < R4.flowMinSteps || n > R4.flowMaxSteps)
+    out.push(
+      `a flow has ${plural(n, 'step')}; use ${R4.flowMinSteps}–${R4.flowMaxSteps} boxes, or a stack for more`,
+    );
+  for (const layer of node.layers)
+    if (layer.title.length > R4.flowLabelChars)
+      out.push(
+        `flow step "${layer.key}" label is ${layer.title.length} characters; keep a box label under ${R4.flowLabelChars}, and put the rest in its claims`,
+      );
+  if (node.axis) out.push('axis shows only in a row; leave it out of a flow');
+  return out;
 }
 
 /** Every node in the order the reader meets it: depth-first, and only a Tabs' first tab (the others start hidden). */
@@ -537,6 +625,198 @@ function pointWarning(board: Board, ctx: Context): string | null {
   return null;
 }
 
+// ------------------------------------------------------------------ pictures (R4)
+
+const claimById = (ctx: Context, id: string | undefined) =>
+  id ? ctx.data.claims.find((c) => c.id === id) : undefined;
+
+/** The words a BeforeAfter shows: the stated change, then the lines that changed on each side. */
+function beforeAfterText(node: NodeOf<'BeforeAfter'>, ctx: Context): string[] {
+  const before = claimById(ctx, node.before)?.data.quote ?? '';
+  const after = claimById(ctx, node.after)?.data.quote ?? '';
+  const changed = changedLines(before, after);
+  return [
+    claimById(ctx, node.claim)?.data.statement ?? '',
+    node.beforeLabel ?? '',
+    node.afterLabel ?? '',
+    ...changed.before,
+    ...changed.after,
+  ];
+}
+
+/** BeforeAfter: two quoted passages and the claim that states the change (r4-plan.md block 3). */
+function describeBeforeAfter(
+  node: NodeOf<'BeforeAfter'>,
+  ctx: Context,
+  warnings: string[],
+): { shows: string; empty: boolean; warnings: string[] } {
+  const get = (id: string) => {
+    const claim = claimById(ctx, id);
+    if (!claim) warnings.push(`claim ${id} not found in this project`);
+    return claim;
+  };
+  const stated = node.claim ? get(node.claim) : undefined;
+  const before = get(node.before);
+  const after = get(node.after);
+  if (!node.claim)
+    warnings.push(
+      'no claim states the change: set claim to a claim saying what changed, in one line above the panes',
+    );
+  const seen = new Set<string>();
+  for (const claim of [stated, before, after])
+    if (claim && !seen.has(claim.id)) {
+      seen.add(claim.id);
+      warnings.push(...claimWarnings(claim, ctx.data.project));
+    }
+  for (const [side, claim] of [
+    ['before', before],
+    ['after', after],
+  ] as const)
+    if (claim && !claim.data.quote)
+      warnings.push(
+        `the ${side} claim ${claim.id} has no quote: store the passage ${side} the change, word for word, as its quote (with locator and source)`,
+      );
+  const a = before?.data.quote ?? '';
+  const b = after?.data.quote ?? '';
+  const statedWords = countWords(stated?.data.statement ?? '');
+  if (statedWords > R4.findingTitleWords)
+    warnings.push(
+      `the stated change is ${statedWords} words; keep it to ${R4.findingTitleWords} or fewer: one line, and let the panes show the rest`,
+    );
+  const words = beforeAfterText(node, ctx).reduce((sum, t) => sum + countWords(t), 0);
+  if (a && b && a.trim() === b.trim())
+    warnings.push('before and after quote the same passage, so nothing shows as changed');
+  else if (words > R4.beforeAfterWords)
+    warnings.push(
+      `this BeforeAfter shows ${words} words; keep the stated change and the changed lines to ${R4.beforeAfterWords}: quote only the lines that changed`,
+    );
+  const parts = a && b ? diffWords(a, b) : [];
+  const clip = (t: string) => (t.length > 40 ? `${t.slice(0, 40)}…` : t);
+  const removed = parts.filter((p) => p.op === 'removed').map((p) => clip(p.text.trim()));
+  const added = parts.filter((p) => p.op === 'added').map((p) => clip(p.text.trim()));
+  const side = (label: string, extra?: string) => (extra ? `${label} · ${extra}` : label);
+  return {
+    shows:
+      `${stated ? `${claimLine(ctx, stated)}; ` : ''}${side('Before', node.beforeLabel)} → ${side('After', node.afterLabel)}` +
+      (parts.length
+        ? `: removed ${removed.length ? removed.map((t) => `“${t}”`).join(', ') : 'nothing'}, added ${added.length ? added.map((t) => `“${t}”`).join(', ') : 'nothing'}`
+        : ': nothing to compare'),
+    empty: !a || !b,
+    warnings,
+  };
+}
+
+type Bar = { key: string; label: string; value: number; unit?: string; values?: Set<string> };
+
+/** The bars a FindingChart draws: claims with a figure, or groups counted by a field. */
+function findingBars(node: NodeOf<'FindingChart'>, ctx: Context): Bar[] {
+  if (node.bars) {
+    return runQuery(
+      ctx.data,
+      'claim',
+      { sort: [{ field: 'order' }], ...node.bars },
+      { today: ctx.today },
+    ).flatMap((c) =>
+      c.data.figure
+        ? [
+            {
+              key: c.id,
+              label: c.data.figure.label,
+              value: c.data.figure.value,
+              unit: c.data.figure.unit,
+            },
+          ]
+        : [],
+    );
+  }
+  if (!node.count) return [];
+  let groups = countGroups(ctx, node.count.query, node.count.by);
+  if (node.count.sort === 'count') groups = [...groups].sort((x, y) => y.count - x.count);
+  return groups
+    .slice(0, node.count.limit)
+    .map((g) => ({ key: g.label, label: g.label, value: g.count, values: g.values }));
+}
+
+/** FindingChart: bars under a title that is a stored claim (r4-plan.md block 4). */
+function describeFindingChart(
+  node: NodeOf<'FindingChart'>,
+  ctx: Context,
+  warnings: string[],
+): { shows: string; empty: boolean; warnings: string[] } {
+  const claim = claimById(ctx, node.claim);
+  if (!node.claim)
+    warnings.push(
+      "the chart's title isn't a stored claim: set claim to the claim that states the finding, so the title carries its certainty and source",
+    );
+  else if (!claim) warnings.push(`claim ${node.claim} not found in this project`);
+  if (node.title)
+    warnings.push(
+      'title is free text: the claim is the title, so leave title out and keep the finding in the claim',
+    );
+  const titleWords = countWords(claim?.data.statement ?? '');
+  if (titleWords > R4.findingTitleWords)
+    warnings.push(
+      `the title claim is ${titleWords} words; keep it to ${R4.findingTitleWords} or fewer, the finding in one line`,
+    );
+  const checked = new Set<string>();
+  const check = (c: Entity<'claim'>) => {
+    if (checked.has(c.id)) return;
+    checked.add(c.id);
+    warnings.push(...claimWarnings(c, ctx.data.project));
+  };
+  if (claim) check(claim);
+
+  if (!node.bars && !node.count)
+    warnings.push('no bars: set bars (a claim filter) or count ({query, by})');
+  if (node.bars && node.count)
+    warnings.push('set bars or count, not both: the chart draws bars and ignores count');
+  if (node.bars) {
+    warnings.push(...filterProblems('claim', node.bars));
+    const rows = runQuery(ctx.data, 'claim', node.bars, { today: ctx.today });
+    for (const c of rows) {
+      check(c);
+      if (!c.data.figure)
+        warnings.push(`claim ${c.id} has no figure, so it draws no bar: add figure {value, label}`);
+    }
+  } else if (node.count) {
+    warnings.push(...filterProblems(node.count.query.type, node.count.query));
+    const problem = pathProblem(node.count.query.type, node.count.by);
+    if (problem) warnings.push(problem);
+  }
+
+  const bars = findingBars(node, ctx);
+  if ((node.bars || node.count) && bars.length < R4.minBars)
+    warnings.push(
+      `the chart has ${plural(bars.length, 'bar')}; a finding chart compares, so it needs at least ${R4.minBars}`,
+    );
+  if (bars.length > R4.maxBars)
+    warnings.push(`the chart has ${bars.length} bars; keep it to ${R4.maxBars} or fewer`);
+  const units = [...new Set(bars.map((b) => b.unit ?? ''))];
+  if (units.length > 1)
+    warnings.push(
+      `the bars mix units (${units.map((u) => `"${u}"`).join(', ')}): one chart compares one unit, so split it or fix the figures`,
+    );
+  const lit =
+    node.highlight === undefined
+      ? bars[0]
+      : bars.find((b) => b.key === node.highlight || b.values?.has(node.highlight!));
+  if (node.highlight !== undefined && !lit)
+    warnings.push(
+      `highlight "${node.highlight}" matches no bar: use ${node.bars ? 'the id of a claim with a figure' : 'a group value or label'}`,
+    );
+  const barText = bars
+    .map(
+      (b) =>
+        `${b.label} ${b.value}${b.unit ? ` ${b.unit}` : ''}${b === lit ? ' (highlighted)' : ''}`,
+    )
+    .join(' · ');
+  return {
+    shows: `${claim ? `${claimLine(ctx, claim)}: ` : ''}${barText || 'no bars'}`,
+    empty: !bars.length,
+    warnings,
+  };
+}
+
 // ------------------------------------------------------------------ report opening
 
 /** Starts the warning for a report page without a StartHere, so callers can recognise it. */
@@ -589,7 +869,7 @@ function describeStartHere(
       `yourPart is ${node.yourPart.length} characters; keep it under ${START_HERE.yourPartChars}: one line, with the detail in a step below`,
     );
 
-  const evidence = node.evidence ?? [];
+  const evidence = (node.evidence ?? []).map(evidenceId);
   for (const id of evidence)
     if (!byId.has(id)) warnings.push(`evidence ${id} not found in this project`);
   if (!claim && !evidence.some((id) => byId.has(id)))
@@ -701,27 +981,57 @@ function visibleText(node: ViewNode, ctx: Context): { texts: string[]; marked: s
       return { texts: [title, node.kicker ?? '', ...said], marked: on ? said : [] };
     }
     case 'Layers': {
-      // A stack shows only the layer open at first; a row shows every step.
-      const shown = (layer: (typeof node.layers)[number]) => {
-        if (node.orientation !== 'row' && layer.key !== node.open) return [];
+      // A stack and a flow show only the layer open at first; a row shows every step.
+      const flow = node.orientation === 'flow';
+      const isOpen = (layer: LayerSpec) => node.orientation === 'row' || layer.key === node.open;
+      const shown = (layer: LayerSpec) => {
+        if (!isOpen(layer)) return [];
         const pill = ctx.data.claims.filter((c) => c.id === layer.pill?.claim);
-        const items = runQuery(ctx.data, 'claim', layer.items, { today: ctx.today });
+        const items = layerClaims(ctx, layer);
         return [...pill, ...items.filter((c) => !pill.includes(c))].flatMap((c) => [
           c.data.statement,
           c.data.detail ?? '',
         ]);
       };
-      const inLayers = node.layers.flatMap((l) => [l.title, l.hint ?? '', ...shown(l)]);
+      // A flow box shows its label; its hint opens with it.
+      const inLayers = node.layers.flatMap((l) => [
+        l.title,
+        !flow || isOpen(l) ? (l.hint ?? '') : '',
+        ...shown(l),
+      ]);
       return {
         texts: [
           title,
           node.prompt ?? '',
           ...(node.legend ?? []).map((l) => l.label),
-          ...(node.axis ? [node.axis.from, node.axis.to] : []),
+          ...(node.axis && !flow ? [node.axis.from, node.axis.to] : []),
           ...node.layers.map((l) => l.pill?.label ?? ''),
+          ...node.layers.map((l) => layerProgress(ctx, l)?.replace(/ done$/, '') ?? ''),
           ...inLayers,
         ],
-        marked: on ? inLayers : [],
+        // A flow is a picture: no underlines unless it asks for them.
+        marked: (flow ? node.terms === true : on) ? inLayers : [],
+      };
+    }
+    case 'BeforeAfter': {
+      const said = beforeAfterText(node, ctx);
+      return { texts: [title, ...said], marked: [] };
+    }
+    case 'FindingChart': {
+      const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
+      const bars = findingBars(node, ctx).map((b) => `${b.label} ${b.value}${b.unit ?? ''}`);
+      return { texts: [title, claim?.data.statement ?? '', ...bars], marked: [] };
+    }
+    case 'TaskTable':
+    case 'DataList': {
+      // Rows aren't counted (data), but they underline terms when asked to.
+      if (node.terms !== true) return { texts: [title], marked: [] };
+      const query: Query =
+        node.component === 'TaskTable' ? { type: 'task', ...node.filter } : node.query;
+      const rows = runQuery(ctx.data, query.type, query, { today: ctx.today });
+      return {
+        texts: [title],
+        marked: rows.map((r) => rowName(query.type, r.data, node.hideCodes === true)),
       };
     }
     default:

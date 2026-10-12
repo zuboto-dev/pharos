@@ -67,6 +67,8 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   DataList: COMPONENT_INFO.DataList.example,
   Text: COMPONENT_INFO.Text.example,
   Layers: COMPONENT_INFO.Layers.example,
+  BeforeAfter: COMPONENT_INFO.BeforeAfter.example,
+  FindingChart: COMPONENT_INFO.FindingChart.example,
   ClaimCard: COMPONENT_INFO.ClaimCard.example,
   StartHere: COMPONENT_INFO.StartHere.example,
 };
@@ -112,6 +114,57 @@ describe('catalog components', () => {
     ]) {
       expect(text).toContain(expected);
     }
+  });
+
+  it('draws the R4 picture stubs from stored claims', () => {
+    const claim = (id: string, extra: Record<string, unknown>) => ({
+      id,
+      type: 'claim',
+      createdAt: '',
+      updatedAt: '',
+      createdRev: 1,
+      updatedRev: 1,
+      data: {
+        projectId: data.project.id,
+        statement: `Claim ${id}`,
+        certainty: 'reading',
+        checkedOn: '2026-10-12',
+        sourceIds: [],
+        tags: [],
+        order: 0,
+        ...extra,
+      },
+    });
+    const withClaims = {
+      ...data,
+      claims: [
+        claim('clm_change', { statement: 'The guide says how to start.' }),
+        claim('clm_before', { quote: 'Run pnpm dev to start.' }),
+        claim('clm_after', { quote: 'Run pnpm service install to start.' }),
+        claim('clm_tokens_headline', { statement: 'OpenUI needs half the tokens.' }),
+        claim('clm_openui_tokens', {
+          figure: { value: 4800, unit: 'tokens', label: 'OpenUI' },
+          tags: ['token-benchmark'],
+        }),
+        claim('clm_json_tokens', {
+          figure: { value: 10180, unit: 'tokens', label: 'JSON' },
+          tags: ['token-benchmark'],
+          order: 1,
+        }),
+      ],
+    } as unknown as ProjectDataset;
+    const before = renderSpec(COMPONENT_INFO.BeforeAfter.example, withClaims).container;
+    expect(before.querySelector('del')?.textContent?.trim()).toBe('dev');
+    expect(before.querySelector('ins')?.textContent?.trim()).toBe('service install');
+    expect(before.textContent).toContain('The guide says how to start.');
+    expect(before.textContent).toContain('Before · 8bb6b32');
+    cleanup();
+    const chart = renderSpec(COMPONENT_INFO.FindingChart.example, withClaims).container;
+    expect(chart.textContent).toContain('OpenUI needs half the tokens.');
+    expect([...chart.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      `OpenUI${(4800).toLocaleString()} tokens`,
+      `JSON${(10180).toLocaleString()} tokens`,
+    ]);
   });
 
   it('isolates a crashing component behind its error boundary', () => {

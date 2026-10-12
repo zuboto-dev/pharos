@@ -29,7 +29,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   StatCards: {
     category: 'overview',
-    use: 'A few headline counts (2–4). Each stat counts entities matching a query; `of` shows "x / total".',
+    use: 'A few headline counts (2–4). Each stat counts entities matching a query; `of` shows "x / total" with a word-sized bar, so the reader sees the share without reading.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -127,7 +127,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   TaskTable: {
     category: 'work',
-    use: 'Many tasks with details side by side (estimate, dependencies). Denser than a kanban.',
+    use: 'Many tasks with details side by side (estimate, dependencies). Denser than a kanban. On a report page set `hideCodes: true` so "W3.8 · Measure the baseline" reads "Measure the baseline", and `terms: true` to explain terms in the rows.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -232,7 +232,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DataList: {
     category: 'data',
-    use: 'A short list of anything with a few details, e.g. decisions still proposed, goals still open.',
+    use: 'A short list of anything with a few details, e.g. decisions still proposed, goals still open. `hideCodes: true` drops work codes from titles on a report page; `terms: true` explains terms in the rows.',
     minColumns: 3,
     suggestedColumns: 6,
     example: {
@@ -244,7 +244,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   Text: {
     category: 'data',
-    use: 'A sentence or two with live numbers, as a headline or summary at the top of an answer.',
+    use: 'A sentence or two with live numbers, as a headline or summary at the top of an answer. `{bar: {query, of}}` draws a word-sized bar inline instead of a number.',
     minColumns: 3,
     suggestedColumns: 12,
     example: {
@@ -281,7 +281,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   Layers: {
     category: 'explain',
-    use: 'A picture of how something is built, as ordered layers the reader taps open (`orientation: "stack"`), or a few steps side by side (`"row"`, e.g. a spectrum with an `axis`). Each layer picks stored claims by tag with `items`; claims with an `aboutId` group into one card per tool, the others show as lines. Name layers, never state facts in `title` or `hint`.',
+    use: 'A picture of how something is built, as ordered layers the reader taps open (`orientation: "stack"`), a few steps side by side (`"row"`, e.g. a spectrum with an `axis`), or a `"flow"`: 2–5 boxes joined by arrows, each a label under 30 characters with its pill colour, whose claims open below the row when the reader taps a box (use it for a process, "Your question → AI arranges blocks → Pharos draws the screen", instead of columns of sentences). Each layer picks stored claims by tag with `items`; a flow step may leave `items` out and be a label only. `progress` (a task where, e.g. {"stageId": "stg_1"}) adds a bar and "2 of 9" to a step, on the same scale for every step, and tapping it lists the open tasks. Claims with an `aboutId` group into one card per tool, the others show as lines. Name layers, never state facts in `title` or `hint`. A flow is a picture, so terms are off unless `terms: true`.',
     minColumns: 6,
     suggestedColumns: 12,
     example: {
@@ -309,9 +309,35 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       ],
     },
   },
+  BeforeAfter: {
+    category: 'explain',
+    use: 'Show what a change did: two panes, "Before · 8bb6b32" and "After · main", each the quoted passage of a stored claim (`before`, `after`), with removed words struck and added words marked; `claim` states the change above in one line (15 words or fewer). Store each passage word for word as the claim\'s `quote`, with `locator` (file and line, or commit) and its source. Use it on a done page for "what changed". Keep the stated change and the changed lines to about 40 words.',
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: {
+      component: 'BeforeAfter',
+      claim: 'clm_change',
+      before: 'clm_before',
+      after: 'clm_after',
+      beforeLabel: '8bb6b32',
+      afterLabel: 'main',
+    },
+  },
+  FindingChart: {
+    category: 'explain',
+    use: 'A number-backed finding as a picture: horizontal bars with values and labels on them, one bar (`highlight`) in the accent colour, the rest grey, no axis or legend. The title is the stored `claim` that states the finding (15 words or fewer), never free text, so leave `title` out. Bars come from claims with `bars` (a claim filter; each claim\'s `figure` {value, unit, label} is one bar, and on "From source" the value must appear in its quote) or from a project query with `count` ({query, by}, like CountChart). Use 2–12 bars in one unit. Tapping a bar opens its claim, quote and source.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'FindingChart',
+      claim: 'clm_tokens_headline',
+      bars: { where: { tags: 'token-benchmark' } },
+      highlight: 'clm_openui_tokens',
+    },
+  },
   StartHere: {
     category: 'explain',
-    use: 'Opens every report page, first and full width: the page\'s one purpose (`done`, `found` or `needs-you`); `why`, one line (under 100 characters) on what the work is for or the question it answers, shown above the headline; one headline sentence with a verb (under 160 characters); `yourPart`, one line (under 120 characters) on what the reader has to do, even when it is "Nothing now" (the only place the page says it: no other widget titled "Your part" or "What you need to do"); where it sits (`stageId` or `goalId`, and `date`; the project is shown for you), and a `path` of 2–4 labelled steps, each with a `target` widget id on the same board so tapping scrolls there. Back the headline: on a found page set `claim` (its statement, certainty mark and sources show); otherwise list `evidence` ids (artifacts, tasks, decisions). Needs-you pages set `due`. One per view. Keep the whole page short: about 150 words before anything the reader opens.',
+    use: 'Opens every report page, first and full width: the page\'s one purpose (`done`, `found` or `needs-you`); `why`, one line (under 100 characters) on what the work is for or the question it answers, shown above the headline; one headline sentence with a verb (under 160 characters); `yourPart`, one line (under 120 characters) on what the reader has to do, even when it is "Nothing now" (the only place the page says it: no other widget titled "Your part" or "What you need to do"); where it sits (`stageId` or `goalId`, and `date`; the project is shown for you), and a `path` of 2–4 labelled steps, each with a `target` widget id on the same board so tapping scrolls there. Back the headline: on a found page set `claim` (its statement, certainty mark and sources show); otherwise list `evidence` ids (artifacts, tasks, decisions), or `{id, label}` to show a short label (24 characters or fewer, e.g. "Test run") instead of a long title. Needs-you pages set `due`. One per view. Keep the whole page short: about 150 words before anything the reader opens.',
     minColumns: 6,
     suggestedColumns: 12,
     example: {
@@ -320,7 +346,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       why: 'So a reader knows at once what a report page is for and what it asks of them',
       headline: 'Report pages now open with a start-here block that says what the page is for.',
       yourPart: 'Nothing now. Open one report page on your phone and say if the opening helps.',
-      evidence: ['art_tests'],
+      evidence: [{ id: 'art_tests', label: 'Test run' }],
       date: '2026-10-12',
       path: [
         { label: 'What changed', says: 'The new block, before and after', target: 'changed' },
@@ -366,7 +392,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
 export const BOARD_GUIDE = `A view is a Board: a 12-column grid of widgets laid out left to right, top to bottom.
 Each widget is {id, w?, x?, h?, node}: a stable id, a width in columns (1–12, default 12), an optional start column (0–11; omit to flow), an optional minimum height in px (omit to fit content), and one catalog component as \`node\`.
 Widths in a row should add up to 12 (e.g. 4 + 8, 6 + 6). Never go below a component's minColumns.
-Components read live project data; never copy data into a view. Findings live in \`claim\` records and words to explain in \`term\` records: ClaimCard and Layers show claims, and text blocks explain terms where they first appear (\`terms: false\` turns that off). Store a term only for a word a non-specialist wouldn't know, not everyday words like "test case"; a report page underlines 5 terms at most. Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
+Components read live project data; never copy data into a view. Findings live in \`claim\` records and words to explain in \`term\` records: ClaimCard, Layers, BeforeAfter and FindingChart show claims, and text blocks explain terms where they first appear (\`terms: false\` turns that off). Store a term only for a word a non-specialist wouldn't know, not everyday words like "test case"; a report page underlines 5 terms at most. Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
 - where values: exact value, array (any of), {not: value|array}, {exists: bool}, {contains: text}, or a range {gt|gte|lt|lte: value}
 - dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
 - fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"

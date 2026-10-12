@@ -23,6 +23,20 @@ const terms = z
   .optional()
   .describe('Explain project terms where they first appear in this widget (default true)');
 
+/** Limits for the R4 picture blocks (r4-plan.md), checked by the preview's warnings. */
+export const R4 = {
+  flowMinSteps: 2,
+  flowMaxSteps: 5,
+  /** A flow box's label. */
+  flowLabelChars: 30,
+  /** Words a BeforeAfter shows: the stated change and the changed lines. */
+  beforeAfterWords: 40,
+  /** A FindingChart's title claim, in words. */
+  findingTitleWords: 15,
+  minBars: 2,
+  maxBars: 12,
+} as const;
+
 function component<C extends string, S extends z.ZodRawShape>(
   name: C,
   description: string,
@@ -77,20 +91,24 @@ export const ProjectHeaderNode = component(
   {},
 );
 
-export const StatCardsNode = component('StatCards', 'A row of key numbers.', {
-  stats: z.array(
-    z.strictObject({
-      label: z.string(),
-      query: Query.optional().describe('Shows how many entities match'),
-      of: Query.optional().describe('With query, shows "matching / total"'),
-      value: z
-        .union([z.string(), z.number()])
-        .optional()
-        .describe('A fixed value instead of a query'),
-      tone: z.enum(['neutral', 'good', 'warning', 'bad']).optional(),
-    }),
-  ),
-});
+export const StatCardsNode = component(
+  'StatCards',
+  'A row of key numbers; a stat with `of` also draws a word-sized bar.',
+  {
+    stats: z.array(
+      z.strictObject({
+        label: z.string(),
+        query: Query.optional().describe('Shows how many entities match'),
+        of: Query.optional().describe('With query, shows "matching / total"'),
+        value: z
+          .union([z.string(), z.number()])
+          .optional()
+          .describe('A fixed value instead of a query'),
+        tone: z.enum(['neutral', 'good', 'warning', 'bad']).optional(),
+      }),
+    ),
+  },
+);
 
 export const ProgressRingNode = component(
   'ProgressRing',
@@ -168,8 +186,21 @@ export const KanbanBoardNode = component('KanbanBoard', 'Tasks as cards in colum
   hideEmpty: z.boolean().optional().describe('Hide columns without tasks'),
 });
 
+/** F6 (R4): titles like "W3.8 · Measure the baseline" read as "Measure the baseline". */
+const hideCodes = z
+  .boolean()
+  .optional()
+  .describe('Hide work codes at the start of titles, e.g. "W3.8 · " (default false)');
+/** Terms in data rows are off unless asked for, so task boards stay plain. */
+const rowTerms = z
+  .boolean()
+  .optional()
+  .describe('Explain project terms where they first appear in the rows (default false)');
+
 export const TaskTableNode = component('TaskTable', 'Tasks as a table.', {
   filter: Filter.optional(),
+  hideCodes,
+  terms: rowTerms,
   columns: z
     .array(z.enum(['status', 'priority', 'stage', 'assignee', 'estimate', 'dueDate', 'dependsOn']))
     .optional()
@@ -277,11 +308,16 @@ export const DataListNode = component('DataList', 'A compact list of any entity 
     .array(FieldPath)
     .optional()
     .describe('Fields shown after each item, e.g. ["status", "dueDate"]'),
+  hideCodes,
+  terms: rowTerms,
 });
 
 const TextValue = z.union([
   z.strictObject({ count: Query }),
   z.strictObject({ percent: z.strictObject({ query: Query, of: Query }) }),
+  z
+    .strictObject({ bar: z.strictObject({ query: Query, of: Query }) })
+    .describe('A word-sized bar: how many of `of` match `query`'),
   z.strictObject({
     project: z.enum(['name', 'summary', 'status', 'currentStage', 'currentStageTarget']),
   }),
@@ -295,7 +331,9 @@ export const TextNode = component(
     values: z
       .record(z.string().regex(/^\w+$/), TextValue)
       .optional()
-      .describe('Named values: {count: query}, {percent: {query, of}}, or {project: field}'),
+      .describe(
+        'Named values: {count: query}, {percent: {query, of}}, {bar: {query, of}} (a word-sized bar), or {project: field}',
+      ),
     terms,
   },
 );
@@ -310,7 +348,13 @@ const ExplainTone = z
 
 const Layer = z.strictObject({
   key: z.string().min(1).max(3).describe('Marker in the circle, e.g. "5"; `open` refers to it'),
-  title: z.string().min(1).max(60).describe('A name, not a claim, e.g. "The recipe format"'),
+  title: z
+    .string()
+    .min(1)
+    .max(60)
+    .describe(
+      `A name, not a claim, e.g. "The recipe format"; in a flow, a box label under ${R4.flowLabelChars} characters`,
+    ),
   hint: z
     .string()
     .max(90)
@@ -327,8 +371,11 @@ const Layer = z.strictObject({
     })
     .optional(),
   highlight: z.boolean().optional().describe('Draw this one as the layer that matters most'),
-  items: Filter.describe(
-    'Which claims it holds, e.g. {"where": {"tags": "layer-4"}}; sorted by order unless sort is given',
+  items: Filter.optional().describe(
+    'Which claims it holds, e.g. {"where": {"tags": "layer-4"}}; sorted by order unless sort is given. Leave it out only for a label-only flow step',
+  ),
+  progress: Where.optional().describe(
+    'Which tasks this step counts, e.g. {"stageId": "stg_1"}: a bar and "2 of 9" done (cancelled left out); tapping it lists the open ones',
   ),
 });
 
@@ -336,12 +383,23 @@ export const LayersNode = component(
   'Layers',
   'Ordered layers or steps, each holding stored claims: a stack the reader taps open, or steps side by side.',
   {
-    layers: z.array(Layer).min(2).max(7).describe('Top to bottom (stack) or left to right (row)'),
+    layers: z
+      .array(Layer)
+      .min(2)
+      .max(7)
+      .describe(
+        `Top to bottom (stack) or left to right (row, flow); a flow has ${R4.flowMinSteps}–${R4.flowMaxSteps} steps`,
+      ),
     orientation: z
-      .enum(['stack', 'row'])
+      .enum(['stack', 'row', 'flow'])
       .optional()
-      .describe('stack (default): one layer open at a time; row: every step shown'),
-    open: z.string().optional().describe('stack: key of the layer open at first (default none)'),
+      .describe(
+        'stack (default): one layer open at a time; row: every step shown; flow: labelled boxes joined by arrows, a tapped box opens its claims below the row',
+      ),
+    open: z
+      .string()
+      .optional()
+      .describe('stack or flow: key of the layer open at first (default none)'),
     prompt: z
       .string()
       .max(80)
@@ -363,7 +421,12 @@ export const LayersNode = component(
       .string()
       .optional()
       .describe('Claims with this tag show as a warning in their card (default "watch")'),
-    terms,
+    terms: z
+      .boolean()
+      .optional()
+      .describe(
+        'Explain project terms where they first appear in this widget (default true; false in a flow, which is a picture)',
+      ),
   },
 );
 
@@ -383,6 +446,66 @@ export const ClaimCardNode = component(
       .describe('One to three words above the statement, e.g. "Build"'),
     tone: ExplainTone.optional(),
     terms,
+  },
+);
+
+// ------------------------------------------------------------------ pictures (R4)
+// docs/reframe/r4-plan.md: pictures read stored claims or project queries; the spec holds ids,
+// tags, filters and short labels, never a finding's words or numbers.
+
+export const BeforeAfterNode = component(
+  'BeforeAfter',
+  "A change shown, not told: two panes, before and after, each with its claim's quoted passage; removed words struck, added words marked.",
+  {
+    claim: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Id of the claim that states the change, shown above the panes'),
+    before: z.string().min(1).describe('Id of the claim whose quote is the passage before'),
+    after: z.string().min(1).describe('Id of the claim whose quote is the passage after'),
+    beforeLabel: z
+      .string()
+      .min(1)
+      .max(24)
+      .optional()
+      .describe('After "Before · ", e.g. a commit "8bb6b32" or a date'),
+    afterLabel: z.string().min(1).max(24).optional().describe('After "After · ", e.g. "main"'),
+  },
+);
+
+const FindingCount = z.strictObject({
+  query: Query,
+  by: FieldPath.describe('Field to group by, e.g. "status", "kind", "stage.name"'),
+  sort: z
+    .enum(['count', 'field'])
+    .optional()
+    .describe("Biggest first (count) or in the field's natural order (default)"),
+  limit: z.number().int().min(1).max(12).optional().describe('Show at most this many bars'),
+});
+
+export const FindingChartNode = component(
+  'FindingChart',
+  'Horizontal bars whose title is a stored claim stating the finding: values and labels on the bars, one bar in the accent colour, the rest grey.',
+  {
+    claim: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Id of the claim that states the finding; it is the title, with its mark'),
+    bars: Filter.optional().describe(
+      'Bars from stored claims, e.g. {"where": {"tags": "token-benchmark"}}: each claim\'s figure is one bar and opens to its quote',
+    ),
+    count: FindingCount.optional().describe(
+      'Bars counting project items by a field instead, like CountChart',
+    ),
+    highlight: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'The bar drawn in the accent colour: a claim id (bars) or a group value or label (count). Default: the first bar',
+      ),
   },
 );
 
@@ -436,6 +559,25 @@ const StartStep = z.strictObject({
 
 const IsoDate = z.iso.date();
 
+/** F5 (R4): an evidence item is an id, or an id with a short label shown instead of its title. */
+const EvidenceItem = z.union([
+  z.string().min(1),
+  z.strictObject({
+    id: z.string().min(1),
+    label: z
+      .string()
+      .min(1)
+      .max(24)
+      .describe('Shown instead of the title, e.g. "Test run" or "G1 measures"'),
+  }),
+]);
+export type EvidenceItem = z.infer<typeof EvidenceItem>;
+
+/** The id of an evidence item, whichever form it takes. */
+export function evidenceId(item: EvidenceItem): string {
+  return typeof item === 'string' ? item : item.id;
+}
+
 export const StartHereNode = component(
   'StartHere',
   "The opening of a report page: its one purpose, why the work exists, a headline sentence with its evidence, the reader's part, where it sits, and a reading path of 2–4 steps.",
@@ -473,11 +615,11 @@ export const StartHereNode = component(
         'Id of the claim the headline states (found pages): its statement is shown, with its certainty mark and sources',
       ),
     evidence: z
-      .array(z.string().min(1))
+      .array(EvidenceItem)
       .max(8)
       .optional()
       .describe(
-        'Ids of what backs the headline: artifacts (links, files, test results), tasks, decisions or claims',
+        'What backs the headline: ids of artifacts (links, files, test results), tasks, decisions or claims, or {id, label} for a short label',
       ),
     stageId: z.string().optional().describe('The stage this report belongs to'),
     goalId: z.string().optional().describe('The goal this report belongs to'),
@@ -522,6 +664,8 @@ const LEAF_NODES = [
   TextNode,
   LayersNode,
   ClaimCardNode,
+  BeforeAfterNode,
+  FindingChartNode,
   StartHereNode,
 ] as const;
 

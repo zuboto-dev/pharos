@@ -796,6 +796,13 @@ function describeFindingChart(
     warnings.push(
       `the bars mix units (${units.map((u) => `"${u}"`).join(', ')}): one chart compares one unit, so split it or fix the figures`,
     );
+  if (node.max !== undefined) {
+    const over = bars.filter((b) => b.value > node.max!);
+    if (over.length)
+      warnings.push(
+        `${over.map((b) => `"${b.label}" (${b.value})`).join(', ')} ${over.length === 1 ? 'is' : 'are'} over max ${node.max}: a bar can't exceed the whole it is part of, so fix the figure or the max`,
+      );
+  }
   const lit =
     node.highlight === undefined
       ? bars[0]
@@ -811,7 +818,7 @@ function describeFindingChart(
     )
     .join(' · ');
   return {
-    shows: `${claim ? `${claimLine(ctx, claim)}: ` : ''}${barText || 'no bars'}`,
+    shows: `${claim ? `${claimLine(ctx, claim)}: ` : ''}${barText || 'no bars'}${node.max !== undefined && bars.length ? ` (out of ${node.max})` : ''}`,
     empty: !bars.length,
     warnings,
   };

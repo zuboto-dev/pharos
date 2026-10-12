@@ -14,7 +14,7 @@ import { formatDate } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { labelOf } from '../interactive';
 import { Empty, isHttp, Uri } from '../ui';
-import { CertaintyMark } from './knowledge';
+import { CertaintyMark, ClaimBasis } from './knowledge';
 
 /**
  * FindingChart (docs/reframe/r4-plan.md block 4): a finding as a picture. The title is the stored
@@ -22,7 +22,8 @@ import { CertaintyMark } from './knowledge';
  * horizontal bars carry their own labels and values, so there is no axis or legend; one bar is in
  * the accent colour and the rest are grey (direct attention, Knaflic). Bars come from claims'
  * figures, each opening to its claim, quote, locator and source, or from a project query counted
- * by a field, labelled the way CountChart labels it.
+ * by a field, labelled the way CountChart labels it. With `max`, each bar sits on a faint track
+ * for that whole (7 of 7 tools, 100%), so a share reads as a share.
  */
 
 type Claim = Entity<'claim'>;
@@ -154,11 +155,17 @@ function SourceLine({ source }: { source: Artifact }) {
   );
 }
 
-/** What a bar rests on: its claim with its mark, the quoted passage, where it sits, its source. */
+/**
+ * What a bar rests on: its claim with its mark, the quote and assumption (open, since the reader
+ * opened the bar), and every source behind it, the quoted one with where the passage sits.
+ */
 function BarDetail({ id, claim }: { id: string; claim: Claim }) {
   const data = useViewData();
-  const { quote, locator } = claim.data;
-  const source = quoteSourceOf(data, claim);
+  const { locator } = claim.data;
+  const quoted = quoteSourceOf(data, claim);
+  const sources = claim.data.sourceIds
+    .map((s) => artifactOf(data, s))
+    .filter((s): s is Artifact => !!s);
   return (
     <div
       id={id}
@@ -167,29 +174,28 @@ function BarDetail({ id, claim }: { id: string; claim: Claim }) {
       className="mt-1.5 space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
     >
       <p className="break-words text-neutral-900 dark:text-neutral-100">{claim.data.statement}</p>
-      <CertaintyMark claim={claim} passage={false} />
-      {quote && (
-        <figure className="min-w-0 space-y-0.5">
-          <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
-            “{quote}”
-          </blockquote>
-          {(source || locator) && (
-            <figcaption className="flex min-w-0 flex-wrap items-baseline gap-x-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
-              <span aria-hidden>—</span>
-              {source && <SourceLine source={source} />}
-              {locator && (
-                <span>
-                  {source && <span aria-hidden>· </span>}
-                  {locator}
-                </span>
-              )}
-            </figcaption>
-          )}
-        </figure>
-      )}
-      {!quote && source && (
-        <div className="text-xs">
-          <SourceLine source={source} />
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <CertaintyMark claim={claim} />
+        <ClaimBasis claim={claim} defaultOpen caption={false} />
+      </div>
+      {sources.length > 0 && (
+        <div className="space-y-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="font-medium text-neutral-700 dark:text-neutral-300">
+            {sources.length > 1 ? `Sources (${sources.length})` : 'Source'}
+          </p>
+          <ul className="space-y-0.5">
+            {sources.map((s) => (
+              <li key={s.id} className="flex min-w-0 flex-wrap items-baseline gap-x-1">
+                <SourceLine source={s} />
+                {locator && s.id === quoted?.id && (
+                  <span>
+                    <span aria-hidden>· </span>
+                    {locator}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
@@ -219,7 +225,9 @@ export function FindingChart({ node }: { node: Node }) {
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
   const bars = barsOf(data, node);
   const lit = highlightOf(bars, node.highlight);
-  const max = Math.max(0, ...bars.map((b) => b.value)) || 1;
+  // The whole every bar is part of: the chart's `max`, else the longest bar.
+  const whole = node.max;
+  const max = whole ?? (Math.max(0, ...bars.map((b) => b.value)) || 1);
   const values = bars.map((b) => formatValue(b.value, b.unit));
   // Room kept after the longest bar for its value, so every bar is drawn on one scale.
   const reserve = Math.max(0, ...values.map((v) => v.length)) + 1;
@@ -242,7 +250,8 @@ export function FindingChart({ node }: { node: Node }) {
           {bars.map((b, i) => {
             const highlighted = b.key === lit;
             const value = values[i]!;
-            const width = `calc((100% - ${reserve}ch) * ${Math.max(0, b.value) / max})`;
+            const share = Math.min(1, Math.max(0, b.value) / max);
+            const width = `calc((100% - ${reserve}ch) * ${share})`;
             const name = `${b.label}, ${value}${highlighted ? ', highlighted' : ''}`;
             const body = (
               <>
@@ -257,15 +266,34 @@ export function FindingChart({ node }: { node: Node }) {
                   {b.label}
                 </span>
                 <span className="flex h-5 items-center">
-                  <span
-                    aria-hidden
-                    data-highlighted={highlighted || undefined}
-                    className={clsx(
-                      'block h-full min-w-0.5 shrink-0 rounded-sm motion-safe:transition-[width]',
-                      highlighted ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600',
-                    )}
-                    style={{ width }}
-                  />
+                  {whole === undefined ? (
+                    <span
+                      aria-hidden
+                      data-highlighted={highlighted || undefined}
+                      className={clsx(
+                        'block h-full min-w-0.5 shrink-0 rounded-sm motion-safe:transition-[width]',
+                        highlighted ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600',
+                      )}
+                      style={{ width }}
+                    />
+                  ) : (
+                    // A faint track for the whole, so the bar reads as a share of it.
+                    <span
+                      aria-hidden
+                      data-track
+                      className="block h-full shrink-0 overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-800"
+                      style={{ width: `calc(100% - ${reserve}ch)` }}
+                    >
+                      <span
+                        data-highlighted={highlighted || undefined}
+                        className={clsx(
+                          'block h-full min-w-0.5 rounded-sm motion-safe:transition-[width]',
+                          highlighted ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600',
+                        )}
+                        style={{ width: `${share * 100}%` }}
+                      />
+                    </span>
+                  )}
                   <span
                     className={clsx(
                       'ml-1.5 text-sm whitespace-nowrap tabular-nums',

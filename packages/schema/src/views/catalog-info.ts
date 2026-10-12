@@ -325,7 +325,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   FindingChart: {
     category: 'explain',
-    use: 'A number-backed finding as a picture: horizontal bars with values and labels on them, one bar (`highlight`) in the accent colour, the rest grey, no axis or legend. The title is the stored `claim` that states the finding (15 words or fewer), never free text, so leave `title` out. Bars come from claims with `bars` (a claim filter; each claim\'s `figure` {value, unit, label} is one bar, and on "From source" the value must appear in its quote) or from a project query with `count` ({query, by}, like CountChart). Use 2–12 bars in one unit. Tapping a bar opens its claim, quote and source.',
+    use: 'A number-backed finding as a picture: horizontal bars with values and labels on them, one bar (`highlight`) in the accent colour, the rest grey, no axis or legend. The title is the stored `claim` that states the finding (15 words or fewer), never free text, so leave `title` out. Bars come from claims with `bars` (a claim filter; each claim\'s `figure` {value, unit, label} is one bar, and on "From source" the value must appear in its quote) or from a project query with `count` ({query, by}, like CountChart). Use 2–12 bars in one unit. When the bars are parts of a whole, set `max` to that whole (7 for "of 7 tools", 100 for percentages) so each bar shows against a faint full-length track; no figure may exceed it. Tapping a bar opens its claim, its quote or assumption, and every source behind it.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {

@@ -173,7 +173,7 @@ export function CertaintyMark({
   const [only] = sources;
   // A single web source is a plain link; a local one, or several, open the list with the passage.
   const singleLink = sources.length === 1 && isHttp(only!.data.uri) ? only : undefined;
-  const { quote, locator, weakBecause } = claim.data;
+  const { quote, locator, weakBecause, assumption } = claim.data;
   // The source the passage (or just where it sits) comes from; off for a shared mark.
   const quoteSource = passage && (quote || locator) ? quoteSourceOf(entityById, claim) : undefined;
   const author = entityOf(entityById, claim.data.authorId, 'assignee');
@@ -246,6 +246,12 @@ export function CertaintyMark({
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             Checked {formatDate(claim.data.checkedOn)}
           </p>
+          {passage && assumption && (
+            <p className="text-xs break-words text-neutral-600 dark:text-neutral-400">
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">Assumes:</span>{' '}
+              {assumption}
+            </p>
+          )}
           {sources.length > 0 && (
             <ul className="space-y-2 border-t border-neutral-100 pt-2 dark:border-neutral-800">
               {sources.map((s) => (
@@ -283,9 +289,19 @@ export function CertaintyMark({
  * its source ("From source") and the assumption ("Our reading"). Renders a button and, when open,
  * a full-width panel; the parent is a wrapping flex row, so the panel drops to its own line.
  */
-export function ClaimBasis({ claim }: { claim: Claim }) {
+export function ClaimBasis({
+  claim,
+  defaultOpen = false,
+  caption = true,
+}: {
+  claim: Claim;
+  /** Start open, for a panel the reader has already opened (a chart's bar). */
+  defaultOpen?: boolean;
+  /** Name the quote's source and locator under it; off when the parent lists the sources. */
+  caption?: boolean;
+}) {
   const { entityById } = useViewData();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
   const { quote, assumption, locator } = claim.data;
   if (!quote && !assumption) return null;
@@ -313,7 +329,7 @@ export function ClaimBasis({ claim }: { claim: Claim }) {
               <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
                 “{quote}”
               </blockquote>
-              {(source || locator) && (
+              {caption && (source || locator) && (
                 <figcaption className="flex min-w-0 flex-wrap items-baseline gap-x-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
                   <span aria-hidden>—</span>
                   {source && <SourceTitle source={source} />}

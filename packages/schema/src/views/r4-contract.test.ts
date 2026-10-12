@@ -83,6 +83,15 @@ describe('picture blocks', () => {
     ).toBe(true);
   });
 
+  it('takes a positive maximum on a FindingChart', () => {
+    const chart = { component: 'FindingChart', claim: 'clm_1', bars: { where: { tags: 'x' } } };
+    expect(ok({ ...chart, max: 7 })).toBe(true);
+    expect(ok({ ...chart, max: 100 })).toBe(true);
+    expect(ok({ ...chart, max: 0 })).toBe(false);
+    expect(ok({ ...chart, max: -1 })).toBe(false);
+    expect(ok({ ...chart, max: '7' })).toBe(false);
+  });
+
   it('takes a Text bar, StartHere evidence labels, and hideCodes on tables', () => {
     expect(
       ok({

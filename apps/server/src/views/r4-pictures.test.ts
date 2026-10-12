@@ -316,6 +316,18 @@ describe('FindingChart', () => {
     ]);
   });
 
+  it('draws bars against a maximum, and warns about a figure over it', () => {
+    const w = one(chart({ max: 20000 }));
+    expect(w.warnings).toEqual([]);
+    expect(w.shows).toMatch(/· JSON 10180 tokens \(out of 20000\)$/);
+    expect(one(chart({ max: 5000 })).warnings).toEqual([
+      '"JSON" (10180) is over max 5000: a bar can\'t exceed the whole it is part of, so fix the figure or the max',
+    ]);
+    expect(one(chart({ max: 1000 })).warnings).toEqual([
+      '"OpenUI" (4800), "JSON" (10180) are over max 1000: a bar can\'t exceed the whole it is part of, so fix the figure or the max',
+    ]);
+  });
+
   it('counts project items by a field, highlighting by value or label', () => {
     const w = one(
       chart({

@@ -506,6 +506,13 @@ export const FindingChartNode = component(
       .describe(
         'The bar drawn in the accent colour: a claim id (bars) or a group value or label (count). Default: the first bar',
       ),
+    max: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        'The whole each bar is a part of, e.g. 7 for "of 7 tools" or 100 for percentages: every bar gets a faint full-length track and is drawn against it. Default: the longest bar fills the width',
+      ),
   },
 );
 

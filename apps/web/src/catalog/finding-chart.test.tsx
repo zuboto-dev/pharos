@@ -76,6 +76,24 @@ const data = {
       tags: ['local'],
     }),
     claim('clm_nofigure', { tags: ['bench'], order: 2 }),
+    claim('clm_count', {
+      statement: '2 of the 7 tools say how sure they are.',
+      certainty: 'reading',
+      figure: { value: 2, unit: 'of 7', label: 'Says how sure' },
+      assumption: 'Counted from each tool’s own pages.',
+      sourceIds: ['art_report', 'art_notes'],
+      tags: ['count'],
+      order: 0,
+    }),
+    claim('clm_count_steps', {
+      statement: '6 of the 7 tools show their steps.',
+      certainty: 'reading',
+      figure: { value: 6, unit: 'of 7', label: 'Shows steps' },
+      assumption: 'Counted from each tool’s own pages.',
+      sourceIds: ['art_report'],
+      tags: ['count'],
+      order: 1,
+    }),
   ],
 } as unknown as ProjectDataset;
 
@@ -154,6 +172,46 @@ describe('FindingChart', () => {
     ).toBeTruthy();
     fireEvent.keyDown(screen.getByRole('button', { name: /^JSON/ }), { key: 'Escape' });
     expect(screen.queryByRole('region')).toBeNull();
+  });
+
+  it('opens a counted bar to its assumption and every source behind it', () => {
+    renderChart({ bars: { where: { tags: 'count' } } });
+    fireEvent.click(screen.getByRole('button', { name: /^Says how sure, 2 of 7/ }));
+    const panel = screen.getByRole('region', { name: '2 of the 7 tools say how sure they are.' });
+    // The basis is open already, and can be closed.
+    const basis = within(panel).getByRole('button', { name: /Assumption/ });
+    expect(basis.getAttribute('aria-expanded')).toBe('true');
+    expect(panel.textContent).toContain('Assumes: Counted from each tool’s own pages.');
+    expect(panel.textContent).toContain('Sources (2)');
+    expect(within(panel).getByRole('link', { name: /OpenUI benchmark/ })).toBeTruthy();
+    expect(within(panel).getByRole('button', { name: 'Notes' })).toBeTruthy();
+    expect(panel.textContent).toContain('docs/notes.md');
+    fireEvent.click(basis);
+    expect(panel.textContent).not.toContain('Assumes:');
+    // The mark's popover names the assumption too.
+    fireEvent.click(within(panel).getByRole('button', { name: /Sources \(2\)/ }));
+    expect(screen.getByRole('dialog').textContent).toContain(
+      'Assumes: Counted from each tool’s own pages.',
+    );
+  });
+
+  it('draws bars against a maximum on a faint full-length track', () => {
+    const { container } = renderChart({ bars: { where: { tags: 'count' } }, max: 7 });
+    const tracks = [...container.querySelectorAll<HTMLElement>('[data-track]')];
+    expect(tracks).toHaveLength(2);
+    expect(tracks.map((t) => t.style.width)).toEqual(['calc(100% - 7ch)', 'calc(100% - 7ch)']);
+    const fills = tracks.map((t) => t.firstElementChild as HTMLElement);
+    expect(fills.map((f) => f.style.width)).toEqual([`${(2 / 7) * 100}%`, `${(6 / 7) * 100}%`]);
+    expect(fills[0]!.className).toContain('bg-sky-500');
+    // A figure over the maximum fills the track and no more.
+    cleanup();
+    const over = renderChart({ bars: { where: { tags: 'count' } }, max: 4 }).container;
+    const capped = [...over.querySelectorAll<HTMLElement>('[data-track] > span')];
+    expect(capped.map((f) => f.style.width)).toEqual(['50%', '100%']);
+    cleanup();
+    // Without a maximum there is no track; the longest bar fills the width.
+    const plain = renderChart({ bars: { where: { tags: 'count' } } }).container;
+    expect(plain.querySelector('[data-track]')).toBeNull();
   });
 
   it('opens a local source in the drawer and shows its path', () => {

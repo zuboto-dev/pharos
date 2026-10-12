@@ -72,6 +72,7 @@ describe('explanation views', () => {
     });
     expect(store.getOfType('view', saved.view.id).data.spec).toBeTruthy();
     expect(saved.preview.warnings).toEqual([
+      expect.stringMatching(/^no start-here opening/),
       expect.stringMatching(/^the point comes too late: no ClaimCard/),
     ]);
     expect(saved.preview.widgets[0]!.warnings).toEqual([
@@ -91,7 +92,8 @@ describe('explanation views', () => {
         },
       ],
     });
-    expect(fixed.preview.warnings).toEqual([]);
+    // The point now comes first; only the missing StartHere opening (start-here.md) remains.
+    expect(fixed.preview.warnings).toEqual([expect.stringMatching(/^no start-here opening/)]);
     expect(fixed.preview.widgets[0]!.warnings).toEqual([
       'claim clm_missing not found in this project',
     ]);

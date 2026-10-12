@@ -1,5 +1,6 @@
 import {
   BOARD_COLUMNS,
+  START_HERE,
   COMPONENT_INFO,
   ENTITIES,
   fieldReader,
@@ -76,7 +77,8 @@ function plural(n: number, word: string): string {
   return `${n} ${/[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`}`;
 }
 
-type Context = { data: ProjectDataset; store: Store; today: string };
+/** `widgetIds`: the ids on the board being previewed, so StartHere steps can be checked. */
+type Context = { data: ProjectDataset; store: Store; today: string; widgetIds: Set<string> };
 
 function count(ctx: Context, query: Query): number {
   return runQuery(ctx.data, query.type, query, { today: ctx.today }).length;
@@ -106,6 +108,7 @@ function describeLeaf(
     return q;
   };
   const n = node as Record<string, unknown> & { component: ComponentName };
+  if (node.component === 'StartHere') return describeStartHere(node, ctx, warnings);
   if (isExplaining(node)) return describeExplaining(node, ctx, warnings);
   switch (node.component) {
     case 'ProjectHeader': {
@@ -504,22 +507,131 @@ function nodeText(node: ViewNode, ctx: Context): string {
 function pointWarning(board: Board, ctx: Context): string | null {
   const roots = board.widgets.map((w) => w.node);
   if (!allNodes(roots).some(isExplaining)) return null;
-  const fix = `put a ClaimCard with size "headline" first and keep what comes before it to ${POINT_WORDS} words or fewer`;
+  const fix = `put a StartHere (or a ClaimCard with size "headline") first and keep what comes before it to ${POINT_WORDS} words or fewer`;
   const order = readingOrder(roots);
-  if (!order.some((n) => n.component === 'ClaimCard'))
-    return `the point comes too late: no ClaimCard states it where the reader starts; ${fix}`;
+  // A StartHere's headline states the point too (start-here.md), so it counts like a ClaimCard.
+  const isPoint = (n: ViewNode) => n.component === 'ClaimCard' || n.component === 'StartHere';
+  if (!order.some(isPoint))
+    return `the point comes too late: no ClaimCard or StartHere states it where the reader starts; ${fix}`;
   let words = 0;
   for (const node of order) {
     words += countWords(nodeText(node, ctx));
-    if (node.component === 'ClaimCard') {
+    if (isPoint(node)) {
       return words > POINT_WORDS
-        ? `the point comes too late: ${words} words before the first ClaimCard; ${fix}`
+        ? `the point comes too late: ${words} words before the first ${node.component}; ${fix}`
         : null;
     }
     if (!CONTAINERS.has(node.component) && !LEAD_IN.has(node.component))
-      return `the point comes too late: a ${node.component} comes before the first ClaimCard; ${fix}`;
+      return `the point comes too late: a ${node.component} comes before the first ${order.find(isPoint)!.component}; ${fix}`;
   }
   return null;
+}
+
+// ------------------------------------------------------------------ report opening
+
+/** Starts the warning for a report page without a StartHere, so callers can recognise it. */
+export const NO_OPENING = 'no start-here opening';
+
+/** What a StartHere shows, warning about anything that breaks the start-here rules (start-here.md). */
+function describeStartHere(
+  node: NodeOf<'StartHere'>,
+  ctx: Context,
+  warnings: string[],
+): { shows: string; empty: boolean; warnings: string[] } {
+  const byId = new Map<string, Entity>(
+    [
+      ...ctx.data.stages,
+      ...ctx.data.goals,
+      ...ctx.data.tasks,
+      ...ctx.data.artifacts,
+      ...ctx.data.decisions,
+      ...ctx.data.claims,
+      ...ctx.data.scopeItems,
+    ].map((e) => [e.id, e]),
+  );
+  const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
+  if (node.claim && !claim) warnings.push(`claim ${node.claim} not found in this project`);
+  if (claim) warnings.push(...claimWarnings(claim, ctx.data.project));
+  const headline = claim?.data.statement ?? node.headline ?? '';
+  const max = START_HERE.headlineChars;
+  if (!headline)
+    warnings.push(
+      'no headline: set headline to the outcome in one sentence, or claim on a found page',
+    );
+  else if (headline.length > max)
+    warnings.push(
+      `headline is ${headline.length} characters; keep it under ${max}: one sentence with a verb, details below`,
+    );
+
+  const evidence = node.evidence ?? [];
+  for (const id of evidence)
+    if (!byId.has(id)) warnings.push(`evidence ${id} not found in this project`);
+  if (!claim && !evidence.some((id) => byId.has(id)))
+    warnings.push(
+      'the headline has no evidence: list what backs it in evidence (artifact, task or decision ids), or set claim on a found page',
+    );
+
+  const place = (id: string | undefined, type: 'stage' | 'goal') => {
+    if (!id) return undefined;
+    const e = byId.get(id);
+    if (e?.type === type) return String(e.data[ENTITIES[type].label as keyof typeof e.data]);
+    warnings.push(`${type}Id ${id} is not a ${type} in this project`);
+    return undefined;
+  };
+  const stage = place(node.stageId, 'stage');
+  const goal = place(node.goalId, 'goal');
+  if (!node.stageId && !node.goalId && (ctx.data.stages.length || ctx.data.goals.length))
+    warnings.push(
+      'where it sits: set stageId or goalId so the reader knows which part of the project this is about',
+    );
+
+  const steps = node.path.length;
+  if (steps < START_HERE.minSteps || steps > START_HERE.maxSteps)
+    warnings.push(
+      `the reading path has ${plural(steps, 'step')}; use ${START_HERE.minSteps}–${START_HERE.maxSteps}, and put more detail behind them`,
+    );
+  node.path.forEach((step, i) => {
+    if (step.target && !ctx.widgetIds.has(step.target))
+      warnings.push(
+        `step ${i + 1} "${step.label}" points at widget "${step.target}", which isn't on this board`,
+      );
+  });
+  if (node.purpose === 'needs-you' && !node.due)
+    warnings.push('a needs-you page says by when: set due');
+
+  const where = [ctx.data.project.data.name, stage, goal, node.date].filter(Boolean).join(' › ');
+  const path = node.path.map((s, i) => `${i + 1} ${s.label}`).join(' → ');
+  return {
+    shows: `${node.purpose}: “${headline}” (${where}); path: ${path}`,
+    empty: !headline,
+    warnings,
+  };
+}
+
+/**
+ * A report page (one with a StartHere, ClaimCard or Layers) opens with exactly one StartHere,
+ * before anything else the reader meets (start-here.md).
+ */
+function openingWarnings(board: Board): string[] {
+  const roots = board.widgets.map((w) => w.node);
+  const all = allNodes(roots);
+  const opening = all.filter((n) => n.component === 'StartHere');
+  if (!opening.length && !all.some(isExplaining)) return [];
+  if (!opening.length)
+    return [
+      `${NO_OPENING}: open a report page with a StartHere (its purpose, a headline, where it sits, and a reading path of ${START_HERE.minSteps}–${START_HERE.maxSteps} steps)`,
+    ];
+  const out: string[] = [];
+  if (opening.length > 1)
+    out.push(
+      `${opening.length} StartHere blocks: a report page has one purpose and one opening; keep one and split the rest into their own views`,
+    );
+  const first = readingOrder(roots).find((n) => !CONTAINERS.has(n.component));
+  if (first && first.component !== 'StartHere')
+    out.push(
+      `the StartHere is not first: a ${first.component} comes before it; move it to the top so the reader starts there`,
+    );
+  return out;
 }
 
 function describeNode(
@@ -548,7 +660,12 @@ function localToday(): string {
 
 /** What every widget of a board shows for a project right now, plus layout and filter warnings. */
 export function previewBoard(store: Store, projectId: string, board: Board, today = localToday()) {
-  const ctx: Context = { data: store.dataset(projectId), store, today };
+  const ctx: Context = {
+    data: store.dataset(projectId),
+    store,
+    today,
+    widgetIds: new Set(board.widgets.map((w) => w.id)),
+  };
   const widgets: WidgetPreview[] = board.widgets.map((w) => {
     const width = w.w ?? BOARD_COLUMNS;
     const d = describeNode(w.node, ctx);
@@ -590,7 +707,7 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
 
   // View-level: what a reader would trip over in an explanation view.
   const point = pointWarning(board, ctx);
-  const warnings = point ? [point] : [];
+  const warnings = [...openingWarnings(board), ...(point ? [point] : [])];
 
   const empty = widgets.filter((w) => w.empty).map((w) => w.id);
   return {

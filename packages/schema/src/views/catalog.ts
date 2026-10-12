@@ -386,6 +386,86 @@ export const ClaimCardNode = component(
   },
 );
 
+// ------------------------------------------------------------------ report opening
+// The "start here" block that opens a report page (docs/reframe/start-here.md): one purpose, one
+// headline, where the page sits, and a short reading path into the widgets below.
+
+/** Limits the save-time warnings check (start-here.md); the schema itself is looser. */
+export const START_HERE = {
+  /** GOV.UK summaries: under 160 characters, with a verb. */
+  headlineChars: 160,
+  minSteps: 2,
+  maxSteps: 4,
+} as const;
+
+export const ReportPurpose = z
+  .enum(['done', 'found', 'needs-you'])
+  .describe(
+    'done: work finished · found: research or a finding · needs-you: a decision for the reader',
+  );
+
+const StartStep = z.strictObject({
+  label: z
+    .string()
+    .min(1)
+    .max(40)
+    .describe('What the step is, key word first, e.g. "What changed"'),
+  says: z
+    .string()
+    .max(100)
+    .optional()
+    .describe('What the reader will see there, e.g. "Three screens, before and after"'),
+  target: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Id of a widget on this board; tapping the step scrolls to it'),
+});
+
+const IsoDate = z.iso.date();
+
+export const StartHereNode = component(
+  'StartHere',
+  'The opening of a report page: its one purpose, a headline sentence with its evidence, where it sits, and a reading path of 2–4 steps.',
+  {
+    purpose: ReportPurpose,
+    headline: z
+      .string()
+      .min(1)
+      .max(300)
+      .optional()
+      .describe(
+        `The outcome in one sentence with a verb, under ${START_HERE.headlineChars} characters. Leave it out when claim is set`,
+      ),
+    claim: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of the claim the headline states (found pages): its statement is shown, with its certainty mark and sources',
+      ),
+    evidence: z
+      .array(z.string().min(1))
+      .max(8)
+      .optional()
+      .describe(
+        'Ids of what backs the headline: artifacts (links, files, test results), tasks, decisions or claims',
+      ),
+    stageId: z.string().optional().describe('The stage this report belongs to'),
+    goalId: z.string().optional().describe('The goal this report belongs to'),
+    date: IsoDate.describe('YYYY-MM-DD the report speaks for'),
+    due: IsoDate.optional().describe('needs-you: YYYY-MM-DD the answer is needed by'),
+    path: z
+      .array(StartStep)
+      .min(1)
+      .max(6)
+      .describe(
+        `The reading path: ${START_HERE.minSteps}–${START_HERE.maxSteps} steps in reading order, each pointing at a widget below`,
+      ),
+    terms,
+  },
+);
+
 // ------------------------------------------------------------------ the tree
 
 const LEAF_NODES = [
@@ -414,6 +494,7 @@ const LEAF_NODES = [
   TextNode,
   LayersNode,
   ClaimCardNode,
+  StartHereNode,
 ] as const;
 
 type Common = { title?: string; span?: number };

@@ -6,6 +6,7 @@ import { ClaimCard, Layers } from './knowledge';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
 import { MilestoneList, StageTracker, Timeline } from './plan';
+import { StartHere } from './start-here';
 import { AssigneeMatrix, DependencyGraph, KanbanBoard, TaskChecklist, TaskTable } from './work';
 
 type LeafName = Exclude<ComponentName, 'Grid' | 'Section' | 'Tabs'>;
@@ -46,4 +47,5 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   Text: { render: TextBlock, bare: true },
   Layers: { render: Layers, bare: true },
   ClaimCard: { render: ClaimCard, bare: true },
+  StartHere: { render: StartHere, bare: true },
 };

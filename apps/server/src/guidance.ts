@@ -37,13 +37,33 @@ good view replaces a paragraph you would otherwise write.
 - Filter instead of copying: never put counts or names into text by hand; use Text values or a
   query so the view stays right as the project changes.
 
+## Report pages: start here
+A report page tells the reader about work: what was done, what was found, or what needs them.
+Any view with a StartHere, ClaimCard or Layers is a report page, and its preview checks the rules
+marked "checked"; task boards and other views without them are not checked.
+
+- **One purpose, one opening** (checked): a StartHere comes first, full width, with purpose
+  "done", "found" or "needs-you". Two purposes are two views.
+- **Headline** (checked): the outcome in one sentence with a verb, under 160 characters. Back it:
+  on a found page set \`claim\` (its statement, mark and sources show); otherwise list \`evidence\`
+  ids (artifacts such as test results and links, tasks, decisions).
+- **Where it sits** (checked): \`stageId\` or \`goalId\`, and \`date\`; the project is shown for you.
+- **Reading path** (checked): 2–4 steps, each a label saying what the reader finds there ("How it
+  was checked", never "More"), a \`says\` line, and a \`target\`: the id of a widget on this board.
+  Detail opens on request, two levels at most: step, then the widget and what it opens.
+- **Then, by purpose.** Done: what changed (show it), how it was checked (with links), what is left.
+  Found: why it matters in one line, 3–5 ClaimCards with sources, how sure and what is unknown.
+  Needs you (set \`due\`): the decision, the options with what each leads to, your recommendation
+  and why, and a way to answer (a proposed decision in a DecisionLog the reader opens, or Ask).
+
 ## Explanation views
 Use one when the reader needs to understand something (research, a concept, what a result
-means) rather than track work. Any view with a ClaimCard or Layers is an explanation view, and its
-preview checks the rules marked "checked"; task boards and other views without them are not checked.
+means) rather than track work. It is a found report page, so it starts as above, and the preview
+also checks the rules marked "checked" here.
 
-1. **The point first, in one short sentence** (checked): a ClaimCard with size "headline" opens
-   the view. At most 30 words of text and no other block may come before it.
+1. **The point first, in one short sentence** (checked): a StartHere with purpose "found" and
+   \`claim\` set to the headline claim opens the view (on its own, a ClaimCard with size "headline"
+   also states the point). At most 30 words of text and no other block may come before it.
 2. **Then the picture**: right under the point, Layers shows how the parts fit (a stack the reader
    taps open, or steps in a row), before any list or long text.
 3. **Every claim stored and sourced** (checked): each finding is a claim record (one finding, one
@@ -241,7 +261,8 @@ export const EXAMPLES: { question: string; why: string; widgets: unknown[] }[] =
 ];
 
 /**
- * A worked explanation view: the point, the picture, two takeaways, then the sources. Ids in
+ * A worked explanation view: the start-here opening (stating the headline claim), the picture,
+ * two takeaways, then the sources. Ids in
  * angle brackets stand for claims the agent stores first (tags pick a layer's claims).
  */
 export const EXPLAIN_EXAMPLE: {
@@ -251,17 +272,23 @@ export const EXPLAIN_EXAMPLE: {
   widgets: unknown[];
 } = {
   question: 'What is <topic>, and where does this project stand?',
-  why: 'The headline claim states the point; the layers show how the parts fit, each holding its claims; two cards say what it means; the sources list lets the reader check.',
+  why: 'StartHere opens it: purpose, the headline claim with its mark and sources, where it sits, and a path to the parts below; the layers show how the parts fit, each holding its claims; two cards say what it means; the sources list lets the reader check.',
   claims:
     'First store, with apply, the claims (statement, checkedOn, sourceIds, quote or assumption, authorId, tags such as "layer-2") and terms the view shows; the ids below are theirs.',
   widgets: [
     {
-      id: 'point',
+      id: 'start',
       node: {
-        component: 'ClaimCard',
+        component: 'StartHere',
+        purpose: 'found',
         claim: '<headline claim id>',
-        size: 'headline',
-        kicker: '<topic>',
+        stageId: '<stage id>',
+        date: '<YYYY-MM-DD>',
+        path: [
+          { label: 'How it is built', says: 'Three layers; tap one to open it', target: 'layers' },
+          { label: 'What it means for us', says: 'What to keep and what to build', target: 'keep' },
+          { label: 'Where it comes from', says: 'Every source, linked', target: 'sources' },
+        ],
       },
     },
     {

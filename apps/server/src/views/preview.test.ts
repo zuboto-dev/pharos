@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { previewView } from './service.js';
+import { NO_OPENING } from './preview.js';
+import { previewView as previewWithOpening } from './service.js';
+
+// The explanation views here have no StartHere opening; that rule (R3.1) is tested in
+// start-here.test.ts, so its warning is left out of these tests.
+const previewView: typeof previewWithOpening = (...args) => {
+  const result = previewWithOpening(...args);
+  return { ...result, warnings: result.warnings.filter((w) => !w.startsWith(NO_OPENING)) };
+};
 
 const agent = { kind: 'agent', name: 'test' } as const;
 
@@ -197,7 +205,8 @@ describe('view_preview on explanation views', () => {
     });
     expect(result.warnings).toEqual([]);
     expect(result.widgets.flatMap((w) => w.warnings)).toEqual([]);
-    expect(result.summary).toBe('3 widgets; none empty');
+    // "see warnings" comes from the missing StartHere opening, filtered out above.
+    expect(result.summary).toBe('3 widgets; none empty; see warnings');
     const w = Object.fromEntries(result.widgets.map((x) => [x.id, x]));
     expect(w.point!.shows).toBe('“Three layers; we have two.” (Our reading, 2026-10-01, 1 source)');
     expect(w.layers!.shows).toMatch(
@@ -220,7 +229,7 @@ describe('view_preview on explanation views', () => {
     };
     const warningsOf = (widgets: unknown[]) => previewView(store, { projectId, widgets }).warnings;
     const tooLate = (what: string) => [
-      `the point comes too late: ${what} before the first ClaimCard; put a ClaimCard with size "headline" first and keep what comes before it to 30 words or fewer`,
+      `the point comes too late: ${what} before the first ClaimCard; put a StartHere (or a ClaimCard with size "headline") first and keep what comes before it to 30 words or fewer`,
     ];
 
     // Words count from titles, filled Text values, Callout bodies and Section descriptions, without
@@ -277,7 +286,7 @@ describe('view_preview on explanation views', () => {
       ]),
     ).toEqual([]);
     const noPoint = [
-      'the point comes too late: no ClaimCard states it where the reader starts; put a ClaimCard with size "headline" first and keep what comes before it to 30 words or fewer',
+      'the point comes too late: no ClaimCard or StartHere states it where the reader starts; put a StartHere (or a ClaimCard with size "headline") first and keep what comes before it to 30 words or fewer',
     ];
     expect(
       warningsOf([

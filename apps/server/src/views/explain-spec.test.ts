@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { createView, previewView, updateView } from './service.js';
+import { NO_OPENING } from './preview.js';
+import { createView, previewView as previewWithOpening, updateView } from './service.js';
 
 const agent = { kind: 'agent', name: 'spec-test' } as const;
 const words = (n: number) => Array.from({ length: n }, () => 'word').join(' ');
@@ -101,6 +102,12 @@ const layers = (claim = ids.linked!, pill?: string) => ({
     ...(pill ? { pill: { label: 'Here', tone: 'own', claim: pill } } : {}),
   })),
 });
+// These views have no StartHere opening; that rule (R3.1) is tested in start-here.test.ts, so its
+// warning is left out here to keep these tests about slice 1 §5.
+const previewView: typeof previewWithOpening = (...args) => {
+  const result = previewWithOpening(...args);
+  return { ...result, warnings: result.warnings.filter((w) => !w.startsWith(NO_OPENING)) };
+};
 const preview = (nodes: unknown[]) =>
   previewView(store, {
     projectId: ids.p!,

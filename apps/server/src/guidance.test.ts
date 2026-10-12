@@ -152,6 +152,15 @@ describe('guidance', () => {
       'Detail on demand',
     ])
       expect(explaining).toContain(`**${rule}**`);
+    const report = VIEW_GUIDELINES.slice(VIEW_GUIDELINES.indexOf('## Report pages: start here'));
+    for (const rule of [
+      'One purpose, one opening',
+      'Headline',
+      'Where it sits',
+      'Reading path',
+      'Then, by purpose.',
+    ])
+      expect(report).toContain(`**${rule}**`);
 
     const store = new Store(openDatabase(':memory:'));
     const claim = (ref: string, tags: string[] = []) => ({
@@ -175,6 +184,12 @@ describe('guidance', () => {
           { op: 'create', type: 'project', ref: 'p', data: { name: 'P' } },
           {
             op: 'create',
+            type: 'stage',
+            ref: 'stage',
+            data: { projectId: '$p', name: 'Research' },
+          },
+          {
+            op: 'create',
             type: 'artifact',
             ref: 'src',
             data: { projectId: '$p', title: 'Report', kind: 'link', uri: 'https://example.com' },
@@ -190,10 +205,10 @@ describe('guidance', () => {
       },
     );
     const widgets = JSON.parse(
-      JSON.stringify(EXPLAIN_EXAMPLE.widgets).replace(
-        /<(headline|gap|keep|build) claim id>/g,
-        (_, ref: string) => created[ref]!,
-      ),
+      JSON.stringify(EXPLAIN_EXAMPLE.widgets)
+        .replace(/<(headline|gap|keep|build) claim id>/g, (_, ref: string) => created[ref]!)
+        .replace('<stage id>', created.stage!)
+        .replace('<YYYY-MM-DD>', '2026-10-12'),
     ) as unknown[];
     expect(Board.safeParse({ component: 'Board', widgets }).success).toBe(true);
     const preview = previewView(store, { projectId: created.p!, widgets });

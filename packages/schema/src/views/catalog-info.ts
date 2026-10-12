@@ -309,6 +309,24 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       ],
     },
   },
+  StartHere: {
+    category: 'explain',
+    use: "Opens every report page, first and full width: the page's one purpose (`done`, `found` or `needs-you`), one headline sentence with a verb (under 160 characters), where it sits (`stageId` or `goalId`, and `date`; the project is shown for you), and a `path` of 2–4 labelled steps, each with a `target` widget id on the same board so tapping scrolls there. Back the headline: on a found page set `claim` (its statement, certainty mark and sources show); otherwise list `evidence` ids (artifacts, tasks, decisions). Needs-you pages set `due`. One per view.",
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: {
+      component: 'StartHere',
+      purpose: 'done',
+      headline: 'Report pages now open with a start-here block that says what the page is for.',
+      evidence: ['art_tests'],
+      date: '2026-10-12',
+      path: [
+        { label: 'What changed', says: 'The new block, before and after', target: 'changed' },
+        { label: 'How it was checked', says: 'Tests and a phone-width check', target: 'checked' },
+        { label: 'What is left', says: 'Two open points', target: 'left' },
+      ],
+    },
+  },
   Tabs: {
     category: 'layout',
     use: 'Several alternative views of the same thing in one widget (e.g. Board / Table). Each tab holds components.',

@@ -9,30 +9,37 @@ import { Badge, isHttp, Uri, type Tone } from '../ui';
 import { CertaintyMark } from './knowledge';
 
 /**
- * The opening of a report page (docs/reframe/start-here.md): what the page is for, its point in
- * one sentence with the evidence behind it, where it sits, and a short path into the widgets below.
+ * The opening of a report page (docs/reframe/start-here.md): what the page is for, why the work
+ * exists, its point in one sentence with the evidence behind it, the reader's part, where it sits,
+ * and a short path into the widgets below.
  */
 
 type Purpose = NodeOf<'StartHere'>['purpose'];
 
-const PURPOSE: Record<Purpose, { label: string; tone: Tone; bar: string; number: string }> = {
+const PURPOSE: Record<
+  Purpose,
+  { label: string; tone: Tone; bar: string; number: string; part: string }
+> = {
   done: {
     label: 'Done',
     tone: 'green',
     bar: 'border-l-emerald-500 dark:border-l-emerald-400',
     number: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    part: 'bg-neutral-50 dark:bg-neutral-800/60',
   },
   found: {
     label: 'Found',
     tone: 'blue',
     bar: 'border-l-sky-500 dark:border-l-sky-400',
     number: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+    part: 'bg-neutral-50 dark:bg-neutral-800/60',
   },
   'needs-you': {
     label: 'Needs you',
     tone: 'amber',
     bar: 'border-l-amber-500 dark:border-l-amber-400',
     number: 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    part: 'bg-amber-50 dark:bg-amber-950/50',
   },
 };
 
@@ -195,6 +202,12 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
         )}
       </div>
       <div className="space-y-2">
+        {node.why && (
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+            <span className={clsx(LABEL, 'mr-2')}>Why</span>
+            {node.why}
+          </p>
+        )}
         {headline ? (
           <h2 className="text-xl font-bold tracking-tight text-balance text-neutral-900 sm:text-2xl dark:text-neutral-50">
             <TermText text={headline} ranges={ranges} />
@@ -207,6 +220,17 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
         {claim && <CertaintyMark claim={claim} />}
         {node.evidence && <Evidence ids={node.evidence} />}
       </div>
+      {node.yourPart && (
+        <p
+          className={clsx(
+            'flex flex-col gap-0.5 rounded-lg px-3 py-2.5 @lg:flex-row @lg:items-baseline @lg:gap-3',
+            purpose.part,
+          )}
+        >
+          <span className={clsx(LABEL, 'shrink-0')}>Your part</span>
+          <span className="font-medium text-neutral-900 dark:text-neutral-50">{node.yourPart}</span>
+        </p>
+      )}
       <nav aria-label="Reading path" className="space-y-1.5">
         <h3 className={LABEL}>Start here</h3>
         <ol style={columns} className="-mx-2.5 grid grid-cols-1 gap-1 @2xl:grid-cols-(--cols)">

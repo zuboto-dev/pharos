@@ -44,15 +44,30 @@ marked "checked"; task boards and other views without them are not checked.
 
 - **One purpose, one opening** (checked): a StartHere comes first, full width, with purpose
   "done", "found" or "needs-you". Two purposes are two views.
+- **Why first** (checked): \`why\`, one line under 100 characters on what the work is for or the
+  question it answers ("To measure whether a new reader understands a Pharos page without help").
+  The reader needs to know why the work exists before what it produced.
 - **Headline** (checked): the outcome in one sentence with a verb, under 160 characters. Back it:
   on a found page set \`claim\` (its statement, mark and sources show); otherwise list \`evidence\`
   ids (artifacts such as test results and links, tasks, decisions).
+- **The reader's part, once** (checked): \`yourPart\`, one line under 120 characters, even when it
+  is "Nothing now." ("Nothing now. When G1 resumes: approve the 3 test cases and targets."). No
+  other widget says what the reader has to do: no "Your part" card, no "nothing needs you" in text.
 - **Where it sits** (checked): \`stageId\` or \`goalId\`, and \`date\`; the project is shown for you.
 - **Reading path** (checked): 2–4 steps, each a label saying what the reader finds there ("How it
   was checked", never "More"), a \`says\` line, and a \`target\`: the id of a widget on this board.
   Detail opens on request, two levels at most: step, then the widget and what it opens.
+- **Short** (checked): about 150 words on the page before the reader opens anything (StartHere,
+  text blocks, claim statements and details on cards, layer labels; data tables don't count), and
+  at most 25 words on one card. Cut repeats and background; put the rest behind a tap.
+- **One item per line**: a list of findings reads as one column, one short line each, with details
+  on tap (full-width cards or a Layers stack). Cards side by side only for short items: numbers,
+  labels. The preview warns when a row puts 3 or more wordy claim cards (over 12 words) side by side.
+- **Few underlines** (checked): a term only for a word a non-specialist wouldn't know, never an
+  everyday phrase like "test case"; at most 5 underlined terms on a page.
 - **Then, by purpose.** Done: what changed (show it), how it was checked (with links), what is left.
-  Found: why it matters in one line, 3–5 ClaimCards with sources, how sure and what is unknown.
+  Found: why it matters in one line, 3–5 findings with sources (one per line), how sure and what is
+  unknown.
   Needs you (set \`due\`): the decision, the options with what each leads to, your recommendation
   and why, and a way to answer (a proposed decision in a DecisionLog the reader opens, or Ask).
 
@@ -73,8 +88,9 @@ also checks the rules marked "checked" here.
    decision in Pharos: create it with status "proposed" (the default, "accepted", can't back it).
    Give "From source" its quote, the passage word for word (quoteSourceId if it has several
    sources), and "Our reading" its assumption, so the reader sees what each rests on.
-4. **Terms explained in place**: store each word the reader may not know as a term (word,
-   explanation, alsoCalled). Pharos marks its first use in each widget and explains it on tap.
+4. **Terms explained in place**: store a word a non-specialist wouldn't know as a term (word,
+   explanation, alsoCalled); not everyday words. Pharos marks its first use in each widget and
+   explains it on tap.
 5. **Certainty visible**: every claim shows its mark (Our reading, From source, Confirmed by you).
    Don't word a reading as a fact; a clean view must not look surer than the research.
 6. **Detail on demand**: put more in a claim's detail, in layers the reader opens, and in a sources
@@ -272,7 +288,7 @@ export const EXPLAIN_EXAMPLE: {
   widgets: unknown[];
 } = {
   question: 'What is <topic>, and where does this project stand?',
-  why: 'StartHere opens it: purpose, the headline claim with its mark and sources, where it sits, and a path to the parts below; the layers show how the parts fit, each holding its claims; two cards say what it means; the sources list lets the reader check.',
+  why: "StartHere opens it: purpose, why the work exists, the headline claim with its mark and sources, the reader's part in one line, where it sits, and a path to the parts below; the layers show how the parts fit, each holding its claims (the reader opens one at a time); two short cards say what it means; the sources list lets the reader check. About 150 words before anything the reader opens.",
   claims:
     'First store, with apply, the claims (statement, checkedOn, sourceIds, quote or assumption, authorId, tags such as "layer-2") and terms the view shows; the ids below are theirs.',
   widgets: [
@@ -281,7 +297,9 @@ export const EXPLAIN_EXAMPLE: {
       node: {
         component: 'StartHere',
         purpose: 'found',
+        why: '<what the work is for, or the question it answers, in one line>',
         claim: '<headline claim id>',
+        yourPart: '<what the reader has to do, in one line; "Nothing now." when nothing>',
         stageId: '<stage id>',
         date: '<YYYY-MM-DD>',
         path: [

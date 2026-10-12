@@ -395,6 +395,11 @@ function claimLine(ctx: Context, claim: Entity<'claim'>): string {
   return `“${statement}” (${label}, ${checkedOn}, ${plural(sourceIds.length, 'source')})`;
 }
 
+/** The words a ClaimCard shows: its kicker, the claim's statement and its detail. */
+function cardText(node: NodeOf<'ClaimCard'>, claim: Entity<'claim'>): string {
+  return [node.kicker, claim.data.statement, claim.data.detail].filter(Boolean).join(' ');
+}
+
 /** What a ClaimCard or Layers shows, warning about missing claims, claims without a source, and empty layers. */
 function describeExplaining(
   node: Explaining,
@@ -420,6 +425,11 @@ function describeExplaining(
   if (node.component === 'ClaimCard') {
     const claim = find(node.claim);
     sourceWarnings();
+    const words = claim ? countWords(cardText(node, claim)) : 0;
+    if (words > START_HERE.cardWords)
+      warnings.push(
+        `this card shows ${words} words; keep a card to ${START_HERE.cardWords} or fewer: shorten the claim's statement to one short line and drop its detail, or move the finding into a Layers stack the reader opens`,
+      );
     return {
       shows: claim ? claimLine(ctx, claim) : 'a missing claim (shows an empty state)',
       empty: !claim,
@@ -562,6 +572,22 @@ function describeStartHere(
     warnings.push(
       `headline is ${headline.length} characters; keep it under ${max}: one sentence with a verb, details below`,
     );
+  if (!node.why)
+    warnings.push(
+      `no why: add why, one line under ${START_HERE.whyChars} characters on what the work is for or the question it answers, so the reader knows why it exists before what it produced`,
+    );
+  else if (node.why.length > START_HERE.whyChars)
+    warnings.push(
+      `why is ${node.why.length} characters; keep it under ${START_HERE.whyChars}: what the work is for, in one line`,
+    );
+  if (!node.yourPart)
+    warnings.push(
+      'no yourPart: say in one line what the reader has to do, even "Nothing now", e.g. "Nothing now. When G1 resumes: approve the 3 test cases and targets."',
+    );
+  else if (node.yourPart.length > START_HERE.yourPartChars)
+    warnings.push(
+      `yourPart is ${node.yourPart.length} characters; keep it under ${START_HERE.yourPartChars}: one line, with the detail in a step below`,
+    );
 
   const evidence = node.evidence ?? [];
   for (const id of evidence)
@@ -602,7 +628,9 @@ function describeStartHere(
   const where = [ctx.data.project.data.name, stage, goal, node.date].filter(Boolean).join(' › ');
   const path = node.path.map((s, i) => `${i + 1} ${s.label}`).join(' → ');
   return {
-    shows: `${node.purpose}: “${headline}” (${where}); path: ${path}`,
+    shows:
+      `${node.purpose}: ${node.why ? `why: ${node.why}; ` : ''}“${headline}” (${where})` +
+      `${node.yourPart ? `; your part: ${node.yourPart}` : ''}; path: ${path}`,
     empty: !headline,
     warnings,
   };
@@ -631,6 +659,207 @@ function openingWarnings(board: Board): string[] {
     out.push(
       `the StartHere is not first: a ${first.component} comes before it; move it to the top so the reader starts there`,
     );
+  return out;
+}
+
+// ------------------------------------------------------------------ reading budget (R3.6)
+
+/**
+ * What a node shows before the reader opens anything: `texts` count towards the word budget, and
+ * `marked` are the texts where the web components underline terms. Data blocks (tables, lists,
+ * boards) count only their title.
+ */
+function visibleText(node: ViewNode, ctx: Context): { texts: string[]; marked: string[] } {
+  const title = node.title ?? '';
+  const on = !('terms' in node) || node.terms !== false;
+  switch (node.component) {
+    case 'StartHere': {
+      const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
+      const headline = claim?.data.statement ?? node.headline ?? '';
+      return {
+        texts: [
+          node.why ?? '',
+          headline,
+          node.yourPart ?? '',
+          ...node.path.flatMap((step) => [step.label, step.says ?? '']),
+        ],
+        marked: on ? [headline] : [],
+      };
+    }
+    case 'Text':
+    case 'Markdown':
+    case 'Callout': {
+      const body = node.component === 'Text' ? describeLeaf(node, ctx).shows : nodeText(node, ctx);
+      return { texts: [node.component === 'Text' ? title : '', body], marked: on ? [body] : [] };
+    }
+    case 'Section':
+      return { texts: [title, node.description ?? ''], marked: [] };
+    case 'ClaimCard': {
+      const claim = ctx.data.claims.find((c) => c.id === node.claim);
+      if (!claim) return { texts: [title], marked: [] };
+      const said = [claim.data.statement, claim.data.detail ?? ''];
+      return { texts: [title, node.kicker ?? '', ...said], marked: on ? said : [] };
+    }
+    case 'Layers': {
+      // A stack shows only the layer open at first; a row shows every step.
+      const shown = (layer: (typeof node.layers)[number]) => {
+        if (node.orientation !== 'row' && layer.key !== node.open) return [];
+        const pill = ctx.data.claims.filter((c) => c.id === layer.pill?.claim);
+        const items = runQuery(ctx.data, 'claim', layer.items, { today: ctx.today });
+        return [...pill, ...items.filter((c) => !pill.includes(c))].flatMap((c) => [
+          c.data.statement,
+          c.data.detail ?? '',
+        ]);
+      };
+      const inLayers = node.layers.flatMap((l) => [l.title, l.hint ?? '', ...shown(l)]);
+      return {
+        texts: [
+          title,
+          node.prompt ?? '',
+          ...(node.legend ?? []).map((l) => l.label),
+          ...(node.axis ? [node.axis.from, node.axis.to] : []),
+          ...node.layers.map((l) => l.pill?.label ?? ''),
+          ...inLayers,
+        ],
+        marked: on ? inLayers : [],
+      };
+    }
+    default:
+      return { texts: [title], marked: [] };
+  }
+}
+
+/** The project's terms as one whole-word pattern, longest form first, like the web's termMatcher. */
+function termPattern(ctx: Context) {
+  const byForm = new Map<string, Entity<'term'>>();
+  for (const term of ctx.data.terms)
+    for (const form of [term.data.word, ...term.data.alsoCalled]) {
+      const key = form.trim().toLowerCase();
+      if (key && !byForm.has(key)) byForm.set(key, term);
+    }
+  if (!byForm.size) return null;
+  const forms = [...byForm.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(?:${forms.join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  return { pattern, byForm };
+}
+
+/** Words that tell the reader what to do, which only the StartHere's yourPart should say. */
+const YOUR_PART =
+  /\b(your (part|turn|move|actions?|to-?dos?)|what you (need|have) to do|what to do next|(nothing )?needs? you|action needed|for you to (do|decide))\b/i;
+
+/** Whether a node (other than the StartHere) speaks to the reader about their part; returns the words. */
+function yourPartElsewhere(node: ViewNode, ctx: Context): string | undefined {
+  const texts = [
+    node.title ?? '',
+    node.component === 'ClaimCard' ? (node.kicker ?? '') : '',
+    node.component === 'Layers' ? node.layers.map((l) => l.title).join('\n') : '',
+    node.component === 'Section' ? (node.description ?? '') : '',
+    LEAD_IN.has(node.component) ? nodeText(node, ctx) : '',
+  ];
+  for (const text of texts) {
+    const match = YOUR_PART.exec(text);
+    if (match) return match[0];
+  }
+  return undefined;
+}
+
+/**
+ * Report pages stay short (R3.6): the reader's part said once, at most START_HERE.pageWords
+ * visible words before any detail, wordy findings one per line, and few underlined terms.
+ */
+function budgetWarnings(board: Board, ctx: Context): string[] {
+  const all = allNodes(board.widgets.map((w) => w.node));
+  if (!all.some((n) => n.component === 'StartHere' || isExplaining(n))) return [];
+  const out: string[] = [];
+
+  if (all.some((n) => n.component === 'StartHere'))
+    for (const w of board.widgets) {
+      const said = allNodes([w.node])
+        .filter((n) => n.component !== 'StartHere')
+        .map((n) => yourPartElsewhere(n, ctx))
+        .find(Boolean);
+      if (said)
+        out.push(
+          `widget "${w.id}" also tells the reader their part ("${said}"); say it once, in the StartHere's yourPart, and take it out here so the page can't contradict itself`,
+        );
+    }
+
+  // Words before any detail, and underlined terms (each widget marks a term's first use in it).
+  const matcher = termPattern(ctx);
+  const perWidget: { id: string; words: number }[] = [];
+  const underlined = new Map<string, string>();
+  let marks = 0;
+  for (const w of board.widgets) {
+    let words = 0;
+    for (const node of readingOrder([w.node])) {
+      const shown = visibleText(node, ctx);
+      words += shown.texts.reduce((sum, t) => sum + countWords(t), 0);
+      if (!matcher) continue;
+      const seen = new Set<string>();
+      for (const text of shown.marked)
+        for (const m of text.matchAll(matcher.pattern)) {
+          const term = matcher.byForm.get(m[0].toLowerCase());
+          if (!term || seen.has(term.id)) continue;
+          seen.add(term.id);
+          underlined.set(term.id, term.data.word);
+        }
+      marks += seen.size;
+    }
+    perWidget.push({ id: w.id, words });
+  }
+  const total = perWidget.reduce((sum, w) => sum + w.words, 0);
+  if (total > START_HERE.pageWords) {
+    const most = [...perWidget]
+      .filter((w) => w.words)
+      .sort((a, b) => b.words - a.words)
+      .slice(0, 3)
+      .map((w) => `"${w.id}" ${w.words}`)
+      .join(', ');
+    out.push(
+      `the page shows ${total} words before the reader opens anything; keep it to about ${START_HERE.pageWords}. Most words: ${most}. Cut repeats and background, and move the rest into details on tap (a Layers stack, a claim's quote or assumption, a later tab); data tables don't count`,
+    );
+  }
+  if (marks > START_HERE.maxTerms) {
+    const words = [...underlined.values()].map((w) => `"${w}"`).join(', ');
+    out.push(
+      `the page underlines ${marks} terms (${words}); keep it to ${START_HERE.maxTerms} or fewer: keep a term only for a word a non-specialist wouldn't know, and delete it or set terms: false where the word is everyday`,
+    );
+  }
+
+  // Wordy claim cards side by side, in a board row or a Grid of 3 or more columns.
+  const wordy = (node: ViewNode) => {
+    if (node.component !== 'ClaimCard') return false;
+    const claim = ctx.data.claims.find((c) => c.id === node.claim);
+    return !!claim && countWords(cardText(node, claim)) > START_HERE.sideBySideWords;
+  };
+  const sideBySide = (where: string, n: number, ids: string) =>
+    out.push(
+      `${where} puts ${n} claim cards with long statements side by side${ids}; wordy findings read better one per line: give each the full width or list them in a Layers stack, one short line each with details on tap. Keep side-by-side cards for short items such as numbers and labels`,
+    );
+  const rows: Board['widgets'][] = [[]];
+  let used = 0;
+  for (const w of board.widgets) {
+    const width = w.w ?? BOARD_COLUMNS;
+    if (used + width > BOARD_COLUMNS) {
+      rows.push([]);
+      used = 0;
+    }
+    rows.at(-1)!.push(w);
+    used += width;
+  }
+  rows.forEach((row, i) => {
+    const long = row.filter((w) => wordy(w.node));
+    if (long.length >= 3)
+      sideBySide(`row ${i + 1}`, long.length, ` (${long.map((w) => `"${w.id}"`).join(', ')})`);
+  });
+  for (const w of board.widgets)
+    for (const node of allNodes([w.node])) {
+      if (node.component !== 'Grid' || (node.columns ?? 2) < 3) continue;
+      const long = node.children.filter(wordy).length;
+      if (long >= 3) sideBySide(`a ${node.columns}-column Grid in "${w.id}"`, long, '');
+    }
   return out;
 }
 
@@ -707,7 +936,11 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
 
   // View-level: what a reader would trip over in an explanation view.
   const point = pointWarning(board, ctx);
-  const warnings = [...openingWarnings(board), ...(point ? [point] : [])];
+  const warnings = [
+    ...openingWarnings(board),
+    ...(point ? [point] : []),
+    ...budgetWarnings(board, ctx),
+  ];
 
   const empty = widgets.filter((w) => w.empty).map((w) => w.id);
   return {

@@ -269,7 +269,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   ClaimCard: {
     category: 'explain',
-    use: 'One stored finding (a `claim`) with its certainty mark ("Our reading", "From source", "Confirmed by you"), checked date and source link. After the StartHere opening, use `size: "headline"`, full width, for the main finding. Use `size: "card"` in a row for takeaways. Write the words in the claim, never in the view.',
+    use: 'One stored finding (a `claim`) with its certainty mark ("Our reading", "From source", "Confirmed by you"), checked date and source link. After the StartHere opening, use `size: "headline"`, full width, for the main finding. Use `size: "card"` for takeaways: side by side only for short items (a number, a label, a line of 12 words or fewer); wordy findings go one per row, full width, one short line each, with the rest behind a layer the reader opens. A card shows at most 25 words (statement, detail and kicker). Write the words in the claim, never in the view.',
     minColumns: 3,
     suggestedColumns: 6,
     example: {
@@ -311,13 +311,15 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   StartHere: {
     category: 'explain',
-    use: "Opens every report page, first and full width: the page's one purpose (`done`, `found` or `needs-you`), one headline sentence with a verb (under 160 characters), where it sits (`stageId` or `goalId`, and `date`; the project is shown for you), and a `path` of 2–4 labelled steps, each with a `target` widget id on the same board so tapping scrolls there. Back the headline: on a found page set `claim` (its statement, certainty mark and sources show); otherwise list `evidence` ids (artifacts, tasks, decisions). Needs-you pages set `due`. One per view.",
+    use: 'Opens every report page, first and full width: the page\'s one purpose (`done`, `found` or `needs-you`); `why`, one line (under 100 characters) on what the work is for or the question it answers, shown above the headline; one headline sentence with a verb (under 160 characters); `yourPart`, one line (under 120 characters) on what the reader has to do, even when it is "Nothing now" (the only place the page says it: no other widget titled "Your part" or "What you need to do"); where it sits (`stageId` or `goalId`, and `date`; the project is shown for you), and a `path` of 2–4 labelled steps, each with a `target` widget id on the same board so tapping scrolls there. Back the headline: on a found page set `claim` (its statement, certainty mark and sources show); otherwise list `evidence` ids (artifacts, tasks, decisions). Needs-you pages set `due`. One per view. Keep the whole page short: about 150 words before anything the reader opens.',
     minColumns: 6,
     suggestedColumns: 12,
     example: {
       component: 'StartHere',
       purpose: 'done',
+      why: 'So a reader knows at once what a report page is for and what it asks of them',
       headline: 'Report pages now open with a start-here block that says what the page is for.',
+      yourPart: 'Nothing now. Open one report page on your phone and say if the opening helps.',
       evidence: ['art_tests'],
       date: '2026-10-12',
       path: [
@@ -364,7 +366,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
 export const BOARD_GUIDE = `A view is a Board: a 12-column grid of widgets laid out left to right, top to bottom.
 Each widget is {id, w?, x?, h?, node}: a stable id, a width in columns (1–12, default 12), an optional start column (0–11; omit to flow), an optional minimum height in px (omit to fit content), and one catalog component as \`node\`.
 Widths in a row should add up to 12 (e.g. 4 + 8, 6 + 6). Never go below a component's minColumns.
-Components read live project data; never copy data into a view. Findings live in \`claim\` records and words to explain in \`term\` records: ClaimCard and Layers show claims, and text blocks explain terms where they first appear (\`terms: false\` turns that off). Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
+Components read live project data; never copy data into a view. Findings live in \`claim\` records and words to explain in \`term\` records: ClaimCard and Layers show claims, and text blocks explain terms where they first appear (\`terms: false\` turns that off). Store a term only for a word a non-specialist wouldn't know, not everyday words like "test case"; a report page underlines 5 terms at most. Narrow what they show with \`filter\` ({where, anyOf, sort, limit}) or \`where\`:
 - where values: exact value, array (any of), {not: value|array}, {exists: bool}, {contains: text}, or a range {gt|gte|lt|lte: value}
 - dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
 - fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"

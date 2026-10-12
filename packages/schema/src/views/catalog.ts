@@ -394,8 +394,20 @@ export const ClaimCardNode = component(
 export const START_HERE = {
   /** GOV.UK summaries: under 160 characters, with a verb. */
   headlineChars: 160,
+  /** What the work is for, in one line (R3.6: the reader asked why the work exists). */
+  whyChars: 100,
+  /** What the reader has to do, in one line. */
+  yourPartChars: 120,
   minSteps: 2,
   maxSteps: 4,
+  /** Visible words a report page may show before any detail the reader opens. */
+  pageWords: 150,
+  /** Visible words on one claim card. */
+  cardWords: 25,
+  /** A claim card over this many words is too wordy to sit three to a row. */
+  sideBySideWords: 12,
+  /** Most terms a report page underlines. */
+  maxTerms: 5,
 } as const;
 
 export const ReportPurpose = z
@@ -426,7 +438,7 @@ const IsoDate = z.iso.date();
 
 export const StartHereNode = component(
   'StartHere',
-  'The opening of a report page: its one purpose, a headline sentence with its evidence, where it sits, and a reading path of 2–4 steps.',
+  "The opening of a report page: its one purpose, why the work exists, a headline sentence with its evidence, the reader's part, where it sits, and a reading path of 2–4 steps.",
   {
     purpose: ReportPurpose,
     headline: z
@@ -436,6 +448,22 @@ export const StartHereNode = component(
       .optional()
       .describe(
         `The outcome in one sentence with a verb, under ${START_HERE.headlineChars} characters. Leave it out when claim is set`,
+      ),
+    why: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        `What the work is for, or the question it answers, in one line under ${START_HERE.whyChars} characters, e.g. "To measure whether a new reader understands a Pharos page without help". Shown above the headline`,
+      ),
+    yourPart: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe(
+        `The reader's part in one line under ${START_HERE.yourPartChars} characters, the only place the page says it, e.g. "Nothing now. When G1 resumes: approve the 3 test cases and targets."`,
       ),
     claim: z
       .string()

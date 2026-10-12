@@ -151,4 +151,35 @@ describe('StartHere', () => {
     renderBoard(start({ claim: 'clm_gone', headline: undefined }));
     expect(screen.getByText('This finding was deleted or isn’t in this project')).toBeTruthy();
   });
+
+  it('says why the work exists above the headline, and the reader’s part in one line (R3.6)', () => {
+    renderBoard(
+      start({
+        why: 'To measure whether a new reader understands a page',
+        yourPart: 'Nothing now. When G1 resumes: approve the 3 test cases.',
+      }),
+    );
+    const opening = screen.getByRole('region', { name: 'Done: start here' });
+    const why = within(opening).getByText('To measure whether a new reader understands a page');
+    expect(why.closest('p')!.textContent).toBe(
+      'WhyTo measure whether a new reader understands a page',
+    );
+    const headline = within(opening).getByRole('heading', { level: 2 });
+    // Why comes first in reading order.
+    expect(why.compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const part = within(opening).getByText(
+      'Nothing now. When G1 resumes: approve the 3 test cases.',
+    );
+    expect(part.closest('p')!.textContent).toBe(
+      'Your partNothing now. When G1 resumes: approve the 3 test cases.',
+    );
+    expect(headline.compareDocumentPosition(part) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('leaves out why and your part when an older view has neither', () => {
+    renderBoard(start());
+    const opening = screen.getByRole('region', { name: 'Done: start here' });
+    expect(within(opening).queryByText('Why')).toBeNull();
+    expect(within(opening).queryByText('Your part')).toBeNull();
+  });
 });

@@ -129,6 +129,16 @@ unless \`terms: true\`. Every item opens to its claim's mark, quote and source.
   the finding (15 words or fewer), never free \`title\` text. Bars from claims with \`bars\` (each
   claim's \`figure\` {value, unit, label} is one bar; on "From source" the value must appear in the
   quote) or from a query with \`count\` ({query, by}). 2–12 bars, one unit, one \`highlight\`.
+- **What it looks like: Gallery** (checked): research about anything visual (UI, products,
+  places, cars, diagrams) shows its examples as pictures, never only as words. Store each example
+  as an artifact with \`image\` (an https address of the picture, or the id of a project image
+  file from project_snapshot.files), \`alt\` (what it shows, one sentence), \`uri\` (the page it
+  comes from; its host shows under the picture) and a shared tag in \`tags\`, then add a Gallery
+  with \`artifacts\` {"where": {"tags": "<tag>"}}. Use \`layout: "compare"\` with exactly two
+  pictures for before/after or option A/B (\`highlight\` the one you recommend), "grid" for a
+  set of examples, "strip" for a row the reader scrolls; \`claim\` heads it with the finding the
+  pictures show. Only https pictures load; the preview warns about a gallery with no matching
+  pictures, missing alt text and images that aren't https.
 - **Shares at a glance: mini bars**: StatCards with \`of\` draw a word-sized bar; in Text, a value
   \`{bar: {query, of}}\` draws one inline.
 - **How strong the evidence is**: the mark shows how many sources back a claim, or "no source

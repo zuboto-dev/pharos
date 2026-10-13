@@ -7,3 +7,5 @@ export * from './progress.js';
 export * from './catalog-info.js';
 export * from './similar.js';
 export * from './text-tools.js';
+export * from './pictures.js';
+export * from './gallery.js';

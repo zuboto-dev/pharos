@@ -305,6 +305,59 @@ export const FileViewNode = component(
   },
 );
 
+/** How a Gallery lays its pictures out (R7.13). */
+export const GALLERY_LAYOUTS = ['grid', 'compare', 'strip'] as const;
+/** What a Gallery writes under each picture. */
+export const GALLERY_CAPTIONS = ['title', 'description', 'none'] as const;
+
+export const GalleryNode = component(
+  'Gallery',
+  "Pictures from the project: artifacts with an `image` (an https address or a project image file) and image files from the owner's folders, with a caption and where each comes from; a tapped picture opens large.",
+  {
+    artifacts: Filter.optional().describe(
+      'Artifacts whose image to show, e.g. {"where": {"tags": "ui-examples"}} or {"where": {"id": ["art_1", "art_2"]}}; artifacts without an image are left out',
+    ),
+    files: Filter.optional().describe(
+      'Project image files (png, jpg, gif, webp) to show, e.g. {"where": {"tags": "screenshots"}}; other files are left out',
+    ),
+    layout: z
+      .enum(GALLERY_LAYOUTS)
+      .optional()
+      .describe(
+        'grid (default): a wall of pictures; compare: exactly two side by side, e.g. before/after or option A/B; strip: one scrolling row',
+      ),
+    columns: z
+      .number()
+      .int()
+      .min(2)
+      .max(4)
+      .optional()
+      .describe('Pictures per row in a grid on a wide screen (default 3)'),
+    caption: z
+      .enum(GALLERY_CAPTIONS)
+      .optional()
+      .describe("Shown under each picture: the item's title (default), its description, or none"),
+    claim: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of the claim that states what the pictures show; it heads the gallery, with its mark',
+      ),
+    highlight: z
+      .array(z.string().min(1))
+      .optional()
+      .describe('Ids of the pictures to draw with an accent ring (artifact or file ids)'),
+    max: z
+      .number()
+      .int()
+      .min(1)
+      .max(24)
+      .optional()
+      .describe('Show at most this many pictures (default 12)'),
+  },
+);
+
 export const ActivityFeedNode = component(
   'ActivityFeed',
   'Recent revisions: who changed what and why.',
@@ -726,6 +779,7 @@ const LEAF_NODES = [
   DecisionLogNode,
   FileListNode,
   FileViewNode,
+  GalleryNode,
   ActivityFeedNode,
   DataTableNode,
   CountChartNode,

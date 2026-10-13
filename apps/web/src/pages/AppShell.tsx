@@ -6,6 +6,7 @@ import { useAgentStatus } from '../lib/events';
 import { useTheme } from '../lib/theme';
 import { PharosLogo } from './Logo';
 import { Sidebar } from './Sidebar';
+import { SIDEBAR_ID, SidebarToggle, useSidebarHidden } from './sidebar-toggle';
 import { UpdateNotice } from './UpdateNotice';
 
 /** Opens Settings; a dot shows when automatic answering is paused. */
@@ -54,15 +55,37 @@ function ShellFolderRequests() {
 export function AppShell() {
   // Keeps the chosen theme applied (and "system" following the OS) on every page.
   useTheme();
+  // R7.14: wide screens can hide the sidebar (a button or ⌘\); phones keep it above the page.
+  const { hidden, toggle, moveFocus } = useSidebarHidden();
+  const fromButton = () => toggle(true);
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="flex max-h-[60vh] shrink-0 flex-col border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0 dark:border-neutral-800 dark:bg-neutral-900">
-        <Link
-          to="/"
-          className="flex items-center gap-2 px-4 pt-4 pb-2 font-semibold tracking-tight"
-        >
-          <PharosLogo className="size-5 text-amber-500" /> Pharos
-        </Link>
+      {hidden && (
+        <div className="hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white px-2 py-3 md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900">
+          <SidebarToggle hidden onToggle={fromButton} focusOnMount={moveFocus.current} />
+          <Link to="/" aria-label="Pharos home" className="rounded-md p-1.5">
+            <PharosLogo className="size-5 text-amber-500" />
+          </Link>
+        </div>
+      )}
+      <aside
+        id={SIDEBAR_ID}
+        className={clsx(
+          'flex max-h-[60vh] shrink-0 flex-col border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0 dark:border-neutral-800 dark:bg-neutral-900',
+          hidden && 'md:hidden',
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 pr-2">
+          <Link
+            to="/"
+            className="flex items-center gap-2 px-4 pt-4 pb-2 font-semibold tracking-tight"
+          >
+            <PharosLogo className="size-5 text-amber-500" /> Pharos
+          </Link>
+          {!hidden && (
+            <SidebarToggle hidden={false} onToggle={fromButton} focusOnMount={moveFocus.current} />
+          )}
+        </div>
         <Sidebar />
         <div className="border-t border-neutral-100 p-3 dark:border-neutral-800">
           <SettingsLink />

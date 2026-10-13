@@ -15,6 +15,7 @@ createRoot(document.getElementById('root')!).render(
           <Route index element={<HomePage />} />
           <Route path="projects/:projectId" element={<ProjectPage />} />
           <Route path="projects/:projectId/views/:viewId" element={<ProjectPage />} />
+          <Route path="projects/:projectId/files" element={<ProjectPage page="files" />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

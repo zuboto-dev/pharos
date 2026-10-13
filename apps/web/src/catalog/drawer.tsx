@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { z } from 'zod';
+import { FileDetails } from '../files/FileDetails';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
 import { useViewData, type OpenTarget } from './context';
@@ -489,6 +490,7 @@ function deleteEffects(entity: Entity, data: ReturnType<typeof useViewData>): st
     const n = data.tasks.filter((t) => t.data.dependsOn.includes(entity.id)).length;
     return n ? `${plural(n, 'task')} that depend on it will no longer depend on it.` : '';
   }
+  if (entity.type === 'file') return 'The file stays in its folder; only this project forgets it.';
   return '';
 }
 
@@ -589,7 +591,7 @@ export function DetailDrawer({
                 onClick={() => setConfirming(true)}
                 className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
               >
-                <Trash2 className="size-3.5" /> Delete
+                <Trash2 className="size-3.5" /> {entity.type === 'file' ? 'Remove' : 'Delete'}
               </button>
             )}
             <button
@@ -609,15 +611,18 @@ export function DetailDrawer({
             className="space-y-2 border-b border-rose-200 bg-rose-50 px-5 py-3 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-100"
           >
             <p>
-              Delete {TYPE_LABELS[entity.type].toLowerCase()} “{labelOf(entity)}”?{' '}
-              {deleteEffects(entity, data)}
+              {entity.type === 'file' ? 'Remove' : 'Delete'}{' '}
+              {TYPE_LABELS[entity.type].toLowerCase()} “{labelOf(entity)}”
+              {entity.type === 'file' ? ' from this project' : ''}? {deleteEffects(entity, data)}
             </p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => {
                   void data.actions.apply(
-                    `Delete ${TYPE_LABELS[entity.type].toLowerCase()} “${labelOf(entity)}”`,
+                    entity.type === 'file'
+                      ? `Remove file “${labelOf(entity)}” from the project`
+                      : `Delete ${TYPE_LABELS[entity.type].toLowerCase()} “${labelOf(entity)}”`,
                     [{ op: 'delete', type: entity.type, id: entity.id }],
                     { undoable: true },
                   );
@@ -625,7 +630,7 @@ export function DetailDrawer({
                 }}
                 className="rounded-md bg-rose-600 px-2.5 py-1 font-medium text-white hover:bg-rose-700"
               >
-                Delete
+                {entity.type === 'file' ? 'Remove' : 'Delete'}
               </button>
               <button
                 type="button"
@@ -642,6 +647,12 @@ export function DetailDrawer({
             <ProjectHistory />
           ) : 'revision' in target ? (
             <RevisionDetails id={target.revision} />
+          ) : entity?.type === 'file' ? (
+            <FileDetails
+              key={entity.id}
+              file={entity as Entity<'file'>}
+              history={<EntityHistory id={entity.id} />}
+            />
           ) : entity ? (
             <EntityDetails key={entity.id} entity={entity} />
           ) : (

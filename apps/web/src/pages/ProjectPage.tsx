@@ -16,6 +16,7 @@ import clsx from 'clsx';
 import {
   BookmarkPlus,
   Check,
+  FolderOpen,
   History,
   LayoutGrid,
   MessageCircleQuestion,
@@ -24,7 +25,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { widgetName } from '../catalog/board';
 import {
   ViewDataProvider,
@@ -35,6 +36,7 @@ import {
   type ViewActions,
 } from '../catalog/context';
 import { DetailDrawer } from '../catalog/drawer';
+import { FilesPage } from '../files/FilesPage';
 import { dismissAnswer, keepAnswer } from './answers';
 import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboarding';
 import { AskDialog, RequestsButton } from './requests';
@@ -144,7 +146,12 @@ type Notice =
   | { kind: 'undo'; text: string; revision: number }
   | { kind: 'answer'; text: string; viewId: string };
 
-export function ProjectPage() {
+/**
+ * A project: its view tabs and the active view, or its Files page (`page="files"`, at
+ * /projects/:projectId/files), with the detail drawer over either.
+ */
+export function ProjectPage({ page }: { page?: 'files' } = {}) {
+  const filesPage = page === 'files';
   const { projectId, viewId } = useParams();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -274,7 +281,7 @@ export function ProjectPage() {
   const views = sortViews(
     dataset.data.views.filter((v) => (!v.data.archived && !isExpired(v)) || v.id === viewId),
   );
-  const active = views.find((v) => v.id === viewId) ?? views[0];
+  const active = filesPage ? undefined : (views.find((v) => v.id === viewId) ?? views[0]);
   if (viewId && !views.some((v) => v.id === viewId))
     return <Navigate to={`/projects/${projectId}`} replace />;
   const spec: ViewSpec = active ? specOf(active) : TEMPLATES.overview;
@@ -337,7 +344,7 @@ export function ProjectPage() {
             active={active}
             onCreated={() => setEditing(true)}
           />
-          {active && (
+          {(active || filesPage) && (
             <div className="relative mb-1.5 flex shrink-0 items-center gap-2">
               {editing ? (
                 <>
@@ -368,6 +375,20 @@ export function ProjectPage() {
                 </>
               ) : (
                 <>
+                  <Link
+                    to={`/projects/${projectId}/files`}
+                    aria-current={filesPage ? 'page' : undefined}
+                    title="Documents from your folders in this project"
+                    className={clsx(
+                      BUTTON.secondary,
+                      filesPage &&
+                        'border-neutral-400 bg-neutral-100 dark:border-neutral-500 dark:bg-neutral-800',
+                    )}
+                  >
+                    <FolderOpen className="size-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Files</span>
+                    <span className="sr-only sm:hidden">Files</span>
+                  </Link>
                   <RequestsButton
                     projectId={projectId!}
                     requests={dataset.data.requests ?? []}
@@ -383,18 +404,21 @@ export function ProjectPage() {
                     <History className="size-3.5" />
                     <span className="hidden sm:inline">History</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className={BUTTON.secondary}
-                  >
-                    <LayoutGrid className="size-3.5" /> Customize
-                  </button>
+                  {!filesPage && (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className={BUTTON.secondary}
+                    >
+                      <LayoutGrid className="size-3.5" /> Customize
+                    </button>
+                  )}
                 </>
               )}
             </div>
           )}
         </div>
+        {filesPage && <FilesPage onAdded={reload} />}
         {active && !editing && <ViewUpdated view={active} />}
         {editing && (
           <p className="text-xs text-neutral-500">
@@ -410,22 +434,27 @@ export function ProjectPage() {
           </p>
         )}
         {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
-        {active?.data.kind !== 'answer' && !editing && isEmptyProject(dataset.data) && (
-          <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
-        )}
-        {board.widgets.length === 0 && !editing && (
+        {!filesPage &&
+          active?.data.kind !== 'answer' &&
+          !editing &&
+          isEmptyProject(dataset.data) && (
+            <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
+          )}
+        {!filesPage && board.widgets.length === 0 && !editing && (
           <div className="rounded-xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-neutral-700">
             This view is empty. Use <strong>Customize</strong> → Add widget, or ask your agent to
             build it (for example, “make this a view of what’s left in the current stage”).
           </div>
         )}
-        <ViewRenderer
-          key={active?.id}
-          view={active ? { id: active.id, name: active.data.name } : undefined}
-          spec={board}
-          editing={editing}
-          onChange={(next, message) => void saveBoard(next, message)}
-        />
+        {!filesPage && (
+          <ViewRenderer
+            key={active?.id}
+            view={active ? { id: active.id, name: active.data.name } : undefined}
+            spec={board}
+            editing={editing}
+            onChange={(next, message) => void saveBoard(next, message)}
+          />
+        )}
       </div>
       {target && (
         <DetailDrawer

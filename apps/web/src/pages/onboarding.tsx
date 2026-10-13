@@ -1,6 +1,7 @@
 import type { ProjectDataset } from '@pharos/schema';
 import { Check, Copy, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
+import { Loading, Skeleton, SkeletonBlock, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 
 const MCP_COMMAND = 'claude mcp add --transport http pharos http://localhost:4300/mcp';
@@ -97,49 +98,63 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
   );
 }
 
-/** Placeholder while a project loads: tabs and a few widget-shaped blocks. */
-export function ProjectSkeleton() {
-  const block = 'rounded-block bg-neutral-100 dark:bg-neutral-800/60';
+/** Placeholder while a project loads: the tab row and a board of block-shaped placeholders. */
+export function ProjectSkeleton({ files = false }: { files?: boolean } = {}) {
   return (
-    <div
-      role="status"
-      aria-label="Loading project"
-      className="mx-auto max-w-7xl animate-pulse space-y-5 p-4 md:p-8"
+    <Loading
+      label={files ? 'Loading files' : 'Loading project'}
+      className="mx-auto max-w-7xl space-y-5 p-4 md:p-8"
     >
-      <div className="flex gap-3 border-b border-line pb-3">
-        <div className={`h-6 w-24 ${block}`} />
-        <div className={`h-6 w-16 ${block}`} />
+      <div className="flex items-end gap-4 border-b border-line pb-2.5">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-14" />
+        <Skeleton className="hidden h-4 w-16 sm:block" />
+        <span className="flex-1" />
+        <Skeleton className="size-7 rounded-control" />
+        <Skeleton className="size-7 rounded-control" />
       </div>
-      <div className={`h-24 ${block}`} />
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className={`h-20 ${block}`} />
-        ))}
-      </div>
-      <div className={`h-40 ${block}`} />
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className={`h-48 ${block}`} />
-        <div className={`h-48 md:col-span-2 ${block}`} />
-      </div>
-    </div>
+      {files ? (
+        <>
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="w-2/3 max-w-md" />
+          </div>
+          <div className="rounded-block border border-line bg-surface p-panel">
+            <SkeletonRows rows={5} label="Loading files" />
+          </div>
+        </>
+      ) : (
+        <>
+          <SkeletonBlock lines={2} />
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="space-y-3 rounded-block border border-line bg-surface p-tile">
+                <Skeleton className="h-2.5 w-1/2" />
+                <Skeleton className="h-6 w-1/3" />
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <SkeletonBlock lines={4} />
+            <SkeletonBlock lines={4} className="md:col-span-2" />
+          </div>
+        </>
+      )}
+    </Loading>
   );
 }
 
 /** Placeholder project cards while the workspace loads. */
 export function HomeSkeleton() {
   return (
-    <div
-      role="status"
-      aria-label="Loading projects"
-      className="mx-auto max-w-5xl animate-pulse space-y-6 p-6 md:p-8"
-    >
-      <div className="h-8 w-40 rounded-tile bg-neutral-100 dark:bg-neutral-800/60" />
+    <Loading label="Loading projects" className="mx-auto max-w-5xl space-y-6 p-6 md:p-8">
+      <Skeleton className="h-6 w-40" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-28 rounded-block bg-neutral-100 dark:bg-neutral-800/60" />
+          <SkeletonBlock key={i} lines={2} />
         ))}
       </div>
-    </div>
+    </Loading>
   );
 }
 

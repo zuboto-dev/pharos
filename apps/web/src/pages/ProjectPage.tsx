@@ -288,7 +288,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  if (dataset.status === 'loading') return <ProjectSkeleton />;
+  if (dataset.status === 'loading') return <ProjectSkeleton files={filesPage} />;
   if (!dataset.data) {
     const notFound = dataset.error instanceof ApiError && dataset.error.status === 404;
     return <LoadError notFound={notFound} what="Project" />;

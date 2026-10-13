@@ -1,7 +1,7 @@
 import { fileUrl, type Entity, type FileInfo, type NodeOf } from '@pharos/schema';
 import { FileQuestion } from 'lucide-react';
 import { FileActions, MissingNotice } from '../../files/FileDetails';
-import { FilePreview } from '../../files/FilePreview';
+import { FilePreview, PreviewSkeleton } from '../../files/FilePreview';
 import { fileName } from '../../files/files';
 import { GlanceDate } from '../../files/glance';
 import { useResource } from '../../lib/api';
@@ -42,7 +42,11 @@ function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'ful
         </p>
       )}
       <FileActions file={file} info={known} compact />
-      {known && <FilePreview file={file} available={known.available} size={size} />}
+      {known ? (
+        <FilePreview file={file} available={known.available} size={size} />
+      ) : (
+        info.status === 'loading' && <PreviewSkeleton />
+      )}
     </div>
   );
 }

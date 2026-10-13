@@ -69,6 +69,9 @@
   /* Presence (v0.2 B5): an agent working here. */
   --ph-presence: var(--color-violet-500);
   --ph-presence-ink: var(--color-violet-700);
+  /* Loading skeletons (v0.2 B8): the placeholder and the lighter band that sweeps over it. */
+  --ph-skeleton: var(--color-neutral-100);
+  --ph-skeleton-shine: var(--color-white);
 }
 
 .dark {
@@ -103,6 +106,8 @@
   --ph-chart-bad: var(--color-rose-400);
   --ph-presence: var(--color-violet-400);
   --ph-presence-ink: var(--color-violet-300);
+  --ph-skeleton: var(--color-neutral-800);
+  --ph-skeleton-shine: oklch(33% 0 none);
 }
 
 @theme inline {
@@ -179,6 +184,7 @@
   --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
   --animate-block-changed: motion-block-changed 1600ms ease-out;
   --animate-presence: motion-presence 1800ms ease-in-out infinite;
+  --animate-shimmer: motion-shimmer 1800ms ease-in-out infinite;
 
   @keyframes motion-fade-in {
     from {
@@ -232,6 +238,15 @@
       transform: scale(var(--motion-presence-scale));
     }
   }
+  /* Loading skeletons: a lighter band sweeps slowly across (still under reduced motion). */
+  @keyframes motion-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
   /* A block whose content an update changed: a soft ring that fades away (not a flash). */
   @keyframes motion-block-changed {
     from {
@@ -253,6 +268,24 @@
 
 /* Compact prose styles for rendered markdown. */
 @layer components {
+  /* A loading placeholder (catalog/skeleton.tsx). */
+  .ph-skeleton {
+    background-color: var(--ph-skeleton);
+    background-image: linear-gradient(
+      90deg,
+      var(--ph-skeleton) 30%,
+      var(--ph-skeleton-shine) 50%,
+      var(--ph-skeleton) 70%
+    );
+    background-size: 300% 100%;
+    animation: var(--animate-shimmer);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ph-skeleton {
+      animation: none;
+      background-image: none;
+    }
+  }
   .md {
     @apply text-sm leading-relaxed text-ink-soft;
   }

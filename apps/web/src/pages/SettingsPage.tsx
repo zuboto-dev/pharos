@@ -8,6 +8,7 @@ import {
 import clsx from 'clsx';
 import { Check, Copy, Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { SkeletonLines, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 import { FolderRequestCard, useFolderRequests } from '../files/FolderRequests';
 import { ApiError, postJson, useResource } from '../lib/api';
@@ -591,7 +592,7 @@ function Folders() {
       ) : folders.data ? (
         <p className="text-sm text-muted">No folders yet.</p>
       ) : (
-        <p className="text-sm text-neutral-400">Loading…</p>
+        <SkeletonRows rows={2} label="Loading folders" />
       )}
       <AddFolder onAdded={changed} onError={report} />
       {error && (
@@ -684,7 +685,7 @@ export function SettingsPage() {
             <Row label="Version">{s.version}</Row>
           </dl>
         ) : (
-          <p className="text-sm text-neutral-400">Loading…</p>
+          <SkeletonLines lines={4} label="Loading settings" />
         )}
       </Section>
     </div>

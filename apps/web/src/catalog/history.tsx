@@ -4,6 +4,7 @@ import { Bot, Cog, RotateCcw, User } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError, getJson, useResource } from '../lib/api';
 import { formatDate, timeAgo } from '../lib/format';
+import { SkeletonRows } from './skeleton';
 import { useViewData } from './context';
 import { BUTTON, Empty } from './ui';
 
@@ -89,8 +90,8 @@ function HistoryList({ filter }: { filter: FilterKey }) {
   const latest = useResource<RevisionSummary[]>(`/api/history?${query}&v=${version}`);
   const [older, setOlder] = useState<RevisionSummary[]>([]);
   const [more, setMore] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  if (!latest.data)
-    return <Empty>{latest.status === 'loading' ? 'Loading…' : 'Couldn’t load history'}</Empty>;
+  if (latest.status === 'loading') return <SkeletonRows rows={5} label="Loading history" />;
+  if (!latest.data) return <Empty>Couldn’t load history</Empty>;
   const first = latest.data;
   const seen = new Set(first.map((r) => r.id));
   const revisions = [...first, ...older.filter((r) => !seen.has(r.id))];

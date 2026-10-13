@@ -7,6 +7,7 @@ import {
 import { FolderSearch, Search, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { SkeletonRows } from '../catalog/skeleton';
 import { FileTypeIcon } from '../catalog/components/file-list';
 import { useOptions } from '../catalog/options';
 import { Select } from '../catalog/select';
@@ -156,7 +157,7 @@ export function AddFilesDialog({
             </div>
             <div className="min-h-40 flex-1 overflow-y-auto px-3 pb-2">
               {scanned.status === 'loading' ? (
-                <Empty>Looking through your folders…</Empty>
+                <SkeletonRows rows={4} label="Looking through your folders" className="pt-3" />
               ) : scanned.status === 'error' && !scanned.data ? (
                 <Empty>Couldn’t read the folder list. Try again in a moment.</Empty>
               ) : results.length === 0 ? (

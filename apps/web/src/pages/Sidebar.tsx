@@ -20,6 +20,7 @@ import {
 import { useEffect, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router';
+import { Loading, Skeleton } from '../catalog/skeleton';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
@@ -266,19 +267,11 @@ export function Sidebar() {
     return <p className="px-4 text-sm text-rose-600">Can’t reach the Pharos server.</p>;
   if (!ws.workspace)
     return (
-      <div
-        role="status"
-        aria-label="Loading projects"
-        className="animate-pulse space-y-2 px-4 py-2"
-      >
+      <Loading label="Loading projects" className="space-y-3 px-4 py-2">
         {[70, 55, 80, 60].map((w) => (
-          <div
-            key={w}
-            className="h-4 rounded bg-neutral-200/70 dark:bg-neutral-800"
-            style={{ width: `${w}%` }}
-          />
+          <Skeleton key={w} style={{ width: `${w}%` }} />
         ))}
-      </div>
+      </Loading>
     );
   const w: Workspace = ws.workspace;
   const repositoryById = new Map(w.repositories.map((r) => [r.id, r]));

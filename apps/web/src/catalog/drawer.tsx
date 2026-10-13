@@ -18,6 +18,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
+import { Loading, Skeleton, SkeletonRows } from './skeleton';
 import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
@@ -371,8 +372,8 @@ function EntityHistory({ id }: { id: string }) {
   const history = useResource<RevisionSummary[]>(
     `/api/history?entityId=${id}&limit=20&v=${version}`,
   );
-  if (!history.data)
-    return <Empty>{history.status === 'loading' ? 'Loading…' : 'Couldn’t load history'}</Empty>;
+  if (history.status === 'loading') return <SkeletonRows rows={2} label="Loading history" />;
+  if (!history.data) return <Empty>Couldn’t load history</Empty>;
   return (
     <ul className="-mx-1.5 space-y-0.5">
       {history.data.map((rev) => (
@@ -429,12 +430,26 @@ function useFormatValue() {
   return one;
 }
 
+/** A revision's details while they load: its title, author line and a few changes. */
+function RevisionSkeleton() {
+  return (
+    <Loading label="Loading revision" className="space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-2.5 w-20" />
+        <Skeleton className="h-5 w-3/4" />
+        <Skeleton className="w-1/2" />
+      </div>
+      <SkeletonRows rows={3} label="Loading changes" />
+    </Loading>
+  );
+}
+
 function RevisionDetails({ id }: { id: number }) {
   const { entityById, version, actions } = useViewData();
   const formatValue = useFormatValue();
   const revision = useResource<RevisionSummary>(`/api/revisions/${id}?v=${version}`);
-  if (!revision.data)
-    return <Empty>{revision.status === 'loading' ? 'Loading…' : 'Revision not found'}</Empty>;
+  if (revision.status === 'loading') return <RevisionSkeleton />;
+  if (!revision.data) return <Empty>Revision not found</Empty>;
   const rev = revision.data;
   const Icon = AUTHOR_ICONS[rev.author.kind];
   return (

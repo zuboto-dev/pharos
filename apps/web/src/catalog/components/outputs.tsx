@@ -6,6 +6,7 @@ import {
   type RevisionSummary,
 } from '@pharos/schema';
 import { Bot, Cog, File, FileText, Link2, Package, Palette, User } from 'lucide-react';
+import { SkeletonRows } from '../skeleton';
 import { useResource } from '../../lib/api';
 import { formatDate, localToday, plural, timeAgo } from '../../lib/format';
 import { useViewData } from '../context';
@@ -192,7 +193,7 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
   const history = useResource<RevisionSummary[]>(
     `/api/history?projectId=${project.id}&limit=${node.limit ?? 10}&v=${version}`,
   );
-  if (history.status === 'loading') return <Empty>Loading…</Empty>;
+  if (history.status === 'loading') return <SkeletonRows rows={3} label="Loading activity" />;
   if (!history.data) return <Empty>Couldn’t load activity</Empty>;
   if (!history.data.length) return <Empty>No activity yet</Empty>;
   return (

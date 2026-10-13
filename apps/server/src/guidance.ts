@@ -77,7 +77,21 @@ marked "checked"; task boards and other views without them are not checked.
   Found: why it matters in one line, 3–5 findings with sources (one per line), how sure and what is
   unknown.
   Needs you (set \`due\`): the decision, the options with what each leads to, your recommendation
-  and why, and a way to answer (a proposed decision in a DecisionLog the reader opens, or Ask).
+  and why, and a way to answer: a DecisionBlock (see "Decisions for the reader" below), or Ask.
+
+## Decisions for the reader
+When the reader has to choose, store the choice on a decision and show it in a DecisionBlock:
+- Create the decision with \`title\` (the question), \`options\` (2–5, each \`{id, label, summary,
+  pros, cons, claimIds}\`: a short label, what it leads to in one line, pros and cons in a few
+  words each, and the claims that back it as sources), \`recommendedOptionId\` and
+  \`recommendationReason\` (one line). It stays "proposed" until the reader answers.
+- Only the reader chooses, writes another answer or decides later; Pharos refuses
+  \`chosenOptionId\`, \`answer\` and \`deferredUntil\` from agents, and an "accepted" status on a
+  decision with options. Read the answer back from the decision (project_snapshot shows it).
+- The page: a StartHere with purpose "needs-you", \`due\`, and \`yourPartTarget\` set to the
+  DecisionBlock's widget id ("Choose an empty state by Friday"), then the DecisionBlock, full
+  width. The preview warns about fewer than 2 options and a recommendation without a reason.
+  Once answered, the block shows the answer and DecisionLog lists it.
 
 ## Explanation views
 Use one when the reader needs to understand something (research, a concept, what a result
@@ -176,7 +190,9 @@ and give the set one view.
    DecisionLog (or a DataList) filtered to the linked items, which show their files as small
    links that open in the FileView. When a paper has an expiry date, add a FileList filtered to
    {"tags": "<tag>", "expiryDate": {"exists": true}} with \`details: ["expiryDate"]\` so the
-   dates show as badges. The preview warns when a FileView's file isn't in the project or
+   dates show as badges, or a DueTracker over {"type": "file", "where": {"tags": "<tag>",
+   "expiryDate": {"exists": true}}} to sort them by urgency (60 days counts as urgent; the
+   project page also reminds the owner). The preview warns when a FileView's file isn't in the project or
    \`showIn\` names no FileView.
 
 Example board (ids from project_snapshot.files):

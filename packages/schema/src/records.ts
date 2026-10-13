@@ -68,7 +68,8 @@ export const RecordType = z.strictObject({
 });
 export type RecordType = z.infer<typeof RecordType>;
 
-export const RecordTypes = z.array(RecordType).max(30);
+// Shared once in the apply tool's JSON schema ($defs), not repeated per operation (C1).
+export const RecordTypes = z.array(RecordType).max(30).meta({ id: 'RecordTypes' });
 
 export const TIME_UNITS = ['days', 'weeks', 'months', 'years'] as const;
 
@@ -96,35 +97,37 @@ const IsoDate = z.iso.date();
  * Repeats every N days/weeks/months/years and/or every N meter units, whichever comes first.
  * Rolling counts from when it was last done; fixed keeps a schedule from its start.
  */
-export const Interval = z.strictObject({
-  every: z
-    .strictObject({ n: z.number().int().min(1), unit: z.enum(TIME_UNITS) })
-    .optional()
-    .describe('e.g. {n: 12, unit: "months"}'),
-  meter: z
-    .strictObject({
-      n: z.number().positive(),
-      from: z
-        .string()
-        .min(1)
-        .describe('Where the reading is, e.g. "fields.vehicle.fields.odometer"'),
-    })
-    .optional(),
-  mode: z.enum(['rolling', 'fixed']).optional().describe('Default rolling'),
-  lastDate: IsoDate.optional().describe('Last done'),
-  lastMeter: z.number().optional().describe('Reading when last done'),
-  startDate: IsoDate.optional().describe('fixed: schedule start; rolling: first due date'),
-  startMeter: z.number().optional(),
-  soon: z
-    .strictObject({
-      urgentDays: z.number().int().min(0).optional(),
-      veryUrgentDays: z.number().int().min(0).optional(),
-      urgentMeter: z.number().min(0).optional(),
-      veryUrgentMeter: z.number().min(0).optional(),
-    })
-    .optional()
-    .describe('Band limits (default 30 / 7 days, 1000 / 250 units)'),
-});
+export const Interval = z
+  .strictObject({
+    every: z
+      .strictObject({ n: z.number().int().min(1), unit: z.enum(TIME_UNITS) })
+      .optional()
+      .describe('e.g. {n: 12, unit: "months"}'),
+    meter: z
+      .strictObject({
+        n: z.number().positive(),
+        from: z
+          .string()
+          .min(1)
+          .describe('Where the reading is, e.g. "fields.vehicle.fields.odometer"'),
+      })
+      .optional(),
+    mode: z.enum(['rolling', 'fixed']).optional().describe('Default rolling'),
+    lastDate: IsoDate.optional().describe('Last done'),
+    lastMeter: z.number().optional().describe('Reading when last done'),
+    startDate: IsoDate.optional().describe('fixed: schedule start; rolling: first due date'),
+    startMeter: z.number().optional(),
+    soon: z
+      .strictObject({
+        urgentDays: z.number().int().min(0).optional(),
+        veryUrgentDays: z.number().int().min(0).optional(),
+        urgentMeter: z.number().min(0).optional(),
+        veryUrgentMeter: z.number().min(0).optional(),
+      })
+      .optional()
+      .describe('Band limits (default 30 / 7 days, 1000 / 250 units)'),
+  })
+  .meta({ id: 'Interval' });
 export type Interval = z.infer<typeof Interval>;
 
 export const FieldValue = z.union([z.string(), z.number(), Money]);

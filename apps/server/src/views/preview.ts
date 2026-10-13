@@ -35,6 +35,8 @@ import {
   chartBars,
   checkBoardQueries,
   dueRows,
+  decisionState,
+  decisionWarnings,
   formatBar,
   formatNumber,
   formatTotal,
@@ -329,11 +331,15 @@ function describeLeaf(
     case 'DueTracker': {
       const d = node as NodeOf<'DueTracker'>;
       const rows = dueRows(ctx.data, d, { today: ctx.today });
-      const parts = rows.slice(0, 5).map(({ record, due }) => {
-        if (!due) return `“${record.data.title}” (no schedule)`;
+      const parts = rows.slice(0, 5).map(({ record, due, unit }) => {
+        if (!due)
+          return `“${record.data.title}” (${record.type === 'file' ? 'no expiry date' : 'no schedule'})`;
         const when = [
-          due.date && `due ${due.date}`,
-          due.left !== undefined && `${formatNumber(due.left)} left`,
+          due.date && `${record.type === 'file' ? 'expires' : 'due'} ${due.date}`,
+          due.left !== undefined &&
+            (due.left < 0
+              ? `${formatNumber(-due.left, unit)} over`
+              : `${formatNumber(due.left, unit)} left`),
         ].filter(Boolean);
         return `${DUE_BAND_LABELS[due.band]}: “${record.data.title}” (${when.join(', ')})`;
       });
@@ -421,6 +427,32 @@ function describeLeaf(
         empty: false,
         warnings,
       };
+    }
+    case 'DecisionBlock': {
+      const id = (node as NodeOf<'DecisionBlock'>).decision;
+      const decision = ctx.data.decisions.find((d) => d.id === id);
+      if (!decision) {
+        warnings.push(
+          `decision ${id} not found in this project; create the decision with options first (apply, type "decision")`,
+        );
+        return { shows: 'A note that the decision isn’t in the project', empty: true, warnings };
+      }
+      const state = decisionState(decision.data);
+      if (state.kind === 'open' || state.kind === 'deferred')
+        warnings.push(...decisionWarnings(decision.data).map((w) => `decision ${id} ${w}`));
+      const options = decision.data.options ?? [];
+      const listed = options
+        .map(
+          (o) => `${o.label}${o.id === decision.data.recommendedOptionId ? ' (recommended)' : ''}`,
+        )
+        .join(' / ');
+      const shows =
+        state.kind === 'chosen'
+          ? `“${decision.data.title}”: the owner chose “${state.option.label}”`
+          : state.kind === 'answered'
+            ? `“${decision.data.title}”: the owner answered “${state.answer}”`
+            : `“${decision.data.title}”: ${plural(options.length, 'option')} to choose from (${listed})${state.kind === 'deferred' ? `, deferred until ${state.until}` : ''}`;
+      return { shows, empty: false, warnings };
     }
     case 'ActivityFeed': {
       const n2 = new AgentFiles(ctx.store).revisions(
@@ -1079,6 +1111,10 @@ function describeStartHere(
         `step ${i + 1} "${step.label}" points at widget "${step.target}", which isn't on this board`,
       );
   });
+  if (node.yourPartTarget && !ctx.widgetIds.has(node.yourPartTarget))
+    warnings.push(
+      `yourPartTarget points at widget "${node.yourPartTarget}", which isn't on this board`,
+    );
   if (node.purpose === 'needs-you' && !node.due)
     warnings.push('a needs-you page says by when: set due');
 
@@ -1198,6 +1234,17 @@ function visibleText(node: ViewNode, ctx: Context): { texts: string[]; marked: s
       const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
       const bars = findingBars(node, ctx).map((b) => `${b.label} ${b.value}${b.unit ?? ''}`);
       return { texts: [title, claim?.data.statement ?? '', ...bars], marked: [] };
+    }
+    case 'DecisionBlock': {
+      // The question, each option's label and what it leads to, and why it's recommended; pros
+      // and cons are short points, like table cells.
+      const d = ctx.data.decisions.find((x) => x.id === node.decision);
+      if (!d) return { texts: [title], marked: [] };
+      const said = (d.data.options ?? []).flatMap((o) => [o.label, o.summary ?? '']);
+      return {
+        texts: [title, d.data.title, ...said, d.data.recommendationReason ?? ''],
+        marked: [],
+      };
     }
     case 'Gallery': {
       // Captions are data, like rows; the claim heading it is read first.

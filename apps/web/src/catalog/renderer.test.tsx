@@ -60,6 +60,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   AssigneeMatrix: { component: 'AssigneeMatrix' },
   ArtifactGallery: { component: 'ArtifactGallery' },
   DecisionLog: { component: 'DecisionLog', filter: { limit: 2 } },
+  DecisionBlock: { component: 'DecisionBlock', decision: 'dec_missing' },
   ActivityFeed: { component: 'ActivityFeed' },
   DataTable: COMPONENT_INFO.DataTable.example,
   CountChart: COMPONENT_INFO.CountChart.example,

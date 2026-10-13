@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DECISION_CHOICE_FIELDS } from './decisions.js';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
@@ -150,6 +151,8 @@ export const DecisionData = z.strictObject({
   ),
   decisionDate: IsoDate.optional().describe('YYYY-MM-DD the decision was made'),
   fileIds: FileIds,
+  // R10.19: options the owner chooses from on a page.
+  ...DECISION_CHOICE_FIELDS,
 });
 
 export const ViewData = z.strictObject({
@@ -518,6 +521,17 @@ export function createSchema(type: EntityType): z.ZodObject {
 }
 
 /**
+ * The same schema without its own description (C1): an update's fields are described once, in the
+ * create operation of the same type, which keeps the apply tool's JSON schema small. Checks stay;
+ * a schema shared by id ($defs) is kept as it is.
+ */
+function undescribed(schema: z.ZodType): z.ZodType {
+  const meta = z.globalRegistry.get(schema);
+  if (!meta?.description || meta.id) return schema;
+  return schema.clone(schema._zod.def);
+}
+
+/**
  * Patch input: every field optional, `null` clears an optional field.
  * `projectId` can't change: entities don't move between projects.
  */
@@ -527,7 +541,7 @@ export function patchSchema(type: EntityType): z.ZodObject {
   for (const [key, field] of Object.entries(shape)) {
     if (key === 'projectId') continue;
     const inner = field instanceof z.ZodOptional ? (field.unwrap() as z.ZodType) : field;
-    patch[key] = inner.nullable().optional();
+    patch[key] = undescribed(inner).nullable().optional();
   }
   return z.strictObject(patch);
 }

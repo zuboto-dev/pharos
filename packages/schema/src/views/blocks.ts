@@ -2,7 +2,8 @@ import type { Entity } from '../entities.js';
 import { findOption, optionKeyOf } from '../options.js';
 import { DUE_BANDS, findRecordType, isMoney, type Money } from '../records.js';
 import type { NodeOf } from './catalog.js';
-import type { Due } from './due.js';
+import { localToday } from './dates.js';
+import { fileDue, type Due } from './due.js';
 import type { ProjectDataset, Query } from './query.js';
 import { dueOf, fieldReader, runQuery, type QueryContext, type Resolved } from './run-query.js';
 
@@ -295,18 +296,50 @@ export function formatBar(bar: ChartBar, unit?: string): string {
 
 // ------------------------------------------------------------------ DueTracker
 
-export type DueRow = { record: Entity<'record'>; due: Due | undefined };
+/**
+ * One row of a DueTracker: a repeating record, or a file with an expiry date (R7.15), with when
+ * it's due and the unit of the reading it counts ("km").
+ */
+export type DueRow = {
+  record: Entity<'record'> | Entity<'file'>;
+  due: Due | undefined;
+  unit?: string;
+};
 
-/** Repeating records, most urgent first (past due, very urgent, urgent, not urgent), then by date. */
+/** The unit of the reading a repeating record counts, e.g. "km" (its meter field's unit). */
+export function dueUnit(
+  project: Entity<'project'> | null | undefined,
+  record: Entity<'record'>,
+): string | undefined {
+  const path = record.data.interval?.meter?.from;
+  if (!path) return undefined;
+  const [, ref, , key] = path.split('.');
+  const own = findRecordType(project, record.data.recordType);
+  const via = own?.fields.find((f) => f.key === ref);
+  const target = via?.kind === 'reference' && via.to ? findRecordType(project, via.to) : own;
+  return target?.fields.find((f) => f.key === (key ?? ref))?.unit;
+}
+
+/**
+ * Repeating records and expiring files, most urgent first (past due, very urgent, urgent, not
+ * urgent), then by date.
+ */
 export function dueRows(
   data: ProjectDataset,
   node: Pick<NodeOf<'DueTracker'>, 'query' | 'bands' | 'limit'>,
   context: QueryContext = {},
 ): DueRow[] {
-  const records = rows(data, node.query, context).filter(
-    (e): e is Entity<'record'> => e.type === 'record',
-  );
-  let out = records.map((record) => ({ record, due: dueOf(data, record, context) }));
+  const today = context.today ?? localToday();
+  let out: DueRow[] = rows(data, node.query, context).flatMap((e): DueRow[] => {
+    if (e.type === 'file') {
+      const file = e as Entity<'file'>;
+      return [{ record: file, due: fileDue(file.data.expiryDate, today) }];
+    }
+    if (e.type !== 'record') return [];
+    const record = e as Entity<'record'>;
+    const unit = dueUnit(data.project, record);
+    return [{ record, due: dueOf(data, record, context), ...(unit ? { unit } : {}) }];
+  });
   if (node.bands) out = out.filter((r) => r.due && node.bands!.includes(r.due.band));
   const rank = (r: DueRow) => (r.due ? DUE_BANDS.indexOf(r.due.band) : -1);
   out.sort(

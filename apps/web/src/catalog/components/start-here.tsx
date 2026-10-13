@@ -258,6 +258,16 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
         >
           <span className={clsx(LABEL, 'shrink-0')}>Your part</span>
           <span className="font-medium text-neutral-900 dark:text-neutral-50">{node.yourPart}</span>
+          {node.yourPartTarget && (
+            <button
+              type="button"
+              onClick={(e) => scrollToWidget(e.currentTarget, node.yourPartTarget!)}
+              className="mt-1 inline-flex shrink-0 items-center gap-1 self-start text-sm font-medium text-sky-700 hover:underline @lg:mt-0 @lg:ml-auto dark:text-sky-300"
+            >
+              {node.purpose === 'needs-you' ? 'Answer it' : 'Go there'}{' '}
+              <ArrowDown aria-hidden className="size-3.5" />
+            </button>
+          )}
         </p>
       )}
       <nav aria-label="Reading path" className="space-y-1.5">

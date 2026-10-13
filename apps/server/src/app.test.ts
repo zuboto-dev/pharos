@@ -65,9 +65,12 @@ describe('MCP', () => {
     expect(apply).not.toContain('"Board"');
     // R7.12 added about 2.1k on top of R7.13 (49.6k): agents add scanned files, and five types
     // link files (fileIds).
-    // R8 added about 9.4k: the record entity (fields, interval) and project.recordTypes. C1 in
-    // v0.2 batch 3 shrinks the apply schema; until then the cap moves with it.
-    expect(apply.length).toBeLessThan(60_000);
+    // R8 added about 9.4k: the record entity (fields, interval) and project.recordTypes, and
+    // R10.19 about 1.9k (decision options). C1 (v0.2) brought it from 62k to under 48k: option
+    // lists, record types, intervals and decision options are shared once in definitions, and an
+    // update's fields are described once, in the create of the same type.
+    expect(apply.length).toBeLessThan(50_000);
+    expect(apply).toContain('"#/definitions/ProjectOptions"');
     expect(client.getInstructions()).toContain('apply');
   });
 

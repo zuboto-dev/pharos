@@ -31,6 +31,9 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
   - `src/agent-runner.ts` — runs an agent (Claude Code by default) for new questions
   - `src/feed.ts` — announces new revisions (including ones from other processes, by polling) to
     `GET /api/events` (SSE); the web app reloads affected data from it
+  - `src/presence.ts` — who is working where right now (v0.2 B5): view tool calls, agents'
+    revisions and the answering run mark a project, view or block for 20 s (the run until it
+    ends); sent on the feed as `presence`. In memory only: not project data, never a revision
 - `apps/web` — Vite + React + Tailwind on port 5173; proxies `/api` to the server
   - `src/catalog/` — view renderer (`renderer.tsx`) and one React component per catalog entry
     (`components/`, registered in `components/index.ts`)

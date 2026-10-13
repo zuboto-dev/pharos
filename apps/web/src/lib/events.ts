@@ -21,6 +21,8 @@ export type AgentStatus = {
     durationMs: number;
     exitCode: number | null;
     timedOut: boolean;
+    /** Stopped because answering was paused (pausing stops the run, v0.2 B5). */
+    stopped?: boolean;
   };
 };
 

@@ -250,11 +250,13 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
         {agent.lastRun && (
           <Row label="Last run">
             {timeAgo(agent.lastRun.startedAt)} · {Math.round(agent.lastRun.durationMs / 1000)}s ·{' '}
-            {agent.lastRun.timedOut
-              ? 'timed out'
-              : agent.lastRun.exitCode === 0
-                ? 'finished'
-                : `failed (exit ${agent.lastRun.exitCode})`}
+            {agent.lastRun.stopped
+              ? 'stopped when answering was paused'
+              : agent.lastRun.timedOut
+                ? 'timed out'
+                : agent.lastRun.exitCode === 0
+                  ? 'finished'
+                  : `failed (exit ${agent.lastRun.exitCode})`}
           </Row>
         )}
         {agent.logPath && (

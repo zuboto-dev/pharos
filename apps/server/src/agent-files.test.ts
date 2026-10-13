@@ -422,8 +422,8 @@ describe(`file_read_text`, () => {
     expect(files.map((f: { id: string }) => f.id)).toEqual([ids.lease, ids.plan]);
   });
 
-  it('stops at the size limit and says so', () => {
-    const result = readAgentFileText(store, ids.notes, 9);
+  it('stops at the size limit and says so', async () => {
+    const result = await readAgentFileText(store, ids.notes, 9);
     expect(result).toMatchObject({ text: '# Kickoff', bytes: 26, truncated: true });
   });
 

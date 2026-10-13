@@ -3,33 +3,41 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { z } from 'zod';
 import { FileError, type FileService } from './service.js';
 
+/** Whether `Origin` names this very origin: the same scheme, host and effective port. */
+export function originMatches(c: Context): boolean {
+  const origin = c.req.header('origin');
+  if (!origin) return false;
+  try {
+    // URL normalizes default ports ("http://localhost:80" is "http://localhost").
+    return new URL(origin).origin === new URL(c.req.url).origin;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * The file routes (R7.2, FILE_ROUTES in @pharos/schema). The app already refuses non-local hosts
- * and origins; these also need proof the request comes from the Pharos page itself, so another
- * site (or another local port) can't embed, download or act on the owner's files:
- * - an `Origin` naming this very host and port, or
- * - for GET without `Origin` (an <img>, <iframe> or link), `Sec-Fetch-Site: same-origin` or
- *   `none` (typed in the address bar).
- * Writes and actions always need the matching `Origin`. Clients outside a browser send it too.
+ * Whether a request carries the proof a browser gives for the Pharos page itself (R7.2, R7.9):
+ * - an `Origin` naming this very origin (scheme, host and effective port), or
+ * - for GET and HEAD without `Origin` (an <img>, <iframe> or link), `Sec-Fetch-Site:
+ *   same-origin` or `none` (typed in the address bar).
+ * Any other `Sec-Fetch-Site` fails. Writes and actions always need the matching `Origin`;
+ * clients outside a browser send it too.
+ */
+export function fromPharosPage(c: Context): boolean {
+  const site = c.req.header('sec-fetch-site');
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return false;
+  if (c.req.header('origin') !== undefined) return originMatches(c);
+  return (c.req.method === 'GET' || c.req.method === 'HEAD') && site !== undefined;
+}
+
+/**
+ * The browser guard of the file routes (R7.2, FILE_ROUTES in @pharos/schema), the folder routes
+ * and the source-file route. The app already refuses non-local hosts and origins; these also need
+ * proof the request comes from the Pharos page itself (`fromPharosPage`), so another site or
+ * another local port can't embed, download or act on the owner's files.
  */
 export const sameOriginOnly: MiddlewareHandler = async (c, next) => {
-  const host = new URL(c.req.url).host;
-  const origin = c.req.header('origin');
-  const site = c.req.header('sec-fetch-site');
-  let ok: boolean;
-  if (origin) {
-    try {
-      ok = new URL(origin).host === host;
-    } catch {
-      ok = false;
-    }
-  } else {
-    ok =
-      (c.req.method === 'GET' || c.req.method === 'HEAD') &&
-      (site === 'same-origin' || site === 'none');
-  }
-  if (site && site !== 'same-origin' && site !== 'none') ok = false;
-  if (!ok)
+  if (!fromPharosPage(c))
     return c.json(
       { error: { code: 'forbidden', message: 'File routes only answer the Pharos page' } },
       403,

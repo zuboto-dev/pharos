@@ -255,17 +255,19 @@ export function createMcpServer(store: Store): McpServer {
       inputSchema: { fileId: z.string() },
       annotations: { readOnlyHint: true },
     },
-    ({ fileId }) =>
-      run(() => {
-        try {
-          return readAgentFileText(store, fileId);
-        } catch (err) {
-          // An open or read failure (permissions, a file swapped mid-read) names the path on
-          // disk; agents get a path-free refusal instead (R7.9).
-          if (err instanceof PharosError) throw err;
-          throw new PharosError('not_found', FILE_UNREADABLE);
-        }
-      }),
+    async ({ fileId }) => {
+      try {
+        return json(await readAgentFileText(store, fileId));
+      } catch (err) {
+        // Refusals are path-free; any other failure (open, read, close) would name the path on
+        // disk, so agents get a path-free refusal instead (R7.9).
+        const refusal =
+          err instanceof PharosError ? err : new PharosError('not_found', FILE_UNREADABLE);
+        return run(() => {
+          throw refusal;
+        });
+      }
+    },
   );
 
   server.registerTool(

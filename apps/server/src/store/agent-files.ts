@@ -1,5 +1,4 @@
-import { closeSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
-import { sep } from 'node:path';
+import { realpathSync } from 'node:fs';
 import {
   AGENT_FILE_FIELDS,
   ENTITIES,
@@ -22,6 +21,7 @@ import {
   type RevisionSummary,
 } from '@pharos/schema';
 import { localPathOf } from '../files/artifact-file.js';
+import { openInside, type OpenedFile } from '../files/safety.js';
 import { PharosError } from './errors.js';
 import type { Store } from './store.js';
 
@@ -441,59 +441,65 @@ export function agentApplyIssue(store: Store, input: ApplyInput): string | undef
 
 /**
  * The text of a file for `file_read_text`: only a file agents can see, in a `contents` folder,
- * of a text type (by extension), at most TEXT_PREVIEW_MAX_BYTES. The real path must stay inside
- * the folder's real path (symlinks). Never logs the contents or the path.
+ * of a text type, at most TEXT_PREVIEW_MAX_BYTES. It reads through the same safe reader as the
+ * file drawer (`openInside`, R7.9): the folder must still be the one the owner added, the
+ * recorded and the resolved names must pass the secret rules, the resolved file must be text
+ * too, and nothing on the way may be a link out. Any failure is one path-free refusal; it never
+ * logs the contents or the path.
  */
-export function readAgentFileText(
+export async function readAgentFileText(
   store: Store,
   fileId: string,
   maxBytes = TEXT_PREVIEW_MAX_BYTES,
-): { id: string; title: string; text: string; bytes: number; truncated: boolean } {
+): Promise<{ id: string; title: string; text: string; bytes: number; truncated: boolean }> {
   const entity = store.get(fileId);
   const file = entity?.type === 'file' ? (entity as Entity<'file'>) : null;
   const folder = file ? new AgentFiles(store).folderOf(file) : null;
   if (!file || !folder) throw new PharosError('not_found', `file ${fileId} not found`);
   if (folder.level !== 'contents') throw new PharosError('invalid', FILE_TEXT_REFUSAL);
-  const { preview } = fileTypeOf(file.data.path);
-  if (preview !== 'text' && preview !== 'markdown')
-    throw new PharosError(
-      'invalid',
-      `"${file.data.title}" isn't a text file; agents can read the text of .txt, .csv and .md files only. Its details are in project_snapshot.`,
-    );
+  const isText = (path: string) => {
+    const { preview } = fileTypeOf(path);
+    return preview === 'text' || preview === 'markdown';
+  };
+  const notText = new PharosError(
+    'invalid',
+    `"${file.data.title}" isn't a text file; agents can read the text of .txt, .csv and .md files only. Its details are in project_snapshot.`,
+  );
+  if (!isText(file.data.path)) throw notText;
   const unreadable = new PharosError(
     'not_found',
-    `"${file.data.title}" can't be read now (its folder or the file is missing); ask the owner to check it in Pharos.`,
+    `"${file.data.title}" can't be read now (its folder or the file is missing, or Pharos doesn't read it); ask the owner to check it in Pharos.`,
   );
-  let real: string;
-  let size: number;
+  let opened: OpenedFile;
   try {
-    const root = realpathSync(folder.path);
-    real = realpathSync(`${folder.path}/${file.data.path}`);
-    const stat = statSync(real);
-    if (!real.startsWith(root + sep) || !stat.isFile()) throw unreadable;
-    size = stat.size;
+    opened = await openInside(folder, file.data.path, { level: 'contents' });
   } catch {
     throw unreadable;
   }
-  const length = Math.min(size, maxBytes);
-  const buffer = Buffer.alloc(length);
-  const fd = openSync(real, 'r');
-  let read = 0;
+  const { handle, stats, resolvedPath } = opened;
   try {
+    // A link "notes.txt" → "notes.pdf" is not text.
+    if (!isText(resolvedPath)) throw notText;
+    const size = stats.size;
+    const length = Math.min(size, maxBytes);
+    const buffer = Buffer.alloc(length);
+    let read = 0;
     while (read < length) {
-      const n = readSync(fd, buffer, read, length - read, read);
-      if (n === 0) break;
-      read += n;
+      const { bytesRead } = await handle.read(buffer, read, length - read, read);
+      if (bytesRead === 0) break;
+      read += bytesRead;
     }
+    return {
+      id: file.id,
+      title: file.data.title,
+      // A cut in the middle of a character decodes as U+FFFD instead of failing.
+      text: new TextDecoder('utf-8').decode(buffer.subarray(0, read)),
+      bytes: size,
+      truncated: size > maxBytes,
+    };
+  } catch (error) {
+    throw error === notText ? notText : unreadable;
   } finally {
-    closeSync(fd);
+    await handle.close().catch(() => {});
   }
-  return {
-    id: file.id,
-    title: file.data.title,
-    // A cut in the middle of a character decodes as U+FFFD instead of failing.
-    text: new TextDecoder('utf-8').decode(buffer.subarray(0, read)),
-    bytes: size,
-    truncated: size > maxBytes,
-  };
 }

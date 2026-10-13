@@ -18,6 +18,7 @@ import { Hono } from 'hono';
 import type { RevisionFeed } from '../feed.js';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
+import { sameOriginOnly } from './routes.js';
 
 /**
  * Claim sources on disk (R7.6, docs/reframe/roadmap-2.md §3). An artifact whose `uri` is a local
@@ -254,9 +255,13 @@ export function watchArtifactLinks(store: Store, feed: RevisionFeed): () => void
   });
 }
 
-/** The route, mounted under `/api`. It answers with ids and the source's own path, never contents. */
+/**
+ * The route, mounted under `/api`. It answers with ids and the source's own path, never contents,
+ * and only to the Pharos page (the same browser guard as the file routes, R7.9).
+ */
 export function artifactFileRoutes(store: Store): Hono {
   const routes = new Hono();
+  routes.use('/artifacts/:artifactId/file', sameOriginOnly);
   routes.get('/artifacts/:artifactId/file', async (c) =>
     c.json(await matchArtifactFile(store, c.req.param('artifactId'))),
   );

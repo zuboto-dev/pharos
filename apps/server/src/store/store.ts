@@ -45,6 +45,7 @@ import {
 } from '@pharos/schema';
 import { AgentFiles, agentApplyIssue, prepareAgentOperations } from './agent-files.js';
 import { PharosError, formatPath } from './errors.js';
+import { agentBlockScopeIssue } from '../views/block-ask.js';
 
 type Data = Record<string, unknown>;
 
@@ -598,7 +599,9 @@ export class Store {
       // an undo removes, not only on the operations an agent sent (R7.9).
       if (author.kind === 'agent') {
         const issue =
-          new AgentFiles(this).changesIssue(tx.changes) ?? agentDecisionIssue(this, tx.changes);
+          new AgentFiles(this).changesIssue(tx.changes) ??
+          agentDecisionIssue(this, tx.changes) ??
+          agentBlockScopeIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
       tx.validate();

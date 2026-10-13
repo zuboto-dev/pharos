@@ -1,7 +1,14 @@
 import { isDeepStrictEqual } from 'node:util';
-import { toBoard, type Board, type Entity, type Operation, type ViewSpec } from '@pharos/schema';
+import {
+  TEMPLATES,
+  toBoard,
+  type Board,
+  type Change,
+  type Entity,
+  type Operation,
+  type ViewSpec,
+} from '@pharos/schema';
 import type { Store } from '../store/store.js';
-import { effectiveBoard } from './service.js';
 
 /**
  * "Ask about this block" (R10.6–R10.9): a person asks from one block, and the request (mode
@@ -81,8 +88,91 @@ export function agentViewOpsIssue(store: Store, operations: Operation[]): string
     const spec = op.data.spec as ViewSpec | null;
     if (spec === null)
       return `${at}: view "${view.data.name}" has an open request to change only ${names(allowed)}; don't reset it`;
-    const issue = blockChangeIssue(effectiveBoard(view), toBoard(spec), allowed);
+    const issue = blockChangeIssue(boardOfData(view.data), toBoard(spec), allowed);
     if (issue) return `${at}: ${issue}`;
+  }
+  return undefined;
+}
+
+type Data = Record<string, unknown>;
+
+/** The board a view's stored data shows (its spec, else its template). */
+function boardOfData(data: Data): Board {
+  const spec =
+    (data.spec as ViewSpec | null | undefined) ??
+    TEMPLATES[(data.template as keyof typeof TEMPLATES | undefined) ?? 'overview'];
+  return toBoard(spec);
+}
+
+const isOpenBlockRequest = (data: Data | null | undefined): data is Data =>
+  !!data &&
+  data.status === 'open' &&
+  data.mode === 'block' &&
+  typeof data.viewId === 'string' &&
+  typeof data.widgetId === 'string';
+
+/**
+ * The store's own check of an agent's revision (v0.2 review, gap 3), on everything it does:
+ * view_update, REST apply, deletes and Undo alike. While a project has an open "ask about this
+ * block" request, an agent's revision may change views in that project only by changing the asked
+ * blocks in place. When the revision closes block requests (answers or dismisses them), only the
+ * blocks those requests name may change; otherwise the blocks of every open block request may.
+ * Other views in the project, and every view's own fields, stay as they are; new views are fine.
+ */
+export function agentBlockScopeIssue(store: Store, changes: Change[]): string | undefined {
+  // Each entity's state before this revision, and its last change in it.
+  const before = new Map<string, Data | null>();
+  const last = new Map<string, Change>();
+  for (const change of changes) {
+    if (!before.has(change.id)) before.set(change.id, change.before);
+    last.set(change.id, change);
+  }
+  const projects = new Set(
+    changes.filter((c) => c.type === 'view' && c.projectId).map((c) => c.projectId!),
+  );
+  for (const projectId of projects) {
+    // Requests as they were before this revision (its own writes set aside).
+    const requests = new Map<string, Data | null>();
+    for (const r of store.list('request', { projectId }))
+      requests.set(r.id, before.has(r.id) ? before.get(r.id)! : (r.data as Data));
+    for (const [id, data] of before)
+      if (!requests.has(id) && last.get(id)?.type === 'request' && data?.projectId === projectId)
+        requests.set(id, data);
+    const open: [string, Data][] = [];
+    for (const [id, data] of requests) if (isOpenBlockRequest(data)) open.push([id, data]);
+    if (!open.length) continue;
+    const closing = open.filter(([id]) => {
+      const change = last.get(id);
+      return change !== undefined && !isOpenBlockRequest(change.after);
+    });
+    const scope = closing.length ? closing : open;
+    const asked = names(new Set(open.map(([, d]) => d.widgetId as string)));
+    const waiting = `A person is waiting for block ${asked} to change (an open "ask about this block" request)`;
+    for (const [id, change] of last) {
+      if (change.type !== 'view' || change.projectId !== projectId) continue;
+      const was = before.get(id) ?? null;
+      const now = change.after;
+      if (!was) continue; // a new view (an answer) is fine
+      const name = String(was.name ?? id);
+      const allowed = new Set(
+        scope.filter(([, d]) => d.viewId === id).map(([, d]) => d.widgetId as string),
+      );
+      if (!now) return `${waiting}; view "${name}" can't be deleted now`;
+      if (!allowed.size)
+        return closing.length
+          ? `${waiting}; the request this answers asks about another view, so view "${name}" stays as it is`
+          : `${waiting}; leave view "${name}" as it is until the request is answered`;
+      const fields = [...new Set([...Object.keys(was), ...Object.keys(now)])].filter(
+        (k) => k !== 'spec' && !isDeepStrictEqual(was[k] ?? null, now[k] ?? null),
+      );
+      if (fields.length)
+        return `${waiting}; leave ${fields.join(', ')} of view "${name}" as they are`;
+      if (!isDeepStrictEqual(was.spec ?? null, now.spec ?? null)) {
+        if ((now.spec ?? null) === null) return `${waiting}; don't reset view "${name}"`;
+        const issue = blockChangeIssue(boardOfData(was), boardOfData(now), allowed);
+        if (issue) return `View "${name}": ${issue}`;
+      }
+    }
   }
   return undefined;
 }

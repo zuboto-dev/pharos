@@ -220,7 +220,7 @@ export const ViewUpdateInput = z.object({
     .int()
     .optional()
     .describe(
-      "The view's revision from view_get; if a person changed the view since, nothing is saved: read it again and redo your change",
+      "The view's revision from view_get; if a person changed the view since, nothing is saved: read it again and redo your change. Needed to replace all widgets (or reset) a view someone else changed last",
     ),
   requestId: z
     .string()
@@ -287,8 +287,14 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
     data.spec = applyWidgetOps(effectiveBoard(view), input.ops);
   }
   if (!Object.keys(data).length) throw new PharosError('invalid', 'Nothing to change');
-  // R10.8: while a person waits for a change to one block, an agent changes only that block.
-  const allowed = author.kind === 'agent' ? askedBlocks(store, view) : new Set<string>();
+  // R10.8: while a person waits for a change to one block, an agent changes only that block; with
+  // a requestId, only the block that request names (the store checks the same, v0.2 review gap 3).
+  const allowed =
+    author.kind !== 'agent'
+      ? new Set<string>()
+      : request?.data.mode === 'block' && request.data.widgetId
+        ? new Set([request.data.widgetId])
+        : askedBlocks(store, view);
   if (allowed.size) {
     const scope = `View "${view.data.name}" has an open request to change only block ${[...allowed].map((id) => `"${id}"`).join(', ')}`;
     const viewFields = Object.keys(data).filter((k) => k !== 'spec');
@@ -301,6 +307,21 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
       const issue = blockChangeIssue(effectiveBoard(view), toBoard(data.spec as ViewSpec), allowed);
       if (issue) throw new PharosError('invalid', issue);
     }
+  }
+  // v0.2 review, gap 4: replacing the whole layout from a copy read earlier would drop a newer
+  // edit by a person (or another agent). When someone else changed the view last, an agent must
+  // say which version it read. (ops apply to the board as it is now, so they need no revision.)
+  if (
+    author.kind === 'agent' &&
+    input.expectedRevision === undefined &&
+    (input.widgets !== undefined || input.resetToTemplate)
+  ) {
+    const last = store.history({ entityId: view.id, limit: 1 })[0]?.author;
+    if (last && last.kind !== 'system' && !(last.kind === 'agent' && last.name === author.name))
+      throw new PharosError(
+        'conflict',
+        `View "${view.data.name}" was last changed by ${last.kind === 'human' ? 'a person' : 'someone else'} (it is at revision ${view.updatedRev}). Read it with view_get, redo your change on what it shows now, and pass that revision as expectedRevision (or change single blocks with ops)`,
+      );
   }
   const result = store.apply(author, {
     message: input.message,

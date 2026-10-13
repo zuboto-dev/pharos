@@ -73,6 +73,10 @@ export const HIDDEN_REVISION_MESSAGE =
 const HIDDEN_ISSUE =
   'An item only the owner can see is involved; ask the owner to do this in Pharos';
 
+/** Said when a write (usually an Undo) would add or drop a link to an item agents can't see. */
+const HIDDEN_LINK_ISSUE =
+  'This would change links the owner keeps to items only they can see; ask the owner to do this in Pharos';
+
 /** Fields agents can't write on a file: the scan's, and the owner's notes (which they can't read). */
 export const AGENT_READONLY_FILE_FIELDS = [...SCAN_FILE_FIELDS, 'notes'] as const;
 
@@ -526,7 +530,35 @@ export class AgentFiles {
       if (issue) return issue;
     }
     if (changes.some((c) => !c.after && !this.visible(c.id))) return HIDDEN_ISSUE;
+    // v0.2 review, gap 6: links to items agents can't see (a task's fileIds, a record's file
+    // field, a decision option's claims) stay as the owner left them, whatever the write: apply
+    // keeps them (prepareAgentOperations), and an Undo that would add or drop one is refused.
+    for (const c of changes) {
+      if (!c.after || !this.visible(c.id)) continue;
+      const before = c.before ? this.hiddenLinks(c.type, c.before) : [];
+      if (before.join('\u0000') !== this.hiddenLinks(c.type, c.after).join('\u0000'))
+        return HIDDEN_LINK_ISSUE;
+    }
     return undefined;
+  }
+
+  /** The ids of items agents can't see that this data links to, sorted. */
+  private hiddenLinks(type: Entity['type'], data: Data): string[] {
+    const ids: string[] = [];
+    const add = (value: unknown) => {
+      if (typeof value === 'string' && !this.visible(value)) ids.push(value);
+    };
+    for (const field of this.hideableRefs(type)) {
+      const value = data[field];
+      if (Array.isArray(value)) value.forEach(add);
+      else add(value);
+    }
+    if (type === 'record' && data.fields && typeof data.fields === 'object')
+      Object.values(data.fields as Data).forEach(add);
+    if (type === 'decision' && Array.isArray(data.options))
+      for (const option of data.options as Data[])
+        if (Array.isArray(option?.claimIds)) option.claimIds.forEach(add);
+    return ids.sort();
   }
 
   /**
@@ -630,6 +662,10 @@ export function prepareAgentOperations(store: Store, input: ApplyInput): ApplyIn
         },
       };
     }
+    if (op.op === 'update' && !op.id.startsWith('$')) {
+      const kept = keepHiddenLinks(files, store.get(op.id)?.data as Data | undefined, op.data);
+      if (kept !== op.data) op = { ...op, data: kept } as Operation;
+    }
     if (op.op === 'update' && Array.isArray(op.data.fileIds) && !op.id.startsWith('$')) {
       const current = store.get(op.id)?.data as Data | undefined;
       const kept = Array.isArray(current?.fileIds)
@@ -646,6 +682,46 @@ export function prepareAgentOperations(store: Store, input: ApplyInput): ApplyIn
     return op;
   });
   return { ...input, operations };
+}
+
+/**
+ * A record's file fields and a decision option's claims that point at items agents can't see
+ * were left out of what the agent was shown, so an update replacing `fields` or `options` keeps
+ * them (v0.2 review, gap 6): a field the agent left out keeps its hidden value, an option (by id)
+ * keeps its hidden claims. Returns `data` itself when nothing is kept.
+ */
+function keepHiddenLinks(files: AgentFiles, current: Data | undefined, data: Data): Data {
+  if (!current) return data;
+  let out = data;
+  const fields = current.fields as Data | undefined;
+  if (fields && data.fields && typeof data.fields === 'object' && !Array.isArray(data.fields)) {
+    const hidden = Object.entries(fields).filter(
+      ([key, v]) => typeof v === 'string' && !files.visible(v) && !(key in (data.fields as Data)),
+    );
+    if (hidden.length)
+      out = { ...out, fields: { ...(data.fields as Data), ...Object.fromEntries(hidden) } };
+  }
+  if (Array.isArray(current.options) && Array.isArray(data.options)) {
+    const hiddenOf = new Map(
+      (current.options as Data[]).map((o) => [
+        o?.id,
+        Array.isArray(o?.claimIds)
+          ? o.claimIds.filter((id): id is string => typeof id === 'string' && !files.visible(id))
+          : [],
+      ]),
+    );
+    if ([...hiddenOf.values()].some((ids) => ids.length))
+      out = {
+        ...out,
+        options: (data.options as Data[]).map((o) => {
+          const hidden = hiddenOf.get(o?.id) ?? [];
+          if (!hidden.length || !o || typeof o !== 'object') return o;
+          const ids = Array.isArray(o.claimIds) ? (o.claimIds as unknown[]) : [];
+          return { ...o, claimIds: [...new Set([...ids, ...hidden])] };
+        }),
+      };
+  }
+  return out;
 }
 
 /** One scanned file an agent may add (R7.12): no contents, nothing from hidden folders. */

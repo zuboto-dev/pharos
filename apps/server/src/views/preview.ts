@@ -1,5 +1,6 @@
 import {
   BOARD_COLUMNS,
+  GALLERY,
   R4,
   START_HERE,
   WEAK_BECAUSE_LABELS,
@@ -11,6 +12,8 @@ import {
   ENTITIES,
   fieldReader,
   findOption,
+  galleryContents,
+  isPictureFile,
   meaningOf,
   optionsFor,
   optionKeyOf,
@@ -131,6 +134,7 @@ function describeLeaf(
   if (node.component === 'StartHere') return describeStartHere(node, ctx, warnings);
   if (node.component === 'BeforeAfter') return describeBeforeAfter(node, ctx, warnings);
   if (node.component === 'FindingChart') return describeFindingChart(node, ctx, warnings);
+  if (node.component === 'Gallery') return describeGallery(node, ctx, warnings);
   if (isExplaining(node)) return describeExplaining(node, ctx, warnings);
   switch (node.component) {
     case 'ProjectHeader': {
@@ -884,6 +888,110 @@ function describeFindingChart(
   };
 }
 
+// ------------------------------------------------------------------ pictures (R7.13)
+
+/** Whether a file the agent can see is a picture, by its path on the owner's side (never shown). */
+function isPictureFileId(ctx: Context, fileId: string): boolean {
+  const file = ctx.store.get(fileId);
+  return file?.type === 'file' && isPictureFile((file.data as { path?: string }).path);
+}
+
+/** Gallery: pictures from artifacts with an image and from project image files. */
+function describeGallery(
+  node: NodeOf<'Gallery'>,
+  ctx: Context,
+  warnings: string[],
+): { shows: string; empty: boolean; warnings: string[] } {
+  if (!node.artifacts && !node.files)
+    warnings.push(
+      'no pictures chosen: set artifacts (e.g. {"where": {"tags": "ui-examples"}}) for artifacts with an image, or files for project image files',
+    );
+  warnings.push(...filterProblems('artifact', node.artifacts));
+  warnings.push(...filterProblems('file', node.files));
+  const claim = claimById(ctx, node.claim);
+  if (node.claim && !claim) warnings.push(`claim ${node.claim} not found in this project`);
+  if (claim) warnings.push(...claimWarnings(claim, ctx.data.project));
+
+  const { pictures, withoutImage, notPictures, overMax } = galleryContents(ctx.data, node, {
+    today: ctx.today,
+    isPicture: (f) => isPictureFileId(ctx, f.id),
+  });
+  const names = (items: { id: string; data: { title: string } }[]) =>
+    items
+      .slice(0, 3)
+      .map((e) => `“${e.data.title}” (${e.id})`)
+      .join(', ') + (items.length > 3 ? ', …' : '');
+  if (withoutImage.length)
+    warnings.push(
+      `${plural(withoutImage.length, 'artifact')} without an image ${withoutImage.length === 1 ? 'is' : 'are'} left out: ${names(withoutImage)}; set image (an https address or a project image file id)`,
+    );
+  if (notPictures.length)
+    warnings.push(
+      `${plural(notPictures.length, 'file')} ${notPictures.length === 1 ? "isn't a picture" : "aren't pictures"} (png, jpg, gif or webp) and ${notPictures.length === 1 ? 'is' : 'are'} left out: ${names(notPictures)}`,
+    );
+  if ((node.artifacts || node.files) && !pictures.length)
+    warnings.push(
+      'no matching pictures: the gallery shows an empty state; check the filter and that the artifacts have an image',
+    );
+  const noAlt = pictures.filter((p) => p.altMissing);
+  if (noAlt.length)
+    warnings.push(
+      `missing alt text on ${noAlt
+        .slice(0, 3)
+        .map((p) => p.id)
+        .join(
+          ', ',
+        )}${noAlt.length > 3 ? ', …' : ''}: set alt on the artifact (what the picture shows, in one sentence) for readers who can't see it`,
+    );
+  for (const p of pictures) {
+    if (p.image.kind === 'url' && !p.image.safe)
+      warnings.push(
+        `the image of ${p.id} isn't shown because ${p.image.problem}: use an https address of a public picture (it shows as a link meanwhile)`,
+      );
+    if (p.type === 'artifact' && p.image.kind === 'file') {
+      const fileId = p.image.fileId;
+      if (!ctx.data.files.some((f) => f.id === fileId))
+        warnings.push(
+          `the image of ${p.id} is file ${fileId}, which is not in this project; use the id of an image file in project_snapshot.files`,
+        );
+      else if (!isPictureFileId(ctx, fileId))
+        warnings.push(
+          `the image of ${p.id} is file ${fileId}, which isn't a picture (png, jpg, gif or webp)`,
+        );
+    }
+  }
+  const layout = node.layout ?? 'grid';
+  if (layout === 'compare' && pictures.length !== GALLERY.compareItems)
+    warnings.push(
+      `layout "compare" sets two pictures side by side, but ${plural(pictures.length, 'picture')} match; narrow the filter to the two to compare`,
+    );
+  if (layout !== 'grid' && node.columns !== undefined)
+    warnings.push(`columns applies to layout "grid" only; ${layout} ignores it`);
+  const shownIds = new Set(pictures.map((p) => p.id));
+  const strayHighlights = (node.highlight ?? []).filter((id) => !shownIds.has(id));
+  if (strayHighlights.length)
+    warnings.push(`highlight ${strayHighlights.join(', ')} matches no picture in this gallery`);
+  if (overMax)
+    warnings.push(
+      `${plural(overMax, 'more picture')} match${overMax === 1 ? 'es' : ''} but ${overMax === 1 ? 'is' : 'are'} left out by max ${node.max ?? GALLERY.defaultMax}`,
+    );
+
+  const lit = new Set(node.highlight ?? []);
+  const list = pictures
+    .map(
+      (p) =>
+        `“${p.caption ?? p.title}”${p.sourceHost ? ` (${p.sourceHost})` : p.image.kind === 'file' ? ' (project file)' : ''}${lit.has(p.id) ? ' (highlighted)' : ''}`,
+    )
+    .join(' · ');
+  return {
+    shows: pictures.length
+      ? `${claim ? `${claimLine(ctx, claim)}: ` : ''}${plural(pictures.length, 'picture')} as ${layout === 'compare' ? 'a side-by-side comparison' : layout === 'strip' ? 'a scrolling strip' : `a grid of ${node.columns ?? 3} columns`}: ${list}`
+      : 'No pictures match (shows an empty state)',
+    empty: !pictures.length,
+    warnings,
+  };
+}
+
 // ------------------------------------------------------------------ report opening
 
 /** Starts the warning for a report page without a StartHere, so callers can recognise it. */
@@ -1089,6 +1197,11 @@ function visibleText(node: ViewNode, ctx: Context): { texts: string[]; marked: s
       const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
       const bars = findingBars(node, ctx).map((b) => `${b.label} ${b.value}${b.unit ?? ''}`);
       return { texts: [title, claim?.data.statement ?? '', ...bars], marked: [] };
+    }
+    case 'Gallery': {
+      // Captions are data, like rows; the claim heading it is read first.
+      const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
+      return { texts: [title, claim?.data.statement ?? ''], marked: [] };
     }
     case 'TaskTable':
     case 'DataList': {

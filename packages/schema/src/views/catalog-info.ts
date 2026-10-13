@@ -199,6 +199,19 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       size: 'compact',
     },
   },
+  Gallery: {
+    category: 'outputs',
+    use: 'Pictures, not words, whenever the subject is visual: UI and product examples, screenshots, places, diagrams. Store each picture as an artifact with `image` (an https address of the image, or a project image file id from project_snapshot.files), `alt` (what it shows, one sentence) and `uri` (the page it comes from, shown as its host under the picture), plus a shared tag; then filter `artifacts` on the tag. `files` adds the project\'s own image files. `layout: "compare"` puts exactly two side by side (before/after, option A/B; highlight the better one); "strip" is one scrolling row; "grid" (default) is a wall with `columns` 2–4. `claim` heads it with the stored claim the pictures show. A tapped picture opens large with its caption and source. Never paste image data or describe a picture in a paragraph instead.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'Gallery',
+      title: 'Empty states we found',
+      artifacts: { where: { tags: 'ui-examples' } },
+      layout: 'grid',
+      columns: 3,
+    },
+  },
   ActivityFeed: {
     category: 'outputs',
     use: 'Recent changes: who changed what and why.',

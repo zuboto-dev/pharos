@@ -195,12 +195,16 @@ export class AgentFiles {
     return Object.fromEntries(Object.entries(data).filter(([k]) => AGENT_FIELDS.has(k)));
   }
 
-  /** Fields of `type` that can point at hideable items (a request's aboutId points at any item). */
+  /**
+   * Fields of `type` that can point at hideable items (a request's aboutId points at any item;
+   * an artifact's `image` may be a file id, R7.13; a web address there always counts as visible).
+   */
   private hideableRefs(type: Entity['type']): string[] {
     return Object.entries(ENTITIES[type].refs as Record<string, { type: EntityType }>)
       .filter(([, ref]) => HIDEABLE.has(ref.type))
       .map(([field]) => field)
-      .concat(type === 'request' ? ['aboutId'] : []);
+      .concat(type === 'request' ? ['aboutId'] : [])
+      .concat(type === 'artifact' ? ['image'] : []);
   }
 
   /** Whether a claim's quote was copied from a hidden or details-only source. */

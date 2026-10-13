@@ -71,6 +71,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   FindingChart: COMPONENT_INFO.FindingChart.example,
   FileList: COMPONENT_INFO.FileList.example,
   FileView: COMPONENT_INFO.FileView.example,
+  Gallery: COMPONENT_INFO.Gallery.example,
   ClaimCard: COMPONENT_INFO.ClaimCard.example,
   StartHere: COMPONENT_INFO.StartHere.example,
 };

@@ -23,7 +23,7 @@ export type SelectOption = {
 
 /** The look shared by every dropdown panel (this and the Add widget list). */
 export const MENU_PANEL =
-  'rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900';
+  'animate-pop-in rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900';
 
 const TRIGGER =
   'inline-flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-left text-sm hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-sky-800';

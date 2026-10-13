@@ -3,6 +3,96 @@
 /* Dark mode follows the `dark` class on <html>, set from the theme switch (System = OS setting). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Motion (v0.2 B3): short, calm transitions with one shared easing. Durations are 120–220ms.
+ * Things that enter move a few pixels at most (transform only, so nothing else shifts); with
+ * prefers-reduced-motion the distances are zero and only opacity changes.
+ */
+:root {
+  --motion-quick: 120ms;
+  --motion-base: 160ms;
+  --motion-slow: 220ms;
+  --motion-rise: 4px;
+  --motion-drawer: 24px;
+  --motion-side: -8px;
+  --motion-scale: 0.98;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-rise: 0px;
+    --motion-drawer: 0px;
+    --motion-side: 0px;
+    --motion-scale: 1;
+  }
+}
+
+@theme {
+  --ease-calm: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-calm-out: cubic-bezier(0.4, 0, 1, 1);
+
+  --animate-fade-in: motion-fade-in var(--motion-base) var(--ease-calm) backwards;
+  --animate-fade-out: motion-fade-out var(--motion-quick) var(--ease-calm-out) forwards;
+  --animate-rise-in: motion-rise-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-pop-in: motion-pop-in var(--motion-quick) var(--ease-calm) backwards;
+  --animate-drawer-in: motion-drawer-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-drawer-out: motion-drawer-out var(--motion-base) var(--ease-calm-out) forwards;
+  --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-block-changed: motion-block-changed 1600ms ease-out;
+
+  @keyframes motion-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes motion-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes motion-rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--motion-rise));
+    }
+  }
+  @keyframes motion-pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(calc(var(--motion-rise) * -1)) scale(var(--motion-scale));
+    }
+  }
+  @keyframes motion-drawer-in {
+    from {
+      opacity: 0;
+      transform: translateX(var(--motion-drawer));
+    }
+  }
+  @keyframes motion-drawer-out {
+    to {
+      opacity: 0;
+      transform: translateX(var(--motion-drawer));
+    }
+  }
+  @keyframes motion-side-in {
+    from {
+      opacity: 0;
+      transform: translateX(var(--motion-side));
+    }
+  }
+  /* A block whose content an update changed: a soft ring that fades away (not a flash). */
+  @keyframes motion-block-changed {
+    from {
+      box-shadow: 0 0 0 2px rgb(14 165 233 / 0.45);
+      background-color: rgb(14 165 233 / 0.06);
+    }
+    to {
+      box-shadow: 0 0 0 2px rgb(14 165 233 / 0);
+      background-color: rgb(14 165 233 / 0);
+    }
+  }
+}
+
 @layer base {
   body {
     @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;

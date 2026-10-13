@@ -53,9 +53,20 @@ export type Resource<T> = Common &
     | { status: 'error'; data?: T; error: Error }
   );
 
+/** The path without its `v=` cache-busting parameter: what the resource is, not which load. */
+export function resourceOf(path: string): string {
+  return path.replace(/([?&])v=[^&]*(&|$)/, (_, lead: string, tail: string) => (tail ? lead : ''));
+}
+
+/** Two paths name the same resource, only loaded at a different data version. */
+const sameResource = (a: string | null, b: string | null) =>
+  a !== null && b !== null && resourceOf(a) === resourceOf(b);
+
 /**
  * Fetches JSON and refetches when the window regains focus, so changes made by agents show up
- * when you come back to the tab. Keeps showing the last data while refetching.
+ * when you come back to the tab. Keeps showing the last data while refetching, also when only
+ * its `v=` parameter changed (a live update): the old data stays until the new arrives, so
+ * blocks never collapse to a loading state and the page doesn't jump (v0.2 B4).
  */
 export function useResource<T>(path: string | null): Resource<T> {
   const [state, setState] = useState<{
@@ -79,7 +90,7 @@ export function useResource<T>(path: string | null): Resource<T> {
         !cancelled &&
         setState((s) => ({
           path,
-          data: s.path === path ? s.data : undefined,
+          data: sameResource(s.path, path) ? s.data : undefined,
           error,
           version: s.version,
         })),
@@ -99,7 +110,12 @@ export function useResource<T>(path: string | null): Resource<T> {
     };
   }, [reload]);
 
-  const current = state.path === path ? state : { path, version: state.version };
+  const current =
+    state.path === path
+      ? state
+      : sameResource(state.path, path) && state.data !== undefined
+        ? { path, data: state.data, version: state.version }
+        : { path, version: state.version };
   const common = { reload, version: current.version };
   if (current.error)
     return { status: 'error', data: current.data, error: current.error, ...common };

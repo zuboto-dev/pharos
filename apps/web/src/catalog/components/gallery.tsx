@@ -21,6 +21,7 @@ import {
 import { createPortal } from 'react-dom';
 import { FileActions } from '../../files/FileDetails';
 import { useResource } from '../../lib/api';
+import { useExit } from '../../lib/motion';
 import { useViewData, type ViewData } from '../context';
 import { Empty } from '../ui';
 import { CertaintyMark } from './knowledge';
@@ -192,11 +193,14 @@ export function Lightbox({
   index,
   onIndex,
   onClose,
+  leaving = false,
 }: {
   pictures: GalleryPicture[];
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  /** Closing: it fades out (index.css motion) before it goes. */
+  leaving?: boolean;
 }) {
   const data = useViewData();
   const dialog = useRef<HTMLDivElement>(null);
@@ -218,15 +222,16 @@ export function Lightbox({
       ? (data.entityById.get(picture.id) as Entity<'artifact'> | undefined)?.data.description
       : undefined;
 
+  useEffect(() => closeButton.current?.focus(), []);
   useEffect(() => {
-    closeButton.current?.focus();
-    // The page behind doesn't scroll while the picture is open.
+    // The page behind doesn't scroll while the picture is open (and does again as it fades out).
+    if (leaving) return;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, []);
+  }, [leaving]);
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
@@ -269,8 +274,12 @@ export function Lightbox({
       aria-modal="true"
       aria-label={picture.caption ?? picture.title}
       aria-describedby={captionId}
+      aria-hidden={leaving || undefined}
       onKeyDown={onKeyDown}
-      className="fixed inset-0 z-50 flex flex-col bg-neutral-950/95 text-neutral-100 backdrop-blur-sm"
+      className={clsx(
+        'fixed inset-0 z-50 flex flex-col bg-neutral-950/95 text-neutral-100 backdrop-blur-sm',
+        leaving ? 'pointer-events-none animate-fade-out' : 'animate-fade-in',
+      )}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-5">
         <span className="text-sm text-neutral-300" aria-live="polite">
@@ -304,7 +313,12 @@ export function Lightbox({
             <ChevronLeft className="size-6" aria-hidden />
           </button>
         )}
-        <Picture key={picture.id} picture={picture} resolved={resolved} large />
+        <div
+          key={picture.id}
+          className="flex min-h-0 min-w-0 flex-1 animate-pop-in items-center justify-center"
+        >
+          <Picture picture={picture} resolved={resolved} large />
+        </div>
         {many && (
           <button
             type="button"
@@ -375,6 +389,8 @@ const GRID_COLUMNS: Record<number, string> = {
 export function Gallery({ node }: { node: Node }) {
   const data = useViewData();
   const [open, setOpen] = useState<number | null>(null);
+  // The lightbox stays a moment after closing, to fade out.
+  const lightbox = useExit(open);
   const opener = useRef<HTMLElement | null>(null);
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
   const { pictures } = galleryContents(data, node);
@@ -459,8 +475,14 @@ export function Gallery({ node }: { node: Node }) {
       ) : (
         <Empty>No pictures yet</Empty>
       )}
-      {open !== null && pictures[open] && (
-        <Lightbox pictures={pictures} index={open} onIndex={setOpen} onClose={close} />
+      {lightbox.shown !== null && pictures[lightbox.shown] && (
+        <Lightbox
+          pictures={pictures}
+          index={lightbox.shown}
+          onIndex={setOpen}
+          onClose={close}
+          leaving={lightbox.leaving}
+        />
       )}
     </figure>
   );

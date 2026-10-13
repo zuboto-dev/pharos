@@ -56,13 +56,18 @@ export function AppShell() {
   // Keeps the chosen theme applied (and "system" following the OS) on every page.
   useTheme();
   // R7.14: wide screens can hide the sidebar (a button or ⌘\); phones keep it above the page.
-  const { hidden, toggle, moveFocus } = useSidebarHidden();
+  const { hidden, toggle, moveFocus, toggled } = useSidebarHidden();
   const fromButton = () => toggle(true);
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {hidden && (
         // The logo keeps the exact spot it has in the sidebar, so hiding the sidebar doesn't move it.
-        <div className="hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900">
+        <div
+          className={clsx(
+            'hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900',
+            toggled && 'animate-fade-in',
+          )}
+        >
           <Link to="/" aria-label="Pharos home" className="flex px-4 pt-4 pb-2">
             <span className="flex h-6 items-center">
               <PharosLogo className="size-5 text-amber-500" />
@@ -76,6 +81,8 @@ export function AppShell() {
         className={clsx(
           'flex max-h-[60vh] shrink-0 flex-col border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0 dark:border-neutral-800 dark:bg-neutral-900',
           hidden && 'md:hidden',
+          // Coming back after a hide: a short slide and fade (opacity only with reduced motion).
+          toggled && !hidden && 'md:animate-side-in',
         )}
       >
         <div className="flex items-center justify-between gap-2 pr-2">

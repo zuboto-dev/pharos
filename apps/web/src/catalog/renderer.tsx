@@ -165,12 +165,23 @@ export function ViewRenderer({
   editing = false,
   onChange = () => {},
   view,
+  quiet,
 }: {
   spec: ViewSpec;
   editing?: boolean;
   onChange?: BoardChange;
   /** The view being shown, so widgets can say where a question was asked from. */
   view?: { id: string; name: string };
+  /** The latest update is the owner's own, so changed blocks aren't marked (v0.2 B4). */
+  quiet?: () => boolean;
 }) {
-  return <BoardView board={toBoard(spec)} editing={editing} onChange={onChange} view={view} />;
+  return (
+    <BoardView
+      board={toBoard(spec)}
+      editing={editing}
+      onChange={onChange}
+      view={view}
+      quiet={quiet}
+    />
+  );
 }

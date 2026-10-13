@@ -130,7 +130,7 @@ export function Popover({
         onKeyDown={onKeyDown}
         onClick={(e) => e.stopPropagation()}
         style={place}
-        className="fixed z-[61] space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white p-3 text-left text-sm font-normal text-neutral-700 shadow-lg outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+        className="fixed z-[61] animate-pop-in space-y-2 overflow-y-auto overscroll-contain rounded-xl border border-neutral-200 bg-white p-3 text-left text-sm font-normal text-neutral-700 shadow-lg outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
       >
         {children}
       </div>

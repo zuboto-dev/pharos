@@ -83,13 +83,16 @@ describe('v0.2 action review regressions', () => {
     expect(s.store.latestRevisionId()).toBe(before);
   });
 
-  it('keeps an agent action attributed to the agent, including Mark paid', () => {
+  // Changed in the fix round: this test expected an agent's Mark paid to succeed, while the next
+  // one (gap 5) expects the same call to be refused. The owner-only rule wins; attribution is
+  // still checked, on the owner's submission.
+  it("keeps an action attributed to its author: the owner's Mark paid is the owner's", () => {
     const s = setup();
     const phone = s.record(s.first.projectId, 'Phone');
-    const done = s.service.run(agent, s.submission(phone)) as ActionDone;
+    const done = s.service.run(owner, s.submission(phone)) as ActionDone;
 
     expect(done.status).toBe('done');
-    expect(s.store.revision(done.revision!)!.author).toEqual(agent);
+    expect(s.store.revision(done.revision!)!.author).toEqual(owner);
     expect((s.store.get(phone.id) as Entity<'record'>).data.interval?.lastDate).toBe(today);
   });
 

@@ -601,6 +601,7 @@ export class Store {
         const issue =
           new AgentFiles(this).changesIssue(tx.changes) ??
           agentDecisionIssue(this, tx.changes) ??
+          agentOutcomeIssue(tx.changes) ??
           agentBlockScopeIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
@@ -656,7 +657,14 @@ function agentArtifactFileIssue(op: Operation): string | undefined {
  */
 function agentDecisionIssue(store: Store, changes: Change[]): string | undefined {
   for (const change of changes) {
-    if (change.type !== 'decision' || !change.after) continue;
+    if (change.type !== 'decision') continue;
+    if (!change.after) {
+      // v0.2 review, gap 5: deleting it would erase the owner's choice, answer or deferral.
+      const set = OWNER_DECISION_FIELDS.find((f) => (change.before?.[f] ?? null) !== null);
+      if (set)
+        return `${describe('decision', change.id, change.before ?? {})}: the owner already answered it (${set}); only they can remove it, in Pharos`;
+      continue;
+    }
     const before: Data = change.before ?? {};
     const after = change.after;
     const what = describe('decision', change.id, after);
@@ -677,6 +685,27 @@ function agentDecisionIssue(store: Store, changes: Change[]): string | undefined
       meaningOf(project, 'decision.status', after.status as string) === 'accepted'
     )
       return `${what}: a decision with options is accepted when the owner chooses one in Pharos; keep its status "proposed"`;
+  }
+  return undefined;
+}
+
+/**
+ * Marking a repeating record done (its `interval.lastDate` or `lastMeter`: a bill paid, a service
+ * done) says something happened in the owner's life, so it is the owner's to record (v0.2 review,
+ * gap 5). Agents may set them on records they create, but never move them on an existing record:
+ * not with apply, not through an action (Mark paid, or Log a service marking its reminder done),
+ * and not by undoing the owner's revision.
+ */
+function agentOutcomeIssue(changes: Change[]): string | undefined {
+  for (const change of changes) {
+    if (change.type !== 'record' || !change.before || !change.after) continue;
+    const was = (change.before.interval ?? {}) as Data;
+    const now = (change.after.interval ?? {}) as Data;
+    const field = (['lastDate', 'lastMeter'] as const).find(
+      (f) => !isDeepStrictEqual(was[f] ?? null, now[f] ?? null),
+    );
+    if (field)
+      return `${describe('record', change.id, change.after)}: only the owner marks it done (interval.${field}), with the page's action in Pharos; tell them what to record instead`;
   }
   return undefined;
 }

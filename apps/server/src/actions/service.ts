@@ -148,6 +148,12 @@ export class ActionService {
         status: 'not_found',
         message: 'That page no longer has this action; reload it',
       };
+    // v0.2 review, gap 5: marking a record done (a bill paid, a reminder done) is the owner's
+    // to record. The store refuses it too; this says so before anything else.
+    if (author.kind === 'agent' && (def.does === 'done' || def.roll))
+      return invalid(`Only the owner can use "${def.label}", on the page in Pharos`, {
+        form: `"${def.label}" marks a record done, which only the owner records; tell them it is ready to do on the page`,
+      });
     const { form, problems } = actionForm(def, project as Entity<'project'>);
     if (!form)
       return {

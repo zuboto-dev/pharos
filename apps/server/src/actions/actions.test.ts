@@ -102,6 +102,9 @@ describe('Log a service (create)', () => {
     const due = page.widgets.find((w) => w.id === 'due')!;
     expect(due.shows).not.toMatch(/Urgent: “Oil change”/);
     expect(page.widgets.find((w) => w.id === 'log')!.shows).toMatch(/5 records/);
+    expect(page.widgets.find((w) => w.id === 'log-service')!.shows).toBe(
+      'A “Log a service” button: adds a service; its form asks for vehicle, date, kind, odometer, cost, shop',
+    );
     // Undo is one revert of that revision.
     s.store.revert(done.revision!, human, 'Undo');
     expect(s.store.get(done.recordId)).toBeNull();

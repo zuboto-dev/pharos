@@ -1,5 +1,6 @@
 import {
   BOARD_COLUMNS,
+  actionForm,
   GALLERY,
   R4,
   START_HERE,
@@ -454,6 +455,23 @@ function describeLeaf(
             ? `“${decision.data.title}”: the owner answered “${state.answer}”`
             : `“${decision.data.title}”: ${plural(options.length, 'option')} to choose from (${listed})${state.kind === 'deferred' ? `, deferred until ${state.until}` : ''}`;
       return { shows, empty: false, warnings };
+    }
+    case 'Action': {
+      // R10: what the reader's button does and what its form asks.
+      const a = node as NodeOf<'Action'>;
+      const { form, problems } = actionForm(a, ctx.data.project);
+      if (!form)
+        return {
+          shows: `A “${a.label}” button that can’t be used: ${problems.join('; ')}`,
+          empty: true,
+          warnings,
+        };
+      const asks = form.fields.filter((f) => f.key !== 'title').map((f) => f.label.toLowerCase());
+      return {
+        shows: `A “${a.label}” button: ${form.kind === 'create' ? `adds a ${form.type.name.toLowerCase()}` : `marks a ${form.type.name.toLowerCase()} done`}; its form asks for ${asks.join(', ')}`,
+        empty: false,
+        warnings,
+      };
     }
     case 'ActivityFeed': {
       const n2 = new AgentFiles(ctx.store).revisions(

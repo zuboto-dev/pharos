@@ -27,7 +27,7 @@ export function BlockPresence({ agent }: { agent: string }) {
     <span
       role="status"
       data-presence={agent}
-      className="pointer-events-none absolute -top-2.5 left-3 z-10 inline-flex max-w-[calc(100%-1.5rem)] animate-fade-in items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 text-xs whitespace-nowrap text-presence-ink shadow-xs"
+      className="pointer-events-none absolute -top-3 right-3 z-10 inline-flex max-w-[calc(100%-1.5rem)] animate-fade-in items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 text-xs whitespace-nowrap text-presence-ink shadow-xs"
     >
       <PresenceDot />
       <span className="truncate">{agent} is editing…</span>
@@ -36,7 +36,7 @@ export function BlockPresence({ agent }: { agent: string }) {
 }
 
 /**
- * "Claude Code is working on this view": the mark on a whole view, at the top right of its board.
+ * "Claude Code is working on this view": the mark on a whole view, at the top left of its board.
  * Absolutely placed, so the board's blocks don't move.
  */
 export function ViewPresence({ agents }: { agents: readonly string[] }) {
@@ -44,7 +44,7 @@ export function ViewPresence({ agents }: { agents: readonly string[] }) {
     <span
       role="status"
       data-presence={agents.join(', ')}
-      className="pointer-events-none absolute -top-3.5 right-0 z-10 inline-flex max-w-full animate-fade-in items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 text-xs whitespace-nowrap text-presence-ink shadow-xs"
+      className="pointer-events-none absolute -top-3.5 left-0 z-10 inline-flex max-w-full animate-fade-in items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-0.5 text-xs whitespace-nowrap text-presence-ink shadow-xs"
     >
       <PresenceDot />
       <span className="truncate">{workingLine(agents, 'this view')}</span>

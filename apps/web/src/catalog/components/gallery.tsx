@@ -21,8 +21,11 @@ import {
 import { createPortal } from 'react-dom';
 import { FileActions } from '../../files/FileDetails';
 import { useResource } from '../../lib/api';
+import { useExit } from '../../lib/motion';
 import { useViewData, type ViewData } from '../context';
 import { Empty } from '../ui';
+import { GlanceDate } from '../../files/glance';
+import { FileTypeIcon } from './file-list';
 import { CertaintyMark } from './knowledge';
 
 /**
@@ -175,6 +178,43 @@ function Source({ picture, className }: { picture: GalleryPicture; className?: s
   );
 }
 
+/**
+ * Where a picture comes from, at a glance under it (v0.2 B2): a project file's one date that
+ * matters, or "Source" linking to its web page (the host is in the tooltip and the lightbox).
+ */
+function CaptionSource({ picture, className }: { picture: GalleryPicture; className?: string }) {
+  const data = useViewData();
+  if (picture.type === 'file' || (picture.image.kind === 'file' && !picture.sourceUrl)) {
+    const id = picture.type === 'file' ? picture.id : (picture.image as { fileId: string }).fileId;
+    const file = data.files?.find((f) => f.id === id);
+    return file ? (
+      <span className={clsx('inline-flex items-center gap-1.5', className)}>
+        <FileTypeIcon path={file.data.path} className="size-3.5 text-neutral-400" />
+        <GlanceDate file={file.data} />
+      </span>
+    ) : null;
+  }
+  const href = picture.sourceUrl ?? (picture.image.kind === 'url' ? picture.image.url : undefined);
+  if (!href || !/^https?:\/\//.test(href)) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      referrerPolicy="no-referrer"
+      title={picture.sourceHost ?? href}
+      className={clsx(
+        'inline-flex min-w-0 items-center gap-1 text-sky-600 hover:underline dark:text-sky-400',
+        className,
+      )}
+    >
+      <span className="truncate">Source</span>
+      <ExternalLink className="size-3 shrink-0" aria-hidden />
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  );
+}
+
 /** The file actions (Download, Open, Reveal, Copy path) for a picture that is a project file. */
 function LightboxFileActions({ file }: { file: Entity<'file'> }) {
   const { version } = useViewData();
@@ -192,11 +232,14 @@ export function Lightbox({
   index,
   onIndex,
   onClose,
+  leaving = false,
 }: {
   pictures: GalleryPicture[];
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  /** Closing: it fades out (index.css motion) before it goes. */
+  leaving?: boolean;
 }) {
   const data = useViewData();
   const dialog = useRef<HTMLDivElement>(null);
@@ -218,15 +261,16 @@ export function Lightbox({
       ? (data.entityById.get(picture.id) as Entity<'artifact'> | undefined)?.data.description
       : undefined;
 
+  useEffect(() => closeButton.current?.focus(), []);
   useEffect(() => {
-    closeButton.current?.focus();
-    // The page behind doesn't scroll while the picture is open.
+    // The page behind doesn't scroll while the picture is open (and does again as it fades out).
+    if (leaving) return;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, []);
+  }, [leaving]);
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') {
@@ -269,8 +313,12 @@ export function Lightbox({
       aria-modal="true"
       aria-label={picture.caption ?? picture.title}
       aria-describedby={captionId}
+      aria-hidden={leaving || undefined}
       onKeyDown={onKeyDown}
-      className="fixed inset-0 z-50 flex flex-col bg-neutral-950/95 text-neutral-100 backdrop-blur-sm"
+      className={clsx(
+        'fixed inset-0 z-50 flex flex-col bg-neutral-950/95 text-neutral-100 backdrop-blur-sm',
+        leaving ? 'pointer-events-none animate-fade-out' : 'animate-fade-in',
+      )}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-5">
         <span className="text-sm text-neutral-300" aria-live="polite">
@@ -304,7 +352,12 @@ export function Lightbox({
             <ChevronLeft className="size-6" aria-hidden />
           </button>
         )}
-        <Picture key={picture.id} picture={picture} resolved={resolved} large />
+        <div
+          key={picture.id}
+          className="flex min-h-0 min-w-0 flex-1 animate-pop-in items-center justify-center"
+        >
+          <Picture picture={picture} resolved={resolved} large />
+        </div>
         {many && (
           <button
             type="button"
@@ -375,6 +428,8 @@ const GRID_COLUMNS: Record<number, string> = {
 export function Gallery({ node }: { node: Node }) {
   const data = useViewData();
   const [open, setOpen] = useState<number | null>(null);
+  // The lightbox stays a moment after closing, to fade out.
+  const lightbox = useExit(open);
   const opener = useRef<HTMLElement | null>(null);
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
   const { pictures } = galleryContents(data, node);
@@ -424,7 +479,7 @@ export function Gallery({ node }: { node: Node }) {
                 </p>
               )}
               <p className="flex min-w-0 text-xs text-neutral-500 dark:text-neutral-400">
-                <Source picture={p} className="min-w-0 truncate" />
+                <CaptionSource picture={p} className="min-w-0 truncate" />
               </p>
             </figcaption>
           )}
@@ -459,8 +514,14 @@ export function Gallery({ node }: { node: Node }) {
       ) : (
         <Empty>No pictures yet</Empty>
       )}
-      {open !== null && pictures[open] && (
-        <Lightbox pictures={pictures} index={open} onIndex={setOpen} onClose={close} />
+      {lightbox.shown !== null && pictures[lightbox.shown] && (
+        <Lightbox
+          pictures={pictures}
+          index={lightbox.shown}
+          onIndex={setOpen}
+          onClose={close}
+          leaving={lightbox.leaving}
+        />
       )}
     </figure>
   );

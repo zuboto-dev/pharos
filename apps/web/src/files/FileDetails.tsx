@@ -9,7 +9,15 @@ import {
   type ProjectDataset,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { AppWindow, Check, Copy, Download, FolderOpen, TriangleAlert } from 'lucide-react';
+import {
+  AppWindow,
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  TriangleAlert,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { ExpiryBadge } from '../catalog/components/file-list';
 import { useViewData } from '../catalog/context';
@@ -23,6 +31,7 @@ import {
 import { EntityRef, TYPE_LABELS, labelOf } from '../catalog/interactive';
 import { EditOptionsButton, useOptions } from '../catalog/options';
 import { Select } from '../catalog/select';
+import { ICON_BUTTON, Tip } from '../catalog/tip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, postJson, useResource } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -51,8 +60,18 @@ type Feedback = { kind: 'ok' | 'error'; text: string } | null;
 /**
  * Open (default app), Reveal in Finder, Copy path, Download (the real file name), and Open in a
  * new tab for files the browser can show. Each says what happened next to the buttons.
+ * `compact` (a FileView in a view, v0.2 B2) shows them as a row of icons with tooltips, and never
+ * writes the path out: that stays in the file's details.
  */
-export function FileActions({ file, info }: { file: Entity<'file'>; info: FileInfo | undefined }) {
+export function FileActions({
+  file,
+  info,
+  compact = false,
+}: {
+  file: Entity<'file'>;
+  info: FileInfo | undefined;
+  compact?: boolean;
+}) {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const available = info?.available ?? false;
   const type = info?.type ?? fileTypeOf(file.data.path);
@@ -74,9 +93,91 @@ export function FileActions({ file, info }: { file: Entity<'file'>; info: FileIn
       await navigator.clipboard.writeText(info.absolutePath);
       setFeedback({ kind: 'ok', text: 'Path copied' });
     } catch {
-      setFeedback({ kind: 'error', text: `Couldn’t copy. The path is ${info.absolutePath}` });
+      setFeedback({
+        kind: 'error',
+        text: compact
+          ? 'Couldn’t copy. Open the file’s details to see its path.'
+          : `Couldn’t copy. The path is ${info.absolutePath}`,
+      });
     }
   };
+  if (compact)
+    return (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div role="group" aria-label="File actions" className="flex items-center gap-1">
+          <Tip label="Download">
+            {available ? (
+              <a
+                href={fileUrl('download', file.id)}
+                download
+                aria-label="Download"
+                className={ICON_BUTTON.secondary}
+              >
+                <Download className="size-4" aria-hidden />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-label="Download"
+                className={ICON_BUTTON.secondary}
+              >
+                <Download className="size-4" aria-hidden />
+              </button>
+            )}
+          </Tip>
+          {type.open && (
+            <Tip label="Open in its app">
+              <button
+                type="button"
+                disabled={!available}
+                aria-label="Open in its app"
+                onClick={() => void run('open', 'Opened in its app')}
+                className={ICON_BUTTON.secondary}
+              >
+                <AppWindow className="size-4" aria-hidden />
+              </button>
+            </Tip>
+          )}
+          <Tip label="Reveal in Finder">
+            <button
+              type="button"
+              disabled={!available}
+              aria-label="Reveal in Finder"
+              onClick={() => void run('reveal', 'Shown in Finder')}
+              className={ICON_BUTTON.secondary}
+            >
+              <FolderOpen className="size-4" aria-hidden />
+            </button>
+          </Tip>
+          <Tip label="Copy path">
+            <button
+              type="button"
+              disabled={!info?.absolutePath}
+              aria-label="Copy path"
+              onClick={() => void copyPath()}
+              className={ICON_BUTTON.secondary}
+            >
+              <Copy className="size-4" aria-hidden />
+            </button>
+          </Tip>
+          {available && type.preview !== 'none' && (
+            <Tip label="Open in a new tab">
+              <a
+                href={fileUrl('content', file.id)}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in a new tab"
+                className={ICON_BUTTON.secondary}
+              >
+                <ExternalLink className="size-4" aria-hidden />
+              </a>
+            </Tip>
+          )}
+        </div>
+        <ActionFeedback feedback={feedback} />
+      </div>
+    );
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -117,23 +218,30 @@ export function FileActions({ file, info }: { file: Entity<'file'>; info: FileIn
         </button>
         {available && type.preview !== 'none' && <NewTabLink fileId={file.id} />}
       </div>
-      <p
-        role="status"
-        className={clsx(
-          'min-h-4 text-xs',
-          feedback?.kind === 'error'
-            ? 'text-rose-600 dark:text-rose-400'
-            : 'text-neutral-500 dark:text-neutral-400',
-        )}
-      >
-        {feedback && (
-          <>
-            {feedback.kind === 'ok' && <Check className="mr-1 inline size-3" aria-hidden />}
-            {feedback.text}
-          </>
-        )}
-      </p>
+      <ActionFeedback feedback={feedback} />
     </div>
+  );
+}
+
+/** What the last file action did, next to the buttons. */
+function ActionFeedback({ feedback }: { feedback: Feedback }) {
+  return (
+    <p
+      role="status"
+      className={clsx(
+        'min-h-4 text-xs',
+        feedback?.kind === 'error'
+          ? 'text-rose-600 dark:text-rose-400'
+          : 'text-neutral-500 dark:text-neutral-400',
+      )}
+    >
+      {feedback && (
+        <>
+          {feedback.kind === 'ok' && <Check className="mr-1 inline size-3" aria-hidden />}
+          {feedback.text}
+        </>
+      )}
+    </p>
   );
 }
 

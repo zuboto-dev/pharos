@@ -274,7 +274,9 @@ export const FileListNode = component(
     details: z
       .array(z.enum(FILE_LIST_DETAILS))
       .optional()
-      .describe('Shown after each title (default ["issuer", "expiryDate"])'),
+      .describe(
+        'Shown after each title (default: the one date that matters, expiry, else issued, else changed)',
+      ),
     showIn: z
       .string()
       .min(1)
@@ -290,7 +292,7 @@ export const FILE_VIEW_SIZES = ['compact', 'full'] as const;
 
 export const FileViewNode = component(
   'FileView',
-  "One file from the owner's folders shown inline: its preview (image, PDF, text or Markdown), title, kind, issuer, dates, an expiry badge and the actions (Open, Reveal in Finder, Copy path, Download).",
+  "One file from the owner's folders shown inline: its preview (image, PDF, text or Markdown), title and the one date that matters (an expiry badge, else issued or changed), and the actions as icons (Download, Open, Reveal in Finder, Copy path, New tab); kind, issuer and where it is open on a tap.",
   {
     file: z
       .string()
@@ -302,7 +304,7 @@ export const FileViewNode = component(
     size: z
       .enum(FILE_VIEW_SIZES)
       .optional()
-      .describe('compact: details, actions and a short preview; full (default): a tall preview'),
+      .describe('compact: a short preview beside a list; full (default): a tall preview'),
   },
 );
 

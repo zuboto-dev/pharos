@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import type { AskAbout, ViewActions } from '../catalog/context';
 import { MENU_PANEL } from '../catalog/select';
+import { ICON_BUTTON, Tip } from '../catalog/tip';
 import { BUTTON } from '../catalog/ui';
 import { useAgentStatus } from '../lib/events';
 import { timeAgo } from '../lib/format';
@@ -163,22 +164,25 @@ export function RequestsButton({
   const waiting = open.length > 0 && agent.configured && agent.enabled && !working;
   return (
     <>
-      <button
-        type="button"
-        onClick={(e) => setAnchor(anchor ? null : e.currentTarget.getBoundingClientRect())}
-        className={open.length > 0 ? BUTTON.accent : BUTTON.secondary}
-        aria-label={`Questions: ${open.length} waiting`}
-      >
-        {working ? (
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-        ) : (
-          <MessageCircleQuestion className="size-3.5" />
-        )}{' '}
-        Questions
-        {open.length > 0 && (
-          <span className="rounded-full bg-sky-500 px-1.5 text-xs text-white">{open.length}</span>
-        )}
-      </button>
+      <Tip label="Questions" align="end">
+        <button
+          type="button"
+          onClick={(e) => setAnchor(anchor ? null : e.currentTarget.getBoundingClientRect())}
+          className={open.length > 0 ? ICON_BUTTON.accent : ICON_BUTTON.secondary}
+          aria-label={`Questions: ${open.length} waiting`}
+          aria-expanded={anchor !== null}
+          aria-haspopup="dialog"
+        >
+          {working ? (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <MessageCircleQuestion className="size-4" aria-hidden />
+          )}
+          {open.length > 0 && (
+            <span className="rounded-full bg-sky-500 px-1.5 text-xs text-white">{open.length}</span>
+          )}
+        </button>
+      </Tip>
       {anchor &&
         createPortal(
           <>

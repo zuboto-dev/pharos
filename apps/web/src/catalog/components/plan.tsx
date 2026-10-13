@@ -149,7 +149,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
     return (
       <EmptyState
         icon={CalendarRange}
-        title="No stages yet"
+        title={data.stages.length ? 'No stages match this list' : 'No stages yet'}
         hint="Stages with dates show up here on a timeline."
       >
         <AskAgentButton question="Plan the stages of this project, with start and target dates." />

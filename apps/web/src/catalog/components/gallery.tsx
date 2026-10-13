@@ -441,6 +441,14 @@ export function Gallery({ node }: { node: Node }) {
   const opener = useRef<HTMLElement | null>(null);
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
   const { pictures } = galleryContents(data, node);
+  // Whether the project has pictures of the kinds this block shows, just none its filter matches.
+  const anyPictures =
+    !pictures.length &&
+    galleryContents(data, {
+      ...node,
+      ...(node.artifacts ? { artifacts: {} } : {}),
+      ...(node.files ? { files: {} } : {}),
+    }).pictures.length > 0;
   const lit = new Set(node.highlight ?? []);
   const layout = node.layout ?? 'grid';
   const close = () => {
@@ -517,10 +525,14 @@ export function Gallery({ node }: { node: Node }) {
       ) : (
         <EmptyState
           icon={Images}
-          title="No pictures yet"
-          hint="Photos and scans from this project’s files show up here."
+          title={anyPictures ? 'No pictures match this list' : 'No pictures yet'}
+          hint={
+            anyPictures
+              ? 'Pictures that match its filter show up here.'
+              : 'Photos and scans from this project’s files show up here.'
+          }
         >
-          <AddFilesActions />
+          {!anyPictures && <AddFilesActions />}
         </EmptyState>
       )}
       {lightbox.shown !== null && pictures[lightbox.shown] && (

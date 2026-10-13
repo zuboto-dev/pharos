@@ -630,7 +630,7 @@ export function DependencyGraph({ node }: { node: NodeOf<'DependencyGraph'> }) {
     return (
       <EmptyState
         icon={GitBranch}
-        title="No tasks yet"
+        title={data.tasks.length ? 'No tasks match this list' : 'No tasks yet'}
         hint="The graph draws tasks and what each one waits for, once there are tasks."
       >
         <AskAgentButton question="Plan the tasks for this work, with what each one depends on." />
@@ -702,7 +702,7 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
     return (
       <EmptyState
         icon={Users}
-        title="No tasks yet"
+        title={data.tasks.length ? 'No tasks match this list' : 'No tasks yet'}
         hint="Who does what shows up here once tasks are assigned."
       >
         <AskAgentButton question="Plan the tasks for this work and who should do each one." />

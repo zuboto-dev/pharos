@@ -7,6 +7,8 @@ import { streamSSE } from 'hono/streaming';
 import type { AgentRunner, AgentStatus } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
 import { artifactFileRoutes, watchArtifactLinks } from './files/artifact-file.js';
+import { fileRoutes } from './files/routes.js';
+import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { createMcpServer } from './mcp.js';
 import { PharosError, formatPath } from './store/errors.js';
@@ -45,6 +47,8 @@ export type ServerInfo = {
   webDir?: string;
   /** Identifies the web app build being served (see `webBuildId`), sent to tabs on connect. */
   buildId?: string;
+  /** Project files on disk (R7.2); tests pass one with a fake `open`. */
+  files?: FileService;
 };
 
 export function createApp(
@@ -233,6 +237,9 @@ export function createApp(
   // Claim sources on disk (R7.6): where an artifact's local path is among the project files.
   api.route('/', artifactFileRoutes(store));
   watchArtifactLinks(store, feed);
+  // Project files: scan, serve read-only, reveal and open (R7.2).
+  const files = info.files ?? new FileService(store);
+  api.route('/', fileRoutes(files));
 
   app.route('/api', api);
 

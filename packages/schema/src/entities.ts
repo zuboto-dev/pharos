@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { ViewSpec } from './views/board.js';
+import { GALLERY, ImageRef } from './views/pictures.js';
 
 export {
   ArtifactKind,
@@ -124,6 +125,10 @@ export const ArtifactData = z.strictObject({
   ),
   stageId: Id.optional(),
   taskId: Id.optional(),
+  // R7.13: a picture of it, shown by Gallery.
+  image: ImageRef.optional().describe('https URL or image file id (Gallery)'),
+  alt: z.string().min(1).max(GALLERY.altChars).optional().describe('What the picture shows'),
+  tags: z.array(Text).optional(),
 });
 
 export const DecisionData = z.strictObject({

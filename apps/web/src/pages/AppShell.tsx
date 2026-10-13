@@ -45,11 +45,14 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {hidden && (
-        <div className="hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white px-2 py-3 md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900">
-          <SidebarToggle hidden onToggle={fromButton} focusOnMount={moveFocus.current} />
-          <Link to="/" aria-label="Pharos home" className="rounded-md p-1.5">
-            <PharosLogo className="size-5 text-amber-500" />
+        // The logo keeps the exact spot it has in the sidebar, so hiding the sidebar doesn't move it.
+        <div className="hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900">
+          <Link to="/" aria-label="Pharos home" className="flex px-4 pt-4 pb-2">
+            <span className="flex h-6 items-center">
+              <PharosLogo className="size-5 text-amber-500" />
+            </span>
           </Link>
+          <SidebarToggle hidden onToggle={fromButton} focusOnMount={moveFocus.current} />
         </div>
       )}
       <aside
@@ -64,7 +67,10 @@ export function AppShell() {
             to="/"
             className="flex items-center gap-2 px-4 pt-4 pb-2 font-semibold tracking-tight"
           >
-            <PharosLogo className="size-5 text-amber-500" /> Pharos
+            <span className="flex h-6 items-center">
+              <PharosLogo className="size-5 text-amber-500" />
+            </span>{' '}
+            Pharos
           </Link>
           {!hidden && (
             <SidebarToggle hidden={false} onToggle={fromButton} focusOnMount={moveFocus.current} />

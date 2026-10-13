@@ -260,7 +260,9 @@ export class FileScanner {
             skipped++;
             continue;
           }
-          if (!info.isFile() || !isAllowedName(name, info.size)) continue;
+          // A hard link (more than one name for the same contents) may be another name for a
+          // secret elsewhere in the folder: never listed (v0.2 review, gap 1).
+          if (!info.isFile() || info.nlink > 1 || !isAllowedName(name, info.size)) continue;
           if (!FilePath.safeParse(relPath).success) continue;
           found.push({
             rootId: folder.id,

@@ -172,6 +172,15 @@ export function isAllowedPath(path: string, size?: number): boolean {
   return parts.every(isAllowedDir) && isAllowedName(name, size);
 }
 
+/**
+ * Whether a file has more than one name (a hard link). Name rules can't tell what a hard link is
+ * another name for: `notes.md` may be the same contents as `.env` (v0.2 review, gap 1). Such
+ * files are never listed, added or read; the check is on the opened file too.
+ */
+export function isMultiplyLinked(stats: { nlink: number | bigint }): boolean {
+  return Number(stats.nlink) > 1;
+}
+
 /** Whether real path `child` is inside real path `root` (not `root` itself). */
 export function isInside(root: string, child: string): boolean {
   return child !== root && child.startsWith(root.endsWith(sep) ? root : root + sep);
@@ -283,7 +292,7 @@ export async function resolveInside(folder: ReadableFolder, relPath: string): Pr
   }
   const leaf = await lstat(real);
   if (leaf.isSymbolicLink()) throw new PathRefused('outside');
-  if (!leaf.isFile()) throw new PathRefused('not-allowed');
+  if (!leaf.isFile() || isMultiplyLinked(leaf)) throw new PathRefused('not-allowed');
   return { root, real, resolvedPath, chain };
 }
 
@@ -318,7 +327,7 @@ export function plainFileInsideSync(
     }
     const full = `${root}/${relPath}`;
     const leaf = lstatSync(full);
-    if (leaf.isSymbolicLink() || !leaf.isFile()) return 'refused';
+    if (leaf.isSymbolicLink() || !leaf.isFile() || isMultiplyLinked(leaf)) return 'refused';
     if (!isInside(root, realpathSync(full))) return 'refused';
     return isAllowedPath(relPath, leaf.size) ? 'ok' : 'refused';
   } catch {
@@ -354,7 +363,7 @@ export async function openInside(
   }
   try {
     const opened = await handle.stat({ bigint: true });
-    if (!opened.isFile()) throw new PathRefused('not-allowed');
+    if (!opened.isFile() || isMultiplyLinked(opened)) throw new PathRefused('not-allowed');
     // What was opened is what the path names now, and nothing on the way changed.
     const named = await lstat(resolved.real, { bigint: true });
     if (named.isSymbolicLink() || identityOf(named) !== identityOf(opened))

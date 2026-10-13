@@ -4,6 +4,7 @@ import {
   Archive,
   ArchiveRestore,
   BookmarkPlus,
+  ChevronDown,
   MessageCircleQuestion,
   MoreHorizontal,
   Pencil,
@@ -13,10 +14,10 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useViewData } from '../catalog/context';
-import { Menu, MenuItem } from '../catalog/menu';
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { AUTHOR_ICONS } from '../catalog/history';
 import { useResource } from '../lib/api';
 import { timeAgo } from '../lib/format';
@@ -77,8 +78,73 @@ export function sortViews(views: Entity<'view'>[]): Entity<'view'>[] {
 }
 
 /**
- * The project's view tabs. The active tab's ⋯ menu renames, pins, archives, or deletes it;
- * "+" adds a blank view; archived views can be restored from their own menu.
+ * Which tabs fit on one line (v0.2 B1). `widths` are the tabs' widths in order, `available` the
+ * room for them, `more` the width of the "More" button that holds the rest. Tabs stay in order;
+ * the active one is always kept, replacing the last ones that fit when it would fall under More.
+ * Returns the indexes to show: every index when everything fits (or nothing is measured yet).
+ */
+export function fitTabs(
+  widths: readonly number[],
+  available: number,
+  active: number,
+  more: number,
+): number[] {
+  const all = widths.map((_, i) => i);
+  const total = widths.reduce((sum, w) => sum + w, 0);
+  if (available <= 0 || total <= available) return all;
+  const budget = available - more;
+  const shown: number[] = [];
+  let used = 0;
+  for (const i of all) {
+    if (used + widths[i]! > budget) break;
+    shown.push(i);
+    used += widths[i]!;
+  }
+  if (active < 0 || active >= widths.length || shown.includes(active)) return shown;
+  // Make room for the active tab by moving the last ones that fit under More.
+  while (shown.length && used + widths[active]! > budget) used -= widths[shown.pop()!]!;
+  return [...shown, active].sort((a, b) => a - b);
+}
+
+/** ← → Home End move between the tabs and the More button. */
+function moveBetweenTabs(e: KeyboardEvent<HTMLElement>) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const stops = [...e.currentTarget.querySelectorAll<HTMLElement>('[data-tabstop]')];
+  const index = stops.indexOf(document.activeElement as HTMLElement);
+  if (index < 0) return;
+  e.preventDefault();
+  const next =
+    e.key === 'Home'
+      ? 0
+      : e.key === 'End'
+        ? stops.length - 1
+        : Math.max(0, Math.min(stops.length - 1, index + (e.key === 'ArrowRight' ? 1 : -1)));
+  stops[next]!.focus();
+}
+
+const TAB =
+  'inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
+const ICON =
+  'mb-1 inline-flex shrink-0 items-center rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200';
+
+/** A tab's icons and name (shared by the tab and its hidden measuring copy). */
+function TabLabel({ view }: { view: Entity<'view'> }) {
+  return (
+    <>
+      {view.data.pinned && <Pin className="size-3 shrink-0" />}
+      {isAnswer(view) && (
+        <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
+      )}
+      <span className="truncate">{view.data.name}</span>
+    </>
+  );
+}
+
+/**
+ * The project's view tabs, on one line at every width (v0.2 B1): tabs that don't fit go under
+ * "More", and the active tab always stays in sight. The active tab's ⋯ menu renames, pins,
+ * archives, or deletes it; "+" adds a blank view; archived views are restored from More (or from
+ * "Archived" when every tab fits). ← → move between the tabs.
  */
 export function ViewTabs({
   projectId,
@@ -93,7 +159,7 @@ export function ViewTabs({
 }) {
   const { actions } = useViewData();
   const navigate = useNavigate();
-  const [menu, setMenu] = useState<{ kind: 'view' | 'archived'; anchor: DOMRect } | null>(null);
+  const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const visible = sortViews(
@@ -105,6 +171,51 @@ export function ViewTabs({
     setMenu(null);
     setConfirmDelete(false);
   };
+
+  // Every tab is measured once from a hidden copy; the row then shows the ones that fit.
+  const nav = useRef<HTMLElement>(null);
+  const measure = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState(0);
+  const [sizes, setSizes] = useState<{ tabs: number[]; plus: number; more: number }>({
+    tabs: [],
+    plus: 0,
+    more: 0,
+  });
+  const shape = `${active?.id}|${visible.map((v) => `${v.id}:${v.data.name}:${v.data.pinned ? 1 : 0}`).join('|')}`;
+  useLayoutEffect(() => {
+    const row = nav.current;
+    const copy = measure.current;
+    if (!row || !copy) return;
+    const read = () => {
+      const width = (el: Element | null | undefined) => el?.getBoundingClientRect().width ?? 0;
+      setRoom(row.clientWidth);
+      setSizes({
+        tabs: [...copy.querySelectorAll('[data-measure="tab"]')].map(width),
+        plus: width(copy.querySelector('[data-measure="plus"]')),
+        more: width(copy.querySelector('[data-measure="more"]')),
+      });
+    };
+    read();
+    if (typeof ResizeObserver === 'undefined') return;
+    // The row's width changes with the window; the copy's when the fonts finish loading.
+    const observer = new ResizeObserver(read);
+    observer.observe(row);
+    observer.observe(copy);
+    return () => observer.disconnect();
+  }, [shape]);
+  const activeIndex = visible.findIndex((v) => v.id === active?.id);
+  const measured = room > 0 && sizes.tabs.length === visible.length;
+  // With archived views the button is always there, so its room is kept from the start.
+  const shownIndexes = measured
+    ? fitTabs(
+        sizes.tabs,
+        room - sizes.plus - (archived.length ? sizes.more : 0),
+        activeIndex,
+        archived.length ? 0 : sizes.more,
+      )
+    : visible.map((_, i) => i);
+  const shown = shownIndexes.map((i) => visible[i]!);
+  const overflow = visible.filter((_, i) => !shownIndexes.includes(i));
 
   const update = (view: Entity<'view'>, data: Record<string, unknown>, message: string) =>
     actions.apply(message, [{ op: 'update', type: 'view', id: view.id, data }], { undoable: true });
@@ -128,13 +239,53 @@ export function ViewTabs({
     }
   };
 
+  const restore = (view: Entity<'view'>) => {
+    close();
+    if (isAnswer(view)) {
+      const { message, operations } = keepAnswer(view);
+      void actions.apply(message, operations, { undoable: true });
+    } else void update(view, { archived: null }, `Restore view “${view.data.name}”`);
+    navigate(`/projects/${projectId}/views/${view.id}`);
+  };
+
   return (
-    <nav className="-mb-px flex min-w-0 basis-full items-end gap-1 overflow-x-auto md:flex-1 md:basis-auto">
-      {visible.map((view, i) => {
+    <nav
+      ref={nav}
+      aria-label="Views"
+      onKeyDown={moveBetweenTabs}
+      className="relative -mb-px flex min-w-0 flex-1 items-end gap-1 overflow-hidden"
+    >
+      {/* The hidden copy every tab is measured from: the same classes, never seen or read. */}
+      <div
+        ref={measure}
+        aria-hidden
+        className="pointer-events-none invisible absolute top-0 left-0 flex h-0 w-max items-end gap-1 overflow-hidden"
+      >
+        {visible.map((view, i) => (
+          <span key={view.id} data-measure="tab" className="flex shrink-0 items-center">
+            {isAnswer(view) && i > 0 && !isAnswer(visible[i - 1]!) && (
+              <span className="mx-1.5 h-5 w-px" />
+            )}
+            <span className={clsx(TAB, view.id === active?.id ? 'pr-1' : 'pr-3')}>
+              <TabLabel view={view} />
+            </span>
+            {view.id === active?.id && <span className="size-6 shrink-0" />}
+          </span>
+        ))}
+        <span data-measure="plus" className={ICON}>
+          <Plus className="size-4" />
+        </span>
+        <span data-measure="more" className={clsx(ICON, 'gap-1 px-2 text-xs')}>
+          More <span className="px-1.5">{visible.length}</span>
+          <ChevronDown className="size-3.5" />
+        </span>
+      </div>
+      {shown.map((view) => {
+        const i = visible.indexOf(view);
         const isActive = view.id === active?.id;
         const firstAnswer = isAnswer(view) && (i === 0 || !isAnswer(visible[i - 1]!));
         return (
-          <div key={view.id} className="relative flex shrink-0 items-center">
+          <div key={view.id} className="relative flex min-w-0 shrink-0 items-center">
             {firstAnswer && i > 0 && (
               <span
                 aria-hidden
@@ -166,37 +317,37 @@ export function ViewTabs({
               <Link
                 to={`/projects/${projectId}/views/${view.id}`}
                 title={tabTitle(view)}
+                data-tabstop
+                aria-current={isActive ? 'page' : undefined}
                 onDoubleClick={() => isActive && setRenaming(true)}
                 className={clsx(
-                  'inline-flex items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap',
+                  TAB,
                   isActive
                     ? 'border-neutral-900 pr-1 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100'
                     : 'border-transparent pr-3 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
                 )}
               >
-                {view.data.pinned && <Pin className="size-3" />}
-                {isAnswer(view) && (
-                  <MessageCircleQuestion className="size-3.5 text-sky-500" aria-label="Answer" />
-                )}
-                {view.data.name}
+                <TabLabel view={view} />
               </Link>
             )}
             {isActive && !renaming && (
               <button
                 type="button"
                 aria-label={`Options for ${view.data.name}`}
+                aria-haspopup="menu"
+                aria-expanded={menu?.kind === 'view'}
                 onClick={(e) =>
                   setMenu(
                     menu ? null : { kind: 'view', anchor: e.currentTarget.getBoundingClientRect() },
                   )
                 }
-                className="mb-0.5 rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="mb-0.5 shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
               >
                 <MoreHorizontal className="size-4" />
               </button>
             )}
             {isActive && menu?.kind === 'view' && isAnswer(view) && (
-              <Menu anchor={menu.anchor} onClose={close}>
+              <Menu anchor={menu.anchor} onClose={close} label={`Options for ${view.data.name}`}>
                 <MenuItem
                   icon={BookmarkPlus}
                   onClick={() => {
@@ -225,7 +376,7 @@ export function ViewTabs({
               </Menu>
             )}
             {isActive && menu?.kind === 'view' && !isAnswer(view) && (
-              <Menu anchor={menu.anchor} onClose={close}>
+              <Menu anchor={menu.anchor} onClose={close} label={`Options for ${view.data.name}`}>
                 <MenuItem icon={Pencil} onClick={() => (close(), setRenaming(true))}>
                   Rename
                 </MenuItem>
@@ -282,61 +433,74 @@ export function ViewTabs({
           </div>
         );
       })}
+      {(overflow.length > 0 || archived.length > 0) && (
+        <button
+          type="button"
+          data-tabstop
+          aria-haspopup="menu"
+          aria-expanded={menu?.kind === 'more'}
+          aria-label={
+            overflow.length
+              ? `More views (${overflow.length}${archived.length ? `, ${archived.length} archived` : ''})`
+              : `Archived (${archived.length})`
+          }
+          onClick={(e) =>
+            setMenu(menu ? null : { kind: 'more', anchor: e.currentTarget.getBoundingClientRect() })
+          }
+          className={clsx(ICON, 'gap-1 px-2 text-xs text-neutral-500')}
+        >
+          {overflow.length ? (
+            <>
+              More
+              <span className="rounded-full bg-neutral-100 px-1.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                {overflow.length}
+              </span>
+              <ChevronDown className="size-3.5" aria-hidden />
+            </>
+          ) : (
+            <>
+              <Archive className="size-3.5" aria-hidden /> Archived ({archived.length})
+            </>
+          )}
+        </button>
+      )}
       <button
         type="button"
         aria-label="New view"
         title="New view"
         onClick={() => void create()}
-        className="mb-1 shrink-0 rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+        className={ICON}
       >
         <Plus className="size-4" />
       </button>
-      {archived.length > 0 && (
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={(e) =>
-              setMenu(
-                menu ? null : { kind: 'archived', anchor: e.currentTarget.getBoundingClientRect() },
-              )
-            }
-            className="mb-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          >
-            <Archive className="size-3.5" /> Archived ({archived.length})
-          </button>
-          {menu?.kind === 'archived' && (
-            <Menu anchor={menu.anchor} onClose={close}>
-              {archived.map((view) =>
-                isAnswer(view) ? (
-                  <MenuItem
-                    key={view.id}
-                    icon={BookmarkPlus}
-                    onClick={() => {
-                      close();
-                      const { message, operations } = keepAnswer(view);
-                      void actions.apply(message, operations, { undoable: true });
-                      navigate(`/projects/${projectId}/views/${view.id}`);
-                    }}
-                  >
-                    Keep “{view.data.name}”{isExpired(view) ? ' (expired)' : ''}
-                  </MenuItem>
-                ) : (
-                  <MenuItem
-                    key={view.id}
-                    icon={ArchiveRestore}
-                    onClick={() => {
-                      close();
-                      void update(view, { archived: null }, `Restore view “${view.data.name}”`);
-                      navigate(`/projects/${projectId}/views/${view.id}`);
-                    }}
-                  >
-                    Restore “{view.data.name}”
-                  </MenuItem>
-                ),
-              )}
-            </Menu>
-          )}
-        </div>
+      {menu?.kind === 'more' && (
+        <Menu anchor={menu.anchor} onClose={close} label="More views">
+          {overflow.map((view) => (
+            <MenuItem
+              key={view.id}
+              icon={isAnswer(view) ? MessageCircleQuestion : view.data.pinned ? Pin : undefined}
+              onClick={() => {
+                close();
+                navigate(`/projects/${projectId}/views/${view.id}`);
+              }}
+            >
+              {view.data.name}
+            </MenuItem>
+          ))}
+          {overflow.length > 0 && archived.length > 0 && <MenuSeparator />}
+          {archived.length > 0 && <MenuLabel>Archived</MenuLabel>}
+          {archived.map((view) => (
+            <MenuItem
+              key={view.id}
+              icon={isAnswer(view) ? BookmarkPlus : ArchiveRestore}
+              onClick={() => restore(view)}
+            >
+              {isAnswer(view)
+                ? `Keep “${view.data.name}”${isExpired(view) ? ' (expired)' : ''}`
+                : `Restore “${view.data.name}”`}
+            </MenuItem>
+          ))}
+        </Menu>
       )}
     </nav>
   );

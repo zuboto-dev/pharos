@@ -40,6 +40,9 @@ describe('MCP', () => {
       'catalog_list',
       'changes_since',
       'file_read_text',
+      'files_unadded',
+      'folder_request',
+      'folder_request_status',
       'get',
       'history_diff',
       'history_list',
@@ -58,7 +61,8 @@ describe('MCP', () => {
     // 2k: agents may only update a file's details.
     const apply = JSON.stringify(tools.find((t) => t.name === 'apply')!.inputSchema);
     expect(apply).not.toContain('"Board"');
-    expect(apply.length).toBeLessThan(47_500);
+    // R7.12 added about 1.8k: agents add scanned files, and five types link files (fileIds).
+    expect(apply.length).toBeLessThan(50_000);
     expect(client.getInstructions()).toContain('apply');
   });
 

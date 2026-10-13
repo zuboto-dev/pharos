@@ -9,6 +9,8 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 export type BoardFiles = {
   /** The file each FileView widget shows now, by widget id (its `file` until one is picked). */
   shown: (widgetId: string) => string | undefined;
+  /** The FileView widgets on the board, in board order (R7.12: linked files open in the first). */
+  fileViews: string[];
   /** Whether a FileView widget with this id is on the board. */
   has: (widgetId: string) => boolean;
   show: (widgetId: string, fileId: string) => void;
@@ -41,6 +43,7 @@ export function BoardFilesProvider({
   const value = useMemo<BoardFiles>(
     () => ({
       shown: (id) => picked[id] ?? defaults.get(id),
+      fileViews: [...defaults.keys()],
       has: (id) => defaults.has(id),
       show,
     }),

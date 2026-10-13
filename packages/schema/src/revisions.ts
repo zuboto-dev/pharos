@@ -19,23 +19,45 @@ const Ref = z
   );
 
 /**
- * Types an author may only update, leaving out some fields: agents fill in a file's details but
- * never add, remove or move a file (R7), so the agent schema says so and stays small.
+ * Types an author may only update (and create as CreateOnly allows), leaving out some fields:
+ * agents fill in a file's details, add scanned files, but never remove or move one (R7, R7.12).
  */
 export type UpdateOnly = Partial<Record<EntityType, readonly string[]>>;
 
-function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}) {
+/**
+ * For a type in UpdateOnly, the only fields a create may carry (R7.12: agents add a scanned file
+ * by folder id and path, like the owner's "Add files"); without an entry it can't be created.
+ * Fields with a default, and `title`, may be left out.
+ */
+export type CreateOnly = Partial<Record<EntityType, readonly string[]>>;
+
+function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}, createOnly: CreateOnly = {}) {
   const omit = updateOnly[type];
   if (omit) {
     const mask = Object.fromEntries(omit.map((f) => [f, true as const]));
     const patch = patchSchema(type).omit(mask as Record<string, true>);
+    const update = z.strictObject({
+      op: z.literal('update'),
+      type: z.literal(type),
+      id: Id,
+      data: patch.describe('Fields to change; null clears an optional field'),
+    });
+    const pick = createOnly[type];
+    if (!pick) return z.discriminatedUnion('op', [update]);
+    const picked = createSchema(type).pick(
+      Object.fromEntries(pick.map((f) => [f, true as const])) as Record<string, true>,
+    );
+    const optional = Object.fromEntries(
+      pick.filter((f) => f === 'title').map((f) => [f, true as const]),
+    ) as Record<string, true>;
     return z.discriminatedUnion('op', [
       z.strictObject({
-        op: z.literal('update'),
+        op: z.literal('create'),
         type: z.literal(type),
-        id: Id,
-        data: patch.describe('Fields to change; null clears an optional field'),
+        ref: Ref.optional(),
+        data: picked.partial(optional),
       }),
+      update,
     ]);
   }
   return z.discriminatedUnion('op', [
@@ -55,10 +77,14 @@ function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}) {
   ]);
 }
 
-function operationUnion(types: readonly EntityType[], updateOnly?: UpdateOnly) {
+function operationUnion(
+  types: readonly EntityType[],
+  updateOnly?: UpdateOnly,
+  createOnly?: CreateOnly,
+) {
   return z.discriminatedUnion(
     'type',
-    types.map((t) => operationsFor(t, updateOnly)) as unknown as [
+    types.map((t) => operationsFor(t, updateOnly, createOnly)) as unknown as [
       ReturnType<typeof operationsFor>,
       ...ReturnType<typeof operationsFor>[],
     ],
@@ -72,14 +98,18 @@ export type Operation =
   | { op: 'delete'; type: EntityType; id: string };
 
 /** Input for applying operations on some entity types (e.g. agents edit views with view tools instead). */
-export function applyInputFor(types: readonly EntityType[], updateOnly?: UpdateOnly) {
+export function applyInputFor(
+  types: readonly EntityType[],
+  updateOnly?: UpdateOnly,
+  createOnly?: CreateOnly,
+) {
   return z.object({
     message: z
       .string()
       .trim()
       .min(1)
       .describe('Why these changes are being made, like a commit message'),
-    operations: z.array(operationUnion(types, updateOnly)).min(1),
+    operations: z.array(operationUnion(types, updateOnly, createOnly)).min(1),
   });
 }
 

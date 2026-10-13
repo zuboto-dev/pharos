@@ -3,8 +3,10 @@ import {
   fileTypeOf,
   fileUrl,
   type Entity,
+  type EntityType,
   type FileAction,
   type FileInfo,
+  type ProjectDataset,
 } from '@pharos/schema';
 import clsx from 'clsx';
 import { AppWindow, Check, Copy, Download, FolderOpen, TriangleAlert } from 'lucide-react';
@@ -18,7 +20,7 @@ import {
   EditableText,
   EditableTitle,
 } from '../catalog/editable';
-import { EntityRef, labelOf } from '../catalog/interactive';
+import { EntityRef, TYPE_LABELS, labelOf } from '../catalog/interactive';
 import { EditOptionsButton, useOptions } from '../catalog/options';
 import { Select } from '../catalog/select';
 import { BUTTON } from '../catalog/ui';
@@ -240,6 +242,60 @@ function LinkedTasks({ file }: { file: Entity<'file'> }) {
  * The file drawer (R7.4): preview, actions, the details people fill in, where it is on disk,
  * linked tasks and the owner's notes. `history` is the drawer's own history list.
  */
+/** Types that link files with `fileIds`, in the order "Linked from" lists them. */
+const LINKING: { type: EntityType; key: keyof ProjectDataset }[] = [
+  { type: 'task', key: 'tasks' },
+  { type: 'decision', key: 'decisions' },
+  { type: 'goal', key: 'goals' },
+  { type: 'stage', key: 'stages' },
+  { type: 'claim', key: 'claims' },
+];
+
+/**
+ * What links this file (R7.12): items whose `fileIds` include it, the tasks it lists, and the
+ * sources (artifacts) that are this file. Each opens its own details.
+ */
+function LinkedFrom({ file }: { file: Entity<'file'> }) {
+  const data = useViewData();
+  const items: Entity[] = [];
+  const seen = new Set<string>();
+  const push = (e: Entity | undefined) => {
+    if (e && !seen.has(e.id)) {
+      seen.add(e.id);
+      items.push(e);
+    }
+  };
+  for (const { key } of LINKING) {
+    const list = (data[key] ?? []) as Entity[];
+    for (const e of list)
+      if (((e.data as { fileIds?: string[] }).fileIds ?? []).includes(file.id)) push(e);
+  }
+  for (const id of file.data.taskIds) push(data.taskById.get(id));
+  for (const a of data.artifacts) if (a.data.fileId === file.id) push(a);
+  if (!items.length) return null;
+  return (
+    <section className="space-y-1">
+      <Heading>Linked from</Heading>
+      <ul className="space-y-1" aria-label="Linked from">
+        {items.map((e) => (
+          <li key={e.id} className="flex items-baseline gap-2 text-sm">
+            <span className="w-16 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">
+              {TYPE_LABELS[e.type]}
+            </span>
+            <button
+              type="button"
+              onClick={() => data.actions.open({ entity: e.id })}
+              className="min-w-0 truncate text-left text-sky-700 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-300"
+            >
+              {labelOf(e)}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function FileDetails({ file, history }: { file: Entity<'file'>; history?: ReactNode }) {
   const { version } = useViewData();
   const info = useResource<FileInfo>(`${fileUrl('info', file.id)}?v=${version}`);
@@ -287,6 +343,7 @@ export function FileDetails({ file, history }: { file: Entity<'file'>; history?:
           </Row>
         </dl>
       </section>
+      <LinkedFrom file={file} />
       <section className="space-y-1">
         <Heading>On disk</Heading>
         <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">

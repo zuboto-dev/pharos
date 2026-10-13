@@ -1,0 +1,50 @@
+import type { Entity } from '@pharos/schema';
+import clsx from 'clsx';
+import { FileTypeIcon } from './components/file-list';
+import { useViewData } from './context';
+import { useOpenItem } from './open-item';
+
+/**
+ * The project files an item links with `fileIds` (R7.12), as small links: tapping one opens the
+ * file in the board's FileView when there is one, else its preview in the drawer. Files the reader
+ * can't see (not in the dataset) are left out.
+ */
+export function LinkedFiles({
+  ids,
+  className,
+}: {
+  ids: readonly string[] | undefined;
+  className?: string;
+}) {
+  const { entityById } = useViewData();
+  const open = useOpenItem();
+  const files = (ids ?? [])
+    .map((id) => entityById.get(id))
+    .filter((e): e is Entity<'file'> => e?.type === 'file');
+  if (!files.length) return null;
+  return (
+    <span className={clsx('flex flex-wrap gap-1', className)} aria-label="Linked files">
+      {files.map((file) => (
+        <button
+          key={file.id}
+          type="button"
+          title={`Open “${file.data.title}”`}
+          onClick={(e) => {
+            e.stopPropagation();
+            open(file.id);
+          }}
+          className="inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-neutral-200 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:border-neutral-700 dark:text-sky-300 dark:hover:bg-sky-950"
+        >
+          <FileTypeIcon path={file.data.path ?? ''} className="size-3 shrink-0" />
+          <span className="truncate">{file.data.title}</span>
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/** The `fileIds` of an item that links files, or undefined. */
+export function fileIdsOf(entity: Entity): string[] | undefined {
+  const ids = (entity.data as { fileIds?: unknown }).fileIds;
+  return Array.isArray(ids) ? (ids as string[]) : undefined;
+}

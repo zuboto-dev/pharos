@@ -7,6 +7,7 @@ import {
   type EntityDataMap,
 } from '@pharos/schema';
 import { isExpired, requestContext } from '../views/service.js';
+import { forAgent, savedRequests } from '../files/requests.js';
 import { AgentFiles } from './agent-files.js';
 import type { Store } from './store.js';
 
@@ -38,6 +39,11 @@ export function projectSnapshot(store: Store, projectId: string) {
   const goals = store.list('goal', { projectId });
   const assigneeNames = new Map(store.list('assignee').map((a) => [a.id, a.data.name]));
   const taskData = tasks.map((t) => t.data);
+  /** Links to files the agent may see (R7.12), only when there are any. */
+  const linked = (data: { fileIds?: string[] }) => {
+    const ids = (data.fileIds ?? []).filter((id) => agentFiles.visible(id));
+    return ids.length ? { fileIds: ids } : {};
+  };
 
   const goalNodes = new Map<string, GoalNode>(
     goals.map((g) => [
@@ -47,6 +53,7 @@ export function projectSnapshot(store: Store, projectId: string) {
         title: g.data.title,
         status: g.data.status,
         successCriteria: g.data.successCriteria,
+        ...linked(g.data),
         subgoals: [],
       },
     ]),
@@ -111,6 +118,7 @@ export function projectSnapshot(store: Store, projectId: string) {
         progressBasis: basis,
         tasks: countByStatus(taskData.filter((t) => t.stageId === s.id)),
         tasksDone: `${done}/${total}`,
+        ...linked(s.data),
       };
     }),
     tasks: tasks.map((t) => ({
@@ -123,6 +131,7 @@ export function projectSnapshot(store: Store, projectId: string) {
       dependsOn: t.data.dependsOn.length ? t.data.dependsOn : undefined,
       estimate: t.data.estimate,
       dueDate: t.data.dueDate,
+      ...linked(t.data),
     })),
     // Agents see no local paths, nor sources (or findings) copied from hidden files (R7.9).
     artifacts: agentFiles.entities(store.list('artifact', { projectId })).map((a) => ({
@@ -143,6 +152,7 @@ export function projectSnapshot(store: Store, projectId: string) {
       sources: c.data.sourceIds.length,
       ...(c.data.aboutId ? { aboutId: c.data.aboutId } : {}),
       ...(c.data.tags.length ? { tags: c.data.tags } : {}),
+      ...linked(c.data),
     })),
     terms: agentFiles
       .entities(store.list('term', { projectId }))
@@ -158,6 +168,13 @@ export function projectSnapshot(store: Store, projectId: string) {
       delete details.projectId;
       return [{ id: f.id, ...details, canReadText: folder.level === 'contents' }];
     }),
+    /**
+     * Folders asked for this project with folder_request (R7.12): pending until the owner
+     * answers; an approved one's folderId is the rootId for files_unadded and adding files.
+     */
+    folderRequests: savedRequests(store)
+      .filter((r) => r.projectId === projectId)
+      .map((r) => forAgent(r)),
     // People and agents work can be assigned to (shared across projects), with ids for assigneeId.
     assignees: store
       .list('assignee')
@@ -169,6 +186,7 @@ export function projectSnapshot(store: Store, projectId: string) {
       decidedById: d.data.decidedById,
       decisionDate: d.data.decisionDate,
       recordedAt: d.createdAt,
+      ...linked(d.data),
     })),
     views: store
       .list('view', { projectId })

@@ -19,6 +19,7 @@ import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { useOptions } from '../options';
 import { Popover, usePopover } from '../popover';
+import { LinkedFiles } from '../linked-files';
 import { LocalSourcePath, linkedFileOf } from '../source-file';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
 import { Badge, Dot, Empty, isHttp, Uri, type Tone } from '../ui';
@@ -378,6 +379,7 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
           <CertaintyMark claim={claim} />
           <ClaimBasis claim={claim} />
         </div>
+        <LinkedFiles ids={claim.data.fileIds} />
       </header>
     );
   }
@@ -397,6 +399,7 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
           <TermText text={detail} ranges={detailTerms} />
         </p>
       )}
+      <LinkedFiles ids={claim.data.fileIds} />
       <div className="mt-auto flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-1">
         <CertaintyMark claim={claim} />
         <ClaimBasis claim={claim} />

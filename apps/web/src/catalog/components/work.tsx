@@ -5,6 +5,7 @@ import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { formatDate, humanize, plural } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, TaskCheck, useGlance, useTaskActions } from '../interactive';
+import { LinkedFiles } from '../linked-files';
 import { EditOptionsButton, OptionBadge, OptionDot, useOptions } from '../options';
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
 import { firstUses, TermText, useTermMatcher } from '../terms';
@@ -424,6 +425,8 @@ function TaskRow({ task, title, children }: { task: Task; title: ReactNode; chil
             {title}
           </span>
         </span>
+        {/* Its papers (R7.12): small links that open in the board's FileView or the drawer. */}
+        <LinkedFiles ids={task.data.fileIds} className="mt-1 pl-7" />
       </td>
       {children}
     </tr>

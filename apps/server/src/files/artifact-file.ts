@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream, realpathSync, statSync, type Stats } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join, normalize } from 'node:path';
+import { dirname, isAbsolute, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   type ArtifactFileMatch,
@@ -11,6 +11,7 @@ import {
   type FileFolder,
   FileFolders,
   FilePath,
+  type MentionedFile,
   type Operation,
   folderContains,
 } from '@pharos/schema';
@@ -18,7 +19,9 @@ import { Hono } from 'hono';
 import type { RevisionFeed } from '../feed.js';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
+import { pendingRequestFor, projectBases, summaryOf } from './requests.js';
 import { sameOriginOnly } from './routes.js';
+import { plainFileInsideSync } from './safety.js';
 
 /**
  * Claim sources on disk (R7.6, docs/reframe/roadmap-2.md §3). An artifact whose `uri` is a local
@@ -159,7 +162,42 @@ async function sameContents(
   return undefined;
 }
 
-/** Where an artifact's local source is: a project file, a folder path not added yet, or neither. */
+/**
+ * A `uri` relative to the project's folder (R7.12), e.g. "records/2024/certificate.pdf" or
+ * "./brand/mark.png", as a folder-relative path; null for anything else (absolute, `~`, a web
+ * address, or a path that climbs out or names a dotfile).
+ */
+export function relativePathOf(uri: string | undefined): string | null {
+  const value = uri?.trim();
+  if (!value || SCHEME.test(value) || value.startsWith('/') || value.startsWith('~')) return null;
+  const path = value.replace(/^(\.\/)+/, '');
+  return FilePath.safeParse(path).success ? path : null;
+}
+
+/** Whether a `uri` names a place on the owner's disk (absolute or relative), not a web address. */
+export function isLocalUri(uri: string | undefined): boolean {
+  const value = uri?.trim();
+  return !!value && (localPathOf(value) !== null || !SCHEME.test(value));
+}
+
+/** Not inside any Pharos folder: where it is, and the folder (and request) that would open it. */
+function notInFolder(store: Store, path: string, absolute: boolean, projectId: string) {
+  const request = absolute
+    ? pendingRequestFor(store, { path })
+    : pendingRequestFor(store, { projectId });
+  return {
+    state: 'not-in-folder' as const,
+    path,
+    folder: request?.path ?? (absolute ? dirname(path) : null),
+    request: request ? summaryOf(request) : null,
+  };
+}
+
+/**
+ * Where an artifact's local source is: a project file, a folder path not added yet, a path in a
+ * folder where nothing (or nothing Pharos reads) is, or outside every folder. A relative `uri`
+ * resolves against the folders approved for its project (R7.12).
+ */
 export async function matchArtifact(
   store: Store,
   artifact: ArtifactEntity,
@@ -168,23 +206,67 @@ export async function matchArtifact(
   if (fileId && store.get(fileId)?.type === 'file') return { state: 'linked', fileId };
   const value = uri?.trim();
   if (!value) return { state: 'none' };
-  const path = localPathOf(value);
-  // A relative path can't be placed in a folder; a web address isn't a local source.
-  if (!path) return SCHEME.test(value) ? { state: 'none' } : { state: 'not-in-folder' };
+  const absolute = localPathOf(value);
+  // A web address isn't a local source.
+  if (!absolute && SCHEME.test(value)) return { state: 'none' };
   const list = folders(store);
+  let paths: string[];
+  if (absolute) paths = [absolute];
+  else {
+    const relative = relativePathOf(value);
+    const bases = projectBases(store, projectId, list);
+    if (!relative || !bases.length) return notInFolder(store, value, false, projectId);
+    paths = bases.map((b) => `${b.base}/${relative}`);
+  }
   const files = store.list('file', { projectId }) as FileEntity[];
-  const inFolder = folderOf(path, list);
-  if (inFolder) {
+  let firstInFolder: { folder: FileFolder; path: string } | null = null;
+  for (const path of paths) {
+    const inFolder = folderOf(path, list);
+    if (!inFolder) continue;
     const byPath = files.find(
       (f) => f.data.rootId === inFolder.folder.id && f.data.path === inFolder.path,
     );
     if (byPath) return { state: 'linked', fileId: byPath.id };
+    firstInFolder ??= inFolder;
   }
-  const byHash = await sameContents(path, files, list);
-  if (byHash) return { state: 'linked', fileId: byHash.id };
-  return inFolder
-    ? { state: 'in-folder', rootId: inFolder.folder.id, path: inFolder.path }
-    : { state: 'not-in-folder' };
+  for (const path of paths) {
+    const byHash = await sameContents(path, files, list);
+    if (byHash) return { state: 'linked', fileId: byHash.id };
+  }
+  if (firstInFolder) {
+    const { folder, path } = firstInFolder;
+    const state = plainFileInsideSync(folder, path);
+    if (state === 'ok') return { state: 'in-folder', rootId: folder.id, path };
+    return { state, rootId: folder.id, path };
+  }
+  // Inside a folder, but at a path Pharos never uses (a dotfile or dot-folder).
+  for (const path of paths) {
+    const real = realpath(path) ?? path;
+    const holder = list.find((f) =>
+      [f.path, realpath(f.path)].some(
+        (root) => !!root && [path, real].some((p) => p !== root && folderContains(root, p)),
+      ),
+    );
+    if (holder) return { state: 'refused', rootId: holder.id, path: value };
+  }
+  return notInFolder(store, absolute ?? value, !!absolute, projectId);
+}
+
+/**
+ * `GET /api/projects/:projectId/mentioned-files` (R7.12): the project's artifacts whose local
+ * source isn't a project file yet, with why, for the Files page.
+ */
+export async function mentionedFiles(store: Store, projectId: string): Promise<MentionedFile[]> {
+  store.getOfType('project', projectId);
+  const out: MentionedFile[] = [];
+  for (const artifact of store.list('artifact', { projectId }) as ArtifactEntity[]) {
+    const { uri, title } = artifact.data;
+    if (!uri || !isLocalUri(uri)) continue;
+    const match = await matchArtifact(store, artifact);
+    if (match.state === 'linked' || match.state === 'none') continue;
+    out.push({ artifactId: artifact.id, title, uri, match });
+  }
+  return out;
 }
 
 /** `GET /api/artifacts/:artifactId/file` (read-only: a match found here isn't saved). */
@@ -206,7 +288,7 @@ export async function artifactLinkOperations(
   const artifacts = store.list('artifact', { projectId }) as ArtifactEntity[];
   const ops: Operation[] = [];
   for (const artifact of artifacts) {
-    if (artifact.data.fileId || !localPathOf(artifact.data.uri)) continue;
+    if (artifact.data.fileId || !isLocalUri(artifact.data.uri)) continue;
     const match = await matchArtifact(store, artifact);
     if (match.state === 'linked')
       ops.push({ op: 'update', type: 'artifact', id: artifact.id, data: { fileId: match.fileId } });
@@ -264,6 +346,10 @@ export function artifactFileRoutes(store: Store): Hono {
   routes.use('/artifacts/:artifactId/file', sameOriginOnly);
   routes.get('/artifacts/:artifactId/file', async (c) =>
     c.json(await matchArtifactFile(store, c.req.param('artifactId'))),
+  );
+  routes.use('/projects/:projectId/mentioned-files', sameOriginOnly);
+  routes.get('/projects/:projectId/mentioned-files', async (c) =>
+    c.json(await mentionedFiles(store, c.req.param('projectId'))),
   );
   return routes;
 }

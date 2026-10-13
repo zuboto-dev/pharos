@@ -9,6 +9,7 @@ import clsx from 'clsx';
 import { Check, Copy, Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { BUTTON } from '../catalog/ui';
+import { FolderRequestCard, useFolderRequests } from '../files/FolderRequests';
 import { ApiError, postJson, useResource } from '../lib/api';
 import {
   announceAgentStatus,
@@ -564,11 +565,27 @@ function Folders() {
     folders.reload();
   };
   const list = folders.data ?? [];
+  const requests = useFolderRequests();
   return (
     <Section
       title="Folders"
       description="Folders on this computer you can add files from. Files stay where they are: Pharos only reads them, and never moves, renames or deletes anything."
     >
+      {requests.pending.length > 0 && (
+        <div className="space-y-2" aria-label="Waiting for you">
+          <h3 className="text-sm font-semibold">Agents asking for a folder</h3>
+          {requests.pending.map((r) => (
+            <FolderRequestCard
+              key={r.id}
+              request={r}
+              onDone={() => {
+                requests.reload();
+                changed();
+              }}
+            />
+          ))}
+        </div>
+      )}
       {folders.status === 'error' && !folders.data ? (
         <p className="text-sm text-rose-600 dark:text-rose-400">Couldn’t load folders.</p>
       ) : list.length ? (

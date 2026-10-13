@@ -35,6 +35,11 @@ const Text = z.string().min(1);
 const Markdown = z.string();
 const IsoDate = z.iso.date();
 const Order = z.number();
+/** Project files this item is about (R7.12): a task's papers, a decision's evidence. */
+const FileIds = z
+  .array(Id)
+  .optional()
+  .describe('Project files linked to it (ids from project_snapshot.files)');
 
 export const SectionData = z.strictObject({
   name: Text.describe('e.g. "Work", "Personal"'),
@@ -78,6 +83,7 @@ export const GoalData = z.strictObject({
   successCriteria: z.array(Text).describe('How we know the goal is met'),
   status: optionField('goal.status'),
   order: Order,
+  fileIds: FileIds,
 });
 
 export const ScopeItemData = z.strictObject({
@@ -96,6 +102,7 @@ export const StageData = z.strictObject({
   startDate: IsoDate.optional().describe('YYYY-MM-DD'),
   targetDate: IsoDate.optional().describe('YYYY-MM-DD'),
   order: Order,
+  fileIds: FileIds,
 });
 
 export const TaskData = z.strictObject({
@@ -110,6 +117,7 @@ export const TaskData = z.strictObject({
   estimate: z.string().optional().describe('Free-form, e.g. "2h", "3 points"'),
   dueDate: IsoDate.optional().describe('YYYY-MM-DD'),
   order: Order,
+  fileIds: FileIds,
 });
 
 export const ArtifactData = z.strictObject({
@@ -135,6 +143,7 @@ export const DecisionData = z.strictObject({
     'Assignee (person or agent) who made the decision, often the person who asked; not just who recorded it',
   ),
   decisionDate: IsoDate.optional().describe('YYYY-MM-DD the decision was made'),
+  fileIds: FileIds,
 });
 
 export const ViewData = z.strictObject({
@@ -236,6 +245,7 @@ export const ClaimData = z.strictObject({
   authorId: Id.optional().describe('Assignee (agent or person) whose claim it is'),
   tags: z.array(z.string()).describe('Keys views pick claims by, e.g. "layer-4"; never shown'),
   order: Order,
+  fileIds: FileIds,
 });
 
 export const TermData = z.strictObject({
@@ -345,7 +355,11 @@ export const ENTITIES = {
     prefix: 'goal',
     data: GoalData,
     defaults: { status: 'open', successCriteria: [] },
-    refs: { projectId: projectRef, parentId: { type: 'goal', onDelete: 'cascade' } },
+    refs: {
+      projectId: projectRef,
+      parentId: { type: 'goal', onDelete: 'cascade' },
+      fileIds: { type: 'file', many: true, onDelete: 'unset' },
+    },
     label: 'title',
   },
   scope_item: {
@@ -359,7 +373,7 @@ export const ENTITIES = {
     prefix: 'stg',
     data: StageData,
     defaults: { status: 'planned' },
-    refs: { projectId: projectRef },
+    refs: { projectId: projectRef, fileIds: { type: 'file', many: true, onDelete: 'unset' } },
     label: 'name',
   },
   task: {
@@ -371,6 +385,7 @@ export const ENTITIES = {
       stageId: { type: 'stage', onDelete: 'unset' },
       assigneeId: { type: 'assignee', onDelete: 'unset' },
       dependsOn: { type: 'task', many: true, onDelete: 'unset' },
+      fileIds: { type: 'file', many: true, onDelete: 'unset' },
     },
     label: 'title',
   },
@@ -390,7 +405,11 @@ export const ENTITIES = {
     prefix: 'dec',
     data: DecisionData,
     defaults: { status: 'accepted' },
-    refs: { projectId: projectRef, decidedById: { type: 'assignee', onDelete: 'unset' } },
+    refs: {
+      projectId: projectRef,
+      decidedById: { type: 'assignee', onDelete: 'unset' },
+      fileIds: { type: 'file', many: true, onDelete: 'unset' },
+    },
     label: 'title',
   },
   view: {
@@ -423,6 +442,7 @@ export const ENTITIES = {
       confirmedById: { type: 'decision', onDelete: 'unset' },
       aboutId: { type: 'artifact', onDelete: 'unset' },
       authorId: { type: 'assignee', onDelete: 'unset' },
+      fileIds: { type: 'file', many: true, onDelete: 'unset' },
     },
     label: 'statement',
   },

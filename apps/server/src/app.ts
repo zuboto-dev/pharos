@@ -6,7 +6,8 @@ import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { AgentRunner, AgentStatus } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
-import { artifactFileRoutes, watchArtifactLinks } from './files/artifact-file.js';
+import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
+import { folderRequestRoutes } from './files/requests.js';
 import { fileRoutes } from './files/routes.js';
 import { FileService } from './files/service.js';
 import { z } from 'zod';
@@ -91,6 +92,9 @@ function agentRefusal(c: Context, store: Store): Response | undefined {
   }
   if (
     (path === '/settings/folders' && (c.req.method === 'GET' || c.req.method === 'HEAD')) ||
+    // Folder requests are answered by the owner only; agents check theirs over MCP (R7.12).
+    /^\/settings\/folder-requests(\/.*)?$/.test(path) ||
+    /^\/projects\/[^/]+\/mentioned-files$/.test(path) ||
     /^\/settings\/folders\/[^/]+\/scan$/.test(path) ||
     /^\/projects\/[^/]+\/scanned-files$/.test(path) ||
     (/^\/projects\/[^/]+\/files$/.test(path) && c.req.method === 'POST')
@@ -336,6 +340,26 @@ export function createApp(
   api.route('/', fileRoutes(files));
   // Folders the owner shares with Pharos (R7.3): app settings, never reachable over MCP.
   api.route('/settings/folders', folderRoutes(store, { ...info.folders, scanner: files.scanner }));
+  // Agents' folder requests (R7.12): the owner approves or declines them on the Pharos page.
+  api.route(
+    '/settings/folder-requests',
+    folderRequestRoutes(store, {
+      ...info.folders,
+      scanner: files.scanner,
+      // Once the new folder is scanned, the project's sources that point into it are linked. In
+      // the background; it catches its own errors (a callback never stops the server).
+      onApproved: (request, folder) => {
+        if (!request.projectId) return;
+        const projectId = request.projectId;
+        void files.scanner
+          .idle(folder.id)
+          .then(() => linkArtifacts(store, projectId))
+          .catch((error: unknown) =>
+            console.error('[pharos] Could not link sources after a folder approval:', error),
+          );
+      },
+    }),
+  );
 
   app.route('/api', api);
 
@@ -359,7 +383,7 @@ export function createApp(
       created.onclose = () => {
         if (created.sessionId) sessions.delete(created.sessionId);
       };
-      await createMcpServer(store).connect(created);
+      await createMcpServer(store, { home: info.folders?.home }).connect(created);
       transport = created;
     }
     return transport.handleRequest(c.req.raw);

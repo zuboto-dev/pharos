@@ -3,7 +3,7 @@ import { findOption, optionKeyOf } from '../options.js';
 import { DUE_BANDS, findRecordType, isMoney, type Money } from '../records.js';
 import type { NodeOf } from './catalog.js';
 import { localToday } from './dates.js';
-import { fileDue, type Due } from './due.js';
+import { dateDue, fileDue, type Due } from './due.js';
 import type { ProjectDataset, Query } from './query.js';
 import { dueOf, fieldReader, runQuery, type QueryContext, type Resolved } from './run-query.js';
 
@@ -326,11 +326,22 @@ export function dueUnit(
  */
 export function dueRows(
   data: ProjectDataset,
-  node: Pick<NodeOf<'DueTracker'>, 'query' | 'bands' | 'limit'>,
+  node: Pick<NodeOf<'DueTracker'>, 'query' | 'bands' | 'limit' | 'date'>,
   context: QueryContext = {},
 ): DueRow[] {
   const today = context.today ?? localToday();
+  const read = node.date ? fieldReader(data, context) : undefined;
   let out: DueRow[] = rows(data, node.query, context).flatMap((e): DueRow[] => {
+    if (read && node.date && (e.type === 'record' || e.type === 'file')) {
+      // A one-off date (R9), e.g. an exam: due on that day, in the bands repeating records use.
+      const value = read(e, node.date).value;
+      return [
+        {
+          record: e as Entity<'record'> | Entity<'file'>,
+          due: typeof value === 'string' ? dateDue(value, today) : undefined,
+        },
+      ];
+    }
     if (e.type === 'file') {
       const file = e as Entity<'file'>;
       return [{ record: file, due: fileDue(file.data.expiryDate, today) }];

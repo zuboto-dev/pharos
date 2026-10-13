@@ -504,6 +504,9 @@ export const DueTrackerNode = component(
       .optional()
       .describe('Only these bands (default all), e.g. ["past_due", "very_urgent", "urgent"]'),
     limit: z.number().int().min(1).max(50).optional(),
+    date: FieldPath.optional().describe(
+      'For one-off dates instead of an interval (R9): the date field each record is due on, e.g. exams "fields.date"; urgent within 30 days, very urgent within 7',
+    ),
   },
 );
 
@@ -522,6 +525,12 @@ export const CategoryBreakdownNode = component(
       by: FieldPath.describe('Reference from a spending to its category, e.g. "fields.category"'),
       sum: FieldPath.describe('The amount to add up, e.g. "fields.amount"'),
     }),
+    aim: z
+      .enum(['limit', 'target'])
+      .optional()
+      .describe(
+        'limit (default): a budget, going over is bad; target (R9): a goal to reach, e.g. study hours per subject, so over is fine and "to go" counts down',
+      ),
   },
 );
 

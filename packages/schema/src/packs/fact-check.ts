@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { DUE_BANDS, Money } from '../records.js';
+import { DUE_BANDS, Money, isMoney as isMoneyValue } from '../records.js';
 import type { Board } from '../views/board.js';
 import {
   categoryBreakdown,
   chartBars,
+  formatMoney,
   dueRows,
   statResult,
   sumRows,
@@ -12,7 +13,7 @@ import {
 } from '../views/blocks.js';
 import type { NodeOf, ViewNode } from '../views/catalog.js';
 import type { ProjectDataset } from '../views/query.js';
-import { runQuery } from '../views/run-query.js';
+import { fieldReader, runQuery } from '../views/run-query.js';
 
 /**
  * Fact checks (R8.3): what a pack page shows, worked out with the same functions the web app
@@ -57,6 +58,17 @@ export const Fact = z.discriminatedUnion('kind', [
     date: z.iso.date().optional(),
     meter: z.number().optional(),
   }),
+  z
+    .strictObject({
+      ...base,
+      kind: z.literal('cell'),
+      row: z.number().int().min(0).describe('Row on the page, from 0, in the order shown'),
+      column: z.string().describe('Field path of the column'),
+      expect: z.union([z.string(), z.number()]),
+    })
+    .describe(
+      'What one cell of a DataTable or DataList shows: a referenced record or file by its title, money formatted',
+    ),
   z.strictObject({
     ...base,
     kind: z.literal('category'),
@@ -179,6 +191,15 @@ function evaluate(fact: Fact, node: ViewNode | undefined, data: ProjectDataset, 
         (fact.meter === undefined || actual.meter === fact.meter);
       return { actual, pass };
     }
+    case 'cell': {
+      const query =
+        node.component === 'DataTable' || node.component === 'DataList' ? node.query : undefined;
+      if (!query) return miss(`a ${node.component} has no cells`);
+      const row = runQuery(data, query.type, query, ctx)[fact.row];
+      if (!row) return miss(`no row ${fact.row}`);
+      const actual = cellText(data, row, fact.column, today);
+      return { actual, pass: actual === fact.expect };
+    }
     case 'category': {
       if (node.component !== 'CategoryBreakdown')
         return miss(`a ${node.component}, not a CategoryBreakdown`);
@@ -195,6 +216,23 @@ function evaluate(fact: Fact, node: ViewNode | undefined, data: ProjectDataset, 
       };
     }
   }
+}
+
+/** A cell as the reader reads it: a referenced record or file by its title, money formatted. */
+export function cellText(
+  data: ProjectDataset,
+  row: { id: string; type: string; data: unknown },
+  path: string,
+  today: string,
+): string | number | null {
+  const { value } = fieldReader(data, { today })(row as never, path);
+  if (value === undefined || value === null) return null;
+  if (isMoneyValue(value)) return formatMoney(value);
+  if (typeof value === 'string') {
+    const target = [...(data.records ?? []), ...data.files].find((e) => e.id === value);
+    if (target) return target.data.title;
+  }
+  return typeof value === 'number' ? value : String(value);
 }
 
 /** Text a reader sees that no query backs: digits there can't be checked. */

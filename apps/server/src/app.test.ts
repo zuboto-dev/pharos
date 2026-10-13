@@ -61,7 +61,8 @@ describe('MCP', () => {
     // 2k: agents may only update a file's details.
     const apply = JSON.stringify(tools.find((t) => t.name === 'apply')!.inputSchema);
     expect(apply).not.toContain('"Board"');
-    // R7.12 added about 1.8k: agents add scanned files, and five types link files (fileIds).
+    // R7.12 added about 2.1k on top of R7.13 (49.6k): agents add scanned files, and five types
+    // link files (fileIds).
     expect(apply.length).toBeLessThan(50_000);
     expect(client.getInstructions()).toContain('apply');
   });

@@ -143,7 +143,10 @@ describe('document sets guidance', () => {
     const section = VIEW_GUIDELINES.slice(VIEW_GUIDELINES.indexOf('## Document sets'));
     for (const words of ['kind', 'issuer', 'issuedDate', 'expiryDate', 'showIn', 'FileView'])
       expect(section).toContain(words);
-    expect(section).toMatch(/can't add, remove or move files/);
+    expect(section).toMatch(/can't remove or move files/);
+    // R7.12: ask for the folder, add from the scan, link related work.
+    for (const words of ['folder_request', 'files_unadded', 'fileIds'])
+      expect(section).toContain(words);
     const { store, ids } = setup();
     expect(answerBrief(store, [ids.p])).toContain('Document sets');
   });

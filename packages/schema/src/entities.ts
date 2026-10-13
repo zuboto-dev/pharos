@@ -37,10 +37,7 @@ const Markdown = z.string();
 const IsoDate = z.iso.date();
 const Order = z.number();
 /** Project files this item is about (R7.12): a task's papers, a decision's evidence. */
-const FileIds = z
-  .array(Id)
-  .optional()
-  .describe('Project files linked to it (ids from project_snapshot.files)');
+const FileIds = z.array(Id).optional().describe('Linked file ids');
 
 export const SectionData = z.strictObject({
   name: Text.describe('e.g. "Work", "Personal"'),

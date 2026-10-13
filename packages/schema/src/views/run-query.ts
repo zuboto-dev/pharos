@@ -1,5 +1,8 @@
 import type { Entity, EntityType } from '../entities.js';
 import { RANKED_MEANINGS, meaningOf, optionKeyOf, optionsFor, type OptionKey } from '../options.js';
+import { DUE_BANDS, findRecordType, isMoney } from '../records.js';
+import { localToday, relativeDate } from './dates.js';
+import { computeDue, type Due } from './due.js';
 import type { Condition, Filter, ProjectDataset, QueryableType, Scalar, Where } from './query.js';
 
 const DATASET_KEYS = {
@@ -12,10 +15,11 @@ const DATASET_KEYS = {
   claim: 'claims',
   term: 'terms',
   file: 'files',
+  record: 'records',
 } as const satisfies Record<QueryableType, keyof ProjectDataset>;
 
 /** References a field path may follow one hop through, e.g. "stage.status" via `stageId`. */
-const HOPS: Record<string, { field: string; type: EntityType }> = {
+export const QUERY_HOPS: Record<string, { field: string; type: EntityType }> = {
   stage: { field: 'stageId', type: 'stage' },
   assignee: { field: 'assigneeId', type: 'assignee' },
   task: { field: 'taskId', type: 'task' },
@@ -33,43 +37,69 @@ type Run = {
   data: ProjectDataset;
   byId: Map<string, Entity>;
   today: string;
+  /** When each repeating record is due, worked out once per run. */
+  due: Map<string, Due | undefined>;
 };
 
-function localToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function addDays(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  const t = new Date(Date.UTC(y!, m! - 1, d! + days));
-  return t.toISOString().slice(0, 10);
-}
-
-/** "$today", "$today+7d", "$today-2w" → YYYY-MM-DD; "$currentStage", "$project" → ids. */
+/** "$today", "$today+7d", "$monthStart" … → YYYY-MM-DD; "$currentStage", "$project" → ids. */
 function resolveSpecial(value: Scalar, run: Run): Scalar | undefined {
   if (typeof value !== 'string' || !value.startsWith('$')) return value;
   if (value === '$currentStage') return run.data.project.data.currentStageId;
   if (value === '$project') return run.data.project.id;
-  const relative = /^\$today(?:([+-])(\d+)([dw]))?$/.exec(value);
-  if (relative) {
-    const [, sign, n, unit] = relative;
-    if (!sign) return run.today;
-    const days = Number(n) * (unit === 'w' ? 7 : 1) * (sign === '-' ? -1 : 1);
-    return addDays(run.today, days);
+  return relativeDate(value, run.today) ?? value;
+}
+
+/** Where a value came from: its entity type and field, and for records the record type. */
+export type Resolved = { value: unknown; type: EntityType; field: string; recordType?: string };
+
+/** When a repeating record is due next (undefined without an interval). */
+function dueOfRecord(record: Entity<'record'>, run: Run): Due | undefined {
+  if (run.due.has(record.id)) return run.due.get(record.id);
+  run.due.set(record.id, undefined); // a reading that points back at itself stops here
+  const { interval } = record.data;
+  let due: Due | undefined;
+  if (interval) {
+    const reading = interval.meter
+      ? resolveField(record, interval.meter.from, run).value
+      : undefined;
+    due = computeDue(interval, run.today, typeof reading === 'number' ? reading : undefined);
   }
-  return value;
+  run.due.set(record.id, due);
+  return due;
+}
+
+/** Record paths: "fields.<key>", one hop "fields.<ref>.<path>", money ".amount", "due.<part>". */
+function resolveRecordField(record: Entity<'record'>, path: string, run: Run): Resolved | null {
+  const recordType = record.data.recordType;
+  if (path.startsWith('due.')) {
+    const due = dueOfRecord(record, run);
+    const part = path.slice(4) as keyof Due;
+    return { value: due?.[part], type: 'record', field: path, recordType };
+  }
+  if (!path.startsWith('fields.')) return null;
+  const rest = path.slice(7);
+  const dot = rest.indexOf('.');
+  const key = dot < 0 ? rest : rest.slice(0, dot);
+  const value = (record.data.fields ?? {})[key];
+  if (dot < 0) return { value, type: 'record', field: `fields.${key}`, recordType };
+  const tail = rest.slice(dot + 1);
+  if (isMoney(value) && (tail === 'amount' || tail === 'currency'))
+    return { value: value[tail], type: 'record', field: `fields.${key}.${tail}`, recordType };
+  const target = typeof value === 'string' ? run.byId.get(value) : undefined;
+  return target
+    ? resolveField(target, tail, run)
+    : { value: undefined, type: 'record', field: tail };
 }
 
 /** A field's value, following one reference hop if the path has a dot; also reports where it came from. */
-function resolveField(
-  entity: Entity,
-  path: string,
-  run: Run,
-): { value: unknown; type: EntityType; field: string } {
+function resolveField(entity: Entity, path: string, run: Run): Resolved {
+  if (entity.type === 'record') {
+    const resolved = resolveRecordField(entity as Entity<'record'>, path, run);
+    if (resolved) return resolved;
+  }
   const dot = path.indexOf('.');
   if (dot > 0) {
-    const hop = HOPS[path.slice(0, dot)];
+    const hop = QUERY_HOPS[path.slice(0, dot)];
     const rest = path.slice(dot + 1);
     if (hop) {
       const id = (entity.data as Record<string, unknown>)[hop.field];
@@ -87,7 +117,37 @@ function resolveField(
         : path === 'updatedAt'
           ? entity.updatedAt
           : (entity.data as Record<string, unknown>)[path];
-  return { value, type: entity.type, field: path };
+  return {
+    value,
+    type: entity.type,
+    field: path,
+    ...(entity.type === 'record'
+      ? { recordType: (entity as Entity<'record'>).data.recordType }
+      : {}),
+  };
+}
+
+/** A record option field's definition, when the value came from one. */
+function recordOptionDef(run: Run, at: Resolved) {
+  if (at.type !== 'record' || !at.recordType || !at.field.startsWith('fields.')) return undefined;
+  const def = findRecordType(run.data.project, at.recordType)?.fields.find(
+    (f) => `fields.${f.key}` === at.field,
+  );
+  return def?.kind === 'option' ? def : undefined;
+}
+
+/** Ranked values that aren't project options: due bands and record option fields. */
+function isRanked(run: Run, at: Resolved): boolean {
+  return (at.type === 'record' && at.field === 'due.band') || !!recordOptionDef(run, at);
+}
+
+function rankOf(run: Run, at: Resolved, value: unknown): number | undefined {
+  const list =
+    at.field === 'due.band'
+      ? (DUE_BANDS as readonly string[])
+      : (recordOptionDef(run, at)?.options ?? []).map((o) => o.value);
+  const i = list.indexOf(value as string);
+  return i === -1 ? undefined : i;
 }
 
 /**
@@ -140,6 +200,7 @@ function compareValues(
     const [x, y] = [optionPosition(run, key, a), optionPosition(run, key, b)];
     return x === undefined || y === undefined ? undefined : x - y;
   }
+  if (isMoney(a)) return compareValues(a.amount, isMoney(b) ? b.amount : b, run, key);
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   // Dates are ISO strings, so text order is date order (YYYY-MM-DD vs full timestamps works too).
   const [x, y] = [String(a), String(b)];
@@ -151,6 +212,7 @@ function matchesCondition(
   condition: Condition,
   run: Run,
   key: OptionKey | undefined,
+  at?: Resolved,
 ): boolean {
   if (typeof condition !== 'object' || Array.isArray(condition))
     return matchesValue(actual, condition, run, key);
@@ -174,15 +236,20 @@ function matchesCondition(
   ];
   return bounds.every(([bound, ok]) => {
     if (bound === undefined) return true;
-    const c = compareValues(actual, resolveSpecial(bound, run), run, key);
+    const target = resolveSpecial(bound, run);
+    if (at && isRanked(run, at)) {
+      const [x, y] = [rankOf(run, at, actual), rankOf(run, at, target)];
+      return x !== undefined && y !== undefined && ok(x - y);
+    }
+    const c = compareValues(actual, target, run, key);
     return c !== undefined && ok(c);
   });
 }
 
 function matches(entity: Entity, where: Where, run: Run): boolean {
   return Object.entries(where).every(([path, condition]) => {
-    const { value, type, field } = resolveField(entity, path, run);
-    return matchesCondition(value, condition, run, optionKeyOf(type, field));
+    const at = resolveField(entity, path, run);
+    return matchesCondition(at.value, condition, run, optionKeyOf(at.type, at.field), at);
   });
 }
 
@@ -191,11 +258,25 @@ function matches(entity: Entity, where: Where, run: Run): boolean {
  * display fields: returns the value plus the entity type and field it finally came from.
  */
 export function fieldReader(data: ProjectDataset, context: QueryContext = {}) {
-  const run: Run = { data, byId: index(data), today: context.today ?? localToday() };
+  const run = newRun(data, context);
   return (entity: Entity, path: string) => resolveField(entity, path, run);
 }
 
+/** When a repeating record is due next, as DueTracker and the "due.*" paths see it. */
+export function dueOf(
+  data: ProjectDataset,
+  record: Entity<'record'>,
+  context: QueryContext = {},
+): Due | undefined {
+  return dueOfRecord(record, newRun(data, context));
+}
+
+function newRun(data: ProjectDataset, context: QueryContext): Run {
+  return { data, byId: index(data), today: context.today ?? localToday(), due: new Map() };
+}
+
 function compare(a: unknown, b: unknown): number {
+  if (isMoney(a) && isMoney(b)) return compare(a.amount, b.amount);
   if (a === b) return 0;
   if (a === undefined || a === null) return 1;
   if (b === undefined || b === null) return -1;
@@ -209,8 +290,9 @@ function index(data: ProjectDataset): Map<string, Entity> {
     ...data.goals,
     ...data.stages,
     ...data.tasks,
-    // Older datasets (and test fixtures) may come without files.
+    // Older datasets (and test fixtures) may come without files or records.
     ...(data.files ?? []),
+    ...(data.records ?? []),
   ];
   return new Map(all.map((e) => [e.id, e]));
 }
@@ -221,7 +303,7 @@ export function runQuery<T extends QueryableType>(
   filter: Filter = {},
   context: QueryContext = {},
 ): Entity<T>[] {
-  const run: Run = { data, byId: index(data), today: context.today ?? localToday() };
+  const run = newRun(data, context);
   let rows = ((data[DATASET_KEYS[type]] ?? []) as Entity<T>[]).filter(
     (e) =>
       (!filter.where || matches(e, filter.where, run)) &&
@@ -238,7 +320,9 @@ export function runQuery<T extends QueryableType>(
         const c = key
           ? (optionPosition(run, key, a.value) ?? Infinity) -
             (optionPosition(run, key, b.value) ?? Infinity)
-          : compare(a.value, b.value);
+          : isRanked(run, a)
+            ? (rankOf(run, a, a.value) ?? -1) - (rankOf(run, b, b.value) ?? -1)
+            : compare(a.value, b.value);
         if (c) return dir === 'desc' ? -c : c;
       }
       return 0;

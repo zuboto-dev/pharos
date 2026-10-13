@@ -310,6 +310,14 @@ export class AgentFiles {
     }
     // A question asked from a hidden item: where it was asked from may name it.
     if (type === 'request' && data.aboutId && !('aboutId' in out)) delete out.about;
+    // A record's file fields (R8) may point at a file in a hidden folder.
+    if (type === 'record' && out.fields && typeof out.fields === 'object') {
+      out.fields = Object.fromEntries(
+        Object.entries(out.fields as Data).filter(
+          ([, v]) => typeof v !== 'string' || this.visible(v),
+        ),
+      );
+    }
     return out;
   }
 
@@ -357,6 +365,7 @@ export class AgentFiles {
       claims: this.entities(dataset.claims),
       terms: this.entities(dataset.terms),
       files: this.entities(dataset.files),
+      records: this.entities(dataset.records ?? []),
     };
   }
 

@@ -1,0 +1,540 @@
+{
+  "fixtures": {
+    "one-car": [
+      {
+        "ref": "car",
+        "recordType": "vehicle",
+        "title": "Test hatchback",
+        "fields": {
+          "make": "Example Motors",
+          "model": "Hatch 1.2",
+          "year": 2019,
+          "odometer": 61850
+        }
+      },
+      {
+        "ref": "s1",
+        "recordType": "service",
+        "title": "First inspection",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2024-05-10",
+          "odometer": 40100,
+          "kind": "inspection",
+          "cost": { "amount": 9500, "currency": "EUR" },
+          "shop": "Test Centre North"
+        }
+      },
+      {
+        "ref": "s2",
+        "recordType": "service",
+        "title": "Annual inspection",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2025-09-08",
+          "odometer": 48900,
+          "kind": "inspection",
+          "cost": { "amount": 9500, "currency": "EUR" },
+          "shop": "Test Centre North"
+        }
+      },
+      {
+        "ref": "s3",
+        "recordType": "service",
+        "title": "Oil and filter",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2025-12-17",
+          "odometer": 52400,
+          "kind": "oil",
+          "cost": { "amount": 14900, "currency": "EUR" },
+          "shop": "Corner Garage"
+        }
+      },
+      {
+        "ref": "s4",
+        "recordType": "service",
+        "title": "Front brake pads",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2026-03-27",
+          "odometer": 55100,
+          "kind": "brakes",
+          "cost": { "amount": 28500, "currency": "EUR" },
+          "shop": "Corner Garage"
+        }
+      },
+      {
+        "ref": "s5",
+        "recordType": "service",
+        "title": "Winter tyres fitted",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2026-06-15",
+          "odometer": 58300,
+          "kind": "tyres",
+          "cost": { "amount": 6000, "currency": "EUR" },
+          "shop": "Tyre Hut"
+        }
+      },
+      {
+        "ref": "f1",
+        "recordType": "fuel",
+        "title": "Fill-up",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2025-11-20",
+          "odometer": 51000,
+          "litres": 40,
+          "cost": { "amount": 7000, "currency": "EUR" }
+        }
+      },
+      {
+        "ref": "f2",
+        "recordType": "fuel",
+        "title": "Fill-up",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2026-09-02",
+          "odometer": 60200,
+          "litres": 42.5,
+          "cost": { "amount": 7225, "currency": "EUR" }
+        }
+      },
+      {
+        "ref": "f3",
+        "recordType": "fuel",
+        "title": "Fill-up",
+        "fields": {
+          "vehicle": "$car",
+          "date": "2026-10-01",
+          "odometer": 61400,
+          "litres": 40.1,
+          "cost": { "amount": 6900, "currency": "EUR" }
+        }
+      },
+      {
+        "ref": "r_oil",
+        "recordType": "reminder",
+        "title": "Oil change",
+        "fields": {
+          "vehicle": "$car",
+          "kind": "oil",
+          "estimate": { "amount": 15000, "currency": "EUR" }
+        },
+        "interval": {
+          "every": { "n": 12, "unit": "months" },
+          "meter": { "n": 10000, "from": "fields.vehicle.fields.odometer" },
+          "lastDate": "2025-12-17",
+          "lastMeter": 52400
+        }
+      },
+      {
+        "ref": "r_inspection",
+        "recordType": "reminder",
+        "title": "Annual inspection",
+        "fields": { "vehicle": "$car", "kind": "inspection" },
+        "interval": { "every": { "n": 12, "unit": "months" }, "lastDate": "2025-09-08" }
+      },
+      {
+        "ref": "r_brakes",
+        "recordType": "reminder",
+        "title": "Brake check",
+        "fields": { "vehicle": "$car", "kind": "brakes" },
+        "interval": {
+          "meter": { "n": 20000, "from": "fields.vehicle.fields.odometer" },
+          "lastMeter": 55100
+        }
+      },
+      {
+        "ref": "r_insurance",
+        "recordType": "reminder",
+        "title": "Insurance renewal",
+        "fields": { "vehicle": "$car", "kind": "papers" },
+        "interval": {
+          "every": { "n": 1, "unit": "years" },
+          "mode": "fixed",
+          "startDate": "2024-10-18",
+          "lastDate": "2025-10-20"
+        }
+      },
+      {
+        "ref": "r_belt",
+        "recordType": "reminder",
+        "title": "Timing belt",
+        "fields": { "vehicle": "$car", "kind": "repair" },
+        "interval": {
+          "meter": { "n": 30000, "from": "fields.vehicle.fields.odometer" },
+          "mode": "fixed",
+          "startMeter": 32000,
+          "lastMeter": 32500
+        }
+      },
+      {
+        "ref": "r_tyres",
+        "recordType": "reminder",
+        "title": "Summer tyres",
+        "fields": { "vehicle": "$car", "kind": "tyres" },
+        "interval": { "every": { "n": 6, "unit": "months" }, "lastDate": "2026-06-15" }
+      },
+      {
+        "ref": "r_wipers",
+        "recordType": "reminder",
+        "title": "Wiper blades",
+        "fields": { "vehicle": "$car", "kind": "other" },
+        "interval": { "every": { "n": 3, "unit": "months" }, "lastDate": "2026-08-01" }
+      }
+    ],
+    "no-records": []
+  },
+  "cases": [
+    {
+      "id": "car-due-bands",
+      "version": 1,
+      "pack": "car",
+      "description": "What's due in the four bands, by days, by km and whichever first, rolling and fixed",
+      "tags": ["due", "interval", "bands"],
+      "today": "2026-10-13",
+      "fixture": "one-car",
+      "facts": [
+        {
+          "id": "oil-km-first",
+          "widget": "due",
+          "kind": "due",
+          "record": "Oil change",
+          "band": "urgent",
+          "date": "2026-12-17",
+          "meter": 62400
+        },
+        {
+          "id": "inspection-late",
+          "widget": "due",
+          "kind": "due",
+          "record": "Annual inspection",
+          "band": "past_due",
+          "date": "2026-09-08"
+        },
+        {
+          "id": "brakes-by-km",
+          "widget": "due",
+          "kind": "due",
+          "record": "Brake check",
+          "band": "not_urgent",
+          "meter": 75100
+        },
+        {
+          "id": "insurance-fixed",
+          "widget": "due",
+          "kind": "due",
+          "record": "Insurance renewal",
+          "band": "very_urgent",
+          "date": "2026-10-18"
+        },
+        {
+          "id": "belt-fixed-km",
+          "widget": "due",
+          "kind": "due",
+          "record": "Timing belt",
+          "band": "very_urgent",
+          "meter": 62000
+        },
+        {
+          "id": "tyres-rolling",
+          "widget": "due",
+          "kind": "due",
+          "record": "Summer tyres",
+          "band": "not_urgent",
+          "date": "2026-12-15"
+        },
+        {
+          "id": "wipers-soon",
+          "widget": "due",
+          "kind": "due",
+          "record": "Wiper blades",
+          "band": "urgent",
+          "date": "2026-11-01"
+        },
+        { "id": "reminders-shown", "widget": "due", "kind": "rows", "expect": 7 },
+        {
+          "id": "headline-late",
+          "widget": "headline",
+          "kind": "text",
+          "value": "late",
+          "expect": 1
+        },
+        {
+          "id": "headline-soon",
+          "widget": "headline",
+          "kind": "text",
+          "value": "soon",
+          "expect": 4
+        }
+      ]
+    },
+    {
+      "id": "car-service-log",
+      "version": 1,
+      "pack": "car",
+      "description": "The service log lists every service with a total, and the fuel table totals litres and cost",
+      "tags": ["log", "ledger", "total"],
+      "today": "2026-10-13",
+      "fixture": "one-car",
+      "facts": [
+        { "id": "services", "widget": "log", "kind": "rows", "expect": 5 },
+        {
+          "id": "service-total",
+          "widget": "log",
+          "kind": "total",
+          "column": "fields.cost",
+          "expect": [{ "amount": 68400, "currency": "EUR" }]
+        },
+        { "id": "fills", "widget": "fuel", "kind": "rows", "expect": 3 },
+        {
+          "id": "litres",
+          "widget": "fuel",
+          "kind": "total",
+          "column": "fields.litres",
+          "expect": 122.6
+        },
+        {
+          "id": "fuel-cost",
+          "widget": "fuel",
+          "kind": "total",
+          "column": "fields.cost",
+          "expect": [{ "amount": 21125, "currency": "EUR" }]
+        }
+      ]
+    },
+    {
+      "id": "car-cost-per-year",
+      "version": 1,
+      "pack": "car",
+      "description": "Cost per year adds services and fuel by calendar year; the headline gives this year's",
+      "tags": ["sum", "year", "money"],
+      "today": "2026-10-13",
+      "fixture": "one-car",
+      "facts": [
+        {
+          "id": "y2024",
+          "widget": "per-year",
+          "kind": "bar",
+          "label": "2024",
+          "expect": 9500,
+          "currency": "EUR"
+        },
+        {
+          "id": "y2025",
+          "widget": "per-year",
+          "kind": "bar",
+          "label": "2025",
+          "expect": 31400,
+          "currency": "EUR"
+        },
+        {
+          "id": "y2026",
+          "widget": "per-year",
+          "kind": "bar",
+          "label": "2026",
+          "expect": 48625,
+          "currency": "EUR"
+        },
+        {
+          "id": "this-year",
+          "widget": "headline",
+          "kind": "text",
+          "value": "cost",
+          "expect": [{ "amount": 48625, "currency": "EUR" }]
+        }
+      ]
+    },
+    {
+      "id": "car-empty",
+      "version": 1,
+      "pack": "car",
+      "description": "A car project on day one, before any record: nothing due, no costs",
+      "tags": ["empty"],
+      "today": "2026-10-13",
+      "fixture": "no-records",
+      "facts": [
+        { "id": "nothing-due", "widget": "due", "kind": "rows", "expect": 0 },
+        { "id": "no-late", "widget": "headline", "kind": "text", "value": "late", "expect": 0 },
+        {
+          "id": "no-cost",
+          "widget": "headline",
+          "kind": "text",
+          "value": "cost",
+          "expect": [{ "amount": 0, "currency": "EUR" }]
+        },
+        { "id": "no-services", "widget": "log", "kind": "rows", "expect": 0 }
+      ]
+    }
+  ],
+  "queryChecks": [
+    {
+      "id": "car-typo-record-field",
+      "version": 1,
+      "pack": "car",
+      "description": "A typo'd record field is refused with the intended suggestion",
+      "tags": ["unknown-field", "suggestion"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataTable",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "service", "fields.odomter": { "gte": 50000 } }
+            },
+            "columns": [{ "field": "title" }]
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-field"]
+    },
+    {
+      "id": "car-sum-over-text",
+      "version": 1,
+      "pack": "car",
+      "description": "A sum over a text field is refused",
+      "tags": ["sum-not-number"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "Stat",
+            "label": "Shops",
+            "query": { "type": "record", "where": { "recordType": "service" } },
+            "sum": "fields.shop"
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["sum-not-number"]
+    },
+    {
+      "id": "car-intentional-empty",
+      "version": 1,
+      "pack": "car",
+      "description": "Only past-due reminders: an empty result on a good day is fine",
+      "tags": ["empty", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DueTracker",
+            "query": { "type": "record", "where": { "recordType": "reminder" } },
+            "bands": ["past_due"]
+          }
+        }
+      ],
+      "expect": "accept"
+    },
+    {
+      "id": "car-custom-option",
+      "version": 1,
+      "pack": "car",
+      "description": "The pack's own option values (file kind registration, service kind papers) are allowed",
+      "tags": ["custom-option", "allowed"],
+      "widgets": [
+        {
+          "id": "files",
+          "node": { "component": "FileList", "filter": { "where": { "kind": "registration" } } }
+        },
+        {
+          "id": "papers",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "reminder", "fields.kind": "papers" }
+            }
+          }
+        }
+      ],
+      "expect": "accept"
+    },
+    {
+      "id": "car-option-typo",
+      "version": 1,
+      "pack": "car",
+      "description": "A record option value that doesn't exist is refused",
+      "tags": ["unknown-option"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "service", "fields.kind": "brakess" }
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-option"]
+    },
+    {
+      "id": "car-unknown-record-type",
+      "version": 1,
+      "pack": "car",
+      "description": "A record type the project doesn't have is refused",
+      "tags": ["unknown-record-type"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": { "type": "record", "where": { "recordType": "servce" } }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-record-type"]
+    },
+    {
+      "id": "car-bad-relative-date",
+      "version": 1,
+      "pack": "car",
+      "description": "A relative date Pharos can't read is refused",
+      "tags": ["bad-relative-date"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "service", "fields.date": { "gte": "$today-1x" } }
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["bad-relative-date"]
+    },
+    {
+      "id": "car-hop-too-far",
+      "version": 1,
+      "pack": "car",
+      "description": "Following two references is refused; one is allowed",
+      "tags": ["unknown-hop"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataTable",
+            "query": { "type": "record", "where": { "recordType": "service" } },
+            "columns": [
+              { "field": "fields.vehicle.fields.odometer" },
+              { "field": "fields.vehicle.fields.make.x" }
+            ]
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-column"]
+    }
+  ]
+}

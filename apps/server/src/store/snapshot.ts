@@ -4,6 +4,7 @@ import {
   stageProgress,
   taskProgress,
   meaningOf,
+  dueOf,
   type EntityDataMap,
 } from '@pharos/schema';
 import { isExpired, requestContext } from '../views/service.js';
@@ -22,6 +23,35 @@ type GoalNode = Pick<EntityDataMap['goal'], 'title' | 'status' | 'successCriteri
   id: string;
   subgoals: GoalNode[];
 };
+
+/** Record types and records, only for projects that keep records (R8). */
+function records(store: Store, agentFiles: AgentFiles, projectId: string) {
+  const dataset = agentFiles.dataset(store.dataset(projectId));
+  const types = dataset.project.data.recordTypes ?? [];
+  if (!types.length) return {};
+  return {
+    recordTypes: types.map((t) => ({
+      key: t.key,
+      name: t.name,
+      ...(t.interval ? { repeats: true } : {}),
+      fields: t.fields.map(
+        (f) =>
+          `${f.key}: ${f.kind}${f.kind === 'reference' ? ` → ${f.to}` : ''}${f.unit ? ` (${f.unit})` : ''}${f.currency ? ` (${f.currency})` : ''}${f.options ? ` [${f.options.map((o) => o.value).join(', ')}]` : ''}${f.required ? ' (required)' : ''}`,
+      ),
+    })),
+    records: (dataset.records ?? []).map((r) => {
+      const due = r.data.interval ? dueOf(dataset, r) : undefined;
+      return {
+        id: r.id,
+        recordType: r.data.recordType,
+        title: r.data.title,
+        fields: r.data.fields,
+        ...(r.data.interval ? { interval: r.data.interval } : {}),
+        ...(due ? { due } : {}),
+      };
+    }),
+  };
+}
 
 /**
  * A compact, structured view of a whole project, sized for an agent to read in one go.
@@ -168,6 +198,11 @@ export function projectSnapshot(store: Store, projectId: string) {
       delete details.projectId;
       return [{ id: f.id, ...details, canReadText: folder.level === 'contents' }];
     }),
+    /**
+     * Kinds of records this project keeps (R8), with their fields as "key: kind", and its
+     * records; repeating ones say when they're due. Query them as {type: "record"}.
+     */
+    ...records(store, agentFiles, project.id),
     /**
      * Folders asked for this project with folder_request (R7.12): pending until the owner
      * answers; an approved one's folderId is the rootId for files_unadded and adding files.

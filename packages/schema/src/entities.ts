@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
+import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
 import { ViewSpec } from './views/board.js';
 import { GALLERY, ImageRef } from './views/pictures.js';
 
@@ -68,6 +69,9 @@ export const ProjectData = z.strictObject({
   status: ProjectStatus,
   currentStageId: Id.optional().describe('Stage the project is currently in'),
   options: ProjectOptions.optional(),
+  recordTypes: RecordTypes.optional().describe(
+    'Kinds of records this project keeps (R8), e.g. a car service; usually set by a pack',
+  ),
   pinned: z.boolean().optional().describe('Pinned projects are listed first in the sidebar'),
   sectionId: Id.optional().describe('Sidebar section, for projects without a repository'),
   order: Order.describe('Position among its sibling projects in the sidebar'),
@@ -293,6 +297,23 @@ export const FileData = z.strictObject({
   taskIds: z.array(Id).describe('Tasks this file belongs to'),
 });
 
+/**
+ * One record of a kind the project defines (R8): a service, a bill, a spending. Its fields are
+ * checked against the record type in `project.data.recordTypes`.
+ */
+export const RecordData = z.strictObject({
+  projectId: Id,
+  recordType: RecordKey.describe("Key of one of the project's record types"),
+  title: Text.max(200),
+  fields: z
+    .record(z.string(), FieldValue)
+    .describe('Values by field key; money is {amount (minor units), currency}'),
+  interval: Interval.optional().describe('When it repeats (record types with interval: true)'),
+  notes: Markdown.optional(),
+  order: Order,
+  fileIds: FileIds,
+});
+
 export const ENTITY_TYPES = [
   'section',
   'repository',
@@ -309,6 +330,7 @@ export const ENTITY_TYPES = [
   'claim',
   'term',
   'file',
+  'record',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -464,6 +486,13 @@ export const ENTITIES = {
       projectId: projectRef,
       taskIds: { type: 'task', many: true, onDelete: 'unset' },
     },
+    label: 'title',
+  },
+  record: {
+    prefix: 'rec',
+    data: RecordData,
+    defaults: { fields: {} },
+    refs: { projectId: projectRef, fileIds: { type: 'file', many: true, onDelete: 'unset' } },
     label: 'title',
   },
 } satisfies Record<EntityType, EntityDef>;

@@ -383,6 +383,24 @@ function checkFilter(
       anyOf: filter.anyOf!.map((x, j) => (j === i ? fixed : x)),
     })),
   );
+  if (filter.onePer) {
+    const resolved = resolveIn(
+      ctx,
+      scopes,
+      filter.onePer,
+      `${at}.onePer`,
+      'unknown-group-field',
+      (fix) => ({ ...filter, onePer: fix }),
+      'one per: ',
+    );
+    if (resolved?.info.unique)
+      add(
+        ctx,
+        'group-by-unique',
+        `${at}.onePer`,
+        `"${filter.onePer}" is different on every row, so onePer keeps every row`,
+      );
+  }
   filter.sort?.forEach((s, i) => {
     const resolved = resolveIn(
       ctx,
@@ -566,6 +584,25 @@ function checkNode(ctx: Ctx, node: ViewNode, at: string): void {
     case 'DueTracker': {
       const scopes = checkQuery(ctx, node.query, `${at}.query`);
       node.show?.forEach((f, i) => checkColumn(ctx, scopes, f, `${at}.show[${i}]`));
+      if (node.date) {
+        const resolved = resolveIn(
+          ctx,
+          scopes,
+          node.date,
+          `${at}.date`,
+          'unknown-field',
+          (fix) => ({
+            date: fix,
+          }),
+        );
+        if (resolved && resolved.info.kind !== 'date')
+          add(
+            ctx,
+            'operator-mismatch',
+            `${at}.date`,
+            `"${node.date}" is ${resolved.info.kind}: date needs a date field`,
+          );
+      }
       return;
     }
     case 'CategoryBreakdown': {

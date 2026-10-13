@@ -26,7 +26,7 @@ import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { folderIdentity, isAllowedDir, isAllowedName, isAllowedPath } from './safety.js';
-import { FileService, contentDisposition } from './service.js';
+import { FileService, byteRange, contentDisposition } from './service.js';
 
 const ROOT_ID = 'root_test01';
 const ORIGIN = { origin: 'http://localhost' };
@@ -681,5 +681,75 @@ describe('actions', () => {
       headers: ORIGIN,
     });
     expect(res2.status).toBe(400);
+  });
+});
+
+// R9: audio plays in place; players ask for byte ranges to seek (Safari needs them).
+describe('audio', () => {
+  const clip = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(996, 7)]);
+
+  it('serves a made-up wav inline, whole or by a byte range', async () => {
+    write('Music/night bus mix 3.wav', clip);
+    await scan();
+    await addFromScan(['Music/night bus mix 3.wav']);
+    const id = store.list('file')[0]!.id;
+
+    const whole = await app.request(`/api/files/${id}/content`, { headers: ORIGIN });
+    expect(whole.status).toBe(200);
+    expect(whole.headers.get('content-type')).toBe('audio/wav');
+    expect(whole.headers.get('content-disposition')).toMatch(/^inline; /);
+    expect(whole.headers.get('accept-ranges')).toBe('bytes');
+    expect(whole.headers.get('content-security-policy')).toBe('sandbox');
+    expect((await whole.arrayBuffer()).byteLength).toBe(1000);
+
+    const part = await app.request(`/api/files/${id}/content`, {
+      headers: { ...ORIGIN, range: 'bytes=0-3' },
+    });
+    expect(part.status).toBe(206);
+    expect(part.headers.get('content-range')).toBe('bytes 0-3/1000');
+    expect(part.headers.get('content-length')).toBe('4');
+    expect(await part.text()).toBe('RIFF');
+
+    const tail = await app.request(`/api/files/${id}/content`, {
+      headers: { ...ORIGIN, range: 'bytes=990-' },
+    });
+    expect(tail.status).toBe(206);
+    expect(tail.headers.get('content-range')).toBe('bytes 990-999/1000');
+
+    const past = await app.request(`/api/files/${id}/content`, {
+      headers: { ...ORIGIN, range: 'bytes=5000-' },
+    });
+    expect(past.status).toBe(416);
+    expect(past.headers.get('content-range')).toBe('bytes */1000');
+  });
+
+  it('ignores ranges on downloads and on files that are not audio', async () => {
+    write('Music/take.wav', clip);
+    await scan();
+    await addFromScan(['Music/take.wav', 'notes.md']);
+    const [wav, md] = ['Music/take.wav', 'notes.md'].map(
+      (p) => store.list('file').find((f) => f.data.path === p)!.id,
+    );
+    const download = await app.request(`/api/files/${wav}/download`, {
+      headers: { ...ORIGIN, range: 'bytes=0-3' },
+    });
+    expect(download.status).toBe(200);
+    expect(download.headers.get('content-disposition')).toMatch(/^attachment; /);
+    const text = await app.request(`/api/files/${md}/content`, {
+      headers: { ...ORIGIN, range: 'bytes=0-3' },
+    });
+    expect(text.status).toBe(200);
+    expect(text.headers.get('accept-ranges')).toBeNull();
+  });
+
+  it('reads one byte range, clamped, and nothing else', () => {
+    expect(byteRange(undefined, 100)).toBeUndefined();
+    expect(byteRange('bytes=0-', 100)).toEqual({ start: 0, end: 99 });
+    expect(byteRange('bytes=10-500', 100)).toEqual({ start: 10, end: 99 });
+    expect(byteRange('bytes=-20', 100)).toEqual({ start: 80, end: 99 });
+    expect(byteRange('bytes=0-1,5-6', 100)).toBeUndefined();
+    expect(byteRange('items=0-1', 100)).toBeUndefined();
+    expect(byteRange('bytes=100-', 100)).toBe('unsatisfiable');
+    expect(byteRange('bytes=9-3', 100)).toBe('unsatisfiable');
   });
 });

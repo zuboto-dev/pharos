@@ -4,6 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FileTypeIcon } from '../catalog/components/file-list';
 import { BUTTON, Markdown } from '../catalog/ui';
+import { AudioPreview } from './audio';
 import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } from './files';
 
 /**
@@ -160,6 +161,8 @@ export function FilePreview({
           <NewTabLink fileId={file.id}>Open the PDF in a new tab</NewTabLink>
         </NoPreview>
       );
+    case 'audio':
+      return <AudioPreview fileId={file.id} title={file.data.title} />;
     case 'text':
     case 'markdown':
       return <TextPreview file={file} markdown={type.preview === 'markdown'} size={size} />;

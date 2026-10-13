@@ -184,7 +184,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   FileList: {
     category: 'outputs',
-    use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders; agents add them only from files_unadded (after the owner approves a folder), so never invent file ids or paths. For one document set (e.g. business registration papers), tag its files and filter on the tag: {"where": {"tags": "business-registration"}}; papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. Set `showIn` to the id of a FileView widget on the same board so a tapped row shows that file there instead of opening the drawer. You see each file\'s details, never its contents.',
+    use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders; agents add them only from files_unadded (after the owner approves a folder), so never invent file ids or paths. For one document set (e.g. business registration papers), tag its files and filter on the tag: {"where": {"tags": "business-registration"}}; papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. Set `showIn` to the id of a FileView widget on the same board so a tapped row shows that file there instead of opening the drawer. You see each file\'s details, never its contents. Audio files get a play button on their row.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -196,7 +196,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   FileView: {
     category: 'outputs',
-    use: 'One key document shown in the view itself: its preview (image, PDF, text or Markdown), title and the one date that matters (expiry, else issued, else changed), and Download, Open, Reveal in Finder, Copy path and New tab as icons; kind, issuer and where it is open in its details on a tap. `file` is the id of a file in project_snapshot.files (never invented); pair it with a FileList whose `showIn` is this widget\'s id so the reader can switch documents. `size: "compact"` (a short preview) fits beside a list at 5–6 columns; "full" (default) gives a tall preview. A file missing on disk says so and keeps its details.',
+    use: 'One key document shown in the view itself: its preview (image, PDF, text or Markdown), title and the one date that matters (expiry, else issued, else changed), and Download, Open, Reveal in Finder, Copy path and New tab as icons; kind, issuer and where it is open in its details on a tap. `file` is the id of a file in project_snapshot.files (never invented); pair it with a FileList whose `showIn` is this widget\'s id so the reader can switch documents. Audio files (wav, mp3, m4a, ogg, flac) play in place. `size: "compact"` (a short preview) fits beside a list at 5–6 columns; "full" (default) gives a tall preview. A file missing on disk says so and keeps its details.',
     minColumns: 4,
     suggestedColumns: 6,
     example: {
@@ -228,7 +228,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DataTable: {
     category: 'data',
-    use: 'Any entity type with chosen columns, e.g. artifacts with kind, status, and stage; or tasks with due date and assignee. Use when no domain component shows the fields you need. For records, columns are "fields.<key>" and money shows in its currency; `total: true` adds a total row (a ledger), and a log is records sorted by date, newest first.',
+    use: 'Any entity type with chosen columns, e.g. artifacts with kind, status, and stage; or tasks with due date and assignee. Use when no domain component shows the fields you need. For records, columns are "fields.<key>" and money shows in its currency; `total: true` adds a total row (a ledger), and a log is records sorted by date, newest first. The latest row per group: sort by date desc and set the query\'s `onePer`, e.g. the latest mix of each song `{"sort": [{"field": "fields.date", "dir": "desc"}], "onePer": "fields.song"}`; a file field holding an audio file plays in place.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -414,7 +414,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DueTracker: {
     category: 'data',
-    use: 'What\'s due among repeating records (services, bills, renewals): each with its next date and/or reading, in four bands (past due, very urgent, urgent, not urgent), most urgent first. The records need an interval; `show` adds a field such as the amount. Files with an expiryDate work too (`{"type": "file", "where": {"expiryDate": {"exists": true}}}`): urgent within 60 days, very urgent within 14, past due once expired.',
+    use: 'What\'s due among repeating records (services, bills, renewals): each with its next date and/or reading, in four bands (past due, very urgent, urgent, not urgent), most urgent first. The records need an interval; `show` adds a field such as the amount. Files with an expiryDate work too (`{"type": "file", "where": {"expiryDate": {"exists": true}}}`): urgent within 60 days, very urgent within 14, past due once expired. One-off dates (exams, appointments): `date: "fields.date"` on records without an interval, usually with `"fields.date": {"gte": "$today"}` in the query.',
     minColumns: 4,
     suggestedColumns: 7,
     example: {
@@ -425,7 +425,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   CategoryBreakdown: {
     category: 'data',
-    use: 'Planned against spent per category (a budget): categories are records with a planned amount, spending records point at their category. One bar each, what is left or over, and a total; currencies are never converted.',
+    use: 'Planned against spent per category (a budget): categories are records with a planned amount, spending records point at their category. One bar each, what is left or over, and a total; currencies are never converted. `aim: "target"` turns it into progress towards a goal (study hours per subject against each subject\'s target): reaching it is good and "to go" counts down.',
     minColumns: 4,
     suggestedColumns: 7,
     example: {
@@ -472,6 +472,7 @@ Components read live project data; never copy data into a view. Findings live in
 - dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
 - fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"
 - \`anyOf: [where, where]\` adds an "or": at least one must also match
+- \`onePer: "fields.song"\` keeps the first row per value after sorting (the latest mix of each song)
 - records (a project's own kinds, R8): query \`{type: "record", where: {recordType: "service"}}\`; fields are "fields.<key>", one hop through a reference "fields.vehicle.title", money parts "fields.cost.amount" (minor units) and "fields.cost.currency", and for repeating records "due.date", "due.band"; dates also "$monthStart", "$monthStart+1m", "$yearStart"
 - every filter, sort, group, sum and column is checked when a view is saved: an unknown field, record type or option value, a sum over text, or a value that doesn't fit its field refuses the save with the allowed values and a corrected example; a record query without recordType only warns
 - statuses and other option fields match by meaning too (e.g. "in_progress" matches a custom "In review"), and ranges follow the option order (priority {gte: "high"})

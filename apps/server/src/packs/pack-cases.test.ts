@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 /** The pack cases live with the packs, in @pharos/schema (made-up data only). */
 const here = join(dirname(fileURLToPath(import.meta.url)), '../../../../packages/schema/src/packs');
-const FILES = ['car.json', 'money.json'];
+const FILES = ['car.json', 'money.json', 'music.json', 'study.json', 'company.json'];
 const files = FILES.map((name) => ({
   name,
   file: CaseFile.parse(JSON.parse(readFileSync(join(here, 'cases', name), 'utf8'))),
@@ -96,7 +96,8 @@ describe('pack cases', () => {
     for (const { file } of files) {
       for (const c of [...(file.cases ?? []), ...(file.queryChecks ?? [])]) {
         const fixture = 'fixture' in c ? file.fixtures?.[c.fixture] : undefined;
-        next[c.id] = { version: c.version, hash: caseHash(c, fixture) };
+        const files = 'fixture' in c ? file.files?.[c.fixture] : undefined;
+        next[c.id] = { version: c.version, hash: caseHash(c, fixture, files) };
       }
     }
     if (process.env.UPDATE_PACK_CASES) {
@@ -120,7 +121,12 @@ describe('pack cases', () => {
     for (const c of file.cases ?? []) {
       it(`${c.id}: every fact on the pack page matches the records`, () => {
         const pack = findPack(c.pack)!;
-        const data = packDataset(pack, file.fixtures![c.fixture]!, c.today);
+        const data = packDataset(
+          pack,
+          file.fixtures![c.fixture]!,
+          c.today,
+          file.files?.[c.fixture],
+        );
         const report = checkFacts(caseBoard(pack, c), data, c.facts, c.today);
         expect(report.results.filter((r) => !r.pass)).toEqual([]);
         expect(report.passed).toBe(true);
@@ -186,6 +192,35 @@ describe('fact checks', () => {
     });
     // The rest of the page still reads this month and passes.
     expect(report.results.find((r) => r.id === 'rows')!.pass).toBe(true);
+  });
+
+  it('fail a music page that lists every mix instead of the latest per song', () => {
+    const music = files.find((f) => f.name === 'music.json')!.file;
+    const c = caseOf(music, 'music-latest-mix');
+    const widgets = structuredClone(findPack('music')!.views[0]!.widgets);
+    delete (widgets.find((w) => w.id === 'latest')!.node as { query: { onePer?: string } }).query
+      .onePer;
+    const data = packDataset(
+      findPack('music')!,
+      music.fixtures!.studio!,
+      c.today,
+      music.files!.studio,
+    );
+    const report = checkFacts(Board.parse({ component: 'Board', widgets }), data, c.facts, c.today);
+    expect(report.passed).toBe(false);
+    expect(report.results.find((r) => r.id === 'rows')).toMatchObject({ pass: false, actual: 5 });
+  });
+
+  it('fail a study page whose next exams include past ones', () => {
+    const study = files.find((f) => f.name === 'study.json')!.file;
+    const c = caseOf(study, 'study-next-exams');
+    const widgets = structuredClone(findPack('study')!.views[0]!.widgets);
+    const exams = widgets.find((w) => w.id === 'exams')!.node as {
+      query: { where: Record<string, unknown> };
+    };
+    delete exams.query.where['fields.date'];
+    const report = run(study, c, widgets);
+    expect(report.results.find((r) => r.id === 'rows')).toMatchObject({ pass: false, actual: 4 });
   });
 
   it('flag prose that states a number no query backs, never passing it', () => {

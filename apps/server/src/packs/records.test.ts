@@ -96,7 +96,7 @@ describe('packs', () => {
       /already has record types "category"/,
     );
     expect(refusal(() => applyPack(s, agent, { pack: 'boat', name: 'B' }, TODAY)).message).toMatch(
-      /No pack "boat" \(packs: car, money\)/,
+      /No pack "boat" \(packs: car, money, music, study, company\)/,
     );
   });
 
@@ -104,7 +104,7 @@ describe('packs', () => {
     const s = store();
     const app = createApp(s);
     const packs = (await (await app.request('/api/packs')).json()) as { key: string }[];
-    expect(packs.map((p) => p.key)).toEqual(['car', 'money']);
+    expect(packs.map((p) => p.key)).toEqual(['car', 'money', 'music', 'study', 'company']);
     const res = await app.request('/api/packs/apply', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-pharos-author': 'human:owner' },

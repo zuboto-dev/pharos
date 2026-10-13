@@ -328,5 +328,18 @@ export function runQuery<T extends QueryableType>(
       return 0;
     });
   }
+  if (filter.onePer) {
+    // One row per value (R9): the first after sorting, e.g. the latest mix of each song. Rows
+    // without a value are kept, each on its own.
+    const seen = new Set<string>();
+    rows = rows.filter((row) => {
+      const value = resolveField(row, filter.onePer!, run).value;
+      if (value === undefined || value === null || value === '') return true;
+      const key = JSON.stringify(value);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
   return filter.limit ? rows.slice(0, filter.limit) : rows;
 }

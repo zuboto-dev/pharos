@@ -1,0 +1,276 @@
+{
+  "fixtures": {
+    "papers": [
+      {
+        "ref": "annual",
+        "recordType": "renewal",
+        "title": "Annual return",
+        "fields": {
+          "kind": "annual_report",
+          "authority": "Companies registry",
+          "cost": { "amount": 1300, "currency": "EUR" }
+        },
+        "interval": { "every": { "n": 1, "unit": "years" }, "lastDate": "2025-11-01" }
+      },
+      {
+        "ref": "vat",
+        "recordType": "renewal",
+        "title": "Quarterly VAT filing",
+        "fields": { "kind": "tax_filing", "authority": "Tax office" },
+        "interval": { "every": { "n": 3, "unit": "months" }, "lastDate": "2026-07-10" }
+      },
+      {
+        "ref": "licence",
+        "recordType": "renewal",
+        "title": "Trading licence renewal",
+        "fields": {
+          "kind": "licence",
+          "document": "$f_licence",
+          "cost": { "amount": 25000, "currency": "EUR" }
+        },
+        "interval": { "every": { "n": 2, "unit": "years" }, "lastDate": "2024-11-20" }
+      },
+      {
+        "ref": "insurance",
+        "recordType": "renewal",
+        "title": "Liability insurance",
+        "fields": {
+          "kind": "insurance",
+          "document": "$f_liability",
+          "cost": { "amount": 64000, "currency": "EUR" }
+        },
+        "interval": { "every": { "n": 1, "unit": "years" }, "lastDate": "2025-10-01" }
+      }
+    ]
+  },
+  "files": {
+    "papers": [
+      {
+        "ref": "f_registration",
+        "title": "Certificate of registration",
+        "path": "company/registration.pdf",
+        "kind": "registration",
+        "issuer": "Companies registry",
+        "issuedDate": "2024-03-01"
+      },
+      {
+        "ref": "f_licence",
+        "title": "Trading licence",
+        "path": "company/trading-licence.pdf",
+        "kind": "licence",
+        "issuer": "City business office",
+        "issuedDate": "2024-11-20",
+        "expiryDate": "2026-11-20"
+      },
+      {
+        "ref": "f_liability",
+        "title": "Liability policy",
+        "path": "company/liability-policy.pdf",
+        "kind": "insurance",
+        "issuer": "Example Insurance",
+        "issuedDate": "2025-10-01",
+        "expiryDate": "2026-10-01"
+      },
+      {
+        "ref": "f_vat",
+        "title": "VAT registration",
+        "path": "company/vat.pdf",
+        "kind": "tax",
+        "issuer": "Tax office",
+        "issuedDate": "2025-01-10",
+        "expiryDate": "2027-01-10"
+      },
+      {
+        "ref": "f_bank",
+        "title": "Bank confirmation letter",
+        "path": "company/bank-letter.pdf",
+        "kind": "statement",
+        "issuer": "Example Bank",
+        "issuedDate": "2025-02-14"
+      },
+      {
+        "ref": "f_lease",
+        "title": "Office lease",
+        "path": "company/lease.pdf",
+        "kind": "contract",
+        "issuer": "Example Properties",
+        "issuedDate": "2023-06-01",
+        "expiryDate": "2026-10-20"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "company-what-expires",
+      "version": 1,
+      "pack": "company",
+      "description": "Expired and expiring papers by their expiry dates, in the file bands (60 and 14 days); papers without one are left out",
+      "tags": ["files", "expiry", "due"],
+      "today": "2026-10-13",
+      "fixture": "papers",
+      "facts": [
+        { "id": "expired", "widget": "headline", "kind": "text", "value": "expired", "expect": 1 },
+        { "id": "soon", "widget": "headline", "kind": "text", "value": "soon", "expect": 2 },
+        { "id": "rows", "widget": "expiring", "kind": "rows", "expect": 4 },
+        {
+          "id": "liability",
+          "widget": "expiring",
+          "kind": "due",
+          "record": "Liability policy",
+          "band": "past_due",
+          "date": "2026-10-01"
+        },
+        {
+          "id": "lease",
+          "widget": "expiring",
+          "kind": "due",
+          "record": "Office lease",
+          "band": "very_urgent"
+        },
+        {
+          "id": "licence",
+          "widget": "expiring",
+          "kind": "due",
+          "record": "Trading licence",
+          "band": "urgent"
+        },
+        {
+          "id": "vat",
+          "widget": "expiring",
+          "kind": "due",
+          "record": "VAT registration",
+          "band": "not_urgent"
+        }
+      ]
+    },
+    {
+      "id": "company-renewals",
+      "version": 1,
+      "pack": "company",
+      "description": "Renewals and filings due from when they were last done; the headline counts the ones due within a month",
+      "tags": ["interval", "due"],
+      "today": "2026-10-13",
+      "fixture": "papers",
+      "facts": [
+        { "id": "due", "widget": "headline", "kind": "text", "value": "due", "expect": 3 },
+        {
+          "id": "vat-late",
+          "widget": "renewals",
+          "kind": "due",
+          "record": "Quarterly VAT filing",
+          "band": "past_due",
+          "date": "2026-10-10"
+        },
+        {
+          "id": "annual",
+          "widget": "renewals",
+          "kind": "due",
+          "record": "Annual return",
+          "band": "urgent",
+          "date": "2026-11-01"
+        },
+        {
+          "id": "licence",
+          "widget": "renewals",
+          "kind": "due",
+          "record": "Trading licence renewal",
+          "band": "not_urgent",
+          "date": "2026-11-20"
+        }
+      ]
+    },
+    {
+      "id": "company-documents",
+      "version": 1,
+      "pack": "company",
+      "description": "Every document by kind (the project's order) with its issuer and dates, and documents per issuer",
+      "tags": ["files", "kind", "issuer"],
+      "today": "2026-10-13",
+      "fixture": "papers",
+      "facts": [
+        { "id": "rows", "widget": "documents", "kind": "rows", "expect": 6 },
+        {
+          "id": "first",
+          "widget": "documents",
+          "kind": "cell",
+          "row": 0,
+          "column": "title",
+          "expect": "Certificate of registration"
+        },
+        {
+          "id": "licence-issuer",
+          "widget": "documents",
+          "kind": "cell",
+          "row": 1,
+          "column": "issuer",
+          "expect": "City business office"
+        },
+        {
+          "id": "licence-expiry",
+          "widget": "documents",
+          "kind": "cell",
+          "row": 1,
+          "column": "expiryDate",
+          "expect": "2026-11-20"
+        },
+        { "id": "bank", "widget": "issuers", "kind": "bar", "label": "Example Bank", "expect": 1 }
+      ]
+    }
+  ],
+  "queryChecks": [
+    {
+      "id": "company-expiry-typo",
+      "version": 1,
+      "pack": "company",
+      "description": "A file field that doesn't exist (expiry) is refused with expiryDate as the fix",
+      "tags": ["files", "unknown-field"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DueTracker",
+            "query": { "type": "file", "where": { "expiry": { "exists": true } } }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-field"]
+    },
+    {
+      "id": "company-date-on-text",
+      "version": 1,
+      "pack": "company",
+      "description": "A DueTracker date on a text field (authority) is refused",
+      "tags": ["date", "operator-mismatch"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DueTracker",
+            "query": { "type": "record", "where": { "recordType": "renewal" } },
+            "date": "fields.authority"
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["operator-mismatch"]
+    },
+    {
+      "id": "company-kind-meaning",
+      "version": 1,
+      "pack": "company",
+      "description": "Files by a pack kind and by a meaning (certificate) are both allowed",
+      "tags": ["files", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "FileList",
+            "filter": { "where": { "kind": ["licence", "certificate"] } }
+          }
+        }
+      ],
+      "expect": "accept"
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { humanize } from '../lib/format';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
+import { BoardFilesProvider, WidgetIdProvider } from './board-files';
 import { useViewData } from './context';
 import { Node } from './renderer';
 import { WidgetSettings } from './settings';
@@ -59,23 +60,29 @@ function placement(widget: Widget, preview: Preview | null): CSSProperties {
   } as CSSProperties;
 }
 
-/**
- * A 12-column board of widgets. In edit mode, widgets can be reordered by dragging their grip,
- * resized from the right edge, bottom edge, or corner (snapping to columns and to neighbours'
- * edges), and removed. Every change is reported through `onChange` as a whole new board.
- */
-export function BoardView({
-  board,
-  editing,
-  onChange,
-  view,
-}: {
+type BoardProps = {
   board: Board;
   editing: boolean;
   onChange: BoardChange;
   /** The view this board belongs to, so widgets can say where a question was asked from. */
   view?: { id: string; name: string };
-}) {
+};
+
+/**
+ * A 12-column board of widgets. In edit mode, widgets can be reordered by dragging their grip,
+ * resized from the right edge, bottom edge, or corner (snapping to columns and to neighbours'
+ * edges), and removed. Every change is reported through `onChange` as a whole new board.
+ */
+export function BoardView(props: BoardProps) {
+  // FileLists can show a file in a FileView on the same board (R7.11).
+  return (
+    <BoardFilesProvider widgets={props.board.widgets}>
+      <BoardGrid {...props} />
+    </BoardFilesProvider>
+  );
+}
+
+function BoardGrid({ board, editing, onChange, view }: BoardProps) {
   const { actions } = useViewData();
   const container = useRef<HTMLDivElement>(null);
   const elements = useRef(new Map<string, HTMLDivElement>());
@@ -253,7 +260,9 @@ export function BoardView({
               dragging === widget.id && 'opacity-40',
             )}
           >
-            <Node node={widget.node} />
+            <WidgetIdProvider id={widget.id}>
+              <Node node={widget.node} />
+            </WidgetIdProvider>
             {!editing && actions.ask && (
               <button
                 type="button"

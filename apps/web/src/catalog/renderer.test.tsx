@@ -70,6 +70,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   BeforeAfter: COMPONENT_INFO.BeforeAfter.example,
   FindingChart: COMPONENT_INFO.FindingChart.example,
   FileList: COMPONENT_INFO.FileList.example,
+  FileView: COMPONENT_INFO.FileView.example,
   ClaimCard: COMPONENT_INFO.ClaimCard.example,
   StartHere: COMPONENT_INFO.StartHere.example,
 };

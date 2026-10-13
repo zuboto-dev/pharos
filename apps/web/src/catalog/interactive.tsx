@@ -66,26 +66,34 @@ export function Clickable({
   children,
   className,
   title,
+  onOpen,
+  pressed,
 }: {
   id: string;
   children: ReactNode;
   className?: string;
   title?: string;
+  /** Replaces opening the entity in the drawer (e.g. a FileList showing a file in a FileView). */
+  onOpen?: () => void;
+  /** Marks the item shown elsewhere on the board right now. */
+  pressed?: boolean;
 }) {
   const { actions } = useViewData();
+  const open = () => (onOpen ? onOpen() : actions.open({ entity: id }));
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const nested = (e.target as HTMLElement).closest('button, a, select, input, [data-no-open]');
     if (nested && nested !== e.currentTarget) return;
-    actions.open({ entity: id });
+    open();
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' && e.target === e.currentTarget) actions.open({ entity: id });
+    if (e.key === 'Enter' && e.target === e.currentTarget) open();
   };
   return (
     <div
       role="button"
       tabIndex={0}
       title={title}
+      aria-pressed={pressed}
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={clsx(

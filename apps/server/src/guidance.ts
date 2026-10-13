@@ -136,6 +136,31 @@ unless \`terms: true\`. Every item opens to its claim's mark, quote and source.
 - **Work codes**: on a report page, TaskTable and DataList take \`hideCodes: true\` so
   "W3.8 · Measure the baseline" reads "Measure the baseline".
 
+## Document sets
+When the owner asks you to manage a set of documents (business registration papers, a lease, a
+year's tax papers), keep the set in the file details and give it one view.
+
+1. **Find the files**: only the owner adds files, from folders in Pharos Settings. Work from
+   project_snapshot.files; if a document is missing, ask the owner to add it (never invent an id).
+2. **Fill in their details** with one apply: \`kind\` (a file.kind value: certificate, contract,
+   statement, …), a shared tag for the set (e.g. "business-registration"), \`issuer\`,
+   \`issuedDate\` and \`expiryDate\` (YYYY-MM-DD) when the document states them, and a plain
+   \`title\`. You may change these and \`taskIds\`; you can't add, remove or move files, and you
+   see their text only where the folder allows it (\`canReadText\`). Without the text, fill what
+   the owner told you and leave the rest empty rather than guess.
+3. **Compose the view** (view_create): a StartHere (purpose "done", or "needs-you" with \`due\`
+   when a paper expires soon), a FileList filtered to the tag with \`showIn\` set to the FileView's
+   id, and a FileView of the key document (\`file\`: its id; \`size: "compact"\` at 5–6 columns
+   beside a 6–7 column list, or full width below it). When a paper has an expiry date, add a
+   FileList filtered to {"tags": "<tag>", "expiryDate": {"exists": true}} with
+   \`details: ["expiryDate"]\` so the dates show as badges. The preview warns when a FileView's
+   file isn't in the project or \`showIn\` names no FileView.
+
+Example board (ids from project_snapshot.files):
+[{"id": "start", "node": {"component": "StartHere", "purpose": "done", "why": "Keep the company's registration papers in one place", "headline": "The four registration papers are tagged and one tap away.", "yourPart": "Nothing now. Renew the tax registration before it expires.", "evidence": ["<certificate file id>"], "date": "<YYYY-MM-DD>", "path": [{"label": "The papers", "says": "Every registration document", "target": "papers"}, {"label": "The certificate", "says": "Preview and actions", "target": "certificate"}]}},
+ {"id": "papers", "w": 6, "node": {"component": "FileList", "title": "Registration papers", "filter": {"where": {"tags": "business-registration"}}, "details": ["issuer", "issuedDate", "expiryDate"], "showIn": "certificate"}},
+ {"id": "certificate", "w": 6, "node": {"component": "FileView", "title": "Certificate", "file": "<certificate file id>", "size": "compact"}}]
+
 ## Queries that answer common questions
 - Overdue: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}
 - Due this week: {dueDate: {gte: "$today", lte: "$today+7d"}}
@@ -505,7 +530,9 @@ export function answerBrief(store: Store, projectIds: string[]): string {
     'Files: you see only the details of files the owner added to a project (project_snapshot.files:',
     'title, kind, issuer, dates, tags, size), never where they are on disk, their notes, or files in',
     `folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when canReadText is true;`,
-    "otherwise work from the details, and don't look for the files on disk.",
+    "otherwise work from the details, and don't look for the files on disk. Asked to manage a set",
+    'of documents? Tag them and fill kind, issuer and dates, then build one view (see "Document',
+    'sets" below): a StartHere, a FileList filtered to the tag and a FileView of the key document.',
     '',
     VIEW_GUIDELINES,
     catalogMarkdown(),

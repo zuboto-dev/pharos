@@ -4,6 +4,7 @@ import { File, FileAudio, FileImage, FileSpreadsheet, FileText, Search, X } from
 import { useMemo, useState, type KeyboardEvent } from 'react';
 import { expiryOf, extensionOf, fileName, formatSize, type Expiry } from '../../files/files';
 import { formatDate, localToday, plural } from '../../lib/format';
+import { useBoardFiles } from '../board-files';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
 import { OptionBadge, useOptions } from '../options';
@@ -13,7 +14,8 @@ import { Badge, Empty } from '../ui';
 // The project's files (docs/reframe/roadmap-2.md §3): find a named document fast and open it in
 // the file drawer (preview, details, actions). Grouped by kind, with a name search and filters
 // for kind, tag, issuer and expiry. Keyboard: ↓ from the search moves into the list, ↑ ↓ move
-// between files, Enter opens one (Enter in the search opens the first match).
+// between files, Enter opens one (Enter in the search opens the first match). With `showIn`
+// naming a FileView on the same board, a row shows its file there instead (R7.11).
 
 type FileEntity = Entity<'file'>;
 type Control = (typeof FILE_LIST_CONTROLS)[number];
@@ -76,11 +78,17 @@ function FileRow({
   details,
   showKind,
   today,
+  onOpen,
+  shown,
 }: {
   file: FileEntity;
   details: Detail[];
   showKind: boolean;
   today: string;
+  /** Shows the file in a FileView on the board instead of opening the drawer. */
+  onOpen?: () => void;
+  /** The file is the one that FileView shows now. */
+  shown?: boolean;
 }) {
   const d = file.data;
   const parts: string[] = [];
@@ -96,7 +104,12 @@ function FileRow({
     <Clickable
       id={file.id}
       title={fileName(d.path)}
-      className="flex items-start gap-2.5 rounded-md px-1.5 py-2 hover:bg-neutral-50 sm:items-center dark:hover:bg-neutral-800/60"
+      onOpen={onOpen}
+      pressed={onOpen ? !!shown : undefined}
+      className={clsx(
+        'flex items-start gap-2.5 rounded-md px-1.5 py-2 sm:items-center',
+        shown ? 'bg-sky-50 dark:bg-sky-950/50' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/60',
+      )}
     >
       <FileTypeIcon
         path={d.path}
@@ -151,6 +164,17 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   const [issuer, setIssuer] = useState('');
   const [expiry, setExpiry] = useState<ExpiryFilter>('');
   const [list, setList] = useState<HTMLDivElement | null>(null);
+  const boardFiles = useBoardFiles();
+  // A FileView on the same board to show tapped files in; else rows open the drawer.
+  const target = node.showIn && boardFiles?.has(node.showIn) ? node.showIn : undefined;
+  const openFile = (fileId: string) => {
+    if (!target) return data.actions.open({ entity: fileId });
+    boardFiles!.show(target, fileId);
+    const widget = document.querySelector<HTMLElement>(`[data-widget="${CSS.escape(target)}"]`);
+    // On a phone the FileView sits below the list: bring it into view.
+    widget?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  };
+  const shownId = target ? boardFiles!.shown(target) : undefined;
 
   const all = useMemo(
     () => runQuery(data, 'file', { sort: [{ field: 'title' }], ...node.filter }),
@@ -270,7 +294,7 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && shown[0]) {
       e.preventDefault();
-      data.actions.open({ entity: (groups[0]?.files[0] ?? shown[0]).id });
+      openFile((groups[0]?.files[0] ?? shown[0]).id);
     } else if (e.key === 'Escape' && query) {
       e.stopPropagation();
       setQuery('');
@@ -334,6 +358,8 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
                     details={details}
                     showKind={node.groupBy === 'none'}
                     today={today}
+                    onOpen={target ? () => openFile(file.id) : undefined}
+                    shown={shownId === file.id}
                   />
                 </li>
               ))}

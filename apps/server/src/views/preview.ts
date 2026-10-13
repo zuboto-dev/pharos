@@ -84,8 +84,16 @@ function plural(n: number, word: string): string {
   return `${n} ${/[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : `${word}s`}`;
 }
 
-/** `widgetIds`: the ids on the board being previewed, so StartHere steps can be checked. */
-type Context = { data: ProjectDataset; store: Store; today: string; widgetIds: Set<string> };
+/**
+ * `widgetIds`: the widgets on the board being previewed and their components, so StartHere steps
+ * and a FileList's `showIn` can be checked.
+ */
+type Context = {
+  data: ProjectDataset;
+  store: Store;
+  today: string;
+  widgetIds: Map<string, ComponentName>;
+};
 
 function count(ctx: Context, query: Query): number {
   return runQuery(ctx.data, query.type, query, { today: ctx.today }).length;
@@ -348,6 +356,55 @@ function describeLeaf(
       return {
         shows: parts.length ? parts.join(' · ') : 'Nothing matches',
         empty: !parts.length,
+        warnings,
+      };
+    }
+    case 'FileList': {
+      const f = node as NodeOf<'FileList'>;
+      const query = queryOf({ type: 'file', ...f.filter });
+      if (f.showIn && !ctx.widgetIds.has(f.showIn))
+        warnings.push(
+          `showIn "${f.showIn}" is not a widget on this board, so rows open the drawer instead; add a FileView with that id or remove showIn`,
+        );
+      else if (f.showIn && ctx.widgetIds.get(f.showIn) !== 'FileView')
+        warnings.push(
+          `showIn "${f.showIn}" is a ${ctx.widgetIds.get(f.showIn)}, not a FileView, so rows open the drawer instead`,
+        );
+      const shown = sample(ctx, query);
+      return {
+        shows: shown === 'nothing' ? 'No files match (shows an empty state)' : shown,
+        empty: shown === 'nothing',
+        warnings,
+      };
+    }
+    case 'FileView': {
+      const v = node as NodeOf<'FileView'>;
+      if (!v.file) {
+        warnings.push(
+          'no file: set `file` to the id of the key document (from project_snapshot.files) so the widget shows it before the reader picks one',
+        );
+        return { shows: 'Nothing until the reader picks a file', empty: true, warnings };
+      }
+      const file = ctx.data.files.find((x) => x.id === v.file);
+      if (!file) {
+        warnings.push(
+          `file ${v.file} not found in this project; use the id of a file in project_snapshot.files (only the owner adds files)`,
+        );
+        return { shows: 'A note that the file isn’t in the project', empty: true, warnings };
+      }
+      const kind = findOption(ctx.data.project, 'file.kind', file.data.kind)?.label;
+      const details = [
+        kind,
+        file.data.issuer,
+        file.data.issuedDate && `issued ${file.data.issuedDate}`,
+        file.data.expiryDate &&
+          (file.data.expiryDate < ctx.today
+            ? `expired ${file.data.expiryDate}`
+            : `expires ${file.data.expiryDate}`),
+      ].filter(Boolean);
+      return {
+        shows: `“${file.data.title}”${details.length ? ` (${details.join(', ')})` : ''}, its preview and actions`,
+        empty: false,
         warnings,
       };
     }
@@ -847,6 +904,7 @@ function describeStartHere(
       ...ctx.data.decisions,
       ...ctx.data.claims,
       ...ctx.data.scopeItems,
+      ...ctx.data.files,
     ].map((e) => [e.id, e]),
   );
   const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
@@ -1214,7 +1272,7 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
     data: new AgentFiles(store).dataset(store.dataset(projectId)),
     store,
     today,
-    widgetIds: new Set(board.widgets.map((w) => w.id)),
+    widgetIds: new Map(board.widgets.map((w) => [w.id, w.node.component])),
   };
   const widgets: WidgetPreview[] = board.widgets.map((w) => {
     const width = w.w ?? BOARD_COLUMNS;

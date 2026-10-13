@@ -177,7 +177,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   FileList: {
     category: 'outputs',
-    use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders and only the owner adds them, so never invent file ids or paths. Narrow with `filter`, e.g. papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. You see each file\'s details, never its contents.',
+    use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders and only the owner adds them, so never invent file ids or paths. For one document set (e.g. business registration papers), tag its files and filter on the tag: {"where": {"tags": "business-registration"}}; papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. Set `showIn` to the id of a FileView widget on the same board so a tapped row shows that file there instead of opening the drawer. You see each file\'s details, never its contents.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -185,6 +185,18 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       title: 'Company papers',
       filter: { where: { kind: ['contract', 'certificate'] } },
       details: ['issuer', 'expiryDate'],
+    },
+  },
+  FileView: {
+    category: 'outputs',
+    use: 'One key document shown in the view itself: its preview (image, PDF, text or Markdown), title, kind, issuer, issued and expiry dates with an expiry badge, and Open, Reveal in Finder, Copy path and Download. `file` is the id of a file in project_snapshot.files (never invented); pair it with a FileList whose `showIn` is this widget\'s id so the reader can switch documents. `size: "compact"` (details, actions, a short preview) fits beside a list at 5–6 columns; "full" (default) gives a tall preview. A file missing on disk says so and keeps its details.',
+    minColumns: 4,
+    suggestedColumns: 6,
+    example: {
+      component: 'FileView',
+      title: 'Certificate',
+      file: 'file_fixture1',
+      size: 'compact',
     },
   },
   ActivityFeed: {

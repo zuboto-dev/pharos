@@ -1,9 +1,22 @@
 import { TEXT_PREVIEW_MAX_BYTES, fileTypeOf, fileUrl, type Entity } from '@pharos/schema';
+import clsx from 'clsx';
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FileTypeIcon } from '../catalog/components/file-list';
 import { BUTTON, Markdown } from '../catalog/ui';
 import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } from './files';
+
+/**
+ * How tall a preview is: in the file drawer, in a compact FileView next to a list, or a full
+ * FileView (R7.11). The preview itself is the same everywhere.
+ */
+export type PreviewSize = 'drawer' | 'compact' | 'full';
+
+const HEIGHT: Record<PreviewSize, { box: string; max: string }> = {
+  drawer: { box: 'h-[60vh]', max: 'max-h-[60vh]' },
+  compact: { box: 'h-80', max: 'max-h-80' },
+  full: { box: 'h-[75vh] min-h-96', max: 'max-h-[75vh]' },
+};
 
 /** Opens the file's contents in a new tab (the browser's own viewer). */
 export function NewTabLink({ fileId, children }: { fileId: string; children?: ReactNode }) {
@@ -45,7 +58,15 @@ const NO_IMAGES = {
   img: ({ alt }: { alt?: string }) => <span className="text-neutral-500">[image: {alt}]</span>,
 };
 
-function TextPreview({ file, markdown }: { file: Entity<'file'>; markdown: boolean }) {
+function TextPreview({
+  file,
+  markdown,
+  size,
+}: {
+  file: Entity<'file'>;
+  markdown: boolean;
+  size: PreviewSize;
+}) {
   // Keyed by file and revision, so a result for an earlier file never shows (and a new one loads).
   const key = `${file.id}@${file.updatedRev}`;
   const [loaded, setLoaded] = useState<
@@ -68,7 +89,7 @@ function TextPreview({ file, markdown }: { file: Entity<'file'>; markdown: boole
   return (
     <div className="space-y-1">
       <Frame>
-        <div className="max-h-[60vh] overflow-auto bg-white p-4 dark:bg-neutral-900">
+        <div className={clsx(HEIGHT[size].max, 'overflow-auto bg-white p-4 dark:bg-neutral-900')}>
           {markdown ? (
             <Markdown components={NO_IMAGES}>{state.text}</Markdown>
           ) : (
@@ -96,9 +117,11 @@ export function FilePreview({
   file,
   available,
   pdf = pdfFrame(),
+  size = 'drawer',
 }: {
   file: Entity<'file'>;
   available: boolean;
+  size?: PreviewSize;
   /** Overridable for tests; defaults to what this browser can do. */
   pdf?: PdfFrame;
 }) {
@@ -112,7 +135,7 @@ export function FilePreview({
           <img
             src={fileUrl('content', file.id)}
             alt={file.data.title}
-            className="mx-auto max-h-[60vh] w-auto object-contain"
+            className={clsx('mx-auto w-auto object-contain', HEIGHT[size].max)}
           />
         </Frame>
       );
@@ -126,7 +149,7 @@ export function FilePreview({
               // Chromium won't show a PDF in a sandboxed frame; the response is sandboxed anyway.
               {...(pdf === 'sandboxed' ? { sandbox: '' } : {})}
               referrerPolicy="no-referrer"
-              className="h-[60vh] w-full bg-white"
+              className={clsx('w-full bg-white', HEIGHT[size].box)}
             />
           </Frame>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -141,7 +164,7 @@ export function FilePreview({
       );
     case 'text':
     case 'markdown':
-      return <TextPreview file={file} markdown={type.preview === 'markdown'} />;
+      return <TextPreview file={file} markdown={type.preview === 'markdown'} size={size} />;
     default:
       return (
         <NoPreview path={file.data.path}>

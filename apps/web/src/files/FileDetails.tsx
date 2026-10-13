@@ -50,7 +50,7 @@ type Feedback = { kind: 'ok' | 'error'; text: string } | null;
  * Open (default app), Reveal in Finder, Copy path, Download (the real file name), and Open in a
  * new tab for files the browser can show. Each says what happened next to the buttons.
  */
-function FileActions({ file, info }: { file: Entity<'file'>; info: FileInfo | undefined }) {
+export function FileActions({ file, info }: { file: Entity<'file'>; info: FileInfo | undefined }) {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const available = info?.available ?? false;
   const type = info?.type ?? fileTypeOf(file.data.path);
@@ -136,7 +136,7 @@ function FileActions({ file, info }: { file: Entity<'file'>; info: FileInfo | un
 }
 
 /** Shown when the file can't be reached; offers the new path when the scan found it moved. */
-function MissingNotice({ file, info }: { file: Entity<'file'>; info: FileInfo }) {
+export function MissingNotice({ file, info }: { file: Entity<'file'>; info: FileInfo }) {
   const { actions } = useViewData();
   if (info.available && !info.movedTo) return null;
   return (

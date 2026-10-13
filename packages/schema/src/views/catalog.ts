@@ -274,6 +274,34 @@ export const FileListNode = component(
       .array(z.enum(FILE_LIST_DETAILS))
       .optional()
       .describe('Shown after each title (default ["issuer", "expiryDate"])'),
+    showIn: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of a FileView widget on the same board: tapping a row shows that file there instead of opening the drawer',
+      ),
+  },
+);
+
+/** How much room a FileView takes (R7.11). */
+export const FILE_VIEW_SIZES = ['compact', 'full'] as const;
+
+export const FileViewNode = component(
+  'FileView',
+  "One file from the owner's folders shown inline: its preview (image, PDF, text or Markdown), title, kind, issuer, dates, an expiry badge and the actions (Open, Reveal in Finder, Copy path, Download).",
+  {
+    file: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of a file added to this project (project_snapshot.files), shown until the reader picks another in a FileList whose showIn names this widget',
+      ),
+    size: z
+      .enum(FILE_VIEW_SIZES)
+      .optional()
+      .describe('compact: details, actions and a short preview; full (default): a tall preview'),
   },
 );
 
@@ -697,6 +725,7 @@ const LEAF_NODES = [
   ArtifactGalleryNode,
   DecisionLogNode,
   FileListNode,
+  FileViewNode,
   ActivityFeedNode,
   DataTableNode,
   CountChartNode,

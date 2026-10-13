@@ -9,6 +9,8 @@ import {
   TEXT_PREVIEW_MAX_BYTES,
   UNKNOWN_FILE_TYPE,
   fileTypeOf,
+  SCAN_FILE_FIELDS,
+  type ApplyInput,
   type Author,
   type Entity,
   type FileAction,
@@ -125,6 +127,21 @@ export class FileService {
 
   folder(rootId: string): FileFolder | null {
     return this.folders().find((f) => f.id === rootId) ?? null;
+  }
+
+  /**
+   * Rescans every folder in Settings, one after another (on server start, R7.9), so files moved
+   * while Pharos was off are found. Never rejects: each scan logs its own errors.
+   */
+  async rescanAll(): Promise<void> {
+    try {
+      for (const folder of this.folders()) {
+        this.scanner.scan(folder);
+        await this.scanner.idle(folder.id);
+      }
+    } catch (error) {
+      this.log(`rescanning folders failed: ${String(error)}`);
+    }
   }
 
   /** `POST …/folders/:folderId/scan`: starts a background scan. */
@@ -319,6 +336,9 @@ export class FileService {
       this.log(`reading a file stopped (${codeOf(error) ?? 'unknown error'})`),
     );
 
+    // `sandbox` stays on every file, PDFs too: Chrome's viewer shows a sandboxed PDF response in
+    // a new tab and in a plain frame (checked in Chrome 154, R7.9). Only a frame with the
+    // `sandbox` attribute stops it, so the drawer leaves that attribute off in Chromium.
     const headers = new Headers({
       'content-type': type.mime,
       'content-length': String(length),
@@ -438,4 +458,86 @@ export class FileService {
     );
     return this.store.apply(author, { message: input.message ?? 'Add files', operations });
   }
+
+  /**
+   * A person's `/api/apply` writes to files (R7.9). Where a file is on disk (`rootId`, `path`)
+   * changes only to a path in the last scan of a folder in Settings that Pharos would serve (after
+   * "Use the new path" for a moved file), never one the client made up; the other scan fields then
+   * come from that scan. Size, date, hash and type are never set by hand, and files are only added
+   * from the scan (`add`). Agents never get here: the store refuses their writes to these fields.
+   */
+  async checkPersonEdits(input: ApplyInput): Promise<ApplyInput> {
+    const issues: string[] = [];
+    const operations: Operation[] = [];
+    for (const [i, op] of input.operations.entries()) {
+      if (op.type !== 'file' || op.op === 'delete') {
+        operations.push(op);
+        continue;
+      }
+      const at = `operations[${i}]`;
+      const byHand = BY_SCAN_ONLY.filter((f) => f in op.data);
+      if (byHand.length) {
+        issues.push(`${at}: ${byHand.join(', ')} come from the folder scan`);
+        continue;
+      }
+      if (op.op === 'create') {
+        issues.push(`${at}: add files from a folder in Settings ("Add files")`);
+        continue;
+      }
+      if (!('rootId' in op.data) && !('path' in op.data)) {
+        operations.push(op);
+        continue;
+      }
+      const entity = op.id.startsWith('$') ? null : this.store.get(op.id);
+      if (entity?.type !== 'file') {
+        issues.push(`${at}: file ${op.id} not found`);
+        continue;
+      }
+      const file = entity as Entity<'file'>;
+      const rootId = op.data.rootId === undefined ? file.data.rootId : op.data.rootId;
+      const path = op.data.path === undefined ? file.data.path : op.data.path;
+      if (typeof rootId !== 'string' || typeof path !== 'string') {
+        issues.push(`${at}: a file always has a folder and a path`);
+        continue;
+      }
+      const folder = this.folder(rootId);
+      if (!folder) {
+        issues.push(`${at}: folder ${rootId} isn't in Settings`);
+        continue;
+      }
+      const entry = this.scanner.entry(rootId, path);
+      if (!entry || !isAllowedPath(entry.path, entry.size)) {
+        issues.push(`${at}: "${path}" isn't in the last scan of ${folder.label}`);
+        continue;
+      }
+      const taken = this.store
+        .list('file', { projectId: file.data.projectId })
+        .some((f) => f.id !== file.id && f.data.rootId === rootId && f.data.path === path);
+      if (taken) {
+        issues.push(`${at}: "${path}" is already in this project`);
+        continue;
+      }
+      const unchanged = rootId === file.data.rootId && path === file.data.path;
+      const sha256 =
+        entry.sha256 ??
+        (unchanged ? (file.data.sha256 ?? null) : await this.hashLocal(folder, path));
+      operations.push({
+        ...op,
+        data: {
+          ...op.data,
+          rootId,
+          path,
+          size: entry.size,
+          modifiedAt: entry.modifiedAt,
+          mimeType: fileTypeOf(entry.path).mime,
+          sha256,
+        },
+      });
+    }
+    if (issues.length) throw new PharosError('invalid', "Some file changes can't be saved", issues);
+    return { ...input, operations };
+  }
 }
+
+/** Scan fields set only by the scan; `rootId` and `path` are checked by `checkPersonEdits`. */
+const BY_SCAN_ONLY = SCAN_FILE_FIELDS.filter((f) => f !== 'rootId' && f !== 'path');

@@ -321,6 +321,25 @@ describe('scanning', () => {
     });
     expect(missing.status).toBe(404);
   });
+
+  it('rescans every folder on start, one at a time, without ever rejecting', async () => {
+    const other = join(base, 'Other Files');
+    mkdirSync(other);
+    writeFileSync(join(other, 'other.md'), 'made up');
+    setFolders([
+      {},
+      { id: 'root_test02', path: other, label: 'Other' },
+      { id: 'root_test03', path: join(base, 'Not There'), label: 'Gone' },
+    ]);
+    await files.rescanAll();
+    expect(files.scanner.status(ROOT_ID)).toMatchObject({ scanning: false, error: null });
+    expect(files.scanner.entry(ROOT_ID, 'notes.md')).not.toBeNull();
+    expect(files.scanner.entry('root_test02', 'other.md')).not.toBeNull();
+    expect(files.scanner.status('root_test03').error).toMatch(/isn't there/);
+    // An unreadable folder list counts as none.
+    store.setSetting(FOLDERS_SETTING, 'not a list');
+    await expect(files.rescanAll()).resolves.toBeUndefined();
+  });
 });
 
 describe('adding files', () => {
@@ -492,6 +511,101 @@ describe('serving', () => {
     expect(((await removed.json()) as { error: { code: string } }).error.code).toBe(
       'folder-removed',
     );
+  });
+
+  it('ignores query strings on the file routes (the drawer adds ?v=<version>)', async () => {
+    const id = record('notes.md');
+    const plain = await app.request(`/api/files/${id}`, { headers: ORIGIN });
+    const versioned = await app.request(`/api/files/${id}?v=7`, { headers: ORIGIN });
+    expect(versioned.status).toBe(200);
+    expect(await versioned.json()).toEqual(await plain.json());
+    const content = await app.request(`/api/files/${id}/content?v=7&x=1`, { headers: ORIGIN });
+    expect(content.status).toBe(200);
+    expect(await content.text()).toBe('# Notes\nmade up');
+    // The guard and the agent refusal still apply with one.
+    expect((await app.request(`/api/files/${id}?v=7`)).status).toBe(403);
+    expect(
+      (
+        await app.request(`/api/files/${id}?v=7`, {
+          headers: { ...ORIGIN, 'x-pharos-author': 'agent:Claude Code' },
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it('lets a person use the new path of a moved file, only a scanned and allowed one', async () => {
+    const other = join(base, 'Other Files');
+    mkdirSync(other);
+    writeFileSync(join(other, 'elsewhere.md'), 'made-up other notes');
+    setFolders([{}, { id: 'root_test02', path: other, label: 'Other' }]);
+    await scan();
+    files.scan('root_test02');
+    await files.scanner.idle('root_test02');
+    await addFromScan(['notes.md', 'Company/office lease.pdf']);
+    const [notes, lease] = ['notes.md', 'Company/office lease.pdf'].map((p) =>
+      store.list('file').find((f) => f.data.path === p)!,
+    );
+    mkdirSync(join(root, 'Archive'));
+    renameSync(join(root, 'notes.md'), join(root, 'Archive/notes.md'));
+    await scan();
+    const info = (await (
+      await app.request(`/api/files/${notes!.id}?v=2`, { headers: ORIGIN })
+    ).json()) as FileInfo;
+    expect(info.movedTo).toBe('Archive/notes.md');
+
+    const apply = (data: Record<string, unknown>, author?: string, op = 'update') =>
+      app.request('/api/apply', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(author ? { 'x-pharos-author': author } : {}),
+        },
+        body: JSON.stringify({
+          message: 'Use the new path',
+          operations: [
+            op === 'create'
+              ? { op, type: 'file', data: { projectId, title: 'Made up', ...data } }
+              : { op, type: 'file', id: notes!.id, data },
+          ],
+        }),
+      });
+    const refused = async (response: Response) => {
+      expect(response.status).toBe(400);
+      expect(store.getOfType('file', notes!.id).data.path).toBe('notes.md');
+    };
+    // Agents never change where a file is.
+    await refused(await apply({ path: 'Archive/notes.md' }, 'agent:Claude Code'));
+    // A person: only a path in the last scan of a folder in Settings, that Pharos would serve.
+    await refused(await apply({ path: 'Archive/never-there.md' }));
+    await refused(await apply({ path: '.env' }));
+    await refused(await apply({ path: 'escape.txt' }));
+    await refused(await apply({ path: 'page.html', size: 1 }));
+    await refused(await apply({ rootId: 'root_gone99', path: 'Archive/notes.md' }));
+    await refused(await apply({ path: lease!.data.path }));
+    await refused(await apply({ sha256: 'a'.repeat(64) }));
+    await refused(await apply({ rootId: ROOT_ID, path: 'notes.md' }, undefined, 'create'));
+    await refused(await apply({ path: null }));
+
+    const moved = await apply({ path: 'Archive/notes.md' });
+    expect(moved.status).toBe(200);
+    const saved = store.getOfType('file', notes!.id).data;
+    expect(saved).toMatchObject({ rootId: ROOT_ID, path: 'Archive/notes.md', size: 15 });
+    expect(saved.sha256).toBe(notes!.data.sha256);
+    const now = (await (
+      await app.request(`/api/files/${notes!.id}`, { headers: ORIGIN })
+    ).json()) as FileInfo;
+    expect(now).toMatchObject({ available: true, movedTo: null });
+
+    // Another approved folder works too; its scan fills in the rest.
+    expect((await apply({ rootId: 'root_test02', path: 'elsewhere.md' })).status).toBe(200);
+    expect(store.getOfType('file', notes!.id).data).toMatchObject({
+      rootId: 'root_test02',
+      path: 'elsewhere.md',
+      size: 19,
+      mimeType: 'text/markdown; charset=utf-8',
+    });
+    // Other details still save as before.
+    expect((await apply({ title: 'Renamed notes' })).status).toBe(200);
   });
 });
 

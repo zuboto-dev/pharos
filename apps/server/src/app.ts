@@ -265,9 +265,17 @@ export function createApp(
     return c.json(seen);
   });
 
+  // Project files (R7.2): scan, serve read-only, reveal and open.
+  const files = info.files ?? new FileService(store);
+
   api.post('/apply', async (c) => {
     const input = ApplyInput.parse(await c.req.json()) as ApplyInput;
-    return c.json(store.apply(authorOf(c), input));
+    const author = authorOf(c);
+    // A person moves a file only to a scanned path in an approved folder (R7.9); the store
+    // refuses agents any change to where a file is.
+    return c.json(
+      store.apply(author, author.kind === 'agent' ? input : await files.checkPersonEdits(input)),
+    );
   });
 
   api.get('/projects/:id/data', (c) => {
@@ -325,8 +333,6 @@ export function createApp(
   // Claim sources on disk (R7.6): where an artifact's local path is among the project files.
   api.route('/', artifactFileRoutes(store));
   watchArtifactLinks(store, feed);
-  // Project files: scan, serve read-only, reveal and open (R7.2).
-  const files = info.files ?? new FileService(store);
   api.route('/', fileRoutes(files));
   // Folders the owner shares with Pharos (R7.3): app settings, never reachable over MCP.
   api.route('/settings/folders', folderRoutes(store, { ...info.folders, scanner: files.scanner }));

@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FileTypeIcon } from '../catalog/components/file-list';
 import { BUTTON, Markdown } from '../catalog/ui';
-import { canFramePdf, extensionOf, formatSize, readTextLimited } from './files';
+import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } from './files';
 
 /** Opens the file's contents in a new tab (the browser's own viewer). */
 export function NewTabLink({ fileId, children }: { fileId: string; children?: ReactNode }) {
@@ -88,19 +88,19 @@ function TextPreview({ file, markdown }: { file: Entity<'file'>; markdown: boole
 }
 
 /**
- * The file's contents, by its allowlisted type: images inline, PDFs in a sandboxed frame (or a
- * new tab where Chrome won't show them framed), text and Markdown up to TEXT_PREVIEW_MAX_BYTES.
+ * The file's contents, by its allowlisted type: images inline, PDFs in a frame (see `pdfFrame`;
+ * a new tab without a PDF viewer), text and Markdown up to TEXT_PREVIEW_MAX_BYTES.
  * Everything else, and HTML or SVG above all, is never shown inline.
  */
 export function FilePreview({
   file,
   available,
-  pdfInFrame = canFramePdf(),
+  pdf = pdfFrame(),
 }: {
   file: Entity<'file'>;
   available: boolean;
   /** Overridable for tests; defaults to what this browser can do. */
-  pdfInFrame?: boolean;
+  pdf?: PdfFrame;
 }) {
   const type = fileTypeOf(file.data.path);
   const ext = extensionOf(file.data.path).toUpperCase() || 'this kind of';
@@ -117,13 +117,14 @@ export function FilePreview({
         </Frame>
       );
     case 'pdf':
-      return pdfInFrame ? (
+      return pdf !== 'new-tab' ? (
         <div className="space-y-2">
           <Frame>
             <iframe
               title={`Preview of ${file.data.title}`}
               src={fileUrl('content', file.id)}
-              sandbox=""
+              // Chromium won't show a PDF in a sandboxed frame; the response is sandboxed anyway.
+              {...(pdf === 'sandboxed' ? { sandbox: '' } : {})}
               referrerPolicy="no-referrer"
               className="h-[60vh] w-full bg-white"
             />
@@ -134,7 +135,7 @@ export function FilePreview({
         </div>
       ) : (
         <NoPreview path={file.data.path}>
-          <span>This browser shows PDFs in their own tab.</span>
+          <span>This browser doesn’t show PDFs inside a page.</span>
           <NewTabLink fileId={file.id}>Open the PDF in a new tab</NewTabLink>
         </NoPreview>
       );

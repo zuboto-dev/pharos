@@ -19,7 +19,7 @@ import { localToday } from '../lib/format';
 import { AddFilesDialog } from './AddFilesDialog';
 import { FilePreview } from './FilePreview';
 import {
-  canFramePdf,
+  pdfFrame,
   expiryOf,
   fileActionUrl,
   formatSize,
@@ -239,7 +239,7 @@ describe('file drawer', () => {
     expect(download.getAttribute('href')).toBe('/api/files/file_fixture2/download');
     expect(download.hasAttribute('download')).toBe(true);
     expect(screen.getByRole('button', { name: 'Open' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Open the PDF in a new tab/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open (it|the PDF) in a new tab/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
   });
 
@@ -342,15 +342,24 @@ describe('FilePreview', () => {
     );
 
   it('shows a PDF in a sandboxed frame, with a new-tab link in case it stays blank', () => {
-    renderPreview(<FilePreview file={pdf} available pdfInFrame />);
+    renderPreview(<FilePreview file={pdf} available pdf="sandboxed" />);
     const frame = screen.getByTitle(`Preview of ${pdf.data.title}`);
     expect(frame.getAttribute('sandbox')).toBe('');
     expect(frame.getAttribute('src')).toBe(`/api/files/${pdf.id}/content`);
     expect(screen.getByRole('link', { name: /Open it in a new tab/ })).toBeTruthy();
   });
 
+  it('frames a PDF without the sandbox attribute where Chromium needs it', () => {
+    renderPreview(<FilePreview file={pdf} available pdf="unsandboxed" />);
+    const frame = screen.getByTitle(`Preview of ${pdf.data.title}`);
+    expect(frame.hasAttribute('sandbox')).toBe(false);
+    expect(frame.getAttribute('referrerpolicy')).toBe('no-referrer');
+    expect(frame.getAttribute('src')).toBe(`/api/files/${pdf.id}/content`);
+    expect(screen.getByRole('link', { name: /Open it in a new tab/ })).toBeTruthy();
+  });
+
   it('opens a PDF in a new tab where the browser won’t frame it', () => {
-    renderPreview(<FilePreview file={pdf} available pdfInFrame={false} />);
+    renderPreview(<FilePreview file={pdf} available pdf="new-tab" />);
     const link = screen.getByRole('link', { name: /Open the PDF in a new tab/ });
     expect(link.getAttribute('href')).toBe(`/api/files/${pdf.id}/content`);
     expect(link.getAttribute('target')).toBe('_blank');
@@ -372,7 +381,7 @@ describe('FilePreview', () => {
 });
 
 describe('file helpers', () => {
-  it('detects browsers that refuse PDFs in a sandboxed frame', () => {
+  it('frames PDFs unsandboxed only in Chromium, and not at all without a viewer', () => {
     const chrome = {
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36',
@@ -382,12 +391,13 @@ describe('file helpers', () => {
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15',
       pdfViewerEnabled: true,
     } as Navigator;
-    expect(canFramePdf(chrome)).toBe(false);
-    expect(canFramePdf(safari)).toBe(true);
-    expect(canFramePdf({ ...safari, pdfViewerEnabled: false } as Navigator)).toBe(false);
+    expect(pdfFrame(chrome)).toBe('unsandboxed');
+    expect(pdfFrame(safari)).toBe('sandboxed');
+    expect(pdfFrame({ ...safari, pdfViewerEnabled: false } as Navigator)).toBe('new-tab');
+    expect(pdfFrame({ ...chrome, pdfViewerEnabled: false } as Navigator)).toBe('new-tab');
     expect(
-      canFramePdf({ userAgent: 'x', userAgentData: { brands: [{ brand: 'Chromium' }] } } as never),
-    ).toBe(false);
+      pdfFrame({ userAgent: 'x', userAgentData: { brands: [{ brand: 'Chromium' }] } } as never),
+    ).toBe('unsandboxed');
   });
 
   it('formats sizes and expiry', () => {

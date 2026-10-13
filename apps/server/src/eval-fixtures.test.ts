@@ -11,6 +11,9 @@ import { Store } from './store/store.js';
 const fixtureDirectory = fileURLToPath(new URL('../../../eval/fixtures/', import.meta.url));
 const serverDirectory = fileURLToPath(new URL('../', import.meta.url));
 const fixtureNames = ['catalog-delivery', 'workshop-renovation'];
+/** Each load starts a tsx process (up to 30s on a busy machine); tests start two or three. */
+const SPAWN_TIMEOUT_MS = 30_000;
+const SPAWNING_TEST_TIMEOUT_MS = 100_000;
 const directories: string[] = [];
 function temporaryDirectory() {
   const directory = mkdtempSync(join(tmpdir(), 'pharos-eval-'));
@@ -33,7 +36,7 @@ function invoke(fixture: string, database: string) {
       fixture,
       database,
     ],
-    { cwd: serverDirectory, encoding: 'utf8', timeout: 30_000 },
+    { cwd: serverDirectory, encoding: 'utf8', timeout: SPAWN_TIMEOUT_MS },
   );
 }
 
@@ -171,22 +174,26 @@ describe('versioned evaluation fixtures', () => {
       writeFileSync(changedPath, JSON.stringify(changed));
       expect(load(changedPath, join(directory, 'changed.db')).checksum).not.toBe(first.checksum);
     },
-    30_000,
+    SPAWNING_TEST_TIMEOUT_MS,
   );
 
-  it('refuses an unrelated existing file and leaves no database after invalid input', () => {
-    const directory = temporaryDirectory();
-    const target = join(directory, 'existing.db');
-    writeFileSync(target, 'unrelated data');
-    expect(invoke(join(fixtureDirectory, 'catalog-delivery.json'), target).status).toBe(1);
-    expect(readFileSync(target, 'utf8')).toBe('unrelated data');
-    const badFixture = join(directory, 'invalid.json');
-    const fixture = JSON.parse(
-      readFileSync(join(fixtureDirectory, 'catalog-delivery.json'), 'utf8'),
-    ) as Fixture;
-    fixture.operations.find((operation) => operation.type === 'task')!.data.stageId = '$missing';
-    writeFileSync(badFixture, JSON.stringify(fixture));
-    expect(invoke(badFixture, join(directory, 'failed.db')).status).toBe(1);
-    expect(readdirSync(directory).some((file) => file.startsWith('failed.db'))).toBe(false);
-  });
+  it(
+    'refuses an unrelated existing file and leaves no database after invalid input',
+    () => {
+      const directory = temporaryDirectory();
+      const target = join(directory, 'existing.db');
+      writeFileSync(target, 'unrelated data');
+      expect(invoke(join(fixtureDirectory, 'catalog-delivery.json'), target).status).toBe(1);
+      expect(readFileSync(target, 'utf8')).toBe('unrelated data');
+      const badFixture = join(directory, 'invalid.json');
+      const fixture = JSON.parse(
+        readFileSync(join(fixtureDirectory, 'catalog-delivery.json'), 'utf8'),
+      ) as Fixture;
+      fixture.operations.find((operation) => operation.type === 'task')!.data.stageId = '$missing';
+      writeFileSync(badFixture, JSON.stringify(fixture));
+      expect(invoke(badFixture, join(directory, 'failed.db')).status).toBe(1);
+      expect(readdirSync(directory).some((file) => file.startsWith('failed.db'))).toBe(false);
+    },
+    SPAWNING_TEST_TIMEOUT_MS,
+  );
 });

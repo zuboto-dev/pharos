@@ -82,16 +82,25 @@ type NavigatorExtras = Navigator & {
   userAgentData?: { brands?: { brand: string }[] };
 };
 
+/** How the drawer shows a PDF: framed (sandboxed or not), or as a link to a new tab. */
+export type PdfFrame = 'sandboxed' | 'unsandboxed' | 'new-tab';
+
 /**
- * Chrome (and other Chromium browsers) won't show a PDF inside a sandboxed frame; it shows a
- * "blocked" page instead. There the drawer offers the PDF in a new tab rather than a broken frame.
+ * How this browser can show a PDF in the drawer (R7.9). Chrome (and other Chromium browsers)
+ * refuse a PDF in a frame with the `sandbox` attribute: it shows a "blocked" page. They do show
+ * it in a plain frame, and the response itself is still sandboxed: the server sends
+ * `Content-Security-Policy: sandbox`, `nosniff` and same-origin CORP with every file, and serves
+ * as a PDF only a file that is really one (checked in Chrome 154, frame and new tab). Other
+ * browsers keep the sandboxed frame too; without a PDF viewer it opens in a new tab.
  */
-export function canFramePdf(nav: Navigator | undefined = globalThis.navigator): boolean {
-  if (!nav) return false;
+export function pdfFrame(nav: Navigator | undefined = globalThis.navigator): PdfFrame {
+  if (!nav) return 'new-tab';
   const extras = nav as NavigatorExtras;
-  if (extras.pdfViewerEnabled === false) return false;
-  if ((extras.userAgentData?.brands ?? []).some((b) => /Chrom/i.test(b.brand))) return false;
-  return !/\b(Chrome|Chromium|CriOS|Edg)\//.test(nav.userAgent ?? '');
+  if (extras.pdfViewerEnabled === false) return 'new-tab';
+  const chromium =
+    (extras.userAgentData?.brands ?? []).some((b) => /Chrom/i.test(b.brand)) ||
+    /\b(Chrome|Chromium|CriOS|Edg)\//.test(nav.userAgent ?? '');
+  return chromium ? 'unsandboxed' : 'sandboxed';
 }
 
 /**

@@ -121,7 +121,10 @@ describe('view tabs', () => {
       type: 'view',
       data: { name: 'New view', spec: { component: 'Board', widgets: [] } },
     });
-    expect(screen.getByTestId('path').textContent).toBe('/projects/p/views/view_new');
+    // The navigation renders after onCreated is called; wait for it rather than race it.
+    await waitFor(() =>
+      expect(screen.getByTestId('path').textContent).toBe('/projects/p/views/view_new'),
+    );
   });
 });
 

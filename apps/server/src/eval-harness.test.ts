@@ -9,8 +9,8 @@ const repository = resolve(serverDirectory, '../..');
 const harnessCli = join(repository, 'eval/harness/run.ts');
 const tsxLoader = join(serverDirectory, 'node_modules/tsx/dist/loader.mjs');
 const sampleCase = join(repository, 'eval/cases/sample-A1.json');
-const TEST_TIMEOUT_MS = 30_000;
-const CHILD_TIMEOUT_MS = 25_000;
+const TEST_TIMEOUT_MS = 90_000;
+const CHILD_TIMEOUT_MS = 60_000;
 
 interface HarnessResult {
   output: string;
@@ -385,16 +385,18 @@ describe('W3.3 evaluation harness', () => {
     expect(extracted.off.cost.actualUsd).toBe(0);
   });
 
-  it('runs the mock agent through the in-process REST app and extracts its emitted metrics', () => {
-    const fixtureUrl = new URL('../../../eval/fixtures/catalog-delivery.json', import.meta.url)
-      .href;
-    const loaderUrl = new URL('../../../eval/fixtures/load.ts', import.meta.url).href;
-    const databaseUrl = new URL('./store/database.ts', import.meta.url).href;
-    const storeUrl = new URL('./store/store.ts', import.meta.url).href;
-    const appUrl = new URL('./app.ts', import.meta.url).href;
-    const mockUrl = new URL('../../../eval/harness/mock-agent.ts', import.meta.url).href;
-    const metricsUrl = new URL('../../../eval/harness/metrics.ts', import.meta.url).href;
-    const source = `
+  it(
+    'runs the mock agent through the in-process REST app and extracts its emitted metrics',
+    () => {
+      const fixtureUrl = new URL('../../../eval/fixtures/catalog-delivery.json', import.meta.url)
+        .href;
+      const loaderUrl = new URL('../../../eval/fixtures/load.ts', import.meta.url).href;
+      const databaseUrl = new URL('./store/database.ts', import.meta.url).href;
+      const storeUrl = new URL('./store/store.ts', import.meta.url).href;
+      const appUrl = new URL('./app.ts', import.meta.url).href;
+      const mockUrl = new URL('../../../eval/harness/mock-agent.ts', import.meta.url).href;
+      const metricsUrl = new URL('../../../eval/harness/metrics.ts', import.meta.url).href;
+      const source = `
       import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
       import { tmpdir } from 'node:os';
       import { join } from 'node:path';
@@ -453,33 +455,42 @@ describe('W3.3 evaluation harness', () => {
       db.close();
       rmSync(temporary, { recursive: true, force: true });
     `;
-    const process = spawnSync(
-      globalThis.process.execPath,
-      ['--import', tsxLoader, '--conditions=development', '--input-type=module', '--eval', source],
-      { cwd: serverDirectory, encoding: 'utf8', timeout: 15_000 },
-    );
-    expect(process.status, process.stderr).toBe(0);
-    const output = JSON.parse(process.stdout.trim()) as {
-      responseStatuses: number[];
-      request: { data: { status: string; answerViewId?: string } };
-      view: {
-        type: string;
-        data: { kind?: string; spec?: { widgets?: Array<{ id?: string }> } };
-      } | null;
-      metrics: {
-        toolCalls: { total: number | null };
-        tokens: { total: number | null };
-        cost: { actualUsd: number | null };
+      const process = spawnSync(
+        globalThis.process.execPath,
+        [
+          '--import',
+          tsxLoader,
+          '--conditions=development',
+          '--input-type=module',
+          '--eval',
+          source,
+        ],
+        { cwd: serverDirectory, encoding: 'utf8', timeout: CHILD_TIMEOUT_MS },
+      );
+      expect(process.status, process.stderr).toBe(0);
+      const output = JSON.parse(process.stdout.trim()) as {
+        responseStatuses: number[];
+        request: { data: { status: string; answerViewId?: string } };
+        view: {
+          type: string;
+          data: { kind?: string; spec?: { widgets?: Array<{ id?: string }> } };
+        } | null;
+        metrics: {
+          toolCalls: { total: number | null };
+          tokens: { total: number | null };
+          cost: { actualUsd: number | null };
+        };
       };
-    };
-    expect(output.responseStatuses).toEqual([200]);
-    expect(output.request.data.status).toBe('answered');
-    expect(output.request.data.answerViewId).toBeTruthy();
-    expect(output.view?.type).toBe('view');
-    expect(output.view?.data.kind).toBe('answer');
-    expect(output.view?.data.spec?.widgets?.some((widget) => widget.id === 'risks')).toBe(true);
-    expect(output.metrics.toolCalls.total).toBe(1);
-    expect(output.metrics.tokens.total).toBe(170);
-    expect(output.metrics.cost.actualUsd).toBe(0.001);
-  });
+      expect(output.responseStatuses).toEqual([200]);
+      expect(output.request.data.status).toBe('answered');
+      expect(output.request.data.answerViewId).toBeTruthy();
+      expect(output.view?.type).toBe('view');
+      expect(output.view?.data.kind).toBe('answer');
+      expect(output.view?.data.spec?.widgets?.some((widget) => widget.id === 'risks')).toBe(true);
+      expect(output.metrics.toolCalls.total).toBe(1);
+      expect(output.metrics.tokens.total).toBe(170);
+      expect(output.metrics.cost.actualUsd).toBe(0.001);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });

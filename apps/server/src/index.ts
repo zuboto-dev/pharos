@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { AgentRunner, agentMcpConfig, agentSetup, shellRunner } from './agent-runner.js';
 import { createApp } from './app.js';
 import { RevisionFeed } from './feed.js';
+import { FileService } from './files/service.js';
 import { answerBrief } from './guidance.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
@@ -55,9 +56,11 @@ const agent = new AgentRunner(store, {
   prompt: (projectIds) => answerBrief(store, projectIds),
 });
 if (agent.configured) agent.watch(feed);
+const files = new FileService(store);
 const app = createApp(store, feed, agent, {
   dataPath: dbPath,
   port,
+  files,
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
 });
 
@@ -76,6 +79,11 @@ const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) =
         'Not answering questions automatically: install Claude Code or set PHAROS_AGENT_COMMAND',
     }[setup.mode],
   );
+  // Find files moved while Pharos was off: rescan the folders in Settings in the background, a
+  // moment after start, one at a time (R7.9). It logs its own errors and never stops the server.
+  setTimeout(() => {
+    files.rescanAll().catch((error: unknown) => console.error('[pharos] rescan failed:', error));
+  }, 3000);
 });
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {

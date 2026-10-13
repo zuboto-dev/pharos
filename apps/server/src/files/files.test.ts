@@ -333,8 +333,9 @@ describe('adding files', () => {
     expect((await addFromScan(['escape.txt'])).status).toBe(400);
     expect((await addFromScan(['Company/not-scanned.pdf'])).status).toBe(400);
     expect((await addFromScan(['notes.md', 'notes.md'])).status).toBe(400);
+    // Adding files is an owner-only route; a declared agent is refused before it (R7.9).
     const agent = await addFromScan(['notes.md'], { ...ORIGIN, 'x-pharos-author': 'agent:test' });
-    expect(agent.status).toBe(400);
+    expect(agent.status).toBe(403);
     expect(store.list('file')).toHaveLength(0);
   });
 });

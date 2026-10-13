@@ -12,6 +12,7 @@ import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { createMcpServer } from './mcp.js';
+import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
@@ -28,12 +29,74 @@ function isLocal(value: string | undefined, parse: (v: string) => string): boole
   }
 }
 
-/** The acting author for REST writes: `X-Pharos-Author: human:me` or `agent:<name>`. */
+/**
+ * The acting author for REST writes: `X-Pharos-Author: human:me` or `agent:<name>` (only Pharos
+ * itself writes as `system`).
+ */
 function authorOf(c: Context): Author {
   const header = c.req.header('x-pharos-author');
   if (!header) return { kind: 'human', name: 'me' };
   const [kind, ...name] = header.split(':');
-  return Author.parse({ kind, name: name.join(':') });
+  const author = Author.parse({ kind, name: name.join(':') });
+  if (author.kind === 'system')
+    throw new PharosError('invalid', 'X-Pharos-Author: use human:<name> or agent:<name>');
+  return author;
+}
+
+/**
+ * Whether a request declares an agent (R7.9): any `X-Pharos-Author` that isn't `human:…`, so a
+ * malformed one gets the agent's view rather than the owner's. Agents then see over REST exactly
+ * what MCP shows them (AgentFiles) and are refused the owner's file and folder routes.
+ *
+ * The header is a declared role, not authentication: a local process that leaves it out is
+ * served as the owner. It keeps well-behaved agents (the answering agent, scripts following
+ * CLAUDE.md) to what the owner shares; a guarantee against an agent impersonating the owner
+ * needs separately authenticated owner and agent access.
+ */
+function declaresAgent(c: Context): boolean {
+  const header = c.req.header('x-pharos-author');
+  return header !== undefined && header.split(':')[0] !== 'human';
+}
+
+const forbidden = (c: Context, message: string) =>
+  c.json({ error: { code: 'forbidden', message } }, 403);
+
+const notFound = (c: Context, message: string) =>
+  c.json({ error: { code: 'not_found', message } }, 404);
+
+function decoded(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}
+
+/** Owner-only routes (files on disk, folders, scans, adding files): what an agent gets instead. */
+function agentRefusal(c: Context, store: Store): Response | undefined {
+  const path = c.req.path.replace(/^\/api/, '');
+  const owner = 'Only the owner uses this in Pharos; agents see project files with MCP tools';
+  const file = /^\/files\/([^/]+)(\/.*)?$/.exec(path);
+  if (file) {
+    // A file agents can't see doesn't exist for them; the rest is the owner's (paths, contents).
+    const entity = store.get(decoded(file[1]!));
+    const seen = entity?.type === 'file' && new AgentFiles(store).visible(entity.id);
+    return seen ? forbidden(c, owner) : notFound(c, 'file not found');
+  }
+  const artifact = /^\/artifacts\/([^/]+)\/file$/.exec(path);
+  if (artifact) {
+    const entity = store.get(decoded(artifact[1]!));
+    const seen = entity?.type === 'artifact' && new AgentFiles(store).visible(entity.id);
+    return seen ? forbidden(c, owner) : notFound(c, 'artifact not found');
+  }
+  if (
+    (path === '/settings/folders' && (c.req.method === 'GET' || c.req.method === 'HEAD')) ||
+    /^\/settings\/folders\/[^/]+\/scan$/.test(path) ||
+    /^\/projects\/[^/]+\/scanned-files$/.test(path) ||
+    (/^\/projects\/[^/]+\/files$/.test(path) && c.req.method === 'POST')
+  )
+    return forbidden(c, owner);
+  return undefined;
 }
 
 const STATUS = { invalid: 400, not_found: 404, conflict: 409 } as const;
@@ -89,6 +152,13 @@ export function createApp(
   });
 
   const api = new Hono();
+
+  // Agents (by their declared author) never reach the owner's file and folder routes (R7.9).
+  api.use(async (c, next) => {
+    const refusal = declaresAgent(c) ? agentRefusal(c, store) : undefined;
+    if (refusal) return refusal;
+    await next();
+  });
 
   api.get('/health', (c) =>
     c.json({
@@ -180,12 +250,19 @@ export function createApp(
   api.get('/entities/:type', (c) => {
     const type = EntityType.parse(c.req.param('type'));
     const { projectId, ...where } = c.req.query();
+    if (declaresAgent(c)) return c.json(new AgentFiles(store).list(type, { projectId, where }));
     return c.json(store.list(type, { projectId, where }));
   });
 
   api.get('/entities/:type/:id', (c) => {
     const type = EntityType.parse(c.req.param('type'));
-    return c.json(store.getOfType(type, c.req.param('id')));
+    const id = c.req.param('id');
+    if (!declaresAgent(c)) return c.json(store.getOfType(type, id));
+    // Hidden and missing read the same to an agent.
+    const entity = store.get(id);
+    const seen = entity?.type === type ? new AgentFiles(store).entity(entity) : null;
+    if (!seen) throw new PharosError('not_found', `${type} not found`);
+    return c.json(seen);
   });
 
   api.post('/apply', async (c) => {
@@ -193,27 +270,36 @@ export function createApp(
     return c.json(store.apply(authorOf(c), input));
   });
 
-  api.get('/projects/:id/data', (c) => c.json(store.dataset(c.req.param('id'))));
+  api.get('/projects/:id/data', (c) => {
+    const dataset = store.dataset(c.req.param('id'));
+    return c.json(declaresAgent(c) ? new AgentFiles(store).dataset(dataset) : dataset);
+  });
 
   api.get('/projects/:id/snapshot', (c) => c.json(projectSnapshot(store, c.req.param('id'))));
 
   api.get('/history', (c) => {
     const q = c.req.query();
-    return c.json(
-      store.history({
-        projectId: q.projectId,
-        entityId: q.entityId,
-        limit: q.limit ? IntParam.parse(q.limit) : undefined,
-        before: q.before ? IntParam.parse(q.before) : undefined,
-        after: q.after ? IntParam.parse(q.after) : undefined,
-        authorKind: q.authorKind ? Author.shape.kind.parse(q.authorKind) : undefined,
-      }),
-    );
+    const files = declaresAgent(c) ? new AgentFiles(store) : null;
+    if (files && q.entityId && !files.visible(q.entityId)) return c.json([]);
+    const history = store.history({
+      projectId: q.projectId,
+      entityId: q.entityId,
+      limit: q.limit ? IntParam.parse(q.limit) : undefined,
+      before: q.before ? IntParam.parse(q.before) : undefined,
+      after: q.after ? IntParam.parse(q.after) : undefined,
+      authorKind: q.authorKind ? Author.shape.kind.parse(q.authorKind) : undefined,
+    });
+    return c.json(files ? files.revisions(history) : history);
   });
 
   api.get('/revisions/:id', (c) => {
     const id = IntParam.parse(c.req.param('id'));
-    const revision = store.revision(id);
+    const found = store.revision(id);
+    const [revision] = !found
+      ? []
+      : declaresAgent(c)
+        ? new AgentFiles(store).revisions([found])
+        : [found];
     if (!revision) throw new PharosError('not_found', `Revision ${id} not found`);
     return c.json(revision);
   });
@@ -228,13 +314,12 @@ export function createApp(
 
   api.get('/diff', (c) => {
     const q = c.req.query();
-    return c.json(
-      store.diff({
-        from: IntParam.parse(q.from ?? 0),
-        to: q.to ? IntParam.parse(q.to) : undefined,
-        projectId: q.projectId,
-      }),
-    );
+    const diffs = store.diff({
+      from: IntParam.parse(q.from ?? 0),
+      to: q.to ? IntParam.parse(q.to) : undefined,
+      projectId: q.projectId,
+    });
+    return c.json(declaresAgent(c) ? new AgentFiles(store).diffs(diffs) : diffs);
   });
 
   // Claim sources on disk (R7.6): where an artifact's local path is among the project files.

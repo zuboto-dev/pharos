@@ -352,10 +352,12 @@ function describeLeaf(
       };
     }
     case 'ActivityFeed': {
-      const n2 = ctx.store.history({
-        projectId: ctx.data.project.id,
-        limit: (node as NodeOf<'ActivityFeed'>).limit ?? 10,
-      }).length;
+      const n2 = new AgentFiles(ctx.store).revisions(
+        ctx.store.history({
+          projectId: ctx.data.project.id,
+          limit: (node as NodeOf<'ActivityFeed'>).limit ?? 10,
+        }),
+      ).length;
       return { shows: plural(n2, 'recent change'), empty: !n2, warnings };
     }
     default:

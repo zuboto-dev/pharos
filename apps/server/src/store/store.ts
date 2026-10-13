@@ -497,7 +497,12 @@ export class Store {
   /** What an agent sees of its own write: file details only (R7.5). */
   private forAuthor(author: Author, result: ApplyResult): ApplyResult {
     if (author.kind !== 'agent') return result;
-    return { ...result, changes: new AgentFiles(this).diffs(result.changes) };
+    const files = new AgentFiles(this);
+    return {
+      ...result,
+      changes: files.diffs(result.changes),
+      warnings: files.texts(result.warnings),
+    };
   }
 
   /** Gives projects created before default views existed their default views. */
@@ -570,6 +575,12 @@ export class Store {
       };
       const tx = new Transaction(this.db, this, revision);
       const created = body(tx);
+      // Checked on everything the operations did, including what a delete cascaded to and what
+      // an undo removes, not only on the operations an agent sent (R7.9).
+      if (author.kind === 'agent') {
+        const issue = new AgentFiles(this).changesIssue(tx.changes);
+        if (issue) throw new PharosError('invalid', issue);
+      }
       tx.validate();
       if (tx.changes.length === 0) {
         this.db.exec('ROLLBACK');
@@ -581,6 +592,10 @@ export class Store {
       return { revision, created, changes: foldChanges(tx.changes), warnings };
     } catch (err) {
       this.db.exec('ROLLBACK');
+      // Conflict and validation details name items by id and title; an agent's never name one
+      // it can't see.
+      if (author.kind === 'agent' && err instanceof PharosError)
+        throw new AgentFiles(this).error(err);
       throw err;
     }
   }

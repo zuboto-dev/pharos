@@ -144,7 +144,11 @@ a level the owner sets: _hidden_ (owner only), _details_ (default), _contents_ (
 read text). Honest limit: Pharos can enforce this over MCP, but an agent with shell access, such
 as Claude Code, can read the disk directly. R7 ships a matching Claude Code deny rule for those
 folders and says so on the Settings page. With details only, the owner fills issuer and expiry
-by hand unless a folder is set to _contents_.
+by hand unless a folder is set to _contents_. Since R7.9 the same holds over REST for requests
+sent with `X-Pharos-Author: agent:…`, which are also refused the owner's file and folder routes;
+that header is a declared role, not authentication, so a local process that leaves it out is
+served as the owner. Sources, findings and terms copied only from hidden files are hidden too,
+no source shows a local path to agents, and quotes from _details_ files are left out.
 
 **Risks.** Chrome may refuse a PDF inside a sandboxed frame (fallback: open in a new tab).
 iCloud files not yet downloaded are fetched when read, so hashing is lazy. Big audio folders make

@@ -17,7 +17,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { answerBrief } from './guidance.js';
-import { readAgentFileText } from './store/agent-files.js';
+import { HIDDEN_REVISION_MESSAGE, readAgentFileText } from './store/agent-files.js';
 import { openDatabase } from './store/database.js';
 import { projectSnapshot } from './store/snapshot.js';
 import { Store } from './store/store.js';
@@ -294,9 +294,11 @@ describe('what agents see of files over MCP', () => {
     expect(snapshot.requests).toEqual([
       expect.not.objectContaining({ aboutId: expect.anything() }),
     ]);
+    // Both revisions also changed the hidden file, so their messages (which may name it) aren't
+    // shown (R7.9).
     expect(snapshot.recentRevisions.map((r: { message: string }) => r.message)).toEqual([
-      'Link the sources',
-      'Add the files',
+      HIDDEN_REVISION_MESSAGE,
+      HIDDEN_REVISION_MESSAGE,
     ]);
     expect(snapshot.unseenChanges).toBe(2);
   });
@@ -308,8 +310,10 @@ describe('what agents see of files over MCP', () => {
       ['expiryDate', 'issuer', 'kind', 'projectId', 'size', 'tags', 'taskIds', 'title'].sort(),
     );
     await expect(call(client, 'get', { id: ids.plan })).rejects.toThrow(`${ids.plan} not found`);
-    const artifact = await call(client, 'get', { id: ids.artifact });
-    expect(artifact.data.fileId).toBeUndefined();
+    // A source linked to a hidden file is hidden too (R7.9).
+    await expect(call(client, 'get', { id: ids.artifact })).rejects.toThrow(
+      `${ids.artifact} not found`,
+    );
 
     const files = await call(client, 'list', { type: 'file', projectId: ids.project });
     expect(files.map((f: { id: string }) => f.id)).toEqual([
@@ -337,8 +341,8 @@ describe('what agents see of files over MCP', () => {
     const client = await connect();
     const history = await call(client, 'history_list', { projectId: ids.project });
     expect(history.map((r: { message: string }) => r.message)).toEqual([
-      'Link the sources',
-      'Add the files',
+      HIDDEN_REVISION_MESSAGE,
+      HIDDEN_REVISION_MESSAGE,
     ]);
     const added = history[1].changes.filter((c: { type: string }) => c.type === 'file');
     expect(added).toHaveLength(4);
@@ -347,8 +351,8 @@ describe('what agents see of files over MCP', () => {
         expect.arrayContaining(['path', 'rootId', 'sha256', 'notes', 'mimeType', 'modifiedAt']),
       );
     expect(await call(client, 'history_list', { entityId: ids.plan })).toEqual([]);
-    const artifactChange = history[0].changes.find((c: { type: string }) => c.type === 'artifact');
-    expect(artifactChange.fields.fileId).toBeUndefined();
+    // The source linked to the hidden file is hidden with it (R7.9).
+    expect(history[0].changes.map((c: { type: string }) => c.type)).toEqual(['request']);
 
     const changes = await call(client, 'changes_since', { projectId: ids.project });
     expect(changes.count).toBe(2);

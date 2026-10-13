@@ -124,7 +124,8 @@ export function projectSnapshot(store: Store, projectId: string) {
       estimate: t.data.estimate,
       dueDate: t.data.dueDate,
     })),
-    artifacts: store.list('artifact', { projectId }).map((a) => ({
+    // Agents see no local paths, nor sources (or findings) copied from hidden files (R7.9).
+    artifacts: agentFiles.entities(store.list('artifact', { projectId })).map((a) => ({
       id: a.id,
       title: a.data.title,
       kind: a.data.kind,
@@ -134,7 +135,7 @@ export function projectSnapshot(store: Store, projectId: string) {
       taskId: a.data.taskId,
     })),
     /** Findings with how sure they are; `sources` counts linked artifacts. Long text is left out. */
-    claims: store.list('claim', { projectId }).map((c) => ({
+    claims: agentFiles.entities(store.list('claim', { projectId })).map((c) => ({
       id: c.id,
       statement: c.data.statement,
       certainty: c.data.certainty,
@@ -143,7 +144,9 @@ export function projectSnapshot(store: Store, projectId: string) {
       ...(c.data.aboutId ? { aboutId: c.data.aboutId } : {}),
       ...(c.data.tags.length ? { tags: c.data.tags } : {}),
     })),
-    terms: store.list('term', { projectId }).map((t) => ({ id: t.id, word: t.data.word })),
+    terms: agentFiles
+      .entities(store.list('term', { projectId }))
+      .map((t) => ({ id: t.id, word: t.data.word })),
     /**
      * Files the owner added from folders agents may see: details only, never where they are.
      * `canReadText`: the folder lets file_read_text return the text (text files only).

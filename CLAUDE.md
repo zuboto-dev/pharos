@@ -105,6 +105,12 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
   `FILE_TYPES` only. Agents see details only and may never add, remove or move a file
   (`Store.apply` refuses it). Tests use made-up folders and files only.
 
+## Project files
+
+- What agents see of project files goes through `AgentFiles` (`apps/server/src/store/agent-files.ts`):
+  every MCP read and every REST read with an `X-Pharos-Author` other than `human:…`. That header is
+  a declared role, not authentication; agents are refused the owner's file and folder routes.
+
 ## Options
 
 - Option fields (task status/priority, stage/goal/artifact/decision status, scope kind, artifact

@@ -21,3 +21,4 @@ export {
 } from './options.js';
 export * from './revisions.js';
 export * from './views/index.js';
+export * from './presence.js';

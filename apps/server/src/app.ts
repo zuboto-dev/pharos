@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { ApplyInput, Author, EntityType, type HealthResponse } from '@pharos/schema';
+import { ApplyInput, Author, EntityType, agentLabel, type HealthResponse } from '@pharos/schema';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -13,6 +13,7 @@ import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { createMcpServer } from './mcp.js';
+import { Presence, watchAgentRevisions } from './presence.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -119,6 +120,8 @@ export type ServerInfo = {
   folders?: Pick<FolderRouteOptions, 'home'>;
   /** Project files on disk (R7.2); tests pass one with a fake `open`. */
   files?: FileService;
+  /** Who is working where (v0.2 B5); shared with the answering agent. Made here when absent. */
+  presence?: Presence;
 };
 
 export function createApp(
@@ -128,6 +131,10 @@ export function createApp(
   info: ServerInfo = {},
 ) {
   const app = new Hono();
+  // Agents' presence marks (v0.2 B5): from the view tools, from agents' revisions (any process),
+  // and from the answering run. Not project data; sent on the change feed as `presence`.
+  const presence = info.presence ?? new Presence();
+  watchAgentRevisions(store, feed, presence);
 
   // Pharos is local-only: refuse requests that didn't come from a localhost page or client,
   // which also blocks DNS-rebinding attacks from websites.
@@ -187,9 +194,14 @@ export function createApp(
       const unwatchAgent = agent?.onChange((status) => {
         void send({ event: 'agent', data: JSON.stringify(status) });
       });
+      // Which agent works where right now (v0.2 B5): the whole state, on every change.
+      const unwatchPresence = presence.subscribe((state) => {
+        void send({ event: 'presence', data: JSON.stringify(state) });
+      });
       stream.onAbort(() => {
         unsubscribe();
         unwatchAgent?.();
+        unwatchPresence();
       });
       await stream.writeSSE({
         event: 'ready',
@@ -201,6 +213,7 @@ export function createApp(
           ...(info.buildId ? { build: info.buildId } : {}),
         }),
       });
+      await stream.writeSSE({ event: 'presence', data: JSON.stringify(presence.state()) });
       // Keep the connection alive through proxies until the client goes away.
       while (!stream.aborted) {
         await stream.sleep(25_000);
@@ -208,8 +221,12 @@ export function createApp(
       }
       unsubscribe();
       unwatchAgent?.();
+      unwatchPresence();
     }),
   );
+
+  // Which agent works where right now (also sent on the feed as `presence`).
+  api.get('/presence', (c) => c.json(presence.state()));
 
   // Whether questions asked here are answered automatically (PHAROS_AGENT_COMMAND).
   const agentStatus = (): AgentStatus =>
@@ -375,15 +392,27 @@ export function createApp(
           404,
         );
       }
+      // The session's presence marks go when it closes: the agent stopped (v0.2 B5).
+      const presenceSource = `mcp:${randomUUID()}`;
+      const mcp = createMcpServer(store, { home: info.folders?.home, presence, presenceSource });
+      const stopped = () => {
+        presence.clearSource(presenceSource);
+        const name = mcp.server.getClientVersion()?.name;
+        if (name) presence.clearSource(`revisions:${agentLabel(name)}`);
+      };
       const created = new WebStandardStreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => void sessions.set(id, created),
-        onsessionclosed: (id) => void sessions.delete(id),
+        onsessionclosed: (id) => {
+          sessions.delete(id);
+          stopped();
+        },
       });
       created.onclose = () => {
         if (created.sessionId) sessions.delete(created.sessionId);
+        stopped();
       };
-      await createMcpServer(store, { home: info.folders?.home }).connect(created);
+      await mcp.connect(created);
       transport = created;
     }
     return transport.handleRequest(c.req.raw);

@@ -2,13 +2,16 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { RevisionEvent, RevisionFeed } from './feed.js';
+import type { Presence } from './presence.js';
 import type { Store } from './store/store.js';
 
 export type RunResult = { exitCode: number | null; timedOut: boolean };
+/** Runs the command; `signal` aborts when answering is paused mid-run (the run is stopped). */
 export type Runner = (
   command: string,
   env: Record<string, string>,
   timeoutMs: number,
+  signal?: AbortSignal,
 ) => Promise<RunResult>;
 
 export type AgentStatus = {
@@ -31,6 +34,8 @@ export type AgentStatus = {
     durationMs: number;
     exitCode: number | null;
     timedOut: boolean;
+    /** Stopped because answering was paused. */
+    stopped?: boolean;
   };
 };
 
@@ -68,7 +73,7 @@ export function agentMcpConfig(serverUrl: string): string {
  * server was started in), logging its output; kills it after the timeout.
  */
 export function shellRunner(logFile: string): Runner {
-  return (command, env, timeoutMs) =>
+  return (command, env, timeoutMs, signal) =>
     new Promise((resolve) => {
       mkdirSync(dirname(logFile), { recursive: true });
       const log = (text: string) => appendFileSync(logFile, text);
@@ -87,10 +92,17 @@ export function shellRunner(logFile: string): Runner {
         timedOut = true;
         child.kill('SIGTERM');
       }, timeoutMs);
+      // Paused in Settings: the run stops, so nothing says it is still answering.
+      const stop = () => {
+        log('--- stopped: answering was paused\n');
+        child.kill('SIGTERM');
+      };
+      signal?.addEventListener('abort', stop, { once: true });
       const finish = (line: string, result: RunResult) => {
         if (done) return;
         done = true;
         clearTimeout(timer);
+        signal?.removeEventListener('abort', stop);
         log(line);
         resolve(result);
       };
@@ -116,6 +128,8 @@ export class AgentRunner {
     return this.answering.length > 0;
   }
   private timer: ReturnType<typeof setTimeout> | undefined;
+  /** Stops the current run (pausing answering). */
+  private stopRun: AbortController | undefined;
   private lastRun: AgentStatus['lastRun'];
   private readonly listeners = new Set<(status: AgentStatus) => void>();
 
@@ -132,6 +146,10 @@ export class AgentRunner {
       logPath?: string;
       /** Instructions for the run, passed as PHAROS_PROMPT. */
       prompt?: (projectIds: string[]) => string;
+      /** Marks the projects being answered while a run lasts (v0.2 B5). */
+      presence?: Presence;
+      /** The agent's name on those marks (default: Claude Code, or "Your agent" for a command). */
+      agentName?: string;
     },
   ) {}
 
@@ -149,6 +167,8 @@ export class AgentRunner {
     if (!enabled) {
       this.queue.clear();
       clearTimeout(this.timer);
+      // A pause stops the current run too, so "paused" is true and its marks clear.
+      this.stopRun?.abort();
     }
     this.changed();
   }
@@ -236,8 +256,20 @@ export class AgentRunner {
     this.queue.clear();
     if (!projectIds.length) return this.changed();
     this.answering = projectIds;
-    this.changed();
+    const stop = new AbortController();
+    this.stopRun = stop;
     const started = Date.now();
+    const presence = this.options.presence;
+    const source = `runner:${started}`;
+    const agentName =
+      this.options.agentName ?? (this.options.mode === 'custom' ? 'Your agent' : 'Claude Code');
+    try {
+      for (const projectId of projectIds)
+        presence?.hold(agentName, { projectId, activity: 'answering' }, source);
+    } catch (error) {
+      console.error('[pharos] Could not mark the projects being answered:', error);
+    }
+    this.changed();
     try {
       const result = await this.options.runner(
         this.options.command!,
@@ -248,14 +280,25 @@ export class AgentRunner {
           ...(this.options.prompt ? { PHAROS_PROMPT: this.options.prompt(projectIds) } : {}),
         },
         this.options.timeoutMs ?? 600_000,
+        stop.signal,
       );
       this.lastRun = {
         projectIds,
         startedAt: new Date(started).toISOString(),
         durationMs: Date.now() - started,
         ...result,
+        ...(stop.signal.aborted ? { stopped: true } : {}),
       };
     } finally {
+      this.stopRun = undefined;
+      // The run is over (finished, failed, timed out or paused): its marks go, including what
+      // its agent marked over MCP during the run (its session may not close by itself).
+      try {
+        presence?.clearSource(source);
+        presence?.clearProjects(projectIds, started);
+      } catch (error) {
+        console.error('[pharos] Could not clear the answering marks:', error);
+      }
       this.answering = [];
       this.changed();
       // Questions asked during the run get their own run.

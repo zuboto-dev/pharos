@@ -10,6 +10,7 @@ import { artifactFileRoutes, watchArtifactLinks } from './files/artifact-file.js
 import { fileRoutes } from './files/routes.js';
 import { FileService } from './files/service.js';
 import { z } from 'zod';
+import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { createMcpServer } from './mcp.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -47,6 +48,8 @@ export type ServerInfo = {
   webDir?: string;
   /** Identifies the web app build being served (see `webBuildId`), sent to tabs on connect. */
   buildId?: string;
+  /** Folders on the Settings page (R7.3): the home folder to guard (tests pass a temp dir). */
+  folders?: Pick<FolderRouteOptions, 'home'>;
   /** Project files on disk (R7.2); tests pass one with a fake `open`. */
   files?: FileService;
 };
@@ -240,6 +243,8 @@ export function createApp(
   // Project files: scan, serve read-only, reveal and open (R7.2).
   const files = info.files ?? new FileService(store);
   api.route('/', fileRoutes(files));
+  // Folders the owner shares with Pharos (R7.3): app settings, never reachable over MCP.
+  api.route('/settings/folders', folderRoutes(store, { ...info.folders, scanner: files.scanner }));
 
   app.route('/api', api);
 

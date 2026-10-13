@@ -22,6 +22,7 @@ import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from 
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
+import { BLOCK_PRESENCE_OUTLINE, BlockPresence, ViewPresence, useViewPresence } from './presence';
 import { Node } from './renderer';
 import { WidgetSettings } from './settings';
 
@@ -105,6 +106,8 @@ export function BoardView(props: BoardProps) {
 
 function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: BoardProps) {
   const { actions, version } = useViewData();
+  // Blocks an agent is editing right now (v0.2 B5).
+  const present = useViewPresence(view?.id);
   const container = useLiveBoard<HTMLDivElement>(
     version,
     board.widgets.map((w) => w.id),
@@ -267,6 +270,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
       className={clsx('relative grid grid-cols-1 md:grid-cols-12', editing && 'pb-4')}
       style={{ gap: GAP }}
     >
+      {!editing && present.agents.length > 0 && <ViewPresence agents={present.agents} />}
       {withLeaving(board.widgets, leaving).map(({ widget, index, gone }) => {
         if (gone)
           return (
@@ -305,8 +309,10 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
               setDrop(null);
               onDrop(widget, sideOf(e, widget), e.dataTransfer.getData(DRAG_TYPE));
             }}
+            data-presence-block={(!editing && present.widgets.get(widget.id)) || undefined}
             className={clsx(
               'group/widget relative flex min-w-0 flex-col *:flex-1 md:[grid-column:var(--col)]',
+              !editing && present.widgets.has(widget.id) && BLOCK_PRESENCE_OUTLINE,
               // A saved height is a minimum: content that grows later is never cut off.
               (resizing ? preview.h : widget.h) && 'md:min-h-(--h)',
               editing &&
@@ -318,6 +324,9 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
             <WidgetIdProvider id={widget.id}>
               <Node node={widget.node} />
             </WidgetIdProvider>
+            {!editing && present.widgets.has(widget.id) && (
+              <BlockPresence agent={present.widgets.get(widget.id)!} />
+            )}
             {!editing && actions.ask && (
               <button
                 type="button"

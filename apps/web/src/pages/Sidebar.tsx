@@ -21,7 +21,9 @@ import { useEffect, useState, type DragEvent, type FormEvent, type ReactNode } f
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
+import { workingLine } from '../catalog/presence';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
+import { usePresence } from '../lib/events';
 import { ApiError, getJson, postJson } from '../lib/api';
 import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
@@ -235,6 +237,8 @@ const MORE =
  * each change is saved as a revision with an Undo.
  */
 export function Sidebar() {
+  // Projects an agent is working in right now (v0.2 B5): a pulsing halo on the status dot.
+  const presence = usePresence();
   const ws = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
@@ -430,6 +434,9 @@ export function Sidebar() {
 
   const projectRow = (project: Project, depth: number, inPinned = false) => {
     const target: Target = { type: 'project', entity: project };
+    const agents = [
+      ...new Set(presence.filter((e) => e.projectId === project.id).map((e) => e.agent)),
+    ];
     const container = containerOf(project);
     const siblings = projectSiblings(w.projects, w.repositories, container);
     return (
@@ -473,8 +480,18 @@ export function Sidebar() {
                 )
               }
             >
-              <Dot tone={toneOf(project.data.status)} />
+              <span className="relative inline-flex shrink-0">
+                <Dot tone={toneOf(project.data.status)} />
+                {agents.length > 0 && (
+                  <span
+                    aria-hidden
+                    data-presence-dot=""
+                    className="pointer-events-none absolute -inset-1 animate-presence rounded-full ring-2 ring-presence"
+                  />
+                )}
+              </span>
               <span className="truncate">{project.data.name}</span>
+              {agents.length > 0 && <span className="sr-only"> ({workingLine(agents, 'it')})</span>}
               {inPinned && project.data.repositoryId && (
                 <span className="ml-auto truncate text-xs text-neutral-400">
                   {repositoryById.get(project.data.repositoryId)?.data.name}

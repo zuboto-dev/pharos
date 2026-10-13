@@ -16,6 +16,8 @@
   --motion-drawer: 24px;
   --motion-side: -8px;
   --motion-scale: 0.98;
+  /* The presence dot (v0.2 B5) breathes: it shrinks a little as it fades. */
+  --motion-presence-scale: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -24,6 +26,7 @@
     --motion-drawer: 0px;
     --motion-side: 0px;
     --motion-scale: 1;
+    --motion-presence-scale: 1;
   }
 }
 
@@ -175,6 +178,7 @@
   --animate-drawer-out: motion-drawer-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
   --animate-block-changed: motion-block-changed 1600ms ease-out;
+  --animate-presence: motion-presence 1800ms ease-in-out infinite;
 
   @keyframes motion-fade-in {
     from {
@@ -214,6 +218,18 @@
     from {
       opacity: 0;
       transform: translateX(var(--motion-side));
+    }
+  }
+  /* An agent at work here: a slow, calm pulse (opacity only with reduced motion). */
+  @keyframes motion-presence {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(var(--motion-presence-scale));
     }
   }
   /* A block whose content an update changed: a soft ring that fades away (not a flash). */

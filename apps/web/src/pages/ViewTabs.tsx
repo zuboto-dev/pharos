@@ -19,6 +19,8 @@ import { Link, useNavigate } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { AUTHOR_ICONS } from '../catalog/history';
+import { PresenceDot, viewsWithPresence, workingLine } from '../catalog/presence';
+import { usePresence } from '../lib/events';
 import { useResource } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { dismissAnswer, keepAnswer } from './answers';
@@ -123,7 +125,7 @@ function moveBetweenTabs(e: KeyboardEvent<HTMLElement>) {
 }
 
 const TAB =
-  'inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
+  'relative inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 const ICON =
   'mb-1 inline-flex shrink-0 items-center rounded-control p-1.5 text-neutral-400 hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 
@@ -159,6 +161,8 @@ export function ViewTabs({
 }) {
   const { actions } = useViewData();
   const navigate = useNavigate();
+  // Views an agent is working on right now (v0.2 B5): view id → agents.
+  const working = viewsWithPresence(usePresence());
   const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -328,6 +332,12 @@ export function ViewTabs({
                 )}
               >
                 <TabLabel view={view} />
+                {working.has(view.id) && (
+                  <>
+                    <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
+                    <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
+                  </>
+                )}
               </Link>
             )}
             {isActive && !renaming && (
@@ -447,8 +457,11 @@ export function ViewTabs({
           onClick={(e) =>
             setMenu(menu ? null : { kind: 'more', anchor: e.currentTarget.getBoundingClientRect() })
           }
-          className={clsx(ICON, 'gap-1 px-2 text-xs text-muted')}
+          className={clsx(ICON, 'relative gap-1 px-2 text-xs text-muted')}
         >
+          {overflow.some((v) => working.has(v.id)) && (
+            <PresenceDot className="absolute top-0.5 right-0.5 size-1.5" />
+          )}
           {overflow.length ? (
             <>
               More
@@ -483,6 +496,12 @@ export function ViewTabs({
               }}
             >
               {view.data.name}
+              {working.has(view.id) && (
+                <>
+                  <PresenceDot className="ml-1.5 size-1.5 align-middle" />
+                  <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
+                </>
+              )}
             </MenuItem>
           ))}
           {overflow.length > 0 && archived.length > 0 && <MenuSeparator />}

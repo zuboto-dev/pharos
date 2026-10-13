@@ -67,7 +67,7 @@ describe('MCP', () => {
     // link files (fileIds).
     // R8 added about 9.4k: the record entity (fields, interval) and project.recordTypes. C1 in
     // v0.2 batch 3 shrinks the apply schema; until then the cap moves with it.
-    expect(apply.length).toBeLessThan(60_000);
+    expect(apply.length).toBeLessThan(64_000);
     expect(client.getInstructions()).toContain('apply');
   });
 

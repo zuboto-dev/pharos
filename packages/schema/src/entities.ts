@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DECISION_CHOICE_FIELDS } from './decisions.js';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
@@ -150,6 +151,8 @@ export const DecisionData = z.strictObject({
   ),
   decisionDate: IsoDate.optional().describe('YYYY-MM-DD the decision was made'),
   fileIds: FileIds,
+  // R10.19: options the owner chooses from on a page.
+  ...DECISION_CHOICE_FIELDS,
 });
 
 export const ViewData = z.strictObject({

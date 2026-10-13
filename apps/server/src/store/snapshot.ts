@@ -5,6 +5,7 @@ import {
   taskProgress,
   meaningOf,
   dueOf,
+  decisionState,
   type EntityDataMap,
 } from '@pharos/schema';
 import { isExpired, requestContext } from '../views/service.js';
@@ -50,6 +51,24 @@ function records(store: Store, agentFiles: AgentFiles, projectId: string) {
         ...(due ? { due } : {}),
       };
     }),
+  };
+}
+
+/** A decision's options and the owner's answer, in a line each (R10.19). */
+function choiceOf(data: EntityDataMap['decision']): Record<string, unknown> {
+  if (!data.options) return {};
+  const state = decisionState(data);
+  return {
+    options: data.options.map((o) => `${o.id}: ${o.label}`),
+    recommendedOptionId: data.recommendedOptionId,
+    ownerAnswer:
+      state.kind === 'chosen'
+        ? `chose "${state.option.label}"`
+        : state.kind === 'answered'
+          ? `answered: ${state.answer}`
+          : state.kind === 'deferred'
+            ? `deferred until ${state.until}`
+            : 'waiting for the owner',
   };
 }
 
@@ -221,6 +240,8 @@ export function projectSnapshot(store: Store, projectId: string) {
       decidedById: d.data.decidedById,
       decisionDate: d.data.decisionDate,
       recordedAt: d.createdAt,
+      // R10.19: a choice waiting for the owner, or what they chose.
+      ...choiceOf(d.data),
       ...linked(d.data),
     })),
     views: store

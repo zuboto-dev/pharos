@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import {
   AGENT_FILE_CREATE_FIELDS,
   AGENT_FILE_FIELDS,
@@ -311,14 +312,30 @@ export class AgentFiles {
     // A question asked from a hidden item: where it was asked from may name it.
     if (type === 'request' && data.aboutId && !('aboutId' in out)) delete out.about;
     // A record's file fields (R8) may point at a file in a hidden folder.
-    if (type === 'record' && out.fields && typeof out.fields === 'object') {
-      out.fields = Object.fromEntries(
-        Object.entries(out.fields as Data).filter(
-          ([, v]) => typeof v !== 'string' || this.visible(v),
-        ),
-      );
-    }
+    if (type === 'record') out.fields = this.recordFields(out.fields);
+    // A decision option's sources (R10.19) may be claims taken from a hidden file.
+    if (type === 'decision') out.options = this.decisionOptions(out.options);
+    if (out.fields === undefined) delete out.fields;
+    if (out.options === undefined) delete out.options;
     return out;
+  }
+
+  /** A record's fields without values pointing at items agents can't see. */
+  private recordFields(fields: unknown): unknown {
+    if (!fields || typeof fields !== 'object') return fields;
+    return Object.fromEntries(
+      Object.entries(fields as Data).filter(([, v]) => typeof v !== 'string' || this.visible(v)),
+    );
+  }
+
+  /** A decision's options without sources agents can't see. */
+  private decisionOptions(options: unknown): unknown {
+    if (!Array.isArray(options)) return options;
+    return options.map((o: Data) =>
+      Array.isArray(o.claimIds)
+        ? { ...o, claimIds: o.claimIds.filter((id) => this.visible(String(id))) }
+        : o,
+    );
   }
 
   /** An entity as agents see it, or null when it is hidden. */
@@ -383,6 +400,20 @@ export class AgentFiles {
         return !refs.includes(f) || this.diffRefVisible(d, f);
       };
       const fields = Object.fromEntries(Object.entries(d.fields).filter(([f]) => keep(f)));
+      // Nested links (a record's file fields, a decision option's sources) are filtered inside
+      // the value on both sides, like `data` does; a change only to hidden ones disappears.
+      const nested =
+        d.type === 'record' && fields.fields
+          ? { field: 'fields', clean: (v: unknown) => this.recordFields(v) }
+          : d.type === 'decision' && fields.options
+            ? { field: 'options', clean: (v: unknown) => this.decisionOptions(v) }
+            : null;
+      if (nested) {
+        const { before, after } = fields[nested.field]!;
+        const diff = { before: nested.clean(before), after: nested.clean(after) };
+        if (isDeepStrictEqual(diff.before, diff.after)) delete fields[nested.field];
+        else fields[nested.field] = diff;
+      }
       if (d.type === 'request' && this.askedFromHidden(d)) delete fields.about;
       if (d.op === 'update' && Object.keys(fields).length === 0) return [];
       return [{ ...d, fields }];

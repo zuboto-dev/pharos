@@ -79,11 +79,12 @@ export const FOLDER_LEVELS: Record<FolderLevel, { label: string; agents: string 
   hidden: { label: 'Hidden', agents: 'Agents see nothing from this folder.' },
   details: {
     label: 'Details',
-    agents: 'Agents see the details of files added to a project, never their contents.',
+    agents:
+      'Agents see the names and details of files (kind, issuer, dates, tags), never their contents.',
   },
   contents: {
     label: 'Contents',
-    agents: 'Agents see details and can read the text of files added to a project.',
+    agents: 'Agents see names and details, and can read the text of .txt, .csv and .md files.',
   },
 };
 

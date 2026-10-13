@@ -81,3 +81,20 @@ export function computeDue(
   );
   return due;
 }
+
+/**
+ * When a file's expiry counts as urgent (R7.15): within 60 days, very urgent within 14, past due
+ * once expired. Renewing a document takes longer than a service, so the bands start earlier.
+ */
+export const FILE_EXPIRY_SOON = { urgentDays: 60, veryUrgentDays: 14 } as const;
+
+/** A file's expiry as a due date in the same four bands as repeating records. */
+export function fileDue(expiryDate: string | undefined, today: string): Due | undefined {
+  if (!expiryDate) return undefined;
+  const days = daysBetween(today, expiryDate);
+  return {
+    date: expiryDate,
+    days,
+    band: band(days, FILE_EXPIRY_SOON.veryUrgentDays, FILE_EXPIRY_SOON.urgentDays),
+  };
+}

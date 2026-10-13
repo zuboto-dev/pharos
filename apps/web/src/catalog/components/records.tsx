@@ -4,6 +4,7 @@ import {
   categoryBreakdown,
   dueOf,
   dueRows,
+  dueUnit,
   fieldReader,
   findRecordType,
   formatMoney,
@@ -91,20 +92,6 @@ export function dueText(due: Due, unit?: string): string[] {
   return parts;
 }
 
-/** The unit of the reading a repeating record counts, e.g. "km". */
-function meterUnit(
-  data: ViewData,
-  path: string | undefined,
-  recordType: string,
-): string | undefined {
-  if (!path) return undefined;
-  const [, ref, , key] = path.split('.');
-  const own = findRecordType(data.project, recordType);
-  const via = own?.fields.find((f) => f.key === ref);
-  const target = via?.kind === 'reference' && via.to ? findRecordType(data.project, via.to) : own;
-  return target?.fields.find((f) => f.key === (key ?? ref))?.unit;
-}
-
 export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
   const data = useViewData();
   const rows = useMemo(() => dueRows(data, node), [data, node]);
@@ -112,8 +99,8 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
   if (!rows.length) return <Empty>Nothing is due</Empty>;
   return (
     <ul className="-mx-2 divide-y divide-neutral-100 dark:divide-neutral-800">
-      {rows.map(({ record, due }) => {
-        const unit = meterUnit(data, record.data.interval?.meter?.from, record.data.recordType);
+      {rows.map(({ record, due, unit }) => {
+        const file = record.type === 'file';
         return (
           <li key={record.id}>
             <Clickable
@@ -124,7 +111,9 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                 {due ? (
                   <Badge tone={BAND_TONES[due.band]}>{DUE_BAND_LABELS[due.band]}</Badge>
                 ) : (
-                  <span className="text-xs text-neutral-400">No schedule</span>
+                  <span className="text-xs text-neutral-400">
+                    {file ? 'No expiry date' : 'No schedule'}
+                  </span>
                 )}
               </span>
               <span className="min-w-[9rem] flex-1 truncate text-sm font-medium">
@@ -139,6 +128,8 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                       : 'text-neutral-500 dark:text-neutral-400',
                   )}
                 >
+                  {file && due.date !== undefined && (due.days ?? 0) >= 0 ? 'Expires ' : ''}
+                  {file && (due.days ?? 0) < 0 ? 'Expired ' : ''}
                   {dueText(due, unit).join(' · ')}
                 </span>
               )}
@@ -167,7 +158,7 @@ export function RecordDetails({
   const read = useMemo(() => fieldReader(data), [data]);
   const type = findRecordType(data.project, record.data.recordType);
   const due = record.data.interval ? dueOf(data, record) : undefined;
-  const unit = meterUnit(data, record.data.interval?.meter?.from, record.data.recordType);
+  const unit = dueUnit(data.project, record);
   const every = record.data.interval?.every;
   const meter = record.data.interval?.meter;
   return (

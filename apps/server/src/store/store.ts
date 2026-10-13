@@ -4,6 +4,9 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   ENTITIES,
   ENTITY_TYPES,
+  OWNER_DECISION_FIELDS,
+  decisionIssues,
+  decisionWarnings,
   type ApplyInput,
   type Author,
   type Change,
@@ -594,7 +597,8 @@ export class Store {
       // Checked on everything the operations did, including what a delete cascaded to and what
       // an undo removes, not only on the operations an agent sent (R7.9).
       if (author.kind === 'agent') {
-        const issue = new AgentFiles(this).changesIssue(tx.changes);
+        const issue =
+          new AgentFiles(this).changesIssue(tx.changes) ?? agentDecisionIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
       tx.validate();
@@ -640,6 +644,38 @@ function agentFileIssue(op: Operation): string | undefined {
 function agentArtifactFileIssue(op: Operation): string | undefined {
   if (op.type !== 'artifact' || op.op === 'delete' || !('fileId' in op.data)) return undefined;
   return "agents can't set fileId; put the local path in uri and Pharos links it to the project file";
+}
+
+/**
+ * A decision with options is the owner's to make (R10.19): agents propose it (options, their
+ * recommendation and why) but never choose, answer, defer or accept it, and can't change the
+ * options once the owner chose. Checked on everything a revision does, undos included.
+ */
+function agentDecisionIssue(store: Store, changes: Change[]): string | undefined {
+  for (const change of changes) {
+    if (change.type !== 'decision' || !change.after) continue;
+    const before: Data = change.before ?? {};
+    const after = change.after;
+    const what = describe('decision', change.id, after);
+    const changed = (field: string) => !isDeepStrictEqual(before[field], after[field]);
+    const owner = OWNER_DECISION_FIELDS.find(changed);
+    if (owner)
+      return `${what}: only the owner chooses, answers or defers a decision (${owner}); they do it in Pharos on a page with a DecisionBlock`;
+    const options = after.options as unknown[] | undefined;
+    if (!options?.length) continue;
+    if (
+      before.chosenOptionId &&
+      ['options', 'recommendedOptionId', 'recommendationReason'].some(changed)
+    )
+      return `${what}: the owner already chose; its options and recommendation can't change`;
+    const project = store.get(after.projectId as string) as Entity<'project'> | null;
+    if (
+      changed('status') &&
+      meaningOf(project, 'decision.status', after.status as string) === 'accepted'
+    )
+      return `${what}: a decision with options is accepted when the owner chooses one in Pharos; keep its status "proposed"`;
+  }
+  return undefined;
 }
 
 /** One in-progress revision. Writes go straight to the DB inside the SQL transaction. */
@@ -825,6 +861,13 @@ class Transaction {
         defaults[field] = valueFor(project as Entity<'project'>, key, defaults[field] as string);
       }
     }
+    // A decision with options waits for the owner's choice (R10.19).
+    if (
+      type === 'decision' &&
+      (data.options as unknown[] | undefined)?.length &&
+      project?.type === 'project'
+    )
+      defaults.status = valueFor(project as Entity<'project'>, 'decision.status', 'proposed');
     const out: Data = { ...defaults, ...data };
     if (hasOrder(type) && out.order === undefined) {
       // Items inside a project are ordered per project; projects and workspace-wide items
@@ -952,6 +995,42 @@ class Transaction {
         this.update(current, { ...current.data, fields });
       }
     }
+    // An artifact's picture may be a project file (R7.13): it goes with the file.
+    for (const entity of doomed) {
+      if (entity.type !== 'file') continue;
+      const pictured = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'artifact' AND json_extract(data, '$.image') = ?",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of pictured) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id)!;
+        const next: Data = { ...current.data };
+        delete next.image;
+        this.update(current, next);
+      }
+    }
+    // A decision option's sources (R10.19) are claims inside its options.
+    for (const entity of doomed) {
+      if (entity.type !== 'claim') continue;
+      const citing = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'decision' AND EXISTS (SELECT 1 FROM json_each(data, '$.options') AS o, json_each(o.value, '$.claimIds') AS c WHERE c.value = ?)",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of citing) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id) as Entity<'decision'>;
+        const options = (current.data.options ?? []).map((o) => {
+          if (!o.claimIds?.includes(entity.id)) return o;
+          const rest = { ...o, claimIds: o.claimIds.filter((id) => id !== entity.id) };
+          if (!rest.claimIds.length) delete (rest as { claimIds?: string[] }).claimIds;
+          return rest;
+        });
+        this.update(current, { ...current.data, options });
+      }
+    }
     // request.aboutId can point at any entity type, so it isn't a typed ref; clear it by hand.
     for (const entity of doomed) {
       const asked = this.db
@@ -1056,6 +1135,8 @@ class Transaction {
       }
       if (entity.type === 'view')
         issues.push(...this.viewQueryIssues(entity as Entity<'view'>, prefix));
+      if (entity.type === 'decision')
+        issues.push(...this.decisionChoiceIssues(entity as Entity<'decision'>, prefix));
     }
     for (const [id, context] of this.claimsToCheck()) {
       const claim = this.store.get(id) as Entity<'claim'>;
@@ -1150,6 +1231,23 @@ class Transaction {
     return row?.kind;
   }
 
+  /** Options must be consistent (R10.19) and cite claims of the same project. */
+  private decisionChoiceIssues(decision: Entity<'decision'>, prefix: string): string[] {
+    const issues = decisionIssues(decision.data).map((i) => `${prefix}: ${i}`);
+    for (const option of decision.data.options ?? []) {
+      for (const id of option.claimIds ?? []) {
+        const claim = this.store.get(id);
+        if (claim?.type !== 'claim')
+          issues.push(`${prefix}: options "${option.id}".claimIds → claim ${id} not found`);
+        else if ((claim.data as Data).projectId !== decision.data.projectId)
+          issues.push(
+            `${prefix}: options "${option.id}".claimIds → claim ${id} belongs to another project`,
+          );
+      }
+    }
+    return issues;
+  }
+
   /** Two terms in a project can't share a word or another form, ignoring case. */
   private termIssues(term: Entity<'term'>, prefix: string): string[] {
     const forms = (t: Entity<'term'>) =>
@@ -1184,6 +1282,12 @@ class Transaction {
               (f) => `view ${id} ("${(entity.data as Data).name as string}"): ${formatFinding(f)}`,
             ),
         );
+        continue;
+      }
+      if (entity?.type === 'decision') {
+        const data = (entity as Entity<'decision'>).data;
+        if (data.options && !data.chosenOptionId && !data.answer)
+          out.push(...decisionWarnings(data).map((w) => `decision ${id} ("${data.title}") ${w}`));
         continue;
       }
       if (entity?.type !== 'claim') continue;

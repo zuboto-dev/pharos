@@ -175,6 +175,13 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
     suggestedColumns: 6,
     example: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
   },
+  DecisionBlock: {
+    category: 'outputs',
+    use: 'A decision the reader makes on this page (needs-you): the question, 2–5 options side by side, each with what it leads to (summary), pros and cons in a few words and claimIds as sources, and your recommendation marked with its reason. The reader chooses, writes another answer or defers; you never choose. Store the options on the decision (options, recommendedOptionId, recommendationReason) and point StartHere yourPartTarget at this widget. Once chosen it shows the answer compactly, and DecisionLog lists it.',
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: { component: 'DecisionBlock', decision: 'dec_empty_state' },
+  },
   FileList: {
     category: 'outputs',
     use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders; agents add them only from files_unadded (after the owner approves a folder), so never invent file ids or paths. For one document set (e.g. business registration papers), tag its files and filter on the tag: {"where": {"tags": "business-registration"}}; papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. Set `showIn` to the id of a FileView widget on the same board so a tapped row shows that file there instead of opening the drawer. You see each file\'s details, never its contents.',
@@ -407,7 +414,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DueTracker: {
     category: 'data',
-    use: "What's due among repeating records (services, bills, renewals): each with its next date and/or reading, in four bands (past due, very urgent, urgent, not urgent), most urgent first. The records need an interval; `show` adds a field such as the amount.",
+    use: 'What\'s due among repeating records (services, bills, renewals): each with its next date and/or reading, in four bands (past due, very urgent, urgent, not urgent), most urgent first. The records need an interval; `show` adds a field such as the amount. Files with an expiryDate work too (`{"type": "file", "where": {"expiryDate": {"exists": true}}}`): urgent within 60 days, very urgent within 14, past due once expired.',
     minColumns: 4,
     suggestedColumns: 7,
     example: {

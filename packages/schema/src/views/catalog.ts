@@ -245,6 +245,13 @@ export const DecisionLogNode = component('DecisionLog', 'Decisions, newest first
   filter: Filter.optional(),
 });
 
+/** R10.19: one proposed decision the reader answers on the page. */
+export const DecisionBlockNode = component(
+  'DecisionBlock',
+  "One proposed decision: its options side by side with what each leads to, pros, cons and sources, the recommendation marked, and buttons to choose, write another answer or decide later. Once answered it shows the owner's choice.",
+  { decision: z.string().min(1).describe('Id of a decision with options in this project') },
+);
+
 /** Filter controls a FileList can show above its rows (R7). */
 export const FILE_LIST_CONTROLS = ['search', 'kind', 'tag', 'issuer', 'expiry'] as const;
 /** Details a FileList row can show after the title. */
@@ -485,7 +492,7 @@ export const DueTrackerNode = component(
   "Repeating records (an interval: every N days or N km, whichever first) by when they're due, in four bands: past due, very urgent, urgent, not urgent.",
   {
     query: Query.describe(
-      'Repeating records, e.g. {"type": "record", "where": {"recordType": "reminder"}}',
+      'Repeating records, e.g. {"type": "record", "where": {"recordType": "reminder"}}, or files by expiryDate',
     ),
     show: z
       .array(FieldPath)
@@ -794,6 +801,11 @@ export const StartHereNode = component(
       .describe(
         `The reader's part in one line under ${START_HERE.yourPartChars} characters, the only place the page says it, e.g. "Nothing now. When G1 resumes: approve the 3 test cases and targets."`,
       ),
+    yourPartTarget: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Id of the widget where the reader does it, e.g. a DecisionBlock; adds a button'),
     claim: z
       .string()
       .min(1)
@@ -843,6 +855,7 @@ const LEAF_NODES = [
   AssigneeMatrixNode,
   ArtifactGalleryNode,
   DecisionLogNode,
+  DecisionBlockNode,
   FileListNode,
   FileViewNode,
   GalleryNode,

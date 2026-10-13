@@ -16,6 +16,7 @@ import {
   SquarePlus,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 import { useEffect, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -960,10 +961,10 @@ export function Sidebar() {
               <button
                 type="button"
                 onClick={() => setNotice(null)}
-                className="font-semibold"
+                className="-m-0.5 rounded-control p-0.5 opacity-80 hover:opacity-100"
                 aria-label="Dismiss"
               >
-                ×
+                <X className="size-4" aria-hidden />
               </button>
             </div>
           )}

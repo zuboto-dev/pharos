@@ -237,6 +237,35 @@ describe('DecisionBlock', () => {
     fireEvent.click(screen.getByRole('button', { name: /Answer it/ }));
     expect(scroll).toHaveBeenCalled();
   });
+
+  it('StartHere shows the answer once the decision it points at is made (v0.2 B10)', () => {
+    const widgets = [
+      {
+        id: 'start',
+        node: {
+          component: 'StartHere' as const,
+          purpose: 'needs-you' as const,
+          headline: 'Pick the empty state every page will use.',
+          yourPart: 'Choose one of two empty states by Friday.',
+          yourPartTarget: 'choice',
+          date: '2026-10-13',
+          path: [{ label: 'The choice', target: 'choice' }],
+        },
+      },
+      { id: 'choice', node: { component: 'DecisionBlock' as const, decision: 'dec_empty' } },
+    ];
+    render(
+      <ViewDataProvider
+        data={{ ...base, decisions: [proposal({ status: 'accepted', chosenOptionId: 'b' })] }}
+        version={1}
+      >
+        <ViewRenderer spec={{ component: 'Board', widgets }} />
+      </ViewDataProvider>,
+    );
+    expect(screen.getByText('Done: you chose “Checklist”')).toBeTruthy();
+    expect(screen.queryByText('Choose one of two empty states by Friday.')).toBeNull();
+    expect(screen.getByRole('button', { name: /See it/ })).toBeTruthy();
+  });
 });
 
 describe('artifact picture in the drawer (R7.15)', () => {

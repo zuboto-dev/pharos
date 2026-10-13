@@ -1,4 +1,5 @@
 import {
+  decisionState,
   ENTITIES,
   evidenceId,
   runQuery,
@@ -7,7 +8,8 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Check } from 'lucide-react';
+import { useBoardFiles } from '../board-files';
 import type { CSSProperties, ReactNode } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData } from '../context';
@@ -180,8 +182,26 @@ function Step({
   );
 }
 
+/**
+ * When "your part" points at a DecisionBlock that has been answered, what was decided (v0.2 B10):
+ * the page then says "Done: you chose …" instead of asking again.
+ */
+function useAnsweredPart(target: string | undefined): string | undefined {
+  const board = useBoardFiles();
+  const { entityById } = useViewData();
+  const widget = target ? board?.widget(target) : undefined;
+  if (widget?.node.component !== 'DecisionBlock') return undefined;
+  const decision = entityById.get(widget.node.decision);
+  if (decision?.type !== 'decision') return undefined;
+  const state = decisionState((decision as Entity<'decision'>).data);
+  if (state.kind === 'chosen') return `Done: you chose “${state.option.label}”`;
+  if (state.kind === 'answered') return `Done: you answered “${state.answer}”`;
+  return undefined;
+}
+
 export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
   const data = useViewData();
+  const done = useAnsweredPart(node.yourPartTarget);
   const matcher = useTermMatcher(node.terms);
   const purpose = PURPOSE[node.purpose];
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
@@ -199,7 +219,7 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
     <section
       aria-label={`${purpose.label}: start here`}
       className={clsx(
-        '@container space-y-4 rounded-block border border-l-4 border-line bg-surface p-4 sm:p-5',
+        '@container space-y-3 rounded-block border border-l-4 border-line bg-surface p-4',
         purpose.bar,
       )}
     >
@@ -225,7 +245,7 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
           </span>
         )}
       </div>
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {node.why && (
           <p className="text-sm text-ink-soft">
             <span className={clsx(LABEL, 'mr-2')}>Why</span>
@@ -252,14 +272,23 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
           )}
         >
           <span className={clsx(LABEL, 'shrink-0')}>Your part</span>
-          <span className="font-medium text-ink">{node.yourPart}</span>
+          <span className="font-medium text-ink">
+            {done ? (
+              <span className="inline-flex items-baseline gap-1.5">
+                <Check aria-hidden className="size-4 shrink-0 self-center text-ok" />
+                {done}
+              </span>
+            ) : (
+              node.yourPart
+            )}
+          </span>
           {node.yourPartTarget && (
             <button
               type="button"
               onClick={(e) => scrollToWidget(e.currentTarget, node.yourPartTarget!)}
               className="mt-1 inline-flex shrink-0 items-center gap-1 self-start text-sm font-medium text-accent-strong hover:underline @lg:mt-0 @lg:ml-auto"
             >
-              {node.purpose === 'needs-you' ? 'Answer it' : 'Go there'}{' '}
+              {done ? 'See it' : node.purpose === 'needs-you' ? 'Answer it' : 'Go there'}{' '}
               <ArrowDown aria-hidden className="size-3.5" />
             </button>
           )}

@@ -12,7 +12,14 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { expiryOf, extensionOf, fileName, formatSize, type Expiry } from '../../files/files';
+import {
+  expiryOf,
+  extensionOf,
+  fileName,
+  fileTitle,
+  formatSize,
+  type Expiry,
+} from '../../files/files';
 import { formatDate, localToday, plural } from '../../lib/format';
 import { useBoardFiles } from '../board-files';
 import { useViewData } from '../context';
@@ -103,6 +110,7 @@ function FileRow({
   shown?: boolean;
 }) {
   const d = file.data;
+  const { entityById } = useViewData();
   const parts: string[] = [];
   for (const detail of details ?? []) {
     if (detail === 'issuer' && d.issuer) parts.push(d.issuer);
@@ -125,7 +133,9 @@ function FileRow({
     >
       <FileTypeIcon path={d.path} className="mt-0.5 size-4 text-faint sm:mt-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-0.5 sm:flex-row sm:items-center">
-        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">{d.title}</span>
+        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">
+          {fileTitle(file, entityById.values())}
+        </span>
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted sm:shrink-0 sm:justify-end">
           {showKind && <OptionBadge field="file.kind" value={d.kind} />}
           {parts.length > 0 && <span className="truncate">{parts.join(' · ')}</span>}

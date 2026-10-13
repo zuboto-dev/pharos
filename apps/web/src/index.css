@@ -311,6 +311,14 @@
   }
 }
 
+/* Focus (v0.2 B10): every control a keyboard reaches shows where focus is, in both themes. */
+@layer base {
+  :where(a[href], button, summary, select, textarea, input, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-sky-500);
+    outline-offset: 2px;
+  }
+}
+
 /* Phones: 16 px fields, so focusing one doesn't zoom the page (unlayered: wins over text-sm). */
 @media (pointer: coarse) {
   input:not([type='checkbox'], [type='radio'], [type='range']),

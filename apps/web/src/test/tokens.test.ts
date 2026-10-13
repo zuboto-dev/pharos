@@ -37,6 +37,12 @@ describe('visual-system tokens', () => {
     }
   });
 
+  it('gives every keyboard-reachable control a visible focus ring (v0.2 B10)', () => {
+    expect(css).toMatch(
+      /:where\(a\[href\], button, summary, select, textarea, input, \[tabindex\]\):focus-visible \{\s*outline: 2px solid/,
+    );
+  });
+
   it('defines every themed colour for light and dark', () => {
     const light = css.slice(css.indexOf(':root {\n  --ph-'), css.indexOf('.dark {'));
     const dark = css.slice(css.indexOf('.dark {'), css.indexOf('@theme inline'));

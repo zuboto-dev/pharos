@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, useViewData } from '../catalog/context';
 import { RecordValue } from '../catalog/components/records';
+import { fileTitle } from '../files/files';
 import { formatDate } from './format';
 
 afterEach(cleanup);
@@ -14,6 +15,19 @@ describe('dates and links in tables (v0.2 B10)', () => {
     expect(formatDate('2026-10-20', true, now)).not.toMatch(/2026/);
     expect(formatDate('2024-03-01', true, now)).toMatch(/2024/);
     expect(formatDate('2027-01-05', true, now)).toMatch(/2027/);
+  });
+
+  it('call a file by its title, not its raw file name', () => {
+    const file = (title: string) => ({
+      id: 'file_a',
+      data: { title, path: 'ui-examples/empty-state-a.png' },
+    });
+    expect(fileTitle(file('Company seal'))).toBe('Company seal');
+    expect(fileTitle(file('empty-state-a.png'))).toBe('Empty state a');
+    const shownBy = [
+      { type: 'artifact', data: { title: 'Empty state A: just a line', fileId: 'file_a' } },
+    ];
+    expect(fileTitle(file('empty-state-a.png'), shownBy)).toBe('Empty state A: just a line');
   });
 
   it('show a web address as its glance, with the full address in the tooltip', () => {

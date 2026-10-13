@@ -23,6 +23,7 @@ import {
   Plus,
   RotateCcw,
   Undo2,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -451,11 +452,11 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           <p className="text-xs text-muted">
             <span className="hidden md:inline">
               Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
-              (double-click the bottom edge to fit content), use ⚙ for its settings, or remove it
-              with ✕.
+              (double-click the bottom edge to fit content), use the gear for its settings, or
+              remove it with the cross.
             </span>
             <span className="md:hidden">
-              Use ↑ ↓ to move widgets, ⚙ for settings, and ✕ to remove them.
+              Use ↑ ↓ to move widgets, the gear for settings, and the cross to remove them.
             </span>{' '}
             Changes are saved as revisions.
           </p>
@@ -572,10 +573,10 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           <button
             type="button"
             onClick={() => setNotice(null)}
-            className="font-semibold"
+            className="-m-0.5 rounded-control p-0.5 opacity-80 hover:opacity-100"
             aria-label="Dismiss"
           >
-            ×
+            <X className="size-4" aria-hidden />
           </button>
         </div>
       )}

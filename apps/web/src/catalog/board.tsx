@@ -21,6 +21,7 @@ import { EXIT_MS } from '../lib/motion';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
 import { BoardActionsProvider } from './action-board';
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
+import { AskHereProvider } from './empty-state';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
 import { BLOCK_PRESENCE_OUTLINE, BlockPresence, ViewPresence, useViewPresence } from './presence';
@@ -325,7 +326,21 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
             )}
           >
             <WidgetIdProvider id={widget.id}>
-              <Node node={widget.node} />
+              <AskHereProvider
+                ask={
+                  actions.ask
+                    ? (question) =>
+                        actions.ask!({
+                          label: view ? `${name} in ${view.name}` : name,
+                          viewId: view?.id,
+                          widgetId: widget.id,
+                          question,
+                        })
+                    : null
+                }
+              >
+                <Node node={widget.node} />
+              </AskHereProvider>
             </WidgetIdProvider>
             {!editing && present.widgets.has(widget.id) && (
               <BlockPresence agent={present.widgets.get(widget.id)!} />
@@ -342,9 +357,14 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                     widgetId: widget.id,
                   })
                 }
-                className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-control border border-line-strong bg-white/90 px-1.5 py-0.5 text-xs text-muted opacity-0 shadow-xs transition group-hover/widget:opacity-100 hover:text-accent-strong focus:opacity-100 dark:bg-neutral-900/90"
+                className={clsx(
+                  'tap-area absolute right-2 z-10 inline-flex items-center gap-1 rounded-control border border-line-strong bg-white/90 px-1.5 py-0.5 text-xs text-muted opacity-0 shadow-xs transition group-hover/widget:opacity-100 hover:text-accent-strong focus:opacity-100 pointer-coarse:opacity-100 dark:bg-neutral-900/90',
+                  // Below the "is editing…" mark when an agent is at work here, never under it.
+                  !editing && present.widgets.has(widget.id) ? 'top-5' : 'top-2',
+                )}
               >
-                <MessageCircleQuestion className="size-3.5" /> Ask
+                <MessageCircleQuestion className="size-3.5" aria-hidden />{' '}
+                <span className="pointer-coarse:sr-only">Ask</span>
               </button>
             )}
             {editing && (

@@ -1,5 +1,6 @@
 import type { Entity } from '@pharos/schema';
 import clsx from 'clsx';
+import { fileTitle } from '../files/files';
 import { glanceDateOf } from '../files/glance';
 import { FileTypeIcon } from './components/file-list';
 import { useViewData } from './context';
@@ -26,23 +27,24 @@ export function LinkedFiles({
   if (!files.length) return null;
   return (
     <span className={clsx('flex flex-wrap gap-1', className)} aria-label="Linked files">
-      {files.map((file) => (
-        <button
-          key={file.id}
-          type="button"
-          title={[`Open “${file.data.title}”`, glanceDateOf(file.data)?.text]
-            .filter(Boolean)
-            .join(' · ')}
-          onClick={(e) => {
-            e.stopPropagation();
-            open(file.id);
-          }}
-          className="inline-flex max-w-[14rem] items-center gap-1 rounded-control border border-line-strong px-1.5 py-0.5 text-xs text-accent-strong hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-sky-950"
-        >
-          <FileTypeIcon path={file.data.path ?? ''} className="size-3 shrink-0" />
-          <span className="truncate">{file.data.title}</span>
-        </button>
-      ))}
+      {files.map((file) => {
+        const title = fileTitle(file, entityById.values());
+        return (
+          <button
+            key={file.id}
+            type="button"
+            title={[`Open “${title}”`, glanceDateOf(file.data)?.text].filter(Boolean).join(' · ')}
+            onClick={(e) => {
+              e.stopPropagation();
+              open(file.id);
+            }}
+            className="inline-flex max-w-[14rem] items-center gap-1 rounded-control border border-line-strong px-1.5 py-0.5 text-xs text-accent-strong hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-sky-950"
+          >
+            <FileTypeIcon path={file.data.path ?? ''} className="size-3 shrink-0" />
+            <span className="truncate">{title}</span>
+          </button>
+        );
+      })}
     </span>
   );
 }

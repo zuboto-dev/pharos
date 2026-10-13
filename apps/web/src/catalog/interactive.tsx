@@ -140,15 +140,12 @@ function GlanceCard({ entity }: { entity: Entity }) {
               ? `Starts ${formatDate(start)}`
               : `Due ${formatDate(end!)}`}
           {start && end && (
-            <span className="text-neutral-400">
-              {' '}
-              · {plural(toDay(end) - toDay(start) + 1, 'day')}
-            </span>
+            <span className="text-faint"> · {plural(toDay(end) - toDay(start) + 1, 'day')}</span>
           )}
         </p>
       )}
       {text && <p className="line-clamp-3 text-xs text-muted">{text}</p>}
-      <div className="text-xs text-neutral-400">Click for details</div>
+      <div className="text-xs text-faint">Click for details</div>
     </div>
   );
 }
@@ -198,7 +195,7 @@ export function EntityRef({ id, className }: { id: string; className?: string })
   const openItem = useOpenItem();
   const { handlers, card } = useGlance(id);
   const entity = entityById.get(id);
-  if (!entity) return <span className="text-xs text-neutral-400">{id}</span>;
+  if (!entity) return <span className="text-xs text-faint">{id}</span>;
   return (
     <>
       <a
@@ -257,10 +254,10 @@ export function TaskCheck({ task, className }: { task: Entity<'task'>; className
         void setStatus(task, done ? 'todo' : 'done');
       }}
       className={clsx(
-        'flex size-5 shrink-0 items-center justify-center rounded-full border transition',
+        'tap-area relative flex size-5 shrink-0 items-center justify-center rounded-full border transition',
         done
           ? 'border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'
-          : 'border-neutral-300 text-neutral-400 hover:border-emerald-500 hover:text-emerald-500 dark:border-neutral-600',
+          : 'border-neutral-300 text-faint hover:border-emerald-500 hover:text-emerald-500 dark:border-neutral-600',
         className,
       )}
     >

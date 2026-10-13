@@ -5,7 +5,20 @@ import {
   type NodeOf,
   type RevisionSummary,
 } from '@pharos/schema';
-import { Bot, Cog, File, FileText, Link2, Package, Palette, User } from 'lucide-react';
+import {
+  Bot,
+  Cog,
+  File,
+  FileText,
+  History,
+  Link2,
+  Package,
+  Palette,
+  Scale,
+  User,
+} from 'lucide-react';
+import { EmptyState } from '../empty-state';
+import { SkeletonRows } from '../skeleton';
 import { useResource } from '../../lib/api';
 import { formatDate, localToday, plural, timeAgo } from '../../lib/format';
 import { useViewData } from '../context';
@@ -22,9 +35,10 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
   const options = useOptions();
   const artifacts = runQuery(data, 'artifact', node.filter);
   const create = useCreate();
-  const addArtifact = (
+  const addArtifact = (variant?: 'button') => (
     <QuickAdd
       label="Add artifact"
+      variant={variant}
       onAdd={(title) =>
         create('artifact', {
           ...defaultsFrom(node.filter?.where, data.project.data.currentStageId),
@@ -35,10 +49,13 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
   );
   if (!artifacts.length) {
     return (
-      <>
-        <Empty>No artifacts yet</Empty>
-        {addArtifact}
-      </>
+      <EmptyState
+        icon={Package}
+        title={data.artifacts.length ? 'No artifacts match this list' : 'No artifacts yet'}
+        hint="Documents, designs and links the work produces show up here."
+      >
+        {addArtifact('button')}
+      </EmptyState>
     );
   }
   return (
@@ -57,7 +74,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <Icon className="size-4 shrink-0 text-neutral-400" />
+                <Icon className="size-4 shrink-0 text-faint" />
                 <span className="truncate text-sm font-medium" title={artifact.data.title}>
                   {artifact.data.title}
                 </span>
@@ -78,7 +95,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
         );
       })}
       <div className="flex items-center rounded-tile border border-dashed border-line p-1">
-        {addArtifact}
+        {addArtifact()}
       </div>
     </div>
   );
@@ -109,9 +126,10 @@ export function plainExcerpt(markdown: string): string {
 export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
   const data = useViewData();
   const create = useCreate();
-  const addDecision = (
+  const addDecision = (variant?: 'button') => (
     <QuickAdd
       label="Record a decision"
+      variant={variant}
       onAdd={(title) => create('decision', { title, decisionDate: localToday() })}
     />
   );
@@ -122,10 +140,13 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
   decisions = decisions.slice(0, limit);
   if (!decisions.length) {
     return (
-      <>
-        <Empty>No decisions recorded yet</Empty>
-        {addDecision}
-      </>
+      <EmptyState
+        icon={Scale}
+        title="No decisions recorded yet"
+        hint="Write down what was decided and why, so it isn’t asked again."
+      >
+        {addDecision('button')}
+      </EmptyState>
     );
   }
   return (
@@ -158,7 +179,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
                 <LinkedFiles ids={decision.data.fileIds} className="mt-1" />
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className="text-right text-xs text-neutral-400">
+                <span className="text-right text-xs text-faint">
                   {decider && <span className="text-ink-soft">{decider} · </span>}
                   {formatDate(decision.data.decisionDate ?? decision.createdAt.slice(0, 10), true)}
                 </span>
@@ -168,7 +189,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
           </li>
         );
       })}
-      <li>{addDecision}</li>
+      <li>{addDecision()}</li>
     </ul>
   );
 }
@@ -192,9 +213,16 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
   const history = useResource<RevisionSummary[]>(
     `/api/history?projectId=${project.id}&limit=${node.limit ?? 10}&v=${version}`,
   );
-  if (history.status === 'loading') return <Empty>Loading…</Empty>;
+  if (history.status === 'loading') return <SkeletonRows rows={3} label="Loading activity" />;
   if (!history.data) return <Empty>Couldn’t load activity</Empty>;
-  if (!history.data.length) return <Empty>No activity yet</Empty>;
+  if (!history.data.length)
+    return (
+      <EmptyState
+        icon={History}
+        title="No activity yet"
+        hint="Every change you or an agent makes to this project shows up here."
+      />
+    );
   return (
     <div>
       <ol className="-mx-2 space-y-0.5">
@@ -222,9 +250,7 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
                     {rev.revertOf && ` · reverts #${rev.revertOf}`}
                   </span>
                   {labels.length > 0 && (
-                    <span className="block truncate text-xs text-neutral-400">
-                      {labels.join(' · ')}
-                    </span>
+                    <span className="block truncate text-xs text-faint">{labels.join(' · ')}</span>
                   )}
                 </span>
               </button>

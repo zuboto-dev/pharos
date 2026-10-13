@@ -22,10 +22,14 @@ export function timeAgo(iso: string, now = Date.now()): string {
   return 'just now';
 }
 
-/** Formats a YYYY-MM-DD date without timezone shifts. */
-export function formatDate(date: string, short = false): string {
+/**
+ * Formats a YYYY-MM-DD date without timezone shifts. `short` leaves the year out, but only for
+ * dates in the current year (v0.2 B10): "Oct 20", "Mar 1, 2024".
+ */
+export function formatDate(date: string, short = false, now = new Date()): string {
   const [y, m, d] = date.split('-').map(Number);
-  return (short ? shortDate : dateFormat).format(new Date(y!, m! - 1, d!));
+  const format = short && y === now.getFullYear() ? shortDate : dateFormat;
+  return format.format(new Date(y!, m! - 1, d!));
 }
 
 export function humanize(value: string): string {

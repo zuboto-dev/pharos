@@ -6,7 +6,8 @@ import {
   type StageProgress,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { Check, TriangleAlert } from 'lucide-react';
+import { CalendarRange, Check, Milestone, TriangleAlert } from 'lucide-react';
+import { AskAgentButton, EmptyState } from '../empty-state';
 import { useState } from 'react';
 import { formatDate } from '../../lib/format';
 import { useViewData } from '../context';
@@ -14,7 +15,7 @@ import { Clickable, useGlance } from '../interactive';
 import { QuickAdd, useCreate } from '../quickadd';
 import { timelineTicks, toDay } from '../timeline';
 import { OptionBadge, useOptions } from '../options';
-import { Badge, DOT_TONES, Empty, ProgressBar } from '../ui';
+import { Badge, DOT_TONES, ProgressBar } from '../ui';
 
 function dateRange(stage: Entity<'stage'>): string | null {
   const { startDate, targetDate } = stage.data;
@@ -68,14 +69,19 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
   const { tasks, project } = data;
   const stages = runQuery(data, 'stage', node.filter);
   const create = useCreate();
-  const addStage = <QuickAdd label="Add stage" onAdd={(name) => create('stage', { name })} />;
+  const addStage = (variant?: 'button') => (
+    <QuickAdd label="Add stage" variant={variant} onAdd={(name) => create('stage', { name })} />
+  );
   const options = useOptions();
   if (!stages.length) {
     return (
-      <>
-        <Empty>No stages yet</Empty>
-        {addStage}
-      </>
+      <EmptyState
+        icon={Milestone}
+        title={data.stages.length ? 'No stages match this list' : 'No stages yet'}
+        hint="Split the work into stages (phases or milestones) to see where it stands."
+      >
+        {addStage('button')}
+      </EmptyState>
     );
   }
   return (
@@ -123,14 +129,12 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                 )}
               </div>
               <StageProgressLine progress={progress} current={current} />
-              {dateRange(stage) && (
-                <div className="text-xs text-neutral-400">{dateRange(stage)}</div>
-              )}
+              {dateRange(stage) && <div className="text-xs text-faint">{dateRange(stage)}</div>}
             </Clickable>
           </li>
         );
       })}
-      <li className="flex min-w-36 items-center">{addStage}</li>
+      <li className="flex min-w-36 items-center">{addStage()}</li>
     </ol>
   );
 }
@@ -141,9 +145,26 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
   const stages = runQuery(data, 'stage', node.filter);
   const dated = stages.filter((s) => s.data.startDate || s.data.targetDate);
   const undated = stages.filter((s) => !s.data.startDate && !s.data.targetDate);
-  if (!stages.length) return <Empty>No stages yet</Empty>;
+  if (!stages.length)
+    return (
+      <EmptyState
+        icon={CalendarRange}
+        title="No stages yet"
+        hint="Stages with dates show up here on a timeline."
+      >
+        <AskAgentButton question="Plan the stages of this project, with start and target dates." />
+      </EmptyState>
+    );
   if (!dated.length)
-    return <Empty>Add start or target dates to stages to see them on a timeline</Empty>;
+    return (
+      <EmptyState
+        icon={CalendarRange}
+        title="No dates yet"
+        hint="Add start or target dates to stages to see them on a timeline."
+      >
+        <AskAgentButton question="Add start and target dates to the stages of this project." />
+      </EmptyState>
+    );
 
   const days = dated.flatMap((s) =>
     [s.data.startDate, s.data.targetDate].filter(Boolean).map((d) => toDay(d!)),
@@ -186,7 +207,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
           />
         ))}
         <div
-          className="relative h-5 text-xs text-neutral-400"
+          className="relative h-5 text-xs text-faint"
           style={{ gridColumn: 2, gridRow: rows + 1 }}
         >
           {/* Labels too close to "Today" are hidden so they don't overlap it. */}
@@ -202,7 +223,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
               </span>
             ))}
           <span
-            className="absolute -translate-x-1/2 font-medium text-rose-500"
+            className="absolute -translate-x-1/2 font-medium text-danger"
             style={{ left: `${pos(today)}%` }}
           >
             Today
@@ -278,13 +299,18 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
   const options = useOptions();
   const stages = runQuery(data, 'stage', node.filter);
   const create = useCreate();
-  const addStage = <QuickAdd label="Add stage" onAdd={(name) => create('stage', { name })} />;
+  const addStage = (variant?: 'button') => (
+    <QuickAdd label="Add stage" variant={variant} onAdd={(name) => create('stage', { name })} />
+  );
   if (!stages.length) {
     return (
-      <>
-        <Empty>No stages yet</Empty>
-        {addStage}
-      </>
+      <EmptyState
+        icon={Milestone}
+        title={data.stages.length ? 'No stages match this list' : 'No stages yet'}
+        hint="Split the work into stages (phases or milestones) to see where it stands."
+      >
+        {addStage('button')}
+      </EmptyState>
     );
   }
   return (
@@ -311,9 +337,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
                 ) : (
                   <OptionBadge field="stage.status" value={stage.data.status} />
                 )}
-                {dateRange(stage) && (
-                  <span className="text-xs text-neutral-400">{dateRange(stage)}</span>
-                )}
+                {dateRange(stage) && <span className="text-xs text-faint">{dateRange(stage)}</span>}
               </div>
               {stage.data.description && (
                 <p className="text-sm text-muted">{stage.data.description}</p>
@@ -325,7 +349,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
           </li>
         );
       })}
-      <li className="-ml-2">{addStage}</li>
+      <li className="-ml-2">{addStage()}</li>
     </ol>
   );
 }

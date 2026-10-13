@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ExternalLink,
   FileText,
+  SearchX,
   TriangleAlert,
 } from 'lucide-react';
 import { useId, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
@@ -22,7 +23,8 @@ import { Popover, usePopover } from '../popover';
 import { LinkedFiles } from '../linked-files';
 import { LocalSourcePath, linkedFileOf } from '../source-file';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
-import { Badge, Dot, Empty, isHttp, Uri, type Tone } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { Badge, Dot, isHttp, Uri, type Tone } from '../ui';
 import {
   OpenTasks,
   ProgressLine,
@@ -348,7 +350,16 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
   const data = useViewData();
   const matcher = useTermMatcher(node.terms);
   const claim = findClaim(data, node.claim);
-  if (!claim) return <Empty>This finding was deleted or isn’t in this project</Empty>;
+  if (!claim)
+    return (
+      <EmptyState
+        icon={SearchX}
+        title="This finding was deleted or isn’t in this project"
+        hint="Ask your agent to point this block at another finding."
+      >
+        <AskAgentButton question="Point this block at a finding that’s in the project." />
+      </EmptyState>
+    );
   const { statement, detail } = claim.data;
   const [statementTerms, detailTerms] = firstUses([statement, detail ?? ''], matcher);
   const tone = node.tone ?? 'neutral';
@@ -701,7 +712,7 @@ function Stack({
                   <ChevronDown
                     aria-hidden
                     className={clsx(
-                      'hidden size-4 text-neutral-400 motion-safe:transition sm:block',
+                      'hidden size-4 text-faint motion-safe:transition sm:block',
                       isOpen && 'rotate-180',
                     )}
                   />
@@ -970,7 +981,7 @@ function Flow({
                       <ChevronDown
                         aria-hidden
                         className={clsx(
-                          'mt-0.5 size-4 shrink-0 text-neutral-400 motion-safe:transition-transform',
+                          'mt-0.5 size-4 shrink-0 text-faint motion-safe:transition-transform',
                           isOpen && 'rotate-180',
                         )}
                       />

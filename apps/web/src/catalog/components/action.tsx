@@ -16,7 +16,7 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { AlertTriangle, Check, Loader2, Plus, X } from 'lucide-react';
+import { AlertTriangle, Check, ClipboardX, Loader2, Plus, X } from 'lucide-react';
 import {
   useEffect,
   useId,
@@ -32,7 +32,8 @@ import { formatDate, localToday } from '../../lib/format';
 import { useBoardActions } from '../action-board';
 import { useWidgetId } from '../board-files';
 import { useViewData, type ViewData } from '../context';
-import { BUTTON, Empty } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { BUTTON } from '../ui';
 
 /**
  * An Action block (R10): a button and a short form built from a record type's fields, e.g.
@@ -502,9 +503,15 @@ export function Action({ node }: { node: NodeOf<'Action'> }) {
   const { usable, problems, start, element } = useActionForm(node, widgetId);
   if (problems.length)
     return (
-      <Empty>
-        “{node.label}” can’t be used here: {problems.join('; ')}
-      </Empty>
+      <EmptyState
+        icon={ClipboardX}
+        title={`“${node.label}” can’t be used here`}
+        hint={`${problems.join('; ')}.`}
+      >
+        <AskAgentButton
+          question={`Fix the “${node.label}” action on this page: ${problems.join('; ')}.`}
+        />
+      </EmptyState>
     );
   const Icon = node.does === 'done' ? Check : Plus;
   return (

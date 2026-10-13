@@ -31,6 +31,7 @@ describe('motion tokens', () => {
     for (const [, name, value] of animations) {
       if (name === 'block-changed') continue; // a colour fade, not a movement
       if (name === 'presence') continue; // a slow looping pulse (v0.2 B5), not a transition
+      if (name === 'shimmer') continue; // a loading skeleton's slow sweep (v0.2 B8), still when reduced
       expect(value, name).toMatch(/var\(--motion-(quick|base|slow)\) var\(--ease-calm(-out)?\)/);
     }
   });
@@ -38,7 +39,12 @@ describe('motion tokens', () => {
   it('turns every movement off under prefers-reduced-motion, leaving opacity', () => {
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
     const block = reduced.slice(0, reduced.indexOf('}\n}') + 3);
-    for (const distance of ['--motion-rise: 0px', '--motion-drawer: 0px', '--motion-side: 0px'])
+    for (const distance of [
+      '--motion-rise: 0px',
+      '--motion-drawer: 0px',
+      '--motion-sheet: 0px',
+      '--motion-side: 0px',
+    ])
       expect(block).toContain(distance);
     expect(block).toContain('--motion-scale: 1');
     expect(block).toContain('--motion-presence-scale: 1');

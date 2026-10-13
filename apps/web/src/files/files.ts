@@ -35,6 +35,29 @@ export function glanceName(uri: string): string {
   return decodeURIComponentSafe(fileName(path)) || uri;
 }
 
+/**
+ * What to call a project file in a chip or a row (v0.2 B10): its title, unless that is only its
+ * file name (the default when it was added). Then the title of an item that shows it (an
+ * artifact whose `fileId` is this file), else the name read as words: "empty-state-a.png" →
+ * "Empty state a".
+ */
+export function fileTitle(
+  file: { id: string; data: { title: string; path: string } },
+  entities?: Iterable<{ type: string; data: unknown }>,
+): string {
+  const name = fileName(file.data.path);
+  const title = file.data.title.trim();
+  if (title && title !== name) return title;
+  for (const e of entities ?? []) {
+    const d = e.data as { fileId?: unknown; title?: unknown };
+    if (e.type === 'artifact' && d.fileId === file.id && typeof d.title === 'string' && d.title)
+      return d.title;
+  }
+  const dot = name.lastIndexOf('.');
+  const words = (dot > 0 ? name.slice(0, dot) : name).replace(/[-_]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
+}
+
 function decodeURIComponentSafe(text: string): string {
   try {
     return decodeURIComponent(text);

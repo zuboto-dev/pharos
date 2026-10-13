@@ -14,6 +14,8 @@
   --motion-slow: 220ms;
   --motion-rise: 4px;
   --motion-drawer: 24px;
+  /* On phones the drawer is a bottom sheet (v0.2 B9): it rises this far as it fades in. */
+  --motion-sheet: 32px;
   --motion-side: -8px;
   --motion-scale: 0.98;
   /* The presence dot (v0.2 B5) breathes: it shrinks a little as it fades. */
@@ -24,6 +26,7 @@
   :root {
     --motion-rise: 0px;
     --motion-drawer: 0px;
+    --motion-sheet: 0px;
     --motion-side: 0px;
     --motion-scale: 1;
     --motion-presence-scale: 1;
@@ -47,9 +50,9 @@
   --ph-ink: var(--color-neutral-900);
   --ph-ink-soft: var(--color-neutral-700);
   --ph-muted: var(--color-neutral-500);
-  --ph-faint: var(--color-neutral-400);
-  --ph-accent: var(--color-sky-600);
-  --ph-accent-strong: var(--color-sky-700);
+  --ph-faint: var(--color-neutral-500);
+  --ph-accent: var(--color-sky-700);
+  --ph-accent-strong: var(--color-sky-800);
   --ph-danger: var(--color-rose-600);
   --ph-warn: var(--color-amber-700);
   --ph-ok: var(--color-emerald-600);
@@ -69,6 +72,9 @@
   /* Presence (v0.2 B5): an agent working here. */
   --ph-presence: var(--color-violet-500);
   --ph-presence-ink: var(--color-violet-700);
+  /* Loading skeletons (v0.2 B8): the placeholder and the lighter band that sweeps over it. */
+  --ph-skeleton: var(--color-neutral-100);
+  --ph-skeleton-shine: var(--color-white);
 }
 
 .dark {
@@ -103,6 +109,8 @@
   --ph-chart-bad: var(--color-rose-400);
   --ph-presence: var(--color-violet-400);
   --ph-presence-ink: var(--color-violet-300);
+  --ph-skeleton: var(--color-neutral-800);
+  --ph-skeleton-shine: oklch(33% 0 none);
 }
 
 @theme inline {
@@ -177,8 +185,11 @@
   --animate-drawer-in: motion-drawer-in var(--motion-slow) var(--ease-calm) backwards;
   --animate-drawer-out: motion-drawer-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-sheet-in: motion-sheet-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-sheet-out: motion-sheet-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-block-changed: motion-block-changed 1600ms ease-out;
   --animate-presence: motion-presence 1800ms ease-in-out infinite;
+  --animate-shimmer: motion-shimmer 1800ms ease-in-out infinite;
 
   @keyframes motion-fade-in {
     from {
@@ -214,6 +225,18 @@
       transform: translateX(var(--motion-drawer));
     }
   }
+  @keyframes motion-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--motion-sheet));
+    }
+  }
+  @keyframes motion-sheet-out {
+    to {
+      opacity: 0;
+      transform: translateY(var(--motion-sheet));
+    }
+  }
   @keyframes motion-side-in {
     from {
       opacity: 0;
@@ -230,6 +253,15 @@
     50% {
       opacity: 0.35;
       transform: scale(var(--motion-presence-scale));
+    }
+  }
+  /* Loading skeletons: a lighter band sweeps slowly across (still under reduced motion). */
+  @keyframes motion-shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0 0;
     }
   }
   /* A block whose content an update changed: a soft ring that fades away (not a flash). */
@@ -251,8 +283,86 @@
   }
 }
 
+/*
+ * Phones (v0.2 B9): on a touch screen every control is at least 44 × 44 px to tap (WCAG 2.5.5).
+ * In the base layer, so a block's own sizes still win where it sets a minimum. Exempt: a reference
+ * inside a sentence (`data-inline-target`, WCAG 2.5.8's inline exception) and small drawn controls
+ * that reach further than they look instead (`tap-area`: a checkbox, a switch).
+ */
+@layer base {
+  @media (pointer: coarse) {
+    :where(
+      button,
+      a[href],
+      summary,
+      select,
+      textarea,
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range']),
+      [role='button'],
+      [role='tab'],
+      [role='switch'],
+      [role='menuitem'],
+      [role='option'],
+      [role='checkbox']
+    ):not(:where([data-inline-target], [data-inline-target] *, .tap-area)) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+}
+
+/* Focus (v0.2 B10): every control a keyboard reaches shows where focus is, in both themes. */
+@layer base {
+  :where(a[href], button, summary, select, textarea, input, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-sky-500);
+    outline-offset: 2px;
+  }
+}
+
+/* Phones: 16 px fields, so focusing one doesn't zoom the page (unlayered: wins over text-sm). */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* A small drawn control (a checkbox, a switch) whose tap area reaches 44 × 44 px on touch. */
+@utility tap-area {
+  @media (pointer: coarse) {
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      translate: -50% -50%;
+    }
+  }
+}
+
 /* Compact prose styles for rendered markdown. */
 @layer components {
+  /* A loading placeholder (catalog/skeleton.tsx). */
+  .ph-skeleton {
+    background-color: var(--ph-skeleton);
+    background-image: linear-gradient(
+      90deg,
+      var(--ph-skeleton) 30%,
+      var(--ph-skeleton-shine) 50%,
+      var(--ph-skeleton) 70%
+    );
+    background-size: 300% 100%;
+    animation: var(--animate-shimmer);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ph-skeleton {
+      animation: none;
+      background-image: none;
+    }
+  }
   .md {
     @apply text-sm leading-relaxed text-ink-soft;
   }

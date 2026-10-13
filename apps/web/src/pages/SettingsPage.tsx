@@ -8,6 +8,7 @@ import {
 import clsx from 'clsx';
 import { Check, Copy, Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { Skeleton, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 import { FolderRequestCard, useFolderRequests } from '../files/FolderRequests';
 import { ApiError, postJson, useResource } from '../lib/api';
@@ -75,7 +76,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
       type="button"
       aria-label={`Copy ${label}`}
       onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
-      className="shrink-0 rounded p-1 text-neutral-400 hover:bg-subtle hover:text-ink-soft"
+      className="shrink-0 rounded p-1 text-faint hover:bg-subtle hover:text-ink-soft"
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </button>
@@ -137,7 +138,7 @@ function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
-        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40',
+        'tap-area relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40',
         checked ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700',
       )}
     >
@@ -397,7 +398,7 @@ function FolderRow({
             </form>
           ) : (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <Folder className="size-4 shrink-0 text-neutral-400" />
+              <Folder className="size-4 shrink-0 text-faint" />
               {folder.label}
             </p>
           )}
@@ -591,7 +592,7 @@ function Folders() {
       ) : folders.data ? (
         <p className="text-sm text-muted">No folders yet.</p>
       ) : (
-        <p className="text-sm text-neutral-400">Loading…</p>
+        <SkeletonRows rows={2} label="Loading folders" />
       )}
       <AddFolder onAdded={changed} onError={report} />
       {error && (
@@ -684,7 +685,7 @@ export function SettingsPage() {
             <Row label="Version">{s.version}</Row>
           </dl>
         ) : (
-          <p className="text-sm text-neutral-400">Loading…</p>
+          <Skeleton lines={4} label="Loading settings" />
         )}
       </Section>
     </div>

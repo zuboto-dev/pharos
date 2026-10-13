@@ -227,9 +227,8 @@ describe('Log a service (Car)', () => {
     const money = packDataset(MONEY_PACK, file.fixtures!.october!, TODAY);
     // The car's action on a money project: the record type isn't there.
     page(CAR_PACK, carCases, 'one-car', vi.fn(), money as ProjectDataset);
-    expect(
-      screen.getByText(/“Log a service” can’t be used here: recordType "service"/),
-    ).toBeTruthy();
+    expect(screen.getByText('“Log a service” can’t be used here')).toBeTruthy();
+    expect(screen.getByText(/recordType "service" isn't a record type here/)).toBeTruthy();
     expect((money.records as Entity<'record'>[]).length).toBeGreaterThan(0);
   });
 });

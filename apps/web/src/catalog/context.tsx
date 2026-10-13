@@ -15,7 +15,14 @@ export type ApplyOutcome =
   { ok: true; revision: number | null; created: Record<string, string> } | { ok: false };
 
 /** What a question is about, when someone asks the agent from the UI. */
-export type AskAbout = { label: string; viewId?: string; widgetId?: string; aboutId?: string };
+export type AskAbout = {
+  label: string;
+  viewId?: string;
+  widgetId?: string;
+  aboutId?: string;
+  /** A question to start from, e.g. from an empty block's "Ask an agent" (v0.2 B8). */
+  question?: string;
+};
 
 export type ViewActions = {
   /** Opens the "ask the agent" dialog (only where asking is available). */

@@ -2,7 +2,7 @@ import clsx from 'clsx';
 import type { ReactNode } from 'react';
 
 const ICON_BASE =
-  'inline-flex h-8 min-w-8 shrink-0 items-center justify-center gap-1 rounded-control border px-1.5 text-sm font-medium transition-colors duration-(--motion-quick) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:opacity-40';
+  'inline-flex h-8 min-w-8 shrink-0 pointer-coarse:min-w-11 items-center justify-center gap-1 rounded-control border px-1.5 text-sm font-medium transition-colors duration-(--motion-quick) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:opacity-40';
 
 /** Icon-only buttons (the project's top bar, compact file actions); complete strings per look. */
 export const ICON_BUTTON = {

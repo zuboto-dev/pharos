@@ -1,15 +1,33 @@
 import { FILE_LIST_CONTROLS, fileTypeOf, runQuery, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { File, FileAudio, FileImage, FileSpreadsheet, FileText, Search, X } from 'lucide-react';
+import {
+  File,
+  FileAudio,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  Search,
+  SearchX,
+  X,
+} from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import { expiryOf, extensionOf, fileName, formatSize, type Expiry } from '../../files/files';
+import {
+  expiryOf,
+  extensionOf,
+  fileName,
+  fileTitle,
+  formatSize,
+  type Expiry,
+} from '../../files/files';
 import { formatDate, localToday, plural } from '../../lib/format';
 import { useBoardFiles } from '../board-files';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
 import { OptionBadge, useOptions } from '../options';
 import { Select } from '../select';
-import { Badge, Empty } from '../ui';
+import { AddFilesActions, EmptyState, FILES_HINT } from '../empty-state';
+import { Badge, BUTTON } from '../ui';
 import { GlanceDate } from '../../files/glance';
 import { PlayButton, isAudio } from '../../files/audio';
 
@@ -92,6 +110,7 @@ function FileRow({
   shown?: boolean;
 }) {
   const d = file.data;
+  const { entityById } = useViewData();
   const parts: string[] = [];
   for (const detail of details ?? []) {
     if (detail === 'issuer' && d.issuer) parts.push(d.issuer);
@@ -114,7 +133,9 @@ function FileRow({
     >
       <FileTypeIcon path={d.path} className="mt-0.5 size-4 text-faint sm:mt-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-0.5 sm:flex-row sm:items-center">
-        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">{d.title}</span>
+        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">
+          {fileTitle(file, entityById.values())}
+        </span>
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted sm:shrink-0 sm:justify-end">
           {showKind && <OptionBadge field="file.kind" value={d.kind} />}
           {parts.length > 0 && <span className="truncate">{parts.join(' · ')}</span>}
@@ -200,9 +221,13 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
 
   if (!all.length) {
     return (
-      <Empty>
-        {data.files?.length ? 'No files match this list' : 'No files added to this project yet'}
-      </Empty>
+      <EmptyState
+        icon={data.files?.length ? SearchX : FolderOpen}
+        title={data.files?.length ? 'No files match this list' : 'No files in this project yet'}
+        hint={data.files?.length ? 'Files that match its filter show up here.' : FILES_HINT}
+      >
+        {!data.files?.length && <AddFilesActions />}
+      </EmptyState>
     );
   }
 
@@ -239,7 +264,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Kind"
         value={kind}
         onChange={setKind}
-        className="w-auto"
         options={[
           { value: '', label: 'All kinds' },
           ...kinds.map((k) => ({
@@ -256,7 +280,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Tag"
         value={tag}
         onChange={setTag}
-        className="w-auto"
         options={[
           { value: '', label: 'All tags' },
           ...tags.map((t) => ({ value: t, label: `#${t}` })),
@@ -269,7 +292,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Issuer"
         value={issuer}
         onChange={setIssuer}
-        className="w-auto"
         options={[
           { value: '', label: 'All issuers' },
           ...issuers.map((i) => ({ value: i, label: i })),
@@ -282,7 +304,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Expiry"
         value={expiry}
         onChange={(v) => setExpiry(v as ExpiryFilter)}
-        className="w-auto"
         options={EXPIRY_CHOICES}
       />
     ),
@@ -301,12 +322,12 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   return (
     <div className="space-y-3">
       {(controls.has('search') || filters.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2">
           {controls.has('search') && (
-            <label className="relative min-w-0 flex-1 basis-48">
+            <label className="relative block min-w-0">
               <span className="sr-only">Find a file</span>
               <Search
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-neutral-400"
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
                 aria-hidden
               />
               <input
@@ -319,7 +340,9 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
               />
             </label>
           )}
-          {filters}
+          {filters.some(Boolean) && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">{filters}</div>
+          )}
         </div>
       )}
       {filtering && (
@@ -368,7 +391,13 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
             </ul>
           </section>
         ))}
-        {!shown.length && <Empty>No files match. Try fewer words or clear the filters.</Empty>}
+        {!shown.length && (
+          <EmptyState icon={SearchX} title="No files match" hint="Try fewer words.">
+            <button type="button" onClick={clear} className={BUTTON.secondary}>
+              Clear the filters
+            </button>
+          </EmptyState>
+        )}
       </div>
     </div>
   );

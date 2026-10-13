@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OPTION_COLORS, OptionValue } from './options.js';
+import { isCalendarDate } from './views/dates.js';
 
 /**
  * Records (R8): a project keeps its own kinds of records (a car service, a bill) with typed
@@ -156,8 +157,6 @@ export function findRecordType(
   return recordTypesOf(project).find((t) => t.key === key);
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
  * Problems with one record's fields against its type (empty when it fits). References and files
  * are checked by the store, which can see other entities.
@@ -198,7 +197,10 @@ function valueProblem(def: RecordFieldDef, value: unknown): string | undefined {
     case 'money':
       return isMoney(value) ? undefined : 'expected {amount (minor units), currency}';
     case 'date':
-      return typeof value === 'string' && DATE.test(value) ? undefined : 'expected YYYY-MM-DD';
+      if (isCalendarDate(value)) return undefined;
+      return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? `${value} isn't a date on the calendar`
+        : 'expected YYYY-MM-DD';
     case 'option': {
       const values = (def.options ?? []).map((o) => o.value);
       return typeof value === 'string' && values.includes(value)

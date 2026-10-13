@@ -1186,6 +1186,7 @@ class Transaction {
                 `${prefix}: ${describe('record', record.id, record.data)}`,
               ),
             );
+        issues.push(...this.projectViewIssues(entity as Entity<'project'>, prefix));
       }
       if (entity.type === 'view')
         issues.push(...this.viewQueryIssues(entity as Entity<'view'>, prefix));
@@ -1352,9 +1353,12 @@ class Transaction {
   }
 
   /** Query findings of a view's own spec (templates are built in and trusted). */
-  private viewFindings(view: Entity<'view'>, spec = view.data.spec): QueryFinding[] {
+  private viewFindings(
+    view: Entity<'view'>,
+    spec = view.data.spec,
+    project = this.store.get(view.data.projectId) as Entity<'project'> | null,
+  ): QueryFinding[] {
     if (!spec) return [];
-    const project = this.store.get(view.data.projectId) as Entity<'project'> | null;
     const parsed = Board.safeParse(toBoard(spec as ViewSpec));
     return parsed.success ? checkBoardQueries(parsed.data, project) : [];
   }
@@ -1372,6 +1376,38 @@ class Transaction {
     return rejects
       .filter((f) => !old.has(findingKey(f)))
       .map((f) => `${prefix}: ${formatFinding(f)}`);
+  }
+
+  /**
+   * A project's record types or option lists changed (v0.2 review, gap 8): its saved pages may
+   * not gain a reject-level query finding from it, such as a total of a field that is gone.
+   * Findings a page already had don't block the change; views written in this transaction are
+   * checked on their own.
+   */
+  private projectViewIssues(project: Entity<'project'>, prefix: string): string[] {
+    const first = this.changes.find((c) => c.id === project.id);
+    if (!first?.before) return [];
+    const before = { ...project, data: first.before } as Entity<'project'>;
+    if (
+      isDeepStrictEqual(first.before.recordTypes ?? null, project.data.recordTypes ?? null) &&
+      isDeepStrictEqual(first.before.options ?? null, project.data.options ?? null)
+    )
+      return [];
+    const issues: string[] = [];
+    for (const view of this.store.list('view', { projectId: project.id })) {
+      if (this.touched.has(view.id)) continue;
+      const rejects = this.viewFindings(view, view.data.spec, project).filter(
+        (f) => f.level === 'reject',
+      );
+      if (!rejects.length) continue;
+      const old = new Set(this.viewFindings(view, view.data.spec, before).map(findingKey));
+      for (const f of rejects)
+        if (!old.has(findingKey(f)))
+          issues.push(
+            `${prefix}: page ${describe('view', view.id, view.data)} would break: ${formatFinding(f)}`,
+          );
+    }
+    return issues;
   }
 
   /**

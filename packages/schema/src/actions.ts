@@ -11,6 +11,7 @@ import {
   type RecordType,
 } from './records.js';
 import type { Operation } from './revisions.js';
+import { isCalendarDate } from './views/dates.js';
 
 /**
  * Record-form actions (R10): "Log a service", "Mark paid". An action is a button on a page and a
@@ -344,13 +345,7 @@ export function meterField(interval: Interval | undefined, type: RecordType): Ac
 
 // ------------------------------------------------------------------ checks
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function validDate(value: string): boolean {
-  if (!DATE.test(value)) return false;
-  const d = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
-}
+const validDate = (value: string): boolean => isCalendarDate(value);
 
 /** What the form shows under a field when its value doesn't fit (undefined when it does). */
 export function fieldError(field: ActionFormField, value: unknown): string | undefined {

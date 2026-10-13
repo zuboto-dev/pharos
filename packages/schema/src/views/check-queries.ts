@@ -3,7 +3,7 @@ import type { Entity, EntityType } from '../entities.js';
 import { recordTypesOf, type RecordType } from '../records.js';
 import type { Board } from './board.js';
 import type { ViewNode } from './catalog.js';
-import { isDateToken, relativeDate } from './dates.js';
+import { isCalendarDate, isDateToken, relativeDate } from './dates.js';
 import {
   optionValues,
   resolvePath,
@@ -108,30 +108,18 @@ function add(
   ctx.out.push({ level: FINDING_LEVELS[code], code, path, widget: ctx.widget, message, ...more });
 }
 
-/** The scopes a query reads: one entity type, or the record types its `recordType` names. */
-function scopesOf(
-  ctx: Ctx,
-  type: EntityType,
-  filter: Filter | undefined,
-  at: string,
-): FieldScope[] {
-  if (type !== 'record') return [{ type }];
-  const named = recordTypeNames(filter);
-  if (!named) {
-    add(
-      ctx,
-      'no-record-type',
-      `${at}.where`,
-      'This record query has no recordType, so it mixes every kind of record',
-      {
-        allowed: ctx.recordTypes.map((t) => t.key),
-        example: { where: { recordType: ctx.recordTypes[0]?.key ?? 'service' } },
-      },
-    );
-    return ctx.recordTypes.map((recordType) => ({ type, recordType }));
-  }
+/** The record types a `where` names with its `recordType` (a value or a list), if any. */
+function namedIn(where: Where | undefined): string[] | undefined {
+  const c = where?.recordType;
+  if (typeof c === 'string') return [c];
+  if (Array.isArray(c)) return c.map(String);
+  return undefined;
+}
+
+/** The project's record types among `names`; an unknown one is a finding at `at`. */
+function knownScopes(ctx: Ctx, type: EntityType, names: string[], at: string): FieldScope[] {
   const scopes: FieldScope[] = [];
-  for (const name of named) {
+  for (const name of names) {
     const recordType = ctx.recordTypes.find((t) => t.key === name);
     if (recordType) scopes.push({ type, recordType });
     else {
@@ -140,7 +128,7 @@ function scopesOf(
       add(
         ctx,
         'unknown-record-type',
-        `${at}.where.recordType`,
+        at,
         `"${name}" isn't a record type of this project (${allowed.join(', ') || 'it has none; apply a pack or add recordTypes to the project'})`,
         {
           allowed,
@@ -152,24 +140,62 @@ function scopesOf(
   return scopes;
 }
 
-/** Record types a filter limits itself to, or undefined when it names none. */
-function recordTypeNames(filter: Filter | undefined): string[] | undefined {
-  const fromWhere = (where: Where | undefined): string[] | undefined => {
-    const c = where?.recordType;
-    if (typeof c === 'string') return [c];
-    if (Array.isArray(c)) return c.map(String);
-    return undefined;
-  };
-  const own = fromWhere(filter?.where);
-  if (own) return own;
-  if (filter?.anyOf?.length) {
-    const each = filter.anyOf.map(fromWhere);
-    if (each.every(Boolean)) return [...new Set(each.flat() as string[])];
-  }
-  return undefined;
+type FilterScopes = {
+  /** What the whole query reads: its where, sort, onePer, columns, sums and groups. */
+  scopes: FieldScope[];
+  /** What each anyOf alternative reads: its own record types, within the outer ones. */
+  branches: FieldScope[][];
+};
+
+/**
+ * The scopes a query reads (v0.2 review, gap 7): one entity type, or the record types its
+ * `recordType` names. Each anyOf alternative is checked in its own record types (intersected
+ * with the outer where's), and every record type named anywhere must exist.
+ */
+function scopesOf(
+  ctx: Ctx,
+  type: EntityType,
+  filter: Filter | undefined,
+  at: string,
+): FilterScopes {
+  const branchCount = filter?.anyOf?.length ?? 0;
+  if (type !== 'record')
+    return { scopes: [{ type }], branches: Array.from({ length: branchCount }, () => [{ type }]) };
+  const all = ctx.recordTypes.map((recordType) => ({ type, recordType }));
+  const outerNames = namedIn(filter?.where);
+  const outer = outerNames
+    ? knownScopes(ctx, type, outerNames, `${at}.where.recordType`)
+    : undefined;
+  const branchNames = (filter?.anyOf ?? []).map(namedIn);
+  const branches = branchNames.map((names, i) => {
+    const own = names ? knownScopes(ctx, type, names, `${at}.anyOf[${i}].recordType`) : undefined;
+    if (own && outer) {
+      const both = own.filter((s) => outer.some((o) => o.recordType === s.recordType));
+      return both.length ? both : own; // none in both: it matches nothing, but check it as written
+    }
+    return own ?? outer ?? all;
+  });
+  const everyBranchNames = branchCount > 0 && branchNames.every(Boolean);
+  if (!outerNames && !everyBranchNames)
+    add(
+      ctx,
+      'no-record-type',
+      `${at}.where`,
+      'This record query has no recordType, so it mixes every kind of record',
+      {
+        allowed: ctx.recordTypes.map((t) => t.key),
+        example: { where: { recordType: ctx.recordTypes[0]?.key ?? 'service' } },
+      },
+    );
+  if (outer) return { scopes: outer, branches };
+  if (!everyBranchNames) return { scopes: all, branches };
+  const union: FieldScope[] = [];
+  for (const scope of branches.flat())
+    if (!union.some((u) => u.recordType === scope.recordType)) union.push(scope);
+  return { scopes: union, branches };
 }
 
-type Resolved = { info: FieldInfo; scope: FieldScope } | null;
+type Resolved = { info: FieldInfo; scope: FieldScope; all: FieldInfo[] } | null;
 
 /**
  * Resolves a path in every scope of the query. Unknown in all: a finding with `code`; unknown in
@@ -213,13 +239,12 @@ function resolveIn(
       `"${path}" isn't a field of ${missing.join(', ')}; those rows show "—"`,
     );
   }
-  return { info: ok[0]![1].info, scope: ok[0]![0] };
+  return { info: ok[0]![1].info, scope: ok[0]![0], all: ok.map(([, r]) => r.info) };
 }
 
 const TEXTUAL = new Set(['text', 'id', 'option', 'reference', 'file']);
 const NUMERIC = new Set(['number', 'meter']);
 const DATELIKE = new Set(['date', 'datetime']);
-const DATE = /^\d{4}-\d{2}-\d{2}/;
 
 /** Problems with one value against a field: a bad "$" value, a wrong type, an unknown option. */
 function valueProblem(
@@ -231,7 +256,17 @@ function valueProblem(
   allowRangeOnText = false,
 ): boolean {
   if (typeof value === 'string' && value.startsWith('$')) {
-    if (SPECIAL.has(value)) return false;
+    if (SPECIAL.has(value)) {
+      // An id (v0.2 review, gap 8): it can only match an id, a reference or text.
+      if (['id', 'reference', 'text'].includes(info.kind)) return false;
+      add(
+        ctx,
+        'operator-mismatch',
+        at,
+        `"${field}" is ${info.many ? 'a list of ' : ''}${info.kind}, so ${value} (an id) can't match it`,
+      );
+      return true;
+    }
     if (relativeDate(value, '2000-01-01') !== undefined) {
       if (DATELIKE.has(info.kind)) return false;
       add(
@@ -273,8 +308,10 @@ function valueProblem(
     });
   if (NUMERIC.has(info.kind) && typeof value !== 'number')
     return mismatch(`${JSON.stringify(value)} isn't a number`);
-  if (DATELIKE.has(info.kind) && !(typeof value === 'string' && DATE.test(value)))
-    return mismatch(`${JSON.stringify(value)} isn't a date (YYYY-MM-DD or "$today+7d")`);
+  if (DATELIKE.has(info.kind) && !(typeof value === 'string' && isCalendarDate(value.slice(0, 10))))
+    return mismatch(
+      `${JSON.stringify(value)} isn't a date that exists (YYYY-MM-DD or "$today+7d")`,
+    );
   if (info.kind === 'boolean' && typeof value !== 'boolean') return mismatch(`use true or false`);
   if (info.kind === 'option' && !allowRangeOnText) {
     const values = optionValues(ctx.project, info);
@@ -364,7 +401,20 @@ function checkWhere(
       for (const [k, v] of Object.entries(where)) copy[k === field ? fix : k] = v;
       return wrap(copy);
     });
-    if (resolved) checkCondition(ctx, resolved.info, field, condition, path);
+    if (!resolved) continue;
+    // The same field may differ between record types (another option list): the value is
+    // fine when it fits the field in any of them.
+    let found: QueryFinding[] | undefined;
+    for (const info of resolved.all) {
+      const out: QueryFinding[] = [];
+      checkCondition({ ...ctx, out }, info, field, condition, path);
+      if (!out.length) {
+        found = [];
+        break;
+      }
+      found ??= out;
+    }
+    ctx.out.push(...(found ?? []));
   }
 }
 
@@ -375,12 +425,12 @@ function checkFilter(
   filter: Filter | undefined,
   at: string,
 ): FieldScope[] {
-  const scopes = scopesOf(ctx, type, filter, at);
+  const { scopes, branches } = scopesOf(ctx, type, filter, at);
   if (!filter) return scopes;
   if (filter.where)
     checkWhere(ctx, scopes, filter.where, `${at}.where`, (where) => ({ ...filter, where }));
   filter.anyOf?.forEach((w, i) =>
-    checkWhere(ctx, scopes, w, `${at}.anyOf[${i}]`, (fixed) => ({
+    checkWhere(ctx, branches[i] ?? scopes, w, `${at}.anyOf[${i}]`, (fixed) => ({
       ...filter,
       anyOf: filter.anyOf!.map((x, j) => (j === i ? fixed : x)),
     })),
@@ -429,7 +479,13 @@ function checkQuery(ctx: Ctx, query: Query | undefined, at: string): FieldScope[
   return checkFilter(ctx, query.type, query, at);
 }
 
-function checkGroup(ctx: Ctx, scopes: FieldScope[], by: string | undefined, at: string) {
+function checkGroup(
+  ctx: Ctx,
+  scopes: FieldScope[],
+  by: string | undefined,
+  at: string,
+  bucket?: 'month' | 'year',
+) {
   if (!by) return;
   const resolved = resolveIn(
     ctx,
@@ -440,7 +496,17 @@ function checkGroup(ctx: Ctx, scopes: FieldScope[], by: string | undefined, at: 
     (fix) => ({ by: fix }),
     'group by: ',
   );
-  if (resolved?.info.unique)
+  if (resolved && bucket && !DATELIKE.has(resolved.info.kind)) {
+    // v0.2 review, gap 8: a month or year bucket needs a date to read the month from.
+    add(
+      ctx,
+      'operator-mismatch',
+      at,
+      `"${by}" is ${resolved.info.kind}: bucket "${bucket}" groups dates by ${bucket}; group by a date field or leave bucket out`,
+    );
+    return;
+  }
+  if (resolved?.info.unique && !bucket)
     add(ctx, 'group-by-unique', at, `"${by}" is different on every row, so each bar would count 1`);
 }
 
@@ -528,7 +594,7 @@ function checkNode(ctx: Ctx, node: ViewNode, at: string): void {
     }
     case 'CountChart': {
       const scopes = checkQuery(ctx, node.query, `${at}.query`);
-      checkGroup(ctx, scopes, node.by, `${at}.by`);
+      checkGroup(ctx, scopes, node.by, `${at}.by`, node.bucket);
       checkSum(ctx, scopes, node.sum, `${at}.sum`);
       return;
     }
@@ -671,7 +737,12 @@ export function formatFinding(f: QueryFinding): string {
   return `${f.path} (widget "${f.widget}"): ${f.message}.${allowed}${example}`;
 }
 
-/** A finding's identity, so an edit is refused only for findings it adds (not old ones). */
+/**
+ * A finding's identity, so an edit is refused only for findings it adds (not old ones): its
+ * widget, where in the widget it is, and what it says (v0.2 review, gap 8). Moving or resizing a
+ * widget keeps it; the same mistake copied to another place in the widget is a new finding.
+ */
 export function findingKey(f: QueryFinding): string {
-  return `${f.widget}|${f.code}|${f.message}`;
+  const inWidget = f.path.replace(/^widgets\[\d+\]/, '');
+  return `${f.widget}|${inWidget}|${f.code}|${f.message}`;
 }

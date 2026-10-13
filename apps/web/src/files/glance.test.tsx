@@ -98,6 +98,19 @@ describe('FileList at a glance', () => {
     expect(row.textContent).toContain(lease!.data.issuer!);
     expect(row.textContent).not.toMatch(/Expire[sd] |Issued |Changed /);
   });
+
+  it('lays a row out by the block’s width, not the window’s, so details never squeeze the name', () => {
+    renderList({ details: ['issuer', 'expiryDate'] });
+    const name = screen.getByText(lease!.data.title);
+    // The name and its details share a line only once the row itself is wide enough (32rem).
+    expect(name.parentElement!.className).toContain('@lg:flex-row');
+    expect(name.parentElement!.parentElement!.className).toContain('@container');
+    expect(name.parentElement!.className).not.toContain('sm:flex-row');
+    cleanup();
+    renderList({});
+    const glance = screen.getByText(lease!.data.title);
+    expect(glance.parentElement!.className).toContain('@md:flex-row');
+  });
 });
 
 describe('linked file chips', () => {

@@ -91,6 +91,14 @@ const unique = (values: (string | undefined)[]) =>
 /** Lowercased words, so "tax 2025" finds "2025 Tax return.pdf". */
 const words = (text: string) => text.toLowerCase().split(/\s+/).filter(Boolean);
 
+/** One line from 28rem (the glance: a name and a date) or 32rem (chosen details) of row width. */
+const ROW = { glance: '@md:flex-row @md:items-center', details: '@lg:flex-row @lg:items-center' };
+const TITLE = { glance: '@md:flex-1', details: '@lg:flex-1' };
+const META = {
+  glance: '@md:shrink-0 @md:justify-end',
+  details: '@lg:shrink-0 @lg:justify-end',
+};
+
 function FileRow({
   file,
   details,
@@ -127,26 +135,45 @@ function FileRow({
       onOpen={onOpen}
       pressed={onOpen ? !!shown : undefined}
       className={clsx(
-        'flex items-start gap-2.5 rounded-control px-1.5 py-2 sm:items-center',
+        'flex items-start gap-2.5 rounded-control px-1.5 py-2',
         shown ? 'bg-sky-50 dark:bg-sky-950/50' : 'hover:bg-sunken',
       )}
     >
-      <FileTypeIcon path={d.path} className="mt-0.5 size-4 text-faint sm:mt-0" />
-      <div className="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-0.5 sm:flex-row sm:items-center">
-        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">
-          {fileTitle(file, entityById.values())}
-        </span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted sm:shrink-0 sm:justify-end">
-          {showKind && <OptionBadge field="file.kind" value={d.kind} />}
-          {parts.length > 0 && <span className="truncate">{parts.join(' · ')}</span>}
-          {tags.map((tag) => (
-            <Badge key={tag} tone="muted">
-              #{tag}
-            </Badge>
-          ))}
-          {showExpiry && <ExpiryBadge date={d.expiryDate!} today={today} />}
-          {!details && <GlanceDate file={d} today={today} />}
-        </span>
+      <FileTypeIcon path={d.path} className="mt-0.5 size-4 shrink-0 text-faint" />
+      {/* The block's width, not the window's, decides whether the details fit beside the name:
+          a narrow block on a wide screen puts them under it, so the name is never squeezed out. */}
+      <div className="@container min-w-0 flex-1">
+        <div
+          className={clsx(
+            'flex min-w-0 flex-col gap-x-3 gap-y-0.5',
+            ROW[details ? 'details' : 'glance'],
+          )}
+        >
+          <span
+            className={clsx(
+              'min-w-0 truncate text-sm font-medium text-ink',
+              TITLE[details ? 'details' : 'glance'],
+            )}
+          >
+            {fileTitle(file, entityById.values())}
+          </span>
+          <span
+            className={clsx(
+              'flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted',
+              META[details ? 'details' : 'glance'],
+            )}
+          >
+            {showKind && <OptionBadge field="file.kind" value={d.kind} />}
+            {parts.length > 0 && <span className="truncate">{parts.join(' · ')}</span>}
+            {tags.map((tag) => (
+              <Badge key={tag} tone="muted">
+                #{tag}
+              </Badge>
+            ))}
+            {showExpiry && <ExpiryBadge date={d.expiryDate!} today={today} />}
+            {!details && <GlanceDate file={d} today={today} />}
+          </span>
+        </div>
       </div>
     </Clickable>
   );

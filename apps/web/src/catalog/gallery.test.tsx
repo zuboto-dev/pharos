@@ -182,7 +182,23 @@ describe('Gallery', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     cleanup();
     show(gallery({ artifacts: { where: { tags: 'nothing' } } }));
+    // The project has pictures; this block's filter just matches none of them.
+    expect(screen.getByText('No pictures match this list')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Add files' })).toBeNull();
+  });
+
+  it('says "No pictures yet" and offers Add files when the project has none', () => {
+    render(
+      <ViewDataProvider
+        data={{ ...data, artifacts: [], files: [] }}
+        version={1}
+        actions={{ apply: async () => ({ ok: false }), open: vi.fn() }}
+      >
+        <ViewRenderer spec={gallery()} />
+      </ViewDataProvider>,
+    );
     expect(screen.getByText('No pictures yet')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Add files' })).toBeTruthy();
   });
 
   it('heads the pictures with a stored claim', () => {

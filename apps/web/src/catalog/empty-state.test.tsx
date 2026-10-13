@@ -78,6 +78,40 @@ describe('empty states (v0.2 B8)', () => {
     expect(screen.getByRole('textbox', { name: 'Record a decision' })).toBeTruthy();
   });
 
+  it('say "match this list", not "yet", when the project has items the filter leaves out', () => {
+    const none = { where: { title: 'Nothing matches this' } };
+    render(
+      <ViewDataProvider data={data} version={1} actions={{ apply: vi.fn(), open: vi.fn() }}>
+        <ViewRenderer
+          spec={{
+            component: 'Grid',
+            children: [
+              { component: 'Timeline', filter: { where: { name: 'Nothing matches this' } } },
+              { component: 'DependencyGraph', filter: none },
+              { component: 'AssigneeMatrix', filter: none },
+              { component: 'DecisionLog', filter: none },
+            ],
+          }}
+        />
+      </ViewDataProvider>,
+    );
+    expect(screen.getByText('No stages match this list')).toBeTruthy();
+    expect(screen.getAllByText('No tasks match this list')).toHaveLength(2);
+    expect(screen.getByText('No decisions match this list')).toBeTruthy();
+    expect(screen.queryByText(/yet$/)).toBeNull();
+  });
+
+  it('say "yet" when the project has none of them', () => {
+    setup({ component: 'Timeline' }, {});
+    expect(screen.getByText('No stages yet')).toBeTruthy();
+    cleanup();
+    setup({ component: 'AssigneeMatrix' }, {});
+    expect(screen.getByText('No tasks yet')).toBeTruthy();
+    cleanup();
+    setup({ component: 'DecisionLog' }, {});
+    expect(screen.getByText('No decisions recorded yet')).toBeTruthy();
+  });
+
   it('start the ask dialog from the prefilled question', () => {
     render(
       <AskDialog

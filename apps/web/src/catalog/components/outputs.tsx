@@ -142,8 +142,12 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
     return (
       <EmptyState
         icon={Scale}
-        title="No decisions recorded yet"
-        hint="Write down what was decided and why, so it isn’t asked again."
+        title={data.decisions.length ? 'No decisions match this list' : 'No decisions recorded yet'}
+        hint={
+          data.decisions.length
+            ? 'Decisions that match its filter show up here.'
+            : 'Write down what was decided and why, so it isn’t asked again.'
+        }
       >
         {addDecision('button')}
       </EmptyState>

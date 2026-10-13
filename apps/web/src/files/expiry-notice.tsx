@@ -53,7 +53,7 @@ export function ExpiryNotice() {
       ? `${plural(list.length, 'file')} expired`
       : expired
         ? `${plural(list.length, 'file')} expired or expire within ${FILE_EXPIRY_SOON.urgentDays} days`
-        : `${plural(list.length, 'file')} expire within ${FILE_EXPIRY_SOON.urgentDays} days`;
+        : `${plural(list.length, 'file')} ${list.length === 1 ? 'expires' : 'expire'} within ${FILE_EXPIRY_SOON.urgentDays} days`;
   const dismiss = () => {
     try {
       window.localStorage.setItem(key(project.id), signature);

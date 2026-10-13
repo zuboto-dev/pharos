@@ -402,6 +402,24 @@ describe('expiry reminders (R7.15)', () => {
     expect(screen.getByRole('region', { name: 'Expiring files' }).textContent).toMatch(/3 files/);
   });
 
+  it('says "1 file expires", "2 files expire"', () => {
+    const ui = (list: Entity<'file'>[]) => (
+      <ViewDataProvider data={{ ...base, files: list }} version={1}>
+        <ExpiryNotice />
+      </ViewDataProvider>
+    );
+    window.localStorage.clear();
+    render(ui([files[0]!]));
+    expect(screen.getByRole('region', { name: 'Expiring files' }).textContent).toMatch(
+      /^1 file expires within 60 days/,
+    );
+    cleanup();
+    render(ui([files[0]!, withExpiry('file_soon2', 'Insurance', 9)]));
+    expect(screen.getByRole('region', { name: 'Expiring files' }).textContent).toMatch(
+      /^2 files expire within 60 days/,
+    );
+  });
+
   it('DueTracker shows files by expiry in the same bands', () => {
     render(
       <ViewDataProvider data={{ ...base, files }} version={1}>

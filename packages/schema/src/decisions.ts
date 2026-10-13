@@ -26,17 +26,19 @@ export const OWNER_DECISION_FIELDS = ['chosenOptionId', 'answer', 'deferredUntil
 
 const Point = z.string().min(1).max(DECISION.pointChars);
 
-export const DecisionOption = z.strictObject({
-  id: z
-    .string()
-    .regex(/^[a-z0-9-]{1,24}$/)
-    .describe('Short key, e.g. "a"'),
-  label: z.string().min(1).max(DECISION.labelChars),
-  summary: z.string().min(1).max(DECISION.summaryChars).optional().describe('What it leads to'),
-  claimIds: z.array(z.string().min(1)).max(DECISION.maxClaims).optional().describe('Its sources'),
-  pros: z.array(Point).max(DECISION.maxPoints).optional(),
-  cons: z.array(Point).max(DECISION.maxPoints).optional(),
-});
+export const DecisionOption = z
+  .strictObject({
+    id: z
+      .string()
+      .regex(/^[a-z0-9-]{1,24}$/)
+      .describe('Short key, e.g. "a"'),
+    label: z.string().min(1).max(DECISION.labelChars),
+    summary: z.string().min(1).max(DECISION.summaryChars).optional().describe('What it leads to'),
+    claimIds: z.array(z.string().min(1)).max(DECISION.maxClaims).optional().describe('Its sources'),
+    pros: z.array(Point).max(DECISION.maxPoints).optional(),
+    cons: z.array(Point).max(DECISION.maxPoints).optional(),
+  })
+  .meta({ id: 'DecisionOption' });
 export type DecisionOption = z.infer<typeof DecisionOption>;
 
 /** The decision fields R10.19 adds, spread into DecisionData. */

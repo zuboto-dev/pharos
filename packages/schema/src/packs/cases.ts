@@ -86,11 +86,7 @@ function hash53(text: string): string {
 }
 
 /** A case's content hash, without its version, for the version lock. */
-export function caseHash(
-  c: FactCase | QueryCheckCase,
-  fixture?: unknown,
-  files?: unknown,
-): string {
+export function caseHash(c: FactCase | QueryCheckCase, fixture?: unknown, files?: unknown): string {
   const rest: Record<string, unknown> = { ...c };
   delete rest.version;
   // Cases without files hash as before, so R8's locked versions stay valid.

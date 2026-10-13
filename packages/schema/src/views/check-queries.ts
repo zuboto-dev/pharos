@@ -585,9 +585,16 @@ function checkNode(ctx: Ctx, node: ViewNode, at: string): void {
       const scopes = checkQuery(ctx, node.query, `${at}.query`);
       node.show?.forEach((f, i) => checkColumn(ctx, scopes, f, `${at}.show[${i}]`));
       if (node.date) {
-        const resolved = resolveIn(ctx, scopes, node.date, `${at}.date`, 'unknown-field', (fix) => ({
-          date: fix,
-        }));
+        const resolved = resolveIn(
+          ctx,
+          scopes,
+          node.date,
+          `${at}.date`,
+          'unknown-field',
+          (fix) => ({
+            date: fix,
+          }),
+        );
         if (resolved && resolved.info.kind !== 'date')
           add(
             ctx,

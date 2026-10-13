@@ -86,5 +86,77 @@
   "money-mixed-valid-invalid": {
     "version": 1,
     "hash": "0f9578ae6e8d4b"
+  },
+  "music-latest-mix": {
+    "version": 1,
+    "hash": "1923fd42e74c8d"
+  },
+  "music-headline-and-sessions": {
+    "version": 1,
+    "hash": "18521940a2008e"
+  },
+  "music-new-month": {
+    "version": 1,
+    "hash": "05d1be1a7351c1"
+  },
+  "music-one-per-typo": {
+    "version": 1,
+    "hash": "012433b1608271"
+  },
+  "music-hop-to-stage": {
+    "version": 1,
+    "hash": "025ced1352af40"
+  },
+  "music-stage-typo": {
+    "version": 1,
+    "hash": "11db2a6bb7c370"
+  },
+  "study-hours-against-target": {
+    "version": 1,
+    "hash": "142694ef557645"
+  },
+  "study-next-exams": {
+    "version": 1,
+    "hash": "17fd775d15fc42"
+  },
+  "study-exam-week": {
+    "version": 1,
+    "hash": "1d493815ac77cd"
+  },
+  "study-target-typo": {
+    "version": 1,
+    "hash": "0937b4e8b133f9"
+  },
+  "study-date-not-a-date": {
+    "version": 1,
+    "hash": "005c625b1dfbc0"
+  },
+  "study-date-ok": {
+    "version": 1,
+    "hash": "1e4636379c79a6"
+  },
+  "company-what-expires": {
+    "version": 1,
+    "hash": "0015b511616040"
+  },
+  "company-renewals": {
+    "version": 1,
+    "hash": "0003246a6c331b"
+  },
+  "company-documents": {
+    "version": 1,
+    "hash": "052bb946269282"
+  },
+  "company-expiry-typo": {
+    "version": 1,
+    "hash": "049bfda1051b07"
+  },
+  "company-date-on-text": {
+    "version": 1,
+    "hash": "17b4203515221e"
+  },
+  "company-kind-meaning": {
+    "version": 1,
+    "hash": "12bc20d1df82b8"
   }
 }

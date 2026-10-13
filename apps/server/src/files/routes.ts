@@ -92,7 +92,9 @@ export function fileRoutes(files: FileService): Hono {
   api.get('/files/:fileId', async (c) => c.json(await files.info(c.req.param('fileId'))));
 
   api.get('/files/:fileId/content', (c) =>
-    files.contents(c.req.param('fileId'), 'content').catch((e: unknown) => fileError(c, e)),
+    files
+      .contents(c.req.param('fileId'), 'content', c.req.header('range'))
+      .catch((e: unknown) => fileError(c, e)),
   );
 
   api.get('/files/:fileId/download', (c) =>

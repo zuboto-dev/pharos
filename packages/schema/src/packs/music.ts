@@ -23,7 +23,8 @@ const SONG = { key: 'song', label: 'Song', kind: 'reference', to: 'song' } as co
 export const MUSIC_PACK: Pack = {
   key: 'music',
   name: 'Music',
-  description: 'Songs by stage, the latest mix of each one to play in place, and a log of sessions.',
+  description:
+    'Songs by stage, the latest mix of each one to play in place, and a log of sessions.',
   summary: 'Songs, their mixes and the sessions behind them',
   guide:
     'Record types: song (stage: idea, writing, demo, recording, mixing, mastering, released; move it on as the song does), mix (one bounce of a song: song, date, version, and file: the audio file of that mix) and session (time spent: song, date, hours, kind). Every new bounce is a new mix record, never an edit of the old one, so the page plays the latest and keeps the rest. Audio files (wav, mp3, m4a, ogg, flac) come from a folder the owner shares: ask with folder_request, add them from files_unadded with kind "audio", then set the mix\'s fields.file to the file id. The page "Songs" shows the latest mix of each song: mixes sorted by fields.date (desc) with onePer "fields.song".',

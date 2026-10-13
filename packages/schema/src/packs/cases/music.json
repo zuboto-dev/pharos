@@ -1,0 +1,300 @@
+{
+  "fixtures": {
+    "studio": [
+      {
+        "ref": "night",
+        "recordType": "song",
+        "title": "Night Bus",
+        "fields": { "stage": "mixing", "bpm": 92 }
+      },
+      {
+        "ref": "paper",
+        "recordType": "song",
+        "title": "Paper Boats",
+        "fields": { "stage": "recording" }
+      },
+      { "ref": "tide", "recordType": "song", "title": "Low Tide", "fields": { "stage": "demo" } },
+      {
+        "ref": "kite",
+        "recordType": "song",
+        "title": "Kite String",
+        "fields": { "stage": "idea" }
+      },
+      {
+        "ref": "m1",
+        "recordType": "mix",
+        "title": "Night Bus mix 1",
+        "fields": { "song": "$night", "date": "2026-09-13", "version": "v1", "file": "$f_night1" }
+      },
+      {
+        "ref": "m2",
+        "recordType": "mix",
+        "title": "Night Bus mix 2",
+        "fields": { "song": "$night", "date": "2026-10-04", "version": "v2", "file": "$f_night2" }
+      },
+      {
+        "ref": "m5",
+        "recordType": "mix",
+        "title": "Night Bus mix 3",
+        "fields": { "song": "$night", "date": "2026-10-10", "version": "v3", "file": "$f_night3" }
+      },
+      {
+        "ref": "m3",
+        "recordType": "mix",
+        "title": "Paper Boats rough mix",
+        "fields": { "song": "$paper", "date": "2026-09-29", "version": "rough", "file": "$f_paper" }
+      },
+      {
+        "ref": "m4",
+        "recordType": "mix",
+        "title": "Low Tide demo",
+        "fields": { "song": "$tide", "date": "2026-09-03", "version": "demo", "file": "$f_tide" }
+      },
+      {
+        "ref": "s1",
+        "recordType": "session",
+        "title": "Vocals",
+        "fields": { "song": "$paper", "date": "2026-10-07", "hours": 3, "kind": "recording" }
+      },
+      {
+        "ref": "s2",
+        "recordType": "session",
+        "title": "Mix notes pass",
+        "fields": { "song": "$night", "date": "2026-10-04", "hours": 2.5, "kind": "mixing" }
+      },
+      {
+        "ref": "s3",
+        "recordType": "session",
+        "title": "Band run-through",
+        "fields": { "date": "2026-10-01", "hours": 2, "kind": "rehearsal" }
+      },
+      {
+        "ref": "s4",
+        "recordType": "session",
+        "title": "Chorus lyrics",
+        "fields": { "song": "$kite", "date": "2026-10-11", "hours": 1, "kind": "writing" }
+      },
+      {
+        "ref": "s5",
+        "recordType": "session",
+        "title": "First mix",
+        "fields": { "song": "$night", "date": "2026-09-20", "hours": 4, "kind": "mixing" }
+      }
+    ]
+  },
+  "files": {
+    "studio": [
+      {
+        "ref": "f_night1",
+        "title": "Night Bus mix 1",
+        "path": "music/night-bus-mix-1.wav",
+        "kind": "audio"
+      },
+      {
+        "ref": "f_night2",
+        "title": "Night Bus mix 2",
+        "path": "music/night-bus-mix-2.wav",
+        "kind": "audio"
+      },
+      {
+        "ref": "f_night3",
+        "title": "Night Bus mix 3",
+        "path": "music/night-bus-mix-3.wav",
+        "kind": "audio"
+      },
+      {
+        "ref": "f_paper",
+        "title": "Paper Boats rough mix",
+        "path": "music/paper-boats-rough.wav",
+        "kind": "audio"
+      },
+      {
+        "ref": "f_tide",
+        "title": "Low Tide demo",
+        "path": "music/low-tide-demo.wav",
+        "kind": "audio"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "music-latest-mix",
+      "version": 1,
+      "pack": "music",
+      "description": "One row per song with its newest mix (onePer after a date sort), most finished song first; a song without a mix isn't listed",
+      "tags": ["onePer", "audio", "latest"],
+      "today": "2026-10-13",
+      "fixture": "studio",
+      "facts": [
+        { "id": "rows", "widget": "latest", "kind": "rows", "expect": 3 },
+        {
+          "id": "first-song",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 0,
+          "column": "fields.song",
+          "expect": "Night Bus"
+        },
+        {
+          "id": "first-mix",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 0,
+          "column": "fields.file",
+          "expect": "Night Bus mix 3"
+        },
+        {
+          "id": "first-version",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 0,
+          "column": "fields.version",
+          "expect": "v3"
+        },
+        {
+          "id": "second-song",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 1,
+          "column": "fields.song",
+          "expect": "Paper Boats"
+        },
+        {
+          "id": "third-mix",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 2,
+          "column": "fields.file",
+          "expect": "Low Tide demo"
+        },
+        {
+          "id": "third-stage",
+          "widget": "latest",
+          "kind": "cell",
+          "row": 2,
+          "column": "fields.song.fields.stage",
+          "expect": "demo"
+        }
+      ]
+    },
+    {
+      "id": "music-headline-and-sessions",
+      "version": 1,
+      "pack": "music",
+      "description": "Songs counted, songs in mixing or mastering, session hours this month only, the session log's total and songs by stage",
+      "tags": ["headline", "sum", "month"],
+      "today": "2026-10-13",
+      "fixture": "studio",
+      "facts": [
+        { "id": "songs", "widget": "headline", "kind": "text", "value": "songs", "expect": 4 },
+        {
+          "id": "finishing",
+          "widget": "headline",
+          "kind": "text",
+          "value": "finishing",
+          "expect": 1
+        },
+        {
+          "id": "month-hours",
+          "widget": "headline",
+          "kind": "text",
+          "value": "hours",
+          "expect": 8.5
+        },
+        { "id": "session-rows", "widget": "sessions", "kind": "rows", "expect": 5 },
+        {
+          "id": "session-total",
+          "widget": "sessions",
+          "kind": "total",
+          "column": "fields.hours",
+          "expect": 12.5
+        },
+        { "id": "mixing-bar", "widget": "stages", "kind": "bar", "label": "Mixing", "expect": 1 },
+        { "id": "idea-bar", "widget": "stages", "kind": "bar", "label": "Idea", "expect": 1 }
+      ]
+    },
+    {
+      "id": "music-new-month",
+      "version": 1,
+      "pack": "music",
+      "description": "The first days of a month with no session yet: zero hours this month, the latest mixes unchanged",
+      "tags": ["empty", "month"],
+      "today": "2026-11-02",
+      "fixture": "studio",
+      "facts": [
+        { "id": "no-hours", "widget": "headline", "kind": "text", "value": "hours", "expect": 0 },
+        { "id": "still-three", "widget": "latest", "kind": "rows", "expect": 3 }
+      ]
+    }
+  ],
+  "queryChecks": [
+    {
+      "id": "music-one-per-typo",
+      "version": 1,
+      "pack": "music",
+      "description": "onePer naming a field the mix doesn't have is refused",
+      "tags": ["onePer", "unknown-group-field"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataTable",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "mix" },
+              "sort": [{ "field": "fields.date", "dir": "desc" }],
+              "onePer": "fields.songs"
+            },
+            "columns": [{ "field": "fields.song" }]
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-group-field"]
+    },
+    {
+      "id": "music-hop-to-stage",
+      "version": 1,
+      "pack": "music",
+      "description": "A column and a sort through the song reference to its stage are allowed",
+      "tags": ["hop", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataTable",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "mix", "fields.song.fields.stage": ["mixing", "mastering"] },
+              "sort": [{ "field": "fields.song.fields.stage" }],
+              "onePer": "fields.song"
+            },
+            "columns": [{ "field": "fields.song.fields.stage" }, { "field": "fields.file" }]
+          }
+        }
+      ],
+      "expect": "accept"
+    },
+    {
+      "id": "music-stage-typo",
+      "version": 1,
+      "pack": "music",
+      "description": "A stage value the song type doesn't have is refused with the allowed values",
+      "tags": ["unknown-option"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "song", "fields.stage": "mixed" }
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-option"]
+    }
+  ]
+}

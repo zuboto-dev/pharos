@@ -18,7 +18,10 @@ export function listPacks() {
 }
 
 export const PackApplyInput = z.object({
-  pack: z.string().min(1).describe('Pack key from pack_list, e.g. "car" or "money"'),
+  pack: z
+    .string()
+    .min(1)
+    .describe('Pack key from pack_list, e.g. "car", "money", "music", "study" or "company"'),
   name: z.string().trim().min(1).optional().describe('Start a new project with this name'),
   projectId: z.string().optional().describe('Or add the pack to this existing project'),
   examples: z

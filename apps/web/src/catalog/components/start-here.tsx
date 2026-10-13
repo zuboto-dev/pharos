@@ -34,14 +34,14 @@ const PURPOSE: Record<
     tone: 'green',
     bar: 'border-l-emerald-500 dark:border-l-emerald-400',
     number: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-    part: 'bg-neutral-50 dark:bg-neutral-800/60',
+    part: 'bg-sunken',
   },
   found: {
     label: 'Found',
     tone: 'blue',
     bar: 'border-l-sky-500 dark:border-l-sky-400',
-    number: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
-    part: 'bg-neutral-50 dark:bg-neutral-800/60',
+    number: 'bg-sky-50 text-accent-strong dark:bg-sky-950',
+    part: 'bg-sunken',
   },
   'needs-you': {
     label: 'Needs you',
@@ -52,7 +52,7 @@ const PURPOSE: Record<
   },
 };
 
-const LABEL = 'text-xs font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-400';
+const LABEL = 'text-xs font-medium tracking-wide text-muted uppercase';
 
 /** "Oct 11", with the year when it isn't this year. */
 function shortDate(date: string): string {
@@ -98,7 +98,7 @@ function Evidence({ items }: { items: readonly EvidenceItem[] }) {
   });
   if (!shown.length) return null;
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
       <span>Evidence</span>
       {shown.map(({ entity: e, title, label }) => {
         const uri = e.type === 'artifact' ? (e as Entity<'artifact'>).data.uri : undefined;
@@ -118,7 +118,7 @@ function Evidence({ items }: { items: readonly EvidenceItem[] }) {
             type="button"
             title={label ? title : undefined}
             onClick={() => openItem(e.id)}
-            className="max-w-full truncate rounded-sm text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+            className="max-w-full truncate rounded-sm text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
           >
             {text}
           </button>
@@ -151,17 +151,15 @@ function Step({
         {index + 1}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block font-medium text-neutral-900 dark:text-neutral-100">
+        <span className="block font-medium text-ink">
           <span className="sr-only">Step {index + 1}: </span>
           {step.label}
         </span>
-        {step.says && (
-          <span className="block text-sm text-neutral-500 dark:text-neutral-400">{step.says}</span>
-        )}
+        {step.says && <span className="block text-sm text-muted">{step.says}</span>}
       </span>
     </>
   );
-  const box = 'flex h-full w-full items-start gap-3 rounded-lg p-2.5 text-left';
+  const box = 'flex h-full w-full items-start gap-3 rounded-tile p-2.5 text-left';
   if (!step.target) return <div className={box}>{body}</div>;
   const target = step.target;
   return (
@@ -170,13 +168,13 @@ function Step({
       onClick={(e) => scrollToWidget(e.currentTarget, target)}
       className={clsx(
         box,
-        'group transition hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800/60',
+        'group transition hover:bg-sunken focus-visible:outline-2 focus-visible:outline-sky-400',
       )}
     >
       {body}
       <ArrowDown
         aria-hidden
-        className="mt-1 size-3.5 shrink-0 text-neutral-300 transition group-hover:text-neutral-500 dark:text-neutral-600 dark:group-hover:text-neutral-300"
+        className="mt-1 size-3.5 shrink-0 text-faint transition group-hover:text-neutral-500 dark:group-hover:text-neutral-300"
       />
     </button>
   );
@@ -201,16 +199,13 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
     <section
       aria-label={`${purpose.label}: start here`}
       className={clsx(
-        '@container space-y-4 rounded-xl border border-l-4 border-neutral-200 bg-white p-4 sm:p-5 dark:border-neutral-800 dark:bg-neutral-900',
+        '@container space-y-4 rounded-block border border-l-4 border-line bg-surface p-4 sm:p-5',
         purpose.bar,
       )}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Badge tone={purpose.tone}>{purpose.label}</Badge>
-        <nav
-          aria-label="Where this sits"
-          className="min-w-0 text-xs text-neutral-500 dark:text-neutral-400"
-        >
+        <nav aria-label="Where this sits" className="min-w-0 text-xs text-muted">
           <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
             {where.map((part, i) => (
               <li key={i} className="flex min-w-0 items-center gap-1.5">
@@ -232,17 +227,17 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
       </div>
       <div className="space-y-2">
         {node.why && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+          <p className="text-sm text-ink-soft">
             <span className={clsx(LABEL, 'mr-2')}>Why</span>
             {node.why}
           </p>
         )}
         {headline ? (
-          <h2 className="text-xl font-bold tracking-tight text-balance text-neutral-900 sm:text-2xl dark:text-neutral-50">
+          <h2 className="text-xl font-bold tracking-tight text-balance text-ink sm:text-2xl">
             <TermText text={headline} ranges={ranges} />
           </h2>
         ) : (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="text-sm text-muted">
             {node.claim ? 'This finding was deleted or isn’t in this project' : 'No headline yet'}
           </p>
         )}
@@ -252,17 +247,17 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
       {node.yourPart && (
         <p
           className={clsx(
-            'flex flex-col gap-0.5 rounded-lg px-3 py-2.5 @lg:flex-row @lg:items-baseline @lg:gap-3',
+            'flex flex-col gap-0.5 rounded-tile px-3 py-2.5 @lg:flex-row @lg:items-baseline @lg:gap-3',
             purpose.part,
           )}
         >
           <span className={clsx(LABEL, 'shrink-0')}>Your part</span>
-          <span className="font-medium text-neutral-900 dark:text-neutral-50">{node.yourPart}</span>
+          <span className="font-medium text-ink">{node.yourPart}</span>
           {node.yourPartTarget && (
             <button
               type="button"
               onClick={(e) => scrollToWidget(e.currentTarget, node.yourPartTarget!)}
-              className="mt-1 inline-flex shrink-0 items-center gap-1 self-start text-sm font-medium text-sky-700 hover:underline @lg:mt-0 @lg:ml-auto dark:text-sky-300"
+              className="mt-1 inline-flex shrink-0 items-center gap-1 self-start text-sm font-medium text-accent-strong hover:underline @lg:mt-0 @lg:ml-auto"
             >
               {node.purpose === 'needs-you' ? 'Answer it' : 'Go there'}{' '}
               <ArrowDown aria-hidden className="size-3.5" />

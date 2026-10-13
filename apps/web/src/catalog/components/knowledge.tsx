@@ -50,7 +50,7 @@ const BADGE_TONE: Record<ExplainTone, Tone> = {
 };
 
 const BORDER: Record<ExplainTone, string> = {
-  neutral: 'border-neutral-200 dark:border-neutral-800',
+  neutral: 'border-line',
   own: 'border-sky-300 dark:border-sky-800',
   watch: 'border-amber-300 dark:border-amber-800',
   gap: 'border-rose-300 dark:border-rose-800',
@@ -64,20 +64,20 @@ const STRONG_BORDER: Record<ExplainTone, string> = {
 };
 
 const KICKER: Record<ExplainTone, string> = {
-  neutral: 'text-neutral-500 dark:text-neutral-400',
-  own: 'text-sky-700 dark:text-sky-300',
+  neutral: 'text-muted',
+  own: 'text-accent-strong',
   watch: 'text-amber-700 dark:text-amber-300',
   gap: 'text-rose-700 dark:text-rose-300',
 };
 
 const GLYPH_COLOR: Record<Tone, string> = {
-  neutral: 'text-neutral-500 dark:text-neutral-400',
-  blue: 'text-sky-600 dark:text-sky-400',
-  green: 'text-emerald-600 dark:text-emerald-400',
-  amber: 'text-amber-600 dark:text-amber-400',
-  red: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-muted',
+  blue: 'text-accent',
+  green: 'text-ok',
+  amber: 'text-warn',
+  red: 'text-danger',
   violet: 'text-violet-600 dark:text-violet-400',
-  muted: 'text-neutral-400 dark:text-neutral-500',
+  muted: 'text-faint',
 };
 
 /** The shape says how sure, next to the word, so colour never carries it alone. */
@@ -131,7 +131,7 @@ function SourceTitle({ source, onOpen }: { source: Artifact; onOpen?: () => void
         onOpen?.();
         actions.open({ entity: fileId ?? source.id });
       }}
-      className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+      className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
     >
       <FileText className="size-3 shrink-0" aria-hidden />
       <span className="truncate">{source.data.title}</span>
@@ -182,12 +182,12 @@ export function CertaintyMark({
   const author = entityOf(entityById, claim.data.authorId, 'assignee');
   const glyph = GLYPHS[meaning] ?? '○';
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted">
       <button
         type="button"
         {...trigger}
         title="How sure this is"
-        className="inline-flex items-baseline gap-1 rounded-sm text-left font-medium text-neutral-600 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-300 dark:hover:text-white"
+        className="inline-flex items-baseline gap-1 rounded-sm text-left font-medium text-ink-soft hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:text-white"
       >
         <span aria-hidden className={GLYPH_COLOR[option.color]}>
           {glyph}
@@ -206,7 +206,7 @@ export function CertaintyMark({
           <button
             type="button"
             {...trigger}
-            className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+            className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
           >
             <span className="truncate">
               {sources.length > 1
@@ -225,16 +225,16 @@ export function CertaintyMark({
       )}
       {/* "Confirmed by you" rests on the owner's decision, so it needs no source to be sound. */}
       {!sources.length && meaning !== 'confirmed' && (
-        <span className="text-neutral-400 dark:text-neutral-500">no source yet</span>
+        <span className="text-faint">no source yet</span>
       )}
       {weakBecause && (
-        <span title="Why the evidence is thin" className="text-amber-700 dark:text-amber-400">
+        <span title="Why the evidence is thin" className="text-warn">
           {WEAK_BECAUSE_LABELS[weakBecause]}
         </span>
       )}
       {anchor && (
         <Popover anchor={anchor} label={option.label} onClose={close}>
-          <div className="flex items-baseline gap-1.5 font-semibold text-neutral-900 dark:text-neutral-100">
+          <div className="flex items-baseline gap-1.5 font-semibold text-ink">
             <span aria-hidden className={GLYPH_COLOR[option.color]}>
               {glyph}
             </span>
@@ -243,20 +243,15 @@ export function CertaintyMark({
           {MEANING_LINES[meaning] && (
             <p>{MEANING_LINES[meaning](formatDate(date), decision?.data.title)}</p>
           )}
-          {author && (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">By {author.data.name}</p>
-          )}
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Checked {formatDate(claim.data.checkedOn)}
-          </p>
+          {author && <p className="text-xs text-muted">By {author.data.name}</p>}
+          <p className="text-xs text-muted">Checked {formatDate(claim.data.checkedOn)}</p>
           {passage && assumption && (
-            <p className="text-xs break-words text-neutral-600 dark:text-neutral-400">
-              <span className="font-medium text-neutral-800 dark:text-neutral-200">Assumes:</span>{' '}
-              {assumption}
+            <p className="text-xs break-words text-muted">
+              <span className="font-medium text-ink">Assumes:</span> {assumption}
             </p>
           )}
           {sources.length > 0 && (
-            <ul className="space-y-2 border-t border-neutral-100 pt-2 dark:border-neutral-800">
+            <ul className="space-y-2 border-t border-line-soft pt-2">
               {sources.map((s) => (
                 <li key={s.id} className="min-w-0 space-y-1">
                   <div className="flex min-w-0">
@@ -264,12 +259,12 @@ export function CertaintyMark({
                   </div>
                   <LocalSourcePath source={s} onOpen={() => close(false)} />
                   {s.id === quoteSource?.id && quote && (
-                    <blockquote className="border-l-2 border-neutral-300 pl-2 text-xs break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
+                    <blockquote className="border-l-2 border-neutral-300 pl-2 text-xs break-words text-ink-soft italic dark:border-neutral-600">
                       “{quote}”
                     </blockquote>
                   )}
                   {s.id === quoteSource?.id && locator && (
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{locator}</p>
+                    <p className="text-xs text-muted">{locator}</p>
                   )}
                 </li>
               ))}
@@ -313,7 +308,7 @@ export function ClaimBasis({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-0.5 rounded-sm text-xs font-medium text-neutral-500 hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-400 dark:hover:text-white"
+        className="inline-flex items-center gap-0.5 rounded-sm text-xs font-medium text-muted hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:text-white"
       >
         {label}
         <ChevronDown
@@ -325,11 +320,11 @@ export function ClaimBasis({
         <div id={panelId} className="basis-full space-y-1.5 pt-1 text-sm">
           {quote && (
             <figure className="min-w-0 space-y-0.5">
-              <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
+              <blockquote className="border-l-2 border-neutral-300 pl-3 break-words text-ink-soft italic dark:border-neutral-600">
                 “{quote}”
               </blockquote>
               {caption && (source || locator) && (
-                <figcaption className="flex min-w-0 flex-wrap items-baseline gap-x-1 pl-3 text-xs text-neutral-500 dark:text-neutral-400">
+                <figcaption className="flex min-w-0 flex-wrap items-baseline gap-x-1 pl-3 text-xs text-muted">
                   <span aria-hidden>—</span>
                   {source && <SourceTitle source={source} />}
                   {source && locator && <span aria-hidden>·</span>}
@@ -339,9 +334,8 @@ export function ClaimBasis({
             </figure>
           )}
           {assumption && (
-            <p className="break-words text-neutral-600 dark:text-neutral-400">
-              <span className="font-medium text-neutral-800 dark:text-neutral-200">Assumes:</span>{' '}
-              {assumption}
+            <p className="break-words text-muted">
+              <span className="font-medium text-ink">Assumes:</span> {assumption}
             </p>
           )}
         </div>
@@ -367,11 +361,11 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
     return (
       <header className="space-y-2 py-1">
         {kicker}
-        <h2 className="text-2xl font-bold tracking-tight text-balance text-neutral-900 sm:text-3xl dark:text-neutral-50">
+        <h2 className="text-2xl font-bold tracking-tight text-balance text-ink sm:text-3xl">
           <TermText text={statement} ranges={statementTerms} />
         </h2>
         {detail && (
-          <p className="max-w-[60ch] text-base text-neutral-600 dark:text-neutral-300">
+          <p className="max-w-[60ch] text-base text-ink-soft">
             <TermText text={detail} ranges={detailTerms} />
           </p>
         )}
@@ -386,16 +380,16 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
   return (
     <article
       className={clsx(
-        'flex h-full min-w-0 flex-col gap-1.5 rounded-xl border bg-white p-4 dark:bg-neutral-900',
+        'flex h-full min-w-0 flex-col gap-1.5 rounded-block border bg-surface p-4',
         BORDER[tone],
       )}
     >
       {kicker}
-      <p className="font-semibold text-neutral-900 dark:text-neutral-50">
+      <p className="font-semibold text-ink">
         <TermText text={statement} ranges={statementTerms} />
       </p>
       {detail && (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-muted">
           <TermText text={detail} ranges={detailTerms} />
         </p>
       )}
@@ -530,9 +524,9 @@ function ClaimLine({
     return (
       <div
         role="note"
-        className="flex gap-2 rounded-md bg-amber-50 px-2.5 py-2 text-sm text-amber-950 dark:bg-amber-950/60 dark:text-amber-100"
+        className="flex gap-2 rounded-control bg-amber-50 px-2.5 py-2 text-sm text-amber-950 dark:bg-amber-950/60 dark:text-amber-100"
       >
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
         <div className="min-w-0 space-y-1">
           <p>
             <span className="sr-only">Watch out: </span>
@@ -546,22 +540,15 @@ function ClaimLine({
   }
   return (
     <div className="min-w-0 space-y-1">
-      <p
-        className={clsx(
-          'text-neutral-800 dark:text-neutral-100',
-          strong ? 'font-semibold' : 'text-sm',
-        )}
-      >
-        {statement}
-      </p>
-      {detail && <p className="text-sm text-neutral-500 dark:text-neutral-400">{detail}</p>}
+      <p className={clsx('text-ink', strong ? 'font-semibold' : 'text-sm')}>{statement}</p>
+      {detail && <p className="text-sm text-muted">{detail}</p>}
       {evidence}
     </div>
   );
 }
 
 function NothingYet() {
-  return <p className="text-sm text-neutral-400 dark:text-neutral-500">Nothing here yet</p>;
+  return <p className="text-sm text-faint">Nothing here yet</p>;
 }
 
 function LayerPanel({
@@ -591,17 +578,15 @@ function LayerPanel({
               <div
                 key={about.id}
                 className={clsx(
-                  'min-w-0 space-y-2 rounded-lg border p-3',
+                  'min-w-0 space-y-2 rounded-tile border p-3',
                   accent
                     ? 'border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40'
                     : warns
                       ? 'border-amber-300 dark:border-amber-800'
-                      : 'border-neutral-200 dark:border-neutral-800',
+                      : 'border-line',
                 )}
               >
-                <h4 className="text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-                  {about.data.title}
-                </h4>
+                <h4 className="text-sm font-semibold text-ink">{about.data.title}</h4>
                 {claims.map((c) => (
                   <ClaimLine key={c.id} claim={c} prefix={key} shared={shared} />
                 ))}
@@ -667,12 +652,12 @@ function Stack({
                 stay buttons of their own (a button can't hold another). */}
             <div
               className={clsx(
-                'relative rounded-xl bg-white motion-safe:transition dark:bg-neutral-900',
+                'relative rounded-block bg-surface motion-safe:transition',
                 isOpen
                   ? 'border border-sky-500 ring-1 ring-sky-500 dark:border-sky-400 dark:ring-sky-400'
                   : layer.highlight
                     ? clsx('border-2 border-dashed', STRONG_BORDER[tone])
-                    : 'border border-neutral-200 hover:border-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600',
+                    : 'border border-line hover:border-neutral-400 dark:hover:border-neutral-600',
               )}
             >
               <button
@@ -682,28 +667,22 @@ function Stack({
                 aria-controls={ids.panel}
                 aria-labelledby={labelledBy}
                 onClick={() => setOpen(isOpen ? null : layer.key)}
-                className="absolute inset-0 cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950"
+                className="absolute inset-0 cursor-pointer rounded-block outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950"
               />
               <div className="pointer-events-none relative grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid-cols-[2.25rem_minmax(0,1fr)_auto] sm:px-4">
                 <span
                   id={ids.key}
-                  className="flex size-8 items-center justify-center rounded-full border border-neutral-300 text-sm font-medium text-neutral-600 tabular-nums dark:border-neutral-600 dark:text-neutral-300"
+                  className="flex size-8 items-center justify-center rounded-full border border-neutral-300 text-sm font-medium text-ink-soft tabular-nums dark:border-neutral-600"
                 >
                   <span className="sr-only">Layer </span>
                   {layer.key}
                 </span>
                 <span className="min-w-0">
-                  <span
-                    id={ids.title}
-                    className="block font-semibold text-neutral-900 dark:text-neutral-50"
-                  >
+                  <span id={ids.title} className="block font-semibold text-ink">
                     <TermText text={layer.title} ranges={terms.get(`${layer.key}:title`)} />
                   </span>
                   {layer.hint && (
-                    <span
-                      id={ids.hint}
-                      className="block text-sm text-neutral-500 dark:text-neutral-400"
-                    >
+                    <span id={ids.hint} className="block text-sm text-muted">
                       <TermText text={layer.hint} ranges={terms.get(`${layer.key}:hint`)} />
                     </span>
                   )}
@@ -734,7 +713,7 @@ function Stack({
               role="region"
               aria-labelledby={ids.title}
               hidden={!isOpen}
-              className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+              className="space-y-3 rounded-block border border-line bg-surface p-4"
             >
               {isOpen && <LayerPanel m={m} shared={shared} highlightAbout={node.highlightAbout} />}
             </div>
@@ -770,8 +749,7 @@ function Row({
   const id = useId();
   const { axis } = node;
   const columns = { '--cols': `repeat(${models.length}, minmax(0, 1fr))` } as CSSProperties;
-  const axisLabel =
-    'text-xs font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-400';
+  const axisLabel = 'text-xs font-medium tracking-wide text-muted uppercase';
   return (
     <div>
       {axis && (
@@ -782,7 +760,7 @@ function Row({
       )}
       <div
         style={columns}
-        className="grid grid-cols-1 overflow-hidden rounded-xl border border-neutral-200 bg-white sm:grid-cols-(--cols) dark:border-neutral-800 dark:bg-neutral-900"
+        className="grid grid-cols-1 overflow-hidden rounded-block border border-line bg-surface sm:grid-cols-(--cols)"
       >
         {models.map((m, i) => {
           const { layer } = m;
@@ -793,7 +771,7 @@ function Row({
               key={layer.key}
               aria-label={layer.title}
               className={clsx(
-                'min-w-0 space-y-2 border-b border-neutral-200 p-4 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0 dark:border-neutral-800',
+                'min-w-0 space-y-2 border-b border-line p-4 last:border-b-0 sm:border-r sm:border-b-0 sm:last:border-r-0',
                 layer.highlight && 'bg-sky-50 dark:bg-sky-950/40',
               )}
             >
@@ -804,7 +782,7 @@ function Row({
                 {layer.pill && <Badge tone={BADGE_TONE[layer.pill.tone]}>{layer.pill.label}</Badge>}
               </div>
               {layer.hint && (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <p className="text-sm text-muted">
                   <TermText text={layer.hint} ranges={terms.get(`${layer.key}:hint`)} />
                 </p>
               )}
@@ -947,7 +925,7 @@ function Flow({
               {i > 0 && (
                 <span
                   aria-hidden
-                  className="flex shrink-0 items-center justify-center p-1 text-neutral-400 dark:text-neutral-500"
+                  className="flex shrink-0 items-center justify-center p-1 text-faint"
                 >
                   <ArrowDown className={clsx('size-4', wide.down)} />
                   <ArrowRight className={clsx('hidden size-4', wide.right)} />
@@ -955,7 +933,7 @@ function Flow({
               )}
               <div
                 className={clsx(
-                  'relative min-w-0 flex-1 rounded-xl bg-white motion-safe:transition dark:bg-neutral-900',
+                  'relative min-w-0 flex-1 rounded-block bg-surface motion-safe:transition',
                   isOpen
                     ? 'border border-sky-500 ring-1 ring-sky-500 dark:border-sky-400 dark:ring-sky-400'
                     : layer.highlight
@@ -977,14 +955,14 @@ function Flow({
                       .join(' ')}
                     onClick={() => setOpen(isOpen ? null : layer.key)}
                     onKeyDown={(e) => onKeyDown(e, i)}
-                    className="absolute inset-0 cursor-pointer rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950"
+                    className="absolute inset-0 cursor-pointer rounded-block outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950"
                   />
                 )}
                 <div className="pointer-events-none relative flex h-full flex-col gap-2 p-3">
                   <span className="flex items-start justify-between gap-2">
                     <span
                       id={ids.title}
-                      className="min-w-0 text-sm font-semibold break-words text-neutral-900 dark:text-neutral-50"
+                      className="min-w-0 text-sm font-semibold break-words text-ink"
                     >
                       <TermText text={layer.title} ranges={terms.get(`${layer.key}:title`)} />
                     </span>
@@ -1019,12 +997,12 @@ function Flow({
         role="region"
         aria-labelledby={openModel ? `${id}-${models.indexOf(openModel)}-title` : undefined}
         hidden={!openModel}
-        className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+        className="space-y-3 rounded-block border border-line bg-surface p-4"
       >
         {openModel && (
           <>
             {openModel.layer.hint && (
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              <p className="text-sm text-muted">
                 <TermText
                   text={openModel.layer.hint}
                   ranges={terms.get(`${openModel.layer.key}:hint`)}
@@ -1051,14 +1029,9 @@ export function Layers({ node }: { node: NodeOf<'Layers'> }) {
   const Body = node.orientation === 'row' ? Row : node.orientation === 'flow' ? Flow : Stack;
   return (
     <div className="space-y-3">
-      {node.prompt && (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">{node.prompt}</p>
-      )}
+      {node.prompt && <p className="text-sm text-muted">{node.prompt}</p>}
       {node.legend && node.legend.length > 0 && (
-        <ul
-          aria-label="Legend"
-          className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-600 dark:text-neutral-400"
-        >
+        <ul aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
           {node.legend.map((item) => (
             <li key={item.label} className="inline-flex items-center gap-1.5">
               <Dot tone={BADGE_TONE[item.tone]} />

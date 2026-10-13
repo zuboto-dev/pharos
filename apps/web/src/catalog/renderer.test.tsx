@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import dataset from './__fixtures__/dataset.json';
 import { ViewDataProvider } from './context';
 import { ViewRenderer } from './renderer';
+import { contrastIssues } from '../test/contrast';
 
 const data = dataset as unknown as ProjectDataset;
 
@@ -187,4 +188,18 @@ describe('catalog components', () => {
     expect(container.textContent).toContain('Every change is traceable');
     spy.mockRestore();
   });
+});
+
+// v0.2 B6: every block reads in dark mode. Text must meet WCAG AA (4.5:1, large text 3:1) on
+// the block's surface, with the colours its classes give in dark mode (see test/contrast.ts).
+describe('dark mode contrast', () => {
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    it(`${name} has readable text in dark mode`, () => {
+      for (const d of [data, empty]) {
+        const { container, unmount } = renderSpec(spec, d);
+        expect(contrastIssues(container, 'dark')).toEqual([]);
+        unmount();
+      }
+    });
+  }
 });

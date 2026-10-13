@@ -23,7 +23,7 @@ function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolea
     <li>
       <Clickable
         id={goal.id}
-        className="-mx-2 flex items-start gap-2 rounded-md px-2 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+        className="-mx-2 flex items-start gap-2 rounded-control px-2 py-1 hover:bg-sunken"
       >
         <span className="mt-0.5">{GOAL_ICONS[meaning] ?? GOAL_ICONS.open}</span>
         <div className="min-w-0">
@@ -31,7 +31,7 @@ function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolea
             {goal.data.title}
           </div>
           {showCriteria && goal.data.successCriteria.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+            <ul className="mt-1 space-y-0.5 text-xs text-muted">
               {goal.data.successCriteria.map((c, i) => (
                 <li key={i} className="flex gap-1.5">
                   <span aria-hidden>·</span>
@@ -43,7 +43,7 @@ function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolea
         </div>
       </Clickable>
       {node.children.length > 0 && (
-        <ul className="mt-1 ml-2 space-y-1 border-l border-neutral-200 pl-4 dark:border-neutral-800">
+        <ul className="mt-1 ml-2 space-y-1 border-l border-line pl-4">
           {node.children.map((child) => (
             <GoalItem key={child.goal.id} node={child} showCriteria={showCriteria} />
           ))}
@@ -102,7 +102,7 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
             const items = data.scopeItems.filter((i) => i.data.kind === column.value);
             return (
               <div key={column.value} className="min-w-0">
-                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-neutral-600 uppercase dark:text-neutral-300">
+                <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-soft uppercase">
                   <OptionDot field="scope_item.kind" value={column.value} />
                   {column.label}{' '}
                   <span className="font-normal text-neutral-400">{items.length}</span>
@@ -112,13 +112,11 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
                     <li key={item.id}>
                       <Clickable
                         id={item.id}
-                        className="rounded-lg bg-neutral-50 px-3 py-2 hover:bg-neutral-100 dark:bg-neutral-800/50 dark:hover:bg-neutral-800"
+                        className="rounded-tile bg-sunken px-3 py-2 hover:bg-subtle"
                       >
                         <div className="text-sm">{item.data.title}</div>
                         {item.data.rationale && (
-                          <div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                            {item.data.rationale}
-                          </div>
+                          <div className="mt-0.5 text-xs text-muted">{item.data.rationale}</div>
                         )}
                       </Clickable>
                     </li>

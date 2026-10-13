@@ -89,11 +89,9 @@ describe('generic data components', () => {
       ],
     });
     expect(screen.getByText('Blocked').nextElementSibling!.textContent).toBe('1');
-    expect(screen.getByText('Blocked').nextElementSibling!.className).toContain('text-rose-600');
+    expect(screen.getByText('Blocked').nextElementSibling!.className).toContain('text-danger');
     expect(screen.getByText('Done').nextElementSibling!.textContent).toBe('33%');
-    expect(screen.getByText('Overdue').nextElementSibling!.className).not.toContain(
-      'text-rose-600',
-    );
+    expect(screen.getByText('Overdue').nextElementSibling!.className).not.toContain('text-danger');
   });
 
   it('Text fills in live values and leaves unknown names visible', () => {

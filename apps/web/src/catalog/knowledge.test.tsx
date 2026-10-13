@@ -736,7 +736,7 @@ describe('evidence in the mark', () => {
 
   it('says "no source yet" in grey when a claim has none', () => {
     renderSpec({ component: 'ClaimCard', claim: 'clm_none' }, evidence);
-    expect(screen.getByText('no source yet').className).toMatch(/neutral-400/);
+    expect(screen.getByText('no source yet').className).toMatch(/text-faint/);
     cleanup();
     renderSpec({ component: 'ClaimCard', claim: 'clm_weak' }, evidence);
     expect(screen.queryByText('no source yet')).toBeNull();

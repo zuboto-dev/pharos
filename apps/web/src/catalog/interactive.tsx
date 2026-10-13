@@ -121,8 +121,8 @@ function GlanceCard({ entity }: { entity: Entity }) {
     (v): v is string => typeof v === 'string' && v.trim().length > 0,
   );
   return (
-    <div className="w-72 space-y-1.5 rounded-lg border border-neutral-200 bg-white p-3 text-left shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="flex items-center justify-between gap-2 text-xs text-neutral-500">
+    <div className="w-72 space-y-1.5 rounded-tile border border-line-strong bg-surface p-3 text-left shadow-popover">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted">
         <span>{TYPE_LABELS[entity.type]}</span>
         {status &&
           (optionKeyOf(entity.type, 'status') ? (
@@ -133,7 +133,7 @@ function GlanceCard({ entity }: { entity: Entity }) {
       </div>
       <div className="text-sm font-medium">{labelOf(entity)}</div>
       {(start || end) && (
-        <p className="text-xs text-neutral-700 tabular-nums dark:text-neutral-300">
+        <p className="text-xs text-ink-soft tabular-nums">
           {start && end
             ? `${formatDate(start)} → ${formatDate(end)}`
             : start
@@ -147,9 +147,7 @@ function GlanceCard({ entity }: { entity: Entity }) {
           )}
         </p>
       )}
-      {text && (
-        <p className="line-clamp-3 text-xs text-neutral-500 dark:text-neutral-400">{text}</p>
-      )}
+      {text && <p className="line-clamp-3 text-xs text-muted">{text}</p>}
       <div className="text-xs text-neutral-400">Click for details</div>
     </div>
   );
@@ -213,7 +211,7 @@ export function EntityRef({ id, className }: { id: string; className?: string })
           openItem(id);
         }}
         className={clsx(
-          'inline-flex max-w-full items-center truncate rounded-md bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700 hover:bg-sky-100 hover:text-sky-800 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-sky-950 dark:hover:text-sky-300',
+          'inline-flex max-w-full items-center truncate rounded-control bg-subtle px-1.5 py-0.5 text-xs text-ink-soft hover:bg-sky-100 hover:text-sky-800 dark:hover:bg-sky-950 dark:hover:text-sky-300',
           className,
         )}
       >

@@ -65,7 +65,7 @@ export function ExpiryNotice() {
   return (
     <section
       aria-label="Expiring files"
-      className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+      className="flex items-start gap-3 rounded-tile border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
     >
       <CalendarClock aria-hidden className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 flex-1 space-y-1">

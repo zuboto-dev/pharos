@@ -35,7 +35,7 @@ class NodeErrorBoundary extends Component<
   override render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
+      <div className="rounded-block border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300">
         <strong>{this.props.name}</strong> failed to render: {this.state.error.message}
       </div>
     );
@@ -47,9 +47,7 @@ function Heading({ title, description }: { title?: string; description?: string 
   return (
     <header className="space-y-0.5">
       {title && <h2 className="text-base font-semibold">{title}</h2>}
-      {description && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
-      )}
+      {description && <p className="text-sm text-muted">{description}</p>}
     </header>
   );
 }
@@ -95,10 +93,7 @@ function Tabs({ node }: { node: NodeOf<'Tabs'> }) {
   return (
     <div className="space-y-4">
       <Heading title={node.title} />
-      <div
-        role="tablist"
-        className="flex gap-1 border-b border-neutral-200 dark:border-neutral-800"
-      >
+      <div role="tablist" className="flex gap-1 border-b border-line">
         {node.tabs.map((t, i) => (
           <button
             key={i}
@@ -108,8 +103,8 @@ function Tabs({ node }: { node: NodeOf<'Tabs'> }) {
             className={clsx(
               '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
               i === active
-                ? 'border-neutral-900 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
+                ? 'border-inverse text-ink'
+                : 'border-transparent text-muted hover:text-ink',
             )}
           >
             {t.label}
@@ -137,7 +132,7 @@ export function Node({ node }: { node: ViewNode }) {
     const def = COMPONENTS[name as keyof typeof COMPONENTS];
     if (!def) {
       return (
-        <div className="rounded-xl border border-dashed border-neutral-300 p-4 text-sm text-neutral-500 dark:border-neutral-700">
+        <div className="rounded-block border border-dashed border-neutral-300 p-4 text-sm text-muted dark:border-neutral-700">
           Unknown component “{name}”
         </div>
       );

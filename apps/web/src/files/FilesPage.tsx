@@ -36,11 +36,11 @@ function MentionedFiles({ projectId, version }: { projectId: string; version: nu
   return (
     <section aria-label="Mentioned but not in Pharos yet" className="space-y-2">
       <h2 className="text-sm font-semibold">Mentioned but not in Pharos yet</h2>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+      <p className="text-sm text-muted">
         Documents this project points to that Pharos can’t open yet.
       </p>
       <Panel>
-        <ul className="-my-2 divide-y divide-neutral-100 dark:divide-neutral-800">
+        <ul className="-my-2 divide-y divide-line-soft">
           {list.map((m) => (
             <li key={m.artifactId} className="space-y-1 py-2.5">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -51,13 +51,9 @@ function MentionedFiles({ projectId, version }: { projectId: string; version: nu
                 >
                   {m.title}
                 </button>
-                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  {WHY[m.match.state]}
-                </span>
+                <span className="text-xs font-medium text-warn">{WHY[m.match.state]}</span>
               </div>
-              <code className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
-                {m.uri}
-              </code>
+              <code className="block truncate text-xs text-muted">{m.uri}</code>
               <SourceStatus match={m.match} onApproved={() => setRefresh((n) => n + 1)} />
             </li>
           ))}
@@ -76,7 +72,7 @@ export function FilesPage({ onAdded }: { onAdded: () => void }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-lg font-semibold">Files</h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="text-sm text-muted">
             {files.length
               ? `${plural(files.length, 'file')} from your folders. Open one to preview it, download it or show it in Finder.`
               : 'Statements, receipts, contracts and certificates from your folders. They stay where they are.'}

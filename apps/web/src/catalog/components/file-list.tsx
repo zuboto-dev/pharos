@@ -107,19 +107,14 @@ function FileRow({
       onOpen={onOpen}
       pressed={onOpen ? !!shown : undefined}
       className={clsx(
-        'flex items-start gap-2.5 rounded-md px-1.5 py-2 sm:items-center',
-        shown ? 'bg-sky-50 dark:bg-sky-950/50' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/60',
+        'flex items-start gap-2.5 rounded-control px-1.5 py-2 sm:items-center',
+        shown ? 'bg-sky-50 dark:bg-sky-950/50' : 'hover:bg-sunken',
       )}
     >
-      <FileTypeIcon
-        path={d.path}
-        className="mt-0.5 size-4 text-neutral-400 sm:mt-0 dark:text-neutral-500"
-      />
+      <FileTypeIcon path={d.path} className="mt-0.5 size-4 text-faint sm:mt-0" />
       <div className="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-0.5 sm:flex-row sm:items-center">
-        <span className="min-w-0 truncate text-sm font-medium text-neutral-800 sm:flex-1 dark:text-neutral-100">
-          {d.title}
-        </span>
-        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500 sm:shrink-0 sm:justify-end dark:text-neutral-400">
+        <span className="min-w-0 truncate text-sm font-medium text-ink sm:flex-1">{d.title}</span>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted sm:shrink-0 sm:justify-end">
           {showKind && <OptionBadge field="file.kind" value={d.kind} />}
           {parts.length > 0 && <span className="truncate">{parts.join(' · ')}</span>}
           {tags.map((tag) => (
@@ -319,7 +314,7 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onSearchKey}
                 placeholder="Find a file by name, issuer or tag"
-                className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pr-2.5 pl-8 text-sm placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:focus-visible:ring-sky-800"
+                className="w-full rounded-control border border-line-strong bg-surface py-1.5 pr-2.5 pl-8 text-sm placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:focus-visible:ring-sky-800"
               />
             </label>
           )}
@@ -327,14 +322,14 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         </div>
       )}
       {filtering && (
-        <div className="flex items-center justify-between gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted">
           <span role="status">
             {shown.length} of {plural(all.length, 'file')}
           </span>
           <button
             type="button"
             onClick={clear}
-            className="inline-flex items-center gap-1 rounded px-1 hover:text-neutral-800 dark:hover:text-neutral-200"
+            className="inline-flex items-center gap-1 rounded px-1 hover:text-ink"
           >
             <X className="size-3" aria-hidden /> Clear filters
           </button>
@@ -344,14 +339,12 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         {groups.map((group) => (
           <section key={group.label || 'files'} aria-label={group.label || 'Files'}>
             {group.label && (
-              <h4 className="mb-0.5 flex items-baseline gap-1.5 px-1.5 text-xs font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
+              <h4 className="mb-0.5 flex items-baseline gap-1.5 px-1.5 text-xs font-medium tracking-wide text-muted uppercase">
                 {group.label}
-                <span className="font-normal text-neutral-400 normal-case dark:text-neutral-500">
-                  {group.files.length}
-                </span>
+                <span className="font-normal text-faint normal-case">{group.files.length}</span>
               </h4>
             )}
-            <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            <ul className="divide-y divide-line-soft">
               {group.files.map((file) => (
                 <li key={file.id}>
                   <FileRow

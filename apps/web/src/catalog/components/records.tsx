@@ -22,6 +22,7 @@ import {
 import clsx from 'clsx';
 import { useMemo, type ReactNode } from 'react';
 import { formatDate, plural } from '../../lib/format';
+import { CHART } from '../chart';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
 import { Badge, Dot, Empty, type Tone } from '../ui';
@@ -42,7 +43,7 @@ export const BAND_TONES: Record<DueBand, Tone> = {
 export function RecordValue({ at, data }: { at: Resolved; data: ViewData }): ReactNode {
   const { value } = at;
   if (value === undefined || value === null || value === '')
-    return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
+    return <span className="text-faint">—</span>;
   if (isMoney(value))
     return <span className="whitespace-nowrap tabular-nums">{formatMoney(value)}</span>;
   if (at.field === 'due.band' && typeof value === 'string')
@@ -98,20 +99,20 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
   const read = useMemo(() => fieldReader(data), [data]);
   if (!rows.length) return <Empty>Nothing is due</Empty>;
   return (
-    <ul className="-mx-2 divide-y divide-neutral-100 dark:divide-neutral-800">
+    <ul className="-mx-2 divide-y divide-line-soft">
       {rows.map(({ record, due, unit }) => {
         const file = record.type === 'file';
         return (
           <li key={record.id}>
             <Clickable
               id={record.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md px-2 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 hover:bg-sunken"
             >
               <span className="w-24 shrink-0">
                 {due ? (
                   <Badge tone={BAND_TONES[due.band]}>{DUE_BAND_LABELS[due.band]}</Badge>
                 ) : (
-                  <span className="text-xs text-neutral-400">
+                  <span className="text-xs text-faint">
                     {file ? 'No expiry date' : 'No schedule'}
                   </span>
                 )}
@@ -123,9 +124,7 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                 <span
                   className={clsx(
                     'text-xs tabular-nums',
-                    due.band === 'past_due'
-                      ? 'text-rose-600 dark:text-rose-400'
-                      : 'text-neutral-500 dark:text-neutral-400',
+                    due.band === 'past_due' ? 'text-danger' : 'text-muted',
                   )}
                 >
                   {file && due.date !== undefined && (due.days ?? 0) >= 0 ? 'Expires ' : ''}
@@ -134,7 +133,7 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                 </span>
               )}
               {node.show?.map((path) => (
-                <span key={path} className="text-xs text-neutral-600 dark:text-neutral-300">
+                <span key={path} className="text-xs text-ink-soft">
                   <RecordValue at={read(record, path)} data={data} />
                 </span>
               ))}
@@ -164,16 +163,16 @@ export function RecordDetails({
   return (
     <div className="space-y-6">
       <div>
-        <div className="text-xs text-neutral-500">{type?.name ?? record.data.recordType}</div>
+        <div className="text-xs text-muted">{type?.name ?? record.data.recordType}</div>
         <h2 className="text-lg font-semibold">{record.data.title}</h2>
       </div>
       {due && (
-        <div className="space-y-1 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+        <div className="space-y-1 rounded-tile border border-line p-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={BAND_TONES[due.band]}>{DUE_BAND_LABELS[due.band]}</Badge>
             <span className="tabular-nums">{dueText(due, unit).join(' · ')}</span>
           </div>
-          <div className="text-xs text-neutral-500">
+          <div className="text-xs text-muted">
             Every{' '}
             {[
               every && plural(every.n, every.unit.replace(/s$/, '')),
@@ -188,10 +187,10 @@ export function RecordDetails({
           </div>
         </div>
       )}
-      <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">
+      <dl className="divide-y divide-line-soft">
         {(type?.fields ?? []).map((f) => (
           <div key={f.key} className="grid grid-cols-[7rem_1fr] items-start gap-3 py-1.5 text-sm">
-            <dt className="text-neutral-500 dark:text-neutral-400">{f.label}</dt>
+            <dt className="text-muted">{f.label}</dt>
             <dd className="min-w-0">
               <RecordValue at={read(record, `fields.${f.key}`)} data={data} />
             </dd>
@@ -200,9 +199,7 @@ export function RecordDetails({
       </dl>
       {record.data.notes && <p className="text-sm whitespace-pre-wrap">{record.data.notes}</p>}
       <section>
-        <h3 className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
-          History
-        </h3>
+        <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">History</h3>
         {history}
       </section>
     </div>
@@ -235,21 +232,19 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
               {row.label}
             </Clickable>
           ) : (
-            <span className="truncate text-neutral-500">{row.label}</span>
+            <span className="truncate text-muted">{row.label}</span>
           );
           return (
             <li key={row.id || 'other'} className="text-sm">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 font-medium">{label}</span>
-                <span className="shrink-0 text-xs text-neutral-600 tabular-nums dark:text-neutral-300">
+                <span className="shrink-0 text-xs text-ink-soft tabular-nums">
                   {amounts(row.spent)}
-                  {row.id ? (
-                    <span className="text-neutral-400"> of {amounts(row.planned)}</span>
-                  ) : null}
+                  {row.id ? <span className="text-faint"> of {amounts(row.planned)}</span> : null}
                 </span>
               </div>
               <div
-                className="mt-1 h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800"
+                className={clsx('mt-1 h-2 overflow-hidden rounded-full', CHART.track)}
                 role="meter"
                 aria-label={`${row.label}: ${amounts(row.spent)} of ${amounts(row.planned)}`}
                 aria-valuemin={0}
@@ -259,7 +254,7 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
                 <div
                   className={clsx(
                     'h-full rounded-full',
-                    over ? 'bg-rose-500' : row.id ? 'bg-sky-500' : 'bg-neutral-400',
+                    CHART.fill[over ? 'bad' : row.id ? 'highlight' : 'rest'],
                   )}
                   style={{ width: `${Math.min(100, pct ?? (row.id ? 0 : 100))}%` }}
                 />
@@ -268,7 +263,7 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
                 <div
                   className={clsx(
                     'mt-0.5 text-xs tabular-nums',
-                    left < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-neutral-400',
+                    left < 0 ? 'text-danger' : 'text-faint',
                   )}
                 >
                   {left < 0
@@ -280,10 +275,10 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
           );
         })}
       </ul>
-      <div className="flex items-baseline justify-between border-t border-neutral-100 pt-2 text-sm dark:border-neutral-800">
+      <div className="flex items-baseline justify-between border-t border-line-soft pt-2 text-sm">
         <span className="font-medium">Total</span>
         <span className="tabular-nums">
-          {amounts(b.spent)} <span className="text-neutral-400">of {amounts(b.planned)}</span>
+          {amounts(b.spent)} <span className="text-faint">of {amounts(b.planned)}</span>
         </span>
       </div>
     </div>

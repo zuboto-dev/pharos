@@ -55,7 +55,7 @@ export function useSourceMatch(
   return match?.key === key ? match.value : undefined;
 }
 
-const NOTE = 'text-xs text-neutral-500 dark:text-neutral-400';
+const NOTE = 'text-xs text-muted';
 
 /** What a source's match means for the reader, and what they can do (R7.12). */
 export function SourceStatus({
@@ -79,7 +79,7 @@ export function SourceStatus({
             onOpen?.();
             actions.open({ entity: match.fileId });
           }}
-          className="inline-flex items-center gap-1 rounded-sm text-xs text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+          className="inline-flex items-center gap-1 rounded-sm text-xs text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
         >
           <FileText className="size-3 shrink-0" aria-hidden />
           Open file
@@ -117,7 +117,7 @@ export function SourceStatus({
         <p className={NOTE}>
           Not in a folder you share with Pharos. To open it here, add{' '}
           <code className="break-all">{match.folder}</code> in{' '}
-          <a href="/settings" className="text-sky-600 hover:underline dark:text-sky-400">
+          <a href="/settings" className="text-accent hover:underline">
             Settings
           </a>{' '}
           or ask your agent to request it.
@@ -126,7 +126,7 @@ export function SourceStatus({
         <p className={NOTE}>
           A path inside the project’s folder, but no folder is approved for this project yet. Ask
           your agent to request it, or add it in{' '}
-          <a href="/settings" className="text-sky-600 hover:underline dark:text-sky-400">
+          <a href="/settings" className="text-accent hover:underline">
             Settings
           </a>
           .
@@ -168,10 +168,10 @@ export function ArtifactSourcePanel({ artifact }: { artifact: Artifact }) {
   return (
     <section
       aria-label="Document"
-      className="mb-4 space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-900"
+      className="mb-4 space-y-1.5 rounded-tile border border-line bg-neutral-50 p-3 dark:bg-neutral-900"
     >
-      <p className="text-xs font-medium text-neutral-600 dark:text-neutral-300">Document</p>
-      <code className="block text-xs break-all text-neutral-600 dark:text-neutral-300">{uri}</code>
+      <p className="text-xs font-medium text-ink-soft">Document</p>
+      <code className="block text-xs break-all text-ink-soft">{uri}</code>
       {match ? (
         <SourceStatus match={match} onApproved={() => setRefresh((n) => n + 1)} />
       ) : (

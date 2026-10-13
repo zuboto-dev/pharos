@@ -26,6 +26,7 @@ import { PharosError } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { registerGuidance } from './guidance.js';
+import type { Presence, PresenceTarget } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { changesSince, unseenCount } from './views/changes.js';
 import { catalogDescribe, catalogList } from './views/catalog.js';
@@ -113,6 +114,10 @@ const Scalar = z.union([z.string(), z.number(), z.boolean()]);
 export type McpOptions = {
   /** The owner's home folder, for checking requested folders (tests pass a temp dir). */
   home?: string;
+  /** Who is working where (v0.2 B5): the view tools mark the view and blocks they touch. */
+  presence?: Presence;
+  /** This session's id for its presence marks, cleared when the session closes. */
+  presenceSource?: string;
 };
 
 export function createMcpServer(store: Store, options: McpOptions = {}): McpServer {
@@ -124,6 +129,25 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     kind: 'agent',
     name: server.server.getClientVersion()?.name ?? 'mcp-agent',
   });
+
+  // Presence (v0.2 B5): a view tool call marks the agent as working on that view (and the
+  // blocks an update names) for a short while. Never stops the call: a bad id is the tool's
+  // own error to report.
+  const mark = (targets: () => PresenceTarget[]) => {
+    const presence = options.presence;
+    if (!presence) return;
+    try {
+      for (const target of targets())
+        presence.touch(author().name, target, options.presenceSource ?? author().name);
+    } catch {
+      // An unknown view or project: nothing to mark.
+    }
+  };
+  const viewTarget = (viewId: string, activity: PresenceTarget['activity']): PresenceTarget => {
+    const view = store.get(viewId);
+    if (view?.type !== 'view') throw new Error('not a view');
+    return { projectId: (view.data as { projectId: string }).projectId, viewId, activity };
+  };
 
   server.registerTool(
     'project_snapshot',
@@ -392,7 +416,10 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       inputSchema: { viewId: z.string() },
       annotations: { readOnlyHint: true },
     },
-    ({ viewId }) => run(() => getView(store, viewId)),
+    ({ viewId }) => {
+      mark(() => [viewTarget(viewId, 'viewing')]);
+      return run(() => getView(store, viewId));
+    },
   );
 
   server.registerTool(
@@ -403,7 +430,10 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
         'Add a saved view (a new tab) made of widgets; to answer a question, use view_answer instead. Example widget: {"id": "work", "w": 8, "node": {"component": "KanbanBoard", "filter": {"where": {"stageId": "$currentStage"}}}}. Returns a preview with warnings that did not block the save; fix them.',
       inputSchema: ViewCreateInput.shape,
     },
-    (input) => run(() => createView(store, author(), input)),
+    (input) => {
+      mark(() => [{ projectId: input.projectId, activity: 'editing' }]);
+      return run(() => createView(store, author(), input));
+    },
   );
 
   server.registerTool(
@@ -414,7 +444,10 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
         'Answer a question about the project with a focused view (shown to the user as an answer, apart from saved views). Lead with the answer, then the evidence. Returns the view, its URL, and a preview of what it shows. Expires after 7 days unless kept.',
       inputSchema: ViewAnswerInput.shape,
     },
-    (input) => run(() => answerView(store, author(), input)),
+    (input) => {
+      mark(() => [{ projectId: input.projectId, activity: 'editing' }]);
+      return run(() => answerView(store, author(), input));
+    },
   );
 
   server.registerTool(
@@ -426,7 +459,16 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       inputSchema: ViewPreviewInput.shape,
       annotations: { readOnlyHint: true },
     },
-    (input) => run(() => previewView(store, input)),
+    (input) => {
+      mark(() =>
+        input.viewId
+          ? [viewTarget(input.viewId, 'viewing')]
+          : input.projectId
+            ? [{ projectId: input.projectId, activity: 'editing' }]
+            : [],
+      );
+      return run(() => previewView(store, input));
+    },
   );
 
   server.registerTool(
@@ -438,7 +480,22 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       inputSchema: ViewUpdateInput.shape,
       annotations: { destructiveHint: true },
     },
-    (input) => run(() => updateView(store, author(), input)),
+    (input) => {
+      mark(() => {
+        const view = viewTarget(input.viewId, 'editing');
+        const ids = (input.ops ?? []).flatMap((op) =>
+          op.op === 'add'
+            ? op.widget.id
+              ? [op.widget.id]
+              : []
+            : op.op === 'remove'
+              ? []
+              : [op.id],
+        );
+        return [view, ...ids.map((widgetId) => ({ ...view, widgetId }))];
+      });
+      return run(() => updateView(store, author(), input));
+    },
   );
 
   server.registerTool(
@@ -452,7 +509,10 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       },
       annotations: { destructiveHint: true },
     },
-    (input) => run(() => deleteView(store, author(), input)),
+    (input) => {
+      mark(() => [{ ...viewTarget(input.viewId, 'editing'), viewId: undefined }]);
+      return run(() => deleteView(store, author(), input));
+    },
   );
 
   server.registerTool(

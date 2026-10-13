@@ -61,7 +61,7 @@ export function QuickAdd({
           setOpen(true);
         }}
         className={clsx(
-          'flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200',
+          'flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left text-sm text-muted hover:bg-subtle hover:text-ink',
           className,
         )}
       >
@@ -96,7 +96,7 @@ export function QuickAdd({
           }
         }}
         onBlur={() => !value.trim() && setOpen(false)}
-        className="w-full rounded-md border border-sky-300 bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:bg-neutral-900 dark:focus:ring-sky-900"
+        className="w-full rounded-control border border-sky-300 bg-surface px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900"
       />
     </form>
   );

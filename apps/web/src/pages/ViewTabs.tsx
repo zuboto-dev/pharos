@@ -19,6 +19,8 @@ import { Link, useNavigate } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { AUTHOR_ICONS } from '../catalog/history';
+import { PresenceDot, viewsWithPresence, workingLine } from '../catalog/presence';
+import { usePresence } from '../lib/events';
 import { useResource } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { dismissAnswer, keepAnswer } from './answers';
@@ -54,7 +56,7 @@ export function ViewUpdated({ view }: { view: Entity<'view'> }) {
       type="button"
       onClick={() => actions.open({ entity: view.id })}
       title={rev ? `#${rev.id} · ${rev.message}` : 'Show this view’s history'}
-      className="inline-flex max-w-full items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+      className="inline-flex max-w-full items-center gap-1.5 text-xs text-muted hover:text-ink"
     >
       {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
       <span className="truncate">
@@ -123,9 +125,9 @@ function moveBetweenTabs(e: KeyboardEvent<HTMLElement>) {
 }
 
 const TAB =
-  'inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
+  'relative inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 const ICON =
-  'mb-1 inline-flex shrink-0 items-center rounded-md p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200';
+  'mb-1 inline-flex shrink-0 items-center rounded-control p-1.5 text-neutral-400 hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 
 /** A tab's icons and name (shared by the tab and its hidden measuring copy). */
 function TabLabel({ view }: { view: Entity<'view'> }) {
@@ -159,6 +161,8 @@ export function ViewTabs({
 }) {
   const { actions } = useViewData();
   const navigate = useNavigate();
+  // Views an agent is working on right now (v0.2 B5): view id → agents.
+  const working = viewsWithPresence(usePresence());
   const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -310,7 +314,7 @@ export function ViewTabs({
                   defaultValue={view.data.name}
                   onBlur={(e) => e.currentTarget.form?.requestSubmit()}
                   onKeyDown={(e) => e.key === 'Escape' && setRenaming(false)}
-                  className="w-36 rounded-md border border-sky-300 bg-white px-2 py-1 text-sm dark:border-sky-800 dark:bg-neutral-900"
+                  className="w-36 rounded-control border border-sky-300 bg-surface px-2 py-1 text-sm dark:border-sky-800"
                 />
               </form>
             ) : (
@@ -323,11 +327,17 @@ export function ViewTabs({
                 className={clsx(
                   TAB,
                   isActive
-                    ? 'border-neutral-900 pr-1 text-neutral-900 dark:border-neutral-100 dark:text-neutral-100'
-                    : 'border-transparent pr-3 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200',
+                    ? 'border-inverse pr-1 text-ink'
+                    : 'border-transparent pr-3 text-muted hover:text-ink',
                 )}
               >
                 <TabLabel view={view} />
+                {working.has(view.id) && (
+                  <>
+                    <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
+                    <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
+                  </>
+                )}
               </Link>
             )}
             {isActive && !renaming && (
@@ -341,7 +351,7 @@ export function ViewTabs({
                     menu ? null : { kind: 'view', anchor: e.currentTarget.getBoundingClientRect() },
                   )
                 }
-                className="mb-0.5 shrink-0 rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="mb-0.5 shrink-0 rounded-control p-1 text-neutral-400 hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400"
               >
                 <MoreHorizontal className="size-4" />
               </button>
@@ -447,14 +457,15 @@ export function ViewTabs({
           onClick={(e) =>
             setMenu(menu ? null : { kind: 'more', anchor: e.currentTarget.getBoundingClientRect() })
           }
-          className={clsx(ICON, 'gap-1 px-2 text-xs text-neutral-500')}
+          className={clsx(ICON, 'relative gap-1 px-2 text-xs text-muted')}
         >
+          {overflow.some((v) => working.has(v.id)) && (
+            <PresenceDot className="absolute top-0.5 right-0.5 size-1.5" />
+          )}
           {overflow.length ? (
             <>
               More
-              <span className="rounded-full bg-neutral-100 px-1.5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                {overflow.length}
-              </span>
+              <span className="rounded-full bg-subtle px-1.5 text-ink-soft">{overflow.length}</span>
               <ChevronDown className="size-3.5" aria-hidden />
             </>
           ) : (
@@ -485,6 +496,12 @@ export function ViewTabs({
               }}
             >
               {view.data.name}
+              {working.has(view.id) && (
+                <>
+                  <PresenceDot className="ml-1.5 size-1.5 align-middle" />
+                  <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
+                </>
+              )}
             </MenuItem>
           ))}
           {overflow.length > 0 && archived.length > 0 && <MenuSeparator />}

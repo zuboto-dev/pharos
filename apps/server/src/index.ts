@@ -9,6 +9,7 @@ import { createApp } from './app.js';
 import { RevisionFeed } from './feed.js';
 import { FileService } from './files/service.js';
 import { answerBrief } from './guidance.js';
+import { Presence } from './presence.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { webBuildId } from './version.js';
@@ -28,6 +29,8 @@ const dbPath = defaultDatabasePath();
 const store = new Store(openDatabase(dbPath));
 store.ensureDefaultViews();
 const feed = new RevisionFeed(store);
+// Who is working where (v0.2 B5): shared by the MCP tools, the answering run and the feed.
+const presence = new Presence();
 // Answer questions asked in the web app by running an agent: PHAROS_AGENT_COMMAND, or Claude Code
 // when it is installed. PHAROS_AGENT_COMMAND=off turns it off.
 const serverUrl = `http://localhost:${port}`;
@@ -54,6 +57,7 @@ const agent = new AgentRunner(store, {
   mode: setup.mode,
   logPath: agentLog,
   prompt: (projectIds) => answerBrief(store, projectIds),
+  presence,
 });
 if (agent.configured) agent.watch(feed);
 const files = new FileService(store);
@@ -61,6 +65,7 @@ const app = createApp(store, feed, agent, {
   dataPath: dbPath,
   port,
   files,
+  presence,
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
 });
 

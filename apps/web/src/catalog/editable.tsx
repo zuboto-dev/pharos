@@ -36,16 +36,16 @@ function useSaveField(entity: Entity) {
 }
 
 const INPUT =
-  'w-full rounded-md border border-sky-300 bg-white px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:bg-neutral-900 dark:focus:ring-sky-900';
+  'w-full rounded-control border border-sky-300 bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900';
 const EDIT_HINT =
-  'inline-flex shrink-0 items-center rounded p-0.5 text-neutral-400 opacity-0 group-hover/edit:opacity-100 hover:text-neutral-700 focus:opacity-100 dark:hover:text-neutral-200';
+  'inline-flex shrink-0 items-center rounded p-0.5 text-neutral-400 opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100';
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+      className="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-ink-soft"
     >
       <Plus className="size-3.5" /> {label}
     </button>
@@ -88,7 +88,7 @@ export function EditableTitle({ entity, prefix }: { entity: Entity; prefix?: Rea
           title="Click to rename"
           onClick={() => setEditing(true)}
           onKeyDown={(e) => e.key === 'Enter' && setEditing(true)}
-          className="cursor-text rounded px-1 -mx-1 text-lg leading-snug font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="cursor-text rounded px-1 -mx-1 text-lg leading-snug font-semibold hover:bg-subtle"
         >
           {value}
         </h2>
@@ -146,7 +146,7 @@ export function EditableMarkdown({ entity, field }: { entity: Entity; field: str
         type="button"
         aria-label={`Edit ${words(field)}`}
         onClick={() => setDraft(value)}
-        className={clsx(EDIT_HINT, 'absolute -top-1 right-0 bg-white dark:bg-neutral-900')}
+        className={clsx(EDIT_HINT, 'absolute -top-1 right-0 bg-surface')}
       >
         <Pencil className="size-3.5" />
       </button>
@@ -199,7 +199,7 @@ export function EditableText({
           href={value}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 break-all text-sky-600 hover:underline dark:text-sky-400"
+          className="inline-flex items-center gap-1 break-all text-accent hover:underline"
         >
           {value} <ExternalLink className="size-3 shrink-0" />
         </a>
@@ -229,7 +229,7 @@ export function EditableDate({ entity, field }: { entity: Entity; field: string 
         aria-label={humanize(words(field))}
         value={value}
         onChange={(e) => save(field, e.target.value || null)}
-        className="rounded-md border border-neutral-200 bg-white px-2 py-0.5 text-sm tabular-nums dark:border-neutral-700 dark:bg-neutral-900 dark:[color-scheme:dark]"
+        className="rounded-control border border-line-strong bg-surface px-2 py-0.5 text-sm tabular-nums dark:[color-scheme:dark]"
       />
       {value && (
         <button

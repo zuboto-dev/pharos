@@ -26,7 +26,7 @@ import { BUTTON, Badge, Empty } from '../ui';
  */
 
 const INPUT =
-  'w-full rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-neutral-700 dark:bg-neutral-900 dark:focus:border-sky-700 dark:focus:ring-sky-900';
+  'w-full rounded-control border border-neutral-300 bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200 dark:border-neutral-700 dark:focus:border-sky-700 dark:focus:ring-sky-900';
 
 /** The person deciding: the first person among the assignees, or a new "me" created with it. */
 function decider(data: ViewData): { id: string; create: Operation[] } {
@@ -49,14 +49,9 @@ function Points({ kind, items }: { kind: 'pro' | 'con'; items?: string[] }) {
         <li key={i} className="flex items-start gap-1.5">
           <Icon
             aria-hidden
-            className={clsx(
-              'mt-0.5 size-3.5 shrink-0',
-              kind === 'pro'
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-rose-600 dark:text-rose-400',
-            )}
+            className={clsx('mt-0.5 size-3.5 shrink-0', kind === 'pro' ? 'text-ok' : 'text-danger')}
           />
-          <span className="text-neutral-700 dark:text-neutral-300">{item}</span>
+          <span className="text-ink-soft">{item}</span>
         </li>
       ))}
     </ul>
@@ -81,12 +76,12 @@ function OptionCard({
     <li
       aria-labelledby={headingId}
       className={clsx(
-        'flex min-w-0 flex-col gap-2.5 rounded-lg border p-3 sm:p-4',
+        'flex min-w-0 flex-col gap-2.5 rounded-tile border p-3 sm:p-4',
         chosen
           ? 'border-emerald-400 bg-emerald-50/50 dark:border-emerald-700 dark:bg-emerald-950/20'
           : recommended
-            ? 'border-sky-300 bg-sky-50/40 dark:border-sky-800 dark:bg-sky-950/20'
-            : 'border-neutral-200 dark:border-neutral-800',
+            ? 'border-accent/50 bg-sky-50/40 dark:bg-sky-950/20'
+            : 'border-line',
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -105,13 +100,11 @@ function OptionCard({
           )
         )}
       </div>
-      {option.summary && (
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">{option.summary}</p>
-      )}
+      {option.summary && <p className="text-sm text-ink-soft">{option.summary}</p>}
       <Points kind="pro" items={option.pros} />
       <Points kind="con" items={option.cons} />
       {option.claimIds?.length ? (
-        <div className="flex flex-wrap items-center gap-1 text-xs text-neutral-500">
+        <div className="flex flex-wrap items-center gap-1 text-xs text-muted">
           <span>Sources</span>
           {option.claimIds.map((id) => (
             <EntityRef key={id} id={id} className="max-w-56" />
@@ -204,7 +197,7 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
     <section aria-labelledby={titleId} className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
-          <p className="text-xs font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">
             {answered ? 'Decided' : 'Decision for you'}
           </p>
           <h3 id={titleId} className="text-lg font-semibold text-balance">
@@ -221,14 +214,11 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
       {answered ? (
         <div
           role="status"
-          className="flex flex-col gap-3 rounded-lg border border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-800 dark:bg-emerald-950/20"
+          className="flex flex-col gap-3 rounded-tile border border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-800 dark:bg-emerald-950/20"
         >
           <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium">
-              <Check
-                aria-hidden
-                className="mr-1 inline size-4 text-emerald-600 dark:text-emerald-400"
-              />
+              <Check aria-hidden className="mr-1 inline size-4 text-ok" />
               {state.kind === 'chosen' ? (
                 <>
                   Chosen: <span className="font-semibold">{state.option.label}</span>
@@ -240,11 +230,9 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
               )}
             </p>
             {state.kind === 'chosen' && state.option.summary && (
-              <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                {state.option.summary}
-              </p>
+              <p className="text-sm text-ink-soft">{state.option.summary}</p>
             )}
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted">
               {[decidedBy, decision.data.decisionDate && formatDate(decision.data.decisionDate)]
                 .filter(Boolean)
                 .join(' · ')}
@@ -307,10 +295,8 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
         ))}
 
       {!answered && recommended && (
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">
-          <span className="font-medium text-neutral-900 dark:text-neutral-100">
-            Why “{recommended.label}”:
-          </span>{' '}
+        <p className="text-sm text-ink-soft">
+          <span className="font-medium text-ink">Why “{recommended.label}”:</span>{' '}
           {decision.data.recommendationReason ?? 'no reason given yet'}
         </p>
       )}
@@ -372,7 +358,7 @@ function FormShell({
           onCancel();
         }
       }}
-      className="space-y-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
+      className="space-y-2 rounded-tile border border-line p-3"
     >
       {children}
       <div className="flex flex-wrap gap-2">

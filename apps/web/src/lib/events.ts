@@ -1,3 +1,4 @@
+import type { PresenceEntry, PresenceState } from '@pharos/schema';
 import { useEffect, useRef, useState } from 'react';
 
 export type RevisionEvent = { id: number; projectIds: string[] };
@@ -20,6 +21,8 @@ export type AgentStatus = {
     durationMs: number;
     exitCode: number | null;
     timedOut: boolean;
+    /** Stopped because answering was paused (pausing stops the run, v0.2 B5). */
+    stopped?: boolean;
   };
 };
 
@@ -29,6 +32,7 @@ type ReadyEvent = { latest?: number; version?: string; build?: string };
 const listeners = new Set<(event: RevisionEvent) => void>();
 const agentListeners = new Set<(status: AgentStatus) => void>();
 const updateListeners = new Set<(build: string | undefined) => void>();
+const presenceListeners = new Set<(entries: PresenceEntry[]) => void>();
 let source: EventSource | null = null;
 /** The build this page was loaded with (the first one the server reported), and a newer one. */
 let loadedBuild: string | undefined;
@@ -60,6 +64,16 @@ function connect() {
     const status = JSON.parse((e as MessageEvent<string>).data) as AgentStatus;
     for (const listener of agentListeners) listener(status);
   });
+  source.addEventListener('presence', (e) => {
+    try {
+      announcePresence(JSON.parse((e as MessageEvent<string>).data) as PresenceState);
+    } catch {
+      // An unreadable presence event changes nothing.
+    }
+  });
+  // Lost the server: nobody can say who is working, so no mark stays up (it reconnects by
+  // itself and the server sends the marks again).
+  source.addEventListener('error', () => announcePresence({ entries: [] }));
   source.addEventListener('ready', (e) => {
     try {
       noticeBuild(JSON.parse((e as MessageEvent<string>).data) as ReadyEvent);
@@ -71,7 +85,14 @@ function connect() {
 }
 
 function disconnect() {
-  if (listeners.size || agentListeners.size || updateListeners.size || !source) return;
+  if (
+    listeners.size ||
+    agentListeners.size ||
+    updateListeners.size ||
+    presenceListeners.size ||
+    !source
+  )
+    return;
   source.close();
   source = null;
 }
@@ -142,4 +163,49 @@ export function useNewerBuild(): string | undefined {
     };
   }, []);
   return build;
+}
+
+// Presence (v0.2 B5): which agent is working where right now, from the feed's `presence` events.
+// Each mark also expires here when its time is up, in case the server's next event is late.
+
+type HeldEntry = PresenceEntry & { until?: number };
+let presence: HeldEntry[] = [];
+let presenceTimer: ReturnType<typeof setTimeout> | undefined;
+
+function livePresence(now = Date.now()): PresenceEntry[] {
+  return presence.filter((e) => e.until === undefined || e.until > now);
+}
+
+function notifyPresence() {
+  clearTimeout(presenceTimer);
+  const now = Date.now();
+  presence = presence.filter((e) => e.until === undefined || e.until > now);
+  const next = Math.min(...presence.map((e) => e.until ?? Infinity));
+  if (next !== Infinity) presenceTimer = setTimeout(notifyPresence, next - now + 50);
+  const entries = livePresence(now);
+  for (const listener of presenceListeners) listener(entries);
+}
+
+/** Takes the server's presence state (or a test's) as the marks shown now. */
+export function announcePresence(state: PresenceState): void {
+  const now = Date.now();
+  const entries = Array.isArray(state?.entries) ? state.entries : [];
+  presence = entries.map((e) =>
+    typeof e.expiresInMs === 'number' ? { ...e, until: now + e.expiresInMs } : { ...e },
+  );
+  notifyPresence();
+}
+
+/** Every agent mark right now: who is working on which project, view, or block. */
+export function usePresence(): PresenceEntry[] {
+  const [entries, setEntries] = useState<PresenceEntry[]>(() => livePresence());
+  useEffect(() => {
+    presenceListeners.add(setEntries);
+    connect();
+    return () => {
+      presenceListeners.delete(setEntries);
+      disconnect();
+    };
+  }, []);
+  return entries;
 }

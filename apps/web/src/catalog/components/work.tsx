@@ -50,7 +50,7 @@ function AssigneeLabel({ id }: { id?: string }) {
   if (!assignee) return null;
   const Icon = assignee.data.kind === 'agent' ? Bot : User;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+    <span className="inline-flex items-center gap-1 text-xs text-muted">
       <Icon className="size-3.5" /> {assignee.data.name}
     </span>
   );
@@ -76,7 +76,7 @@ function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: 
         id={task.id}
         title={task.data.description}
         className={clsx(
-          'space-y-2 rounded-lg border border-neutral-200 bg-white p-3 shadow-xs transition hover:border-neutral-300 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700',
+          'space-y-2 rounded-tile border border-line bg-surface p-3 shadow-xs transition hover:border-neutral-300 hover:shadow-sm dark:hover:border-neutral-700',
           meaning === 'blocked' && 'border-l-2 border-l-rose-500',
           meaning === 'cancelled' && 'opacity-60',
         )}
@@ -156,7 +156,7 @@ function ColumnCards({
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-2 w-full rounded-md px-2 py-1 text-left text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="mt-2 w-full rounded-control px-2 py-1 text-left text-xs text-muted hover:bg-subtle hover:text-ink"
         >
           {expanded ? 'Show fewer' : `Show ${hidden} more`}
         </button>
@@ -257,13 +257,13 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
           }}
           onDrop={(e) => onDrop(e, column)}
           className={clsx(
-            'flex w-64 shrink-0 flex-col rounded-lg p-2 transition',
+            'flex w-64 shrink-0 flex-col rounded-tile p-2 transition',
             over === column.key
               ? 'bg-sky-50 ring-2 ring-sky-300 dark:bg-sky-950/50 dark:ring-sky-800'
               : 'bg-neutral-50 dark:bg-neutral-950/60',
           )}
         >
-          <div className="group/col flex items-center gap-2 px-1 pb-2 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+          <div className="group/col flex items-center gap-2 px-1 pb-2 text-xs font-semibold text-ink-soft">
             {optionField && column.key && <OptionDot field={optionField} value={column.key} />}
             {column.label}
             <span className="font-normal text-neutral-400">{column.tasks.length}</span>
@@ -296,7 +296,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
         </div>
       ))}
       {optionField && (
-        <div className="flex w-40 shrink-0 items-start justify-center rounded-lg border border-dashed border-neutral-200 p-2 dark:border-neutral-800">
+        <div className="flex w-40 shrink-0 items-start justify-center rounded-tile border border-dashed border-line p-2">
           <EditOptionsButton
             field={optionField}
             label={groupBy === 'status' ? 'Edit statuses' : 'Edit priorities'}
@@ -371,8 +371,8 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
   return (
     <div className="-mx-4 -my-4 overflow-x-auto">
       <table className="w-full text-left text-sm">
-        <thead className="text-xs text-neutral-500 dark:text-neutral-400">
-          <tr className="border-b border-neutral-100 dark:border-neutral-800">
+        <thead className="text-xs text-muted">
+          <tr className="border-b border-line-soft">
             <th className="px-4 py-2 font-medium">Task</th>
             {columns.map((c) => (
               <th key={c} className="px-3 py-2 font-medium whitespace-nowrap">
@@ -389,7 +389,7 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
               title={<TermText text={titles[i]!} ranges={termRanges[i]} />}
             >
               {columns.map((c) => (
-                <td key={c} className="px-3 py-2 text-neutral-600 dark:text-neutral-300">
+                <td key={c} className="px-3 py-2 text-ink-soft">
                   {cell(task, c)}
                 </td>
               ))}
@@ -411,7 +411,7 @@ function TaskRow({ task, title, children }: { task: Task; title: ReactNode; chil
         if (!(e.target as HTMLElement).closest('button, a, select'))
           actions.open({ entity: task.id });
       }}
-      className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/40"
+      className="cursor-pointer border-b border-line-soft last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
     >
       <td className="px-4 py-2">
         <span className="flex items-center gap-2">
@@ -484,7 +484,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
           <li key={task.id}>
             <Clickable
               id={task.id}
-              className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+              className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken"
             >
               <TaskCheck task={task} />
               <span
@@ -506,7 +506,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
                 <button
                   type="button"
                   onClick={() => void setStatus(task, 'in_progress')}
-                  className="inline-flex items-center gap-1 rounded-md border border-neutral-200 px-2 py-0.5 text-xs text-neutral-600 hover:border-sky-300 hover:text-sky-700 dark:border-neutral-700 dark:text-neutral-300 dark:hover:text-sky-300"
+                  className="inline-flex items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-sky-300 hover:text-accent-strong"
                 >
                   <Play className="size-3" /> Start
                 </button>
@@ -522,7 +522,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
         <button
           type="button"
           onClick={() => setShowDone((v) => !v)}
-          className="text-xs text-neutral-500 hover:underline"
+          className="text-xs text-muted hover:underline"
         >
           {showDone ? 'Hide finished' : `Show ${finished.length} finished`}
         </button>
@@ -547,7 +547,7 @@ function GraphNode({ task, x, y }: { task: Task; x: number; y: number }) {
     >
       <Clickable
         id={task.id}
-        className="flex h-full items-center gap-2 rounded-lg border border-neutral-200 bg-white px-3 transition hover:border-sky-300 hover:shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-sky-800"
+        className="flex h-full items-center gap-2 rounded-tile border border-line-strong bg-surface px-3 transition hover:border-sky-300 hover:shadow-sm dark:hover:border-sky-800"
       >
         <OptionDot field="task.status" value={task.data.status} />
         <span className={clsx('line-clamp-2 text-xs font-medium', done && 'text-neutral-400')}>
@@ -666,8 +666,8 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
   return (
     <div className="-mx-4 -my-4 overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="text-xs text-neutral-500 dark:text-neutral-400">
-          <tr className="border-b border-neutral-100 dark:border-neutral-800">
+        <thead className="text-xs text-muted">
+          <tr className="border-b border-line-soft">
             <th className="px-4 py-2 text-left font-medium">Assignee</th>
             {statuses.map((s) => (
               <th key={s.value} className="px-3 py-2 text-right font-medium whitespace-nowrap">
@@ -678,10 +678,7 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr
-              key={row.key}
-              className="border-b border-neutral-100 last:border-0 dark:border-neutral-800"
-            >
+            <tr key={row.key} className="border-b border-line-soft last:border-0">
               <td className="px-4 py-2">
                 <span className="inline-flex items-center gap-1.5">
                   {row.kind === 'agent' ? (
@@ -700,7 +697,7 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
                     title={matching.map((t) => t.data.title).join('\n')}
                     className={clsx(
                       'px-3 py-2 text-right tabular-nums',
-                      matching.length ? 'font-medium' : 'text-neutral-300 dark:text-neutral-700',
+                      matching.length ? 'font-medium' : 'text-faint',
                     )}
                   >
                     {matching.length}

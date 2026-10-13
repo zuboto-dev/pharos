@@ -18,7 +18,26 @@ const Ref = z
     'Name for this new entity; later operations in the same call can use "$<ref>" as its id',
   );
 
-function operationsFor(type: EntityType) {
+/**
+ * Types an author may only update, leaving out some fields: agents fill in a file's details but
+ * never add, remove or move a file (R7), so the agent schema says so and stays small.
+ */
+export type UpdateOnly = Partial<Record<EntityType, readonly string[]>>;
+
+function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}) {
+  const omit = updateOnly[type];
+  if (omit) {
+    const mask = Object.fromEntries(omit.map((f) => [f, true as const]));
+    const patch = patchSchema(type).omit(mask as Record<string, true>);
+    return z.discriminatedUnion('op', [
+      z.strictObject({
+        op: z.literal('update'),
+        type: z.literal(type),
+        id: Id,
+        data: patch.describe('Fields to change; null clears an optional field'),
+      }),
+    ]);
+  }
   return z.discriminatedUnion('op', [
     z.strictObject({
       op: z.literal('create'),
@@ -36,10 +55,10 @@ function operationsFor(type: EntityType) {
   ]);
 }
 
-function operationUnion(types: readonly EntityType[]) {
+function operationUnion(types: readonly EntityType[], updateOnly?: UpdateOnly) {
   return z.discriminatedUnion(
     'type',
-    types.map(operationsFor) as unknown as [
+    types.map((t) => operationsFor(t, updateOnly)) as unknown as [
       ReturnType<typeof operationsFor>,
       ...ReturnType<typeof operationsFor>[],
     ],
@@ -53,14 +72,14 @@ export type Operation =
   | { op: 'delete'; type: EntityType; id: string };
 
 /** Input for applying operations on some entity types (e.g. agents edit views with view tools instead). */
-export function applyInputFor(types: readonly EntityType[]) {
+export function applyInputFor(types: readonly EntityType[], updateOnly?: UpdateOnly) {
   return z.object({
     message: z
       .string()
       .trim()
       .min(1)
       .describe('Why these changes are being made, like a commit message'),
-    operations: z.array(operationUnion(types)).min(1),
+    operations: z.array(operationUnion(types, updateOnly)).min(1),
   });
 }
 

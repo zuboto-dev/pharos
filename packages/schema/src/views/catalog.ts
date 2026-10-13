@@ -244,6 +244,39 @@ export const DecisionLogNode = component('DecisionLog', 'Decisions, newest first
   filter: Filter.optional(),
 });
 
+/** Filter controls a FileList can show above its rows (R7). */
+export const FILE_LIST_CONTROLS = ['search', 'kind', 'tag', 'issuer', 'expiry'] as const;
+/** Details a FileList row can show after the title. */
+export const FILE_LIST_DETAILS = [
+  'issuer',
+  'issuedDate',
+  'expiryDate',
+  'tags',
+  'size',
+  'modifiedAt',
+] as const;
+
+export const FileListNode = component(
+  'FileList',
+  "Files from the owner's folders added to this project, grouped by kind; a row opens the file drawer (preview, details, actions).",
+  {
+    filter: Filter.optional().describe(
+      'Which files, e.g. {"where": {"tags": "tax-2025"}} or expiring soon {"where": {"expiryDate": {"lte": "$today+60d"}}}',
+    ),
+    groupBy: z.enum(['kind', 'none']).optional().describe('Default kind'),
+    controls: z
+      .array(z.enum(FILE_LIST_CONTROLS))
+      .optional()
+      .describe(
+        'Controls the reader can filter with: a name search and filters for kind, tag, issuer and expiry (default all; [] hides them)',
+      ),
+    details: z
+      .array(z.enum(FILE_LIST_DETAILS))
+      .optional()
+      .describe('Shown after each title (default ["issuer", "expiryDate"])'),
+  },
+);
+
 export const ActivityFeedNode = component(
   'ActivityFeed',
   'Recent revisions: who changed what and why.',
@@ -663,6 +696,7 @@ const LEAF_NODES = [
   AssigneeMatrixNode,
   ArtifactGalleryNode,
   DecisionLogNode,
+  FileListNode,
   ActivityFeedNode,
   DataTableNode,
   CountChartNode,

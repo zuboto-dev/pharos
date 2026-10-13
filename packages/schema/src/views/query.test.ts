@@ -39,6 +39,7 @@ const data: ProjectDataset = {
   requests: [],
   claims: [],
   terms: [],
+  files: [],
 };
 
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);

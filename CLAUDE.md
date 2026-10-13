@@ -94,6 +94,17 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
 - Components read data through filters evaluated by `runQuery` against the project dataset
   (`GET /api/projects/:id/data`); they never copy data into the spec.
 
+## Files
+
+- Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The
+  contract is `packages/schema/src/files.ts`: folders are an app setting (`FOLDERS_SETTING`,
+  never revisions, never over MCP) with a level (hidden / details / contents); a `file` entity
+  records where a file is (`rootId` + relative `path`) and its details; the `file_scan` table is
+  a cache, not project data.
+- Read-only. File routes carry ids, never paths (`FILE_ROUTES`); mime types come from
+  `FILE_TYPES` only. Agents see details only and may never add, remove or move a file
+  (`Store.apply` refuses it). Tests use made-up folders and files only.
+
 ## Options
 
 - Option fields (task status/priority, stage/goal/artifact/decision status, scope kind, artifact

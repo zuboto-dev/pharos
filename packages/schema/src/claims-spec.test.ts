@@ -120,6 +120,7 @@ describe('certainty queries with owner-renamed options', () => {
     requests: [],
     claims,
     terms: [],
+    files: [],
   };
   const ids = (rows: { id: string }[]) => rows.map(({ id }) => id);
 

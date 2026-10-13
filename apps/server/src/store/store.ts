@@ -19,6 +19,7 @@ import {
   type RevisionSummary,
   OPTION_FIELDS,
   OPTION_KEYS,
+  SCAN_FILE_FIELDS,
   findOption,
   hasOrder,
   isProjectScoped,
@@ -398,6 +399,7 @@ export class Store {
       requests: this.list('request', { projectId }),
       claims: this.list('claim', { projectId }),
       terms: this.list('term', { projectId }),
+      files: this.list('file', { projectId }),
     };
   }
 
@@ -452,6 +454,12 @@ export class Store {
 
   /** Applies operations atomically as one revision. */
   apply(author: Author, input: ApplyInput): ApplyResult {
+    if (author.kind === 'agent') {
+      input.operations.forEach((op, index) => {
+        const issue = agentFileIssue(op);
+        if (issue) throw new PharosError('invalid', `operations[${index}]: ${issue}`);
+      });
+    }
     return this.transaction(author, input.message, null, (tx) => {
       const created: Record<string, string> = {};
       const refs = new Map<string, string>();
@@ -542,6 +550,22 @@ export class Store {
       throw err;
     }
   }
+}
+
+/**
+ * Files (R7) come from folders the owner adds in Settings: agents may fill in a file's details
+ * (title, kind, issuer, dates, tags, notes, tasks) but never add or remove one, or change where it
+ * is on disk.
+ */
+function agentFileIssue(op: Operation): string | undefined {
+  if (op.type !== 'file') return undefined;
+  if (op.op === 'create')
+    return "agents can't add files; the owner adds them from a folder in Pharos";
+  if (op.op === 'delete') return "agents can't remove files; ask the owner";
+  const scanned = SCAN_FILE_FIELDS.filter((f) => f in op.data);
+  return scanned.length
+    ? `${scanned.join(', ')} come from the folder scan; agents can't change them`
+    : undefined;
 }
 
 /** One in-progress revision. Writes go straight to the DB inside the SQL transaction. */

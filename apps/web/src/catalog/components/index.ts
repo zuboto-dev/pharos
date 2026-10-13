@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { CountChart, DataList, DataTable, Stat, TextBlock } from './generic';
 import { GoalTree, ScopeBoard } from './goals';
 import { BeforeAfter } from './before-after';
+import { FileList } from './file-list';
 import { FindingChart } from './finding-chart';
 import { ClaimCard, Layers } from './knowledge';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
@@ -41,6 +42,7 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   AssigneeMatrix: { render: AssigneeMatrix },
   ArtifactGallery: { render: ArtifactGallery },
   DecisionLog: { render: DecisionLog },
+  FileList: { render: FileList },
   ActivityFeed: { render: ActivityFeed },
   DataTable: { render: DataTable },
   CountChart: { render: CountChart },

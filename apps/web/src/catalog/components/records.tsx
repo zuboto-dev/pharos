@@ -29,6 +29,7 @@ import { Clickable, EntityRef } from '../interactive';
 import { CalendarCheck, PieChart } from 'lucide-react';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { Badge, Dot, isHttp, Uri, type Tone } from '../ui';
+import { RowAction } from './action';
 
 /**
  * Blocks for a project's own records (R8): what's due, and planned against spent. Their numbers
@@ -131,10 +132,10 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
       {rows.map(({ record, due, unit }) => {
         const file = record.type === 'file';
         return (
-          <li key={record.id}>
+          <li key={record.id} className="flex items-center gap-2">
             <Clickable
               id={record.id}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 hover:bg-sunken"
+              className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 hover:bg-sunken"
             >
               <span className="w-24 shrink-0">
                 {due ? (
@@ -166,6 +167,9 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                 </span>
               ))}
             </Clickable>
+            {node.action && record.type === 'record' && (
+              <RowAction actionId={node.action} recordId={record.id} title={record.data.title} />
+            )}
           </li>
         );
       })}

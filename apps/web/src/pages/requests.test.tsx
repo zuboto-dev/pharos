@@ -69,6 +69,11 @@ describe('asking the agent', () => {
     fireEvent.change(screen.getByLabelText('Question'), {
       target: { value: 'Which goal is most at risk?' },
     });
+    // Asked from a block, it changes that block unless the person picks a separate answer.
+    expect(
+      (screen.getByRole('radio', { name: /Change this block/ }) as HTMLInputElement).checked,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Answer in a new view/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(apply).toHaveBeenCalledWith(
@@ -88,6 +93,49 @@ describe('asking the agent', () => {
       ],
       { undoable: true },
     );
+  });
+
+  it('asks to change the block in place by default (R10.6)', async () => {
+    const onClose = vi.fn();
+    render(
+      <AskDialog
+        projectId="p"
+        about={{ label: 'Bills in This month', viewId: 'view_1', widgetId: 'bills' }}
+        apply={apply}
+        onClose={onClose}
+      />,
+    );
+    const question = screen.getByLabelText('Question');
+    expect(document.activeElement).toBe(question);
+    fireEvent.change(question, { target: { value: 'Only bills due this month' } });
+    // Cmd/Ctrl+Enter sends it from the keyboard.
+    fireEvent.keyDown(question, { key: 'Enter', metaKey: true });
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(apply).toHaveBeenLastCalledWith(
+      'Ask: Only bills due this month',
+      [
+        {
+          op: 'create',
+          type: 'request',
+          data: {
+            projectId: 'p',
+            question: 'Only bills due this month',
+            about: 'Bills in This month',
+            viewId: 'view_1',
+            widgetId: 'bills',
+            mode: 'block',
+          },
+        },
+      ],
+      { undoable: true },
+    );
+  });
+
+  it('a question about the whole project has no block choice', () => {
+    render(
+      <AskDialog projectId="p" about={{ label: 'Project' }} apply={apply} onClose={vi.fn()} />,
+    );
+    expect(screen.queryByRole('radio')).toBeNull();
   });
 
   it('lists waiting and answered questions', () => {

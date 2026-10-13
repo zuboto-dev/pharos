@@ -1,3 +1,4 @@
+import { actionForm } from '../actions.js';
 import type { Entity, EntityType } from '../entities.js';
 import { recordTypesOf, type RecordType } from '../records.js';
 import type { Board } from './board.js';
@@ -31,6 +32,7 @@ export const FINDING_LEVELS = {
   'operator-mismatch': 'reject',
   'unknown-option': 'reject',
   'bad-relative-date': 'reject',
+  'bad-action': 'reject',
   'no-record-type': 'warn',
   'mixed-record-types': 'warn',
   'group-by-unique': 'warn',
@@ -621,6 +623,13 @@ function checkNode(ctx: Ctx, node: ViewNode, at: string): void {
       checkSum(ctx, spent, node.spent.sum, `${at}.spent.sum`);
       return;
     }
+    case 'Action':
+      // R10: the form is built from the record type, so every type and field it names must exist.
+      for (const problem of actionForm(node, { data: { recordTypes: ctx.recordTypes } }).problems)
+        add(ctx, 'bad-action', at, problem, {
+          allowed: ctx.recordTypes.map((t) => t.key),
+        });
+      return;
     default:
       return;
   }
@@ -632,6 +641,23 @@ export function checkBoardQueries(board: Board, project: Entity<'project'> | nul
   board.widgets.forEach((w, i) => {
     const ctx: Ctx = { project, recordTypes: recordTypesOf(project), widget: w.id, out };
     checkNode(ctx, w.node, `widgets[${i}].node`);
+    // A DueTracker's row action names a done Action on the same board (R10).
+    const action = w.node.component === 'DueTracker' ? w.node.action : undefined;
+    if (action) {
+      const target = board.widgets.find((x) => x.id === action)?.node;
+      if (target?.component !== 'Action' || (target.does ?? 'create') !== 'done')
+        add(
+          ctx,
+          'bad-action',
+          `widgets[${i}].node.action`,
+          `"${action}" must be the id of an Action block on this page with does "done"`,
+          {
+            allowed: board.widgets
+              .filter((x) => x.node.component === 'Action' && x.node.does === 'done')
+              .map((x) => x.id),
+          },
+        );
+    }
   });
   return out;
 }

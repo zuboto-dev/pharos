@@ -9,6 +9,7 @@ import {
   FOLDER_REQUEST_STATUS_TOOL,
   FOLDER_REQUEST_TOOL,
   FolderRequestInput,
+  ActionSubmission,
   applyInputFor,
   type ApplyInput,
   type Author,
@@ -16,6 +17,7 @@ import {
 } from '@pharos/schema';
 import { z } from 'zod';
 import { VERSION } from './version.js';
+import { ActionService } from './actions/service.js';
 import { forAgent, requestFolder, savedRequests } from './files/requests.js';
 import {
   AGENT_READONLY_FILE_FIELDS,
@@ -86,7 +88,9 @@ Generating views (what the user sees):
 - Prefer adjusting an existing view when the user asks to change "the board" or "the overview"; create a new view when they want a different angle (e.g. "a view for this week's work").
 - view_create, view_answer, and view_update return a preview of the saved view: read it before telling the user the view is ready, and fix unknown fields, empty widgets you didn't intend, and its warnings (per widget, and for the whole view). Use view_preview for drafts or other views.
 - Query checks: every filter, sort, group, sum and column in a view is checked against the project's fields (record fields included) before it is saved. An unknown field, record type or option value, a sum over something that isn't a number, an unreadable relative date, or a value that doesn't fit its field (e.g. a range on money; use "fields.amount.amount" in cents) refuses the save; the error gives the JSON path, the allowed values, the closest match and a corrected example, so fix exactly that and retry. A record query without recordType, or a field only some of its record types have, only warns. Empty results, custom option values and mixed currencies are fine.
-- People can rearrange views too, so read a view with view_get before editing it, and keep widget ids stable.
+- People can rearrange views too, so read a view with view_get before editing it, keep widget ids stable, and pass its revision as view_update's expectedRevision: if a person changed the view since, nothing is saved and you read it again and redo your change on what it shows now.
+- Actions (R10): an Action block is a button and a short form people use to change records from a page ("Log a service", "Mark paid"); the form is built from the record type. Offer one only on a page about records the owner keeps up by hand, for what they do often (pack pages have theirs; pharos://guide/packs). project_snapshot.actions lists them; action_run submits one as one revision.
+- A request with mode "block" asks you to change one block (its widgetId) in place: view_update with requestId and ops on that block only (other blocks and the view are refused while it is open), and a short reply. If it can't be done in that block, dismiss the request with a reply saying why.
 
 History:
 - At the start of a session, call changes_since for the project you work on: it lists what people and other agents changed since you last looked (Pharos remembers your place), e.g. tasks they finished or questions they asked.
@@ -513,6 +517,24 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     (input) => {
       mark(() => [{ ...viewTarget(input.viewId, 'editing'), viewId: undefined }]);
       return run(() => deleteView(store, author(), input));
+    },
+  );
+
+  const actions = new ActionService(store);
+  server.registerTool(
+    'action_run',
+    {
+      title: 'Run a page action',
+      description:
+        'Submit an Action block\'s form ("Log a service", "Mark paid") as the owner would, in one revision: project_snapshot.actions lists them, record fields come from the record type. done actions need recordId and expectedRevision (the record\'s revision in project_snapshot.records). Returns status done, duplicate (same idempotencyKey: nothing new), invalid (fieldErrors), stale (the record changed: read it and decide again), not_found or failed.',
+      inputSchema: ActionSubmission.shape,
+      annotations: { destructiveHint: true },
+    },
+    (input) => {
+      const result = actions.run(author(), input);
+      return result.status === 'done' || result.status === 'duplicate'
+        ? json(result)
+        : { isError: true, content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
 

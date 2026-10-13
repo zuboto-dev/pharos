@@ -67,6 +67,7 @@ export const MONEY_PACK: Pack = {
       widgets: [
         {
           id: 'headline',
+          w: 8,
           node: {
             component: 'Text',
             content:
@@ -97,6 +98,27 @@ export const MONEY_PACK: Pack = {
           },
         },
         {
+          id: 'mark-paid',
+          w: 4,
+          node: {
+            component: 'Action',
+            label: 'Mark paid',
+            description: 'Moves the bill to its next date and adds the spending',
+            recordType: 'bill',
+            does: 'done',
+            log: {
+              recordType: 'spending',
+              fields: {
+                date: '$date',
+                amount: 'fields.amount',
+                category: 'fields.category',
+                payee: 'fields.payee',
+              },
+              ask: ['amount'],
+            },
+          },
+        },
+        {
           id: 'categories',
           w: 7,
           node: {
@@ -122,6 +144,7 @@ export const MONEY_PACK: Pack = {
             title: 'Upcoming bills',
             query: { type: 'record', where: { recordType: 'bill' } },
             show: ['fields.amount'],
+            action: 'mark-paid',
           },
         },
         {

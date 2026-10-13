@@ -35,6 +35,7 @@ describe('MCP', () => {
     const client = await connect();
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
+      'action_run',
       'apply',
       'catalog_describe',
       'catalog_list',

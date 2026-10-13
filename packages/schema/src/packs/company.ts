@@ -58,6 +58,7 @@ export const COMPANY_PACK: Pack = {
       widgets: [
         {
           id: 'headline',
+          w: 8,
           node: {
             component: 'Text',
             content:
@@ -85,6 +86,17 @@ export const COMPANY_PACK: Pack = {
           },
         },
         {
+          id: 'mark-renewed',
+          w: 4,
+          node: {
+            component: 'Action',
+            label: 'Mark renewed',
+            description: 'Moves a renewal or filing to its next date',
+            recordType: 'renewal',
+            does: 'done',
+          },
+        },
+        {
           id: 'expiring',
           w: 7,
           node: {
@@ -102,6 +114,7 @@ export const COMPANY_PACK: Pack = {
             title: 'Renewals and filings',
             query: { type: 'record', where: { recordType: 'renewal' } },
             show: ['fields.cost'],
+            action: 'mark-renewed',
           },
         },
         {

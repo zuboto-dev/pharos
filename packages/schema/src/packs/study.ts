@@ -100,6 +100,7 @@ export const STUDY_PACK: Pack = {
       widgets: [
         {
           id: 'headline',
+          w: 8,
           node: {
             component: 'Text',
             content:
@@ -131,6 +132,15 @@ export const STUDY_PACK: Pack = {
                 },
               },
             },
+          },
+        },
+        {
+          id: 'log-session',
+          w: 4,
+          node: {
+            component: 'Action',
+            label: 'Log a session',
+            recordType: 'session',
           },
         },
         {

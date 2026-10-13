@@ -120,6 +120,17 @@ export const MIGRATIONS: string[] = [
     error TEXT
   );
   `,
+  // Record-form actions (R10): one row per idempotency key, so a retried submission returns its
+  // first result instead of writing again. App data beside revisions, not project data.
+  `
+  CREATE TABLE action_submissions (
+    key TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    result TEXT,
+    created_at TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

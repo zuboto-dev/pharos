@@ -1,4 +1,11 @@
-import type { ArtifactFileMatch, Entity, Operation, ProjectDataset } from '@pharos/schema';
+import type {
+  ActionResult,
+  ActionSubmission,
+  ArtifactFileMatch,
+  Entity,
+  Operation,
+  ProjectDataset,
+} from '@pharos/schema';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
 export type OpenTarget = { entity: string } | { revision: number } | { history: true };
@@ -33,6 +40,11 @@ export type ViewActions = {
     revision: number,
     message: string,
   ) => Promise<{ ok: true; revision: number | null } | { ok: false; error: string }>;
+  /**
+   * Sends an Action block's form (R10; live pages only): the page reloads and offers Undo on
+   * success; the form shows field errors, a stale record or a failure from the result.
+   */
+  act?: (submission: ActionSubmission) => Promise<ActionResult>;
   /** Where a claim source's local path is among the project files (R7.6; live pages only). */
   findSourceFile?: (artifactId: string) => Promise<ArtifactFileMatch>;
 };

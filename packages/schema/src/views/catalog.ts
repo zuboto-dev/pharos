@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ACTION_FIELDS } from '../actions.js';
 import { DUE_BANDS } from '../records.js';
 import { Filter, Query, Where } from './query.js';
 
@@ -507,7 +508,21 @@ export const DueTrackerNode = component(
     date: FieldPath.optional().describe(
       'For one-off dates instead of an interval (R9): the date field each record is due on, e.g. exams "fields.date"; urgent within 30 days, very urgent within 7',
     ),
+    action: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Id of an Action block on the same page whose does is "done" (e.g. "Mark paid"): each row gets its button, with that record picked (R10)',
+      ),
   },
+);
+
+/** R10: a button and a short form that adds a record or marks one done, on the page. */
+export const ActionNode = component(
+  'Action',
+  'A button that opens a short form built from a record type\'s fields: "create" adds a record (Log a service), "done" marks a repeating record done on a date (Mark paid). One revision, with Undo.',
+  ACTION_FIELDS,
 );
 
 export const CategoryBreakdownNode = component(
@@ -881,6 +896,7 @@ const LEAF_NODES = [
   StartHereNode,
   DueTrackerNode,
   CategoryBreakdownNode,
+  ActionNode,
 ] as const;
 
 type Common = { title?: string; span?: number };

@@ -88,6 +88,7 @@ const CASES: Record<FindingCode, ViewNode> = {
     component: 'DataList',
     query: { type: 'task', where: { dueDate: { lt: '$tomorrow' } } },
   },
+  'bad-action': { component: 'Action', label: 'Log a service', recordType: 'servce' },
   'no-record-type': { component: 'DataList', query: { type: 'record' } },
   'mixed-record-types': {
     component: 'DataTable',

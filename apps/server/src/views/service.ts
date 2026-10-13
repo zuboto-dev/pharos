@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { AgentFiles } from '../store/agent-files.js';
 import { PharosError, formatPath } from '../store/errors.js';
 import type { ApplyResult, Store } from '../store/store.js';
+import { askedBlocks, blockChangeIssue } from './block-ask.js';
 import { WidgetOp, applyWidgetOps, summarizeBoard } from './board-ops.js';
 import { previewBoard } from './preview.js';
 
@@ -41,6 +42,8 @@ function summary(view: Entity<'view'>) {
   return {
     id: view.id,
     name,
+    /** Send it back as view_update's expectedRevision (R10). */
+    revision: view.updatedRev,
     ...(kind === 'answer'
       ? { kind, question, expiresAt, ...(isExpired(view) ? { expired: true } : {}) }
       : {}),
@@ -212,10 +215,48 @@ export const ViewUpdateInput = z.object({
     .boolean()
     .optional()
     .describe('Turn an answer view into a saved view (a regular tab that does not expire)'),
+  expectedRevision: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      "The view's revision from view_get; if a person changed the view since, nothing is saved: read it again and redo your change",
+    ),
+  requestId: z
+    .string()
+    .optional()
+    .describe(
+      'The request this change answers (marks it answered). For an "ask about this block" request, change only its widgetId',
+    ),
+  reply: z
+    .string()
+    .min(1)
+    .max(300)
+    .optional()
+    .describe('With requestId: one or two sentences to the person about what you changed'),
 });
 
 export function updateView(store: Store, author: Author, input: z.infer<typeof ViewUpdateInput>) {
   const view = store.getOfType('view', input.viewId);
+  // A person (or another agent) changed the view since this one read it: refuse, never overwrite.
+  if (input.expectedRevision !== undefined && view.updatedRev !== input.expectedRevision)
+    throw new PharosError(
+      'conflict',
+      `View "${view.data.name}" changed since revision ${input.expectedRevision} (it is at ${view.updatedRev} now). Read it again with view_get and redo your change on what it shows now`,
+    );
+  const request = input.requestId ? store.getOfType('request', input.requestId) : undefined;
+  if (request) {
+    if (request.data.projectId !== view.data.projectId)
+      throw new PharosError('invalid', `Request ${request.id} is about another project`);
+    if (request.data.status !== 'open')
+      throw new PharosError('invalid', `Request ${request.id} is already ${request.data.status}`);
+    if (request.data.mode === 'block' && request.data.viewId !== view.id)
+      throw new PharosError(
+        'invalid',
+        `Request ${request.id} asks about block "${request.data.widgetId}" in view ${request.data.viewId}; change that view`,
+      );
+  }
+  if (input.reply && !request) throw new PharosError('invalid', 'reply needs a requestId');
   const data: Record<string, unknown> = {};
   for (const key of ['name', 'description', 'pinned', 'archived', 'order'] as const) {
     if (input[key] !== undefined) data[key] = input[key];
@@ -246,9 +287,36 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
     data.spec = applyWidgetOps(effectiveBoard(view), input.ops);
   }
   if (!Object.keys(data).length) throw new PharosError('invalid', 'Nothing to change');
+  // R10.8: while a person waits for a change to one block, an agent changes only that block.
+  const allowed = author.kind === 'agent' ? askedBlocks(store, view) : new Set<string>();
+  if (allowed.size) {
+    const scope = `View "${view.data.name}" has an open request to change only block ${[...allowed].map((id) => `"${id}"`).join(', ')}`;
+    const viewFields = Object.keys(data).filter((k) => k !== 'spec');
+    if (viewFields.length || data.spec === null)
+      throw new PharosError(
+        'invalid',
+        `${scope}; leave ${viewFields.length ? viewFields.join(', ') : 'its template'} as it is (use ops on that block)`,
+      );
+    if (data.spec) {
+      const issue = blockChangeIssue(effectiveBoard(view), toBoard(data.spec as ViewSpec), allowed);
+      if (issue) throw new PharosError('invalid', issue);
+    }
+  }
   const result = store.apply(author, {
     message: input.message,
-    operations: [{ op: 'update', type: 'view', id: view.id, data }],
+    operations: [
+      { op: 'update', type: 'view', id: view.id, data },
+      ...(request
+        ? [
+            {
+              op: 'update' as const,
+              type: 'request' as const,
+              id: request.id,
+              data: { status: 'answered', ...(input.reply ? { reply: input.reply } : {}) },
+            },
+          ]
+        : []),
+    ],
   });
   return withView(store, result, view.id);
 }
@@ -324,6 +392,10 @@ export function requestContext(store: Store, request: Entity<'request'>): string
     } else {
       lines.push(`View "${v.data.name}" (${v.id}, ${kind})`);
     }
+    if (widget && request.data.mode === 'block')
+      lines.push(
+        `Change this block in place (R10): view_get ${v.id}, then view_update {viewId: "${v.id}", expectedRevision, requestId: "${request.id}", ops: [{op: "update", id: "${widget.id}", …}], reply}. Only this block may change; edits to other blocks or the view are refused. If it can't be done in this block, apply {op: "update", type: "request", id: "${request.id}", data: {status: "dismissed", reply: "<why, in one sentence>"}}.`,
+      );
   }
   const found = request.data.aboutId ? store.get(request.data.aboutId) : null;
   // Asked from a file in a hidden folder: agents don't learn it exists (R7.5).

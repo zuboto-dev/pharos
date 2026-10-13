@@ -3,6 +3,7 @@ export * from './entities.js';
 export * from './decisions.js';
 export * from './files.js';
 export * from './records.js';
+export * from './actions.js';
 export {
   OPTION_COLORS,
   OPTION_FIELDS,

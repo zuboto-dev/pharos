@@ -82,6 +82,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   StartHere: COMPONENT_INFO.StartHere.example,
   DueTracker: COMPONENT_INFO.DueTracker.example,
   CategoryBreakdown: COMPONENT_INFO.CategoryBreakdown.example,
+  Action: COMPONENT_INFO.Action.example,
 };
 
 const empty: ProjectDataset = {

@@ -57,10 +57,15 @@ export function formatTotal(total: Total): string {
 
 /** The unit of a record number or meter field, for "12,400 km". */
 function unitOf(data: ProjectDataset, at: Resolved): string | undefined {
+  return fieldDef(data, at)?.unit;
+}
+
+/** The record field definition a value was read from, if any. */
+function fieldDef(data: ProjectDataset, at: Resolved) {
   if (at.type !== 'record' || !at.recordType || !at.field.startsWith('fields.')) return undefined;
   return findRecordType(data.project, at.recordType)?.fields.find(
     (f) => `fields.${f.key}` === at.field,
-  )?.unit;
+  );
 }
 
 /**
@@ -195,10 +200,11 @@ export function tableTotals(
   const read = fieldReader(data, context);
   const out: Record<string, Total> = {};
   for (const { field } of node.columns) {
-    const values = matching.map((r) => read(r, field).value);
-    const summable = values.some((v) => isMoney(v) || typeof v === 'number');
-    // Ids and order numbers aren't amounts.
-    if (!summable || field === 'order' || field.endsWith('.order')) continue;
+    const read0 = matching.map((r) => read(r, field));
+    const summable = read0.some((at) => isMoney(at.value) || typeof at.value === 'number');
+    // Order numbers aren't amounts, and meter readings (an odometer) add up to nothing.
+    const meter = read0.some((at) => fieldDef(data, at)?.kind === 'meter');
+    if (!summable || meter || field === 'order' || field.endsWith('.order')) continue;
     out[field] = sumRows(data, matching, field, context, node.query);
   }
   return out;

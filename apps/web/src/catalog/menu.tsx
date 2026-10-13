@@ -127,7 +127,7 @@ export function MenuItem({
 }
 
 export function MenuLabel({ children }: { children: ReactNode }) {
-  return <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-neutral-400">{children}</div>;
+  return <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-faint">{children}</div>;
 }
 
 export function MenuSeparator() {

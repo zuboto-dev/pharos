@@ -35,7 +35,7 @@ export function AskDialog({
   answers?: Entity<'view'>[];
   onOpenAnswer?: (viewId: string) => void;
 }) {
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(about.question ?? '');
   const earlier = question.trim()
     ? similarAnswers(question, answers, (v) => v.data.question).slice(0, 3)
     : [];
@@ -113,7 +113,7 @@ export function AskDialog({
               >
                 <span className="min-w-0 flex-1">
                   {v.data.question ?? v.data.name}{' '}
-                  <span className="text-xs text-neutral-400">{timeAgo(v.createdAt)}</span>
+                  <span className="text-xs text-faint">{timeAgo(v.createdAt)}</span>
                 </span>
                 <ArrowRight className="size-3.5 shrink-0 text-emerald-600" />
               </button>
@@ -195,7 +195,7 @@ export function RequestsButton({
               }}
               className={clsx('fixed z-[61] max-h-[70vh] w-88 overflow-y-auto text-sm', MENU_PANEL)}
             >
-              <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-neutral-400">
+              <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-faint">
                 {working
                   ? 'Your agent is answering…'
                   : waiting
@@ -203,7 +203,7 @@ export function RequestsButton({
                     : 'Waiting for the agent'}
               </div>
               {open.length === 0 && (
-                <p className="px-2.5 pb-2 text-xs text-neutral-400">Nothing waiting.</p>
+                <p className="px-2.5 pb-2 text-xs text-faint">Nothing waiting.</p>
               )}
               {open.map((r) => (
                 <div
@@ -213,7 +213,7 @@ export function RequestsButton({
                   <CircleDot className="mt-0.5 size-3.5 shrink-0 text-sky-500" />
                   <div className="min-w-0 flex-1">
                     <div>{r.data.question}</div>
-                    <div className="text-xs text-neutral-400">
+                    <div className="text-xs text-faint">
                       {r.data.about ? `${r.data.about} · ` : ''}
                       {timeAgo(r.createdAt)}
                     </div>
@@ -238,16 +238,14 @@ export function RequestsButton({
                         },
                       )
                     }
-                    className="rounded p-0.5 text-neutral-400 hover:text-rose-600"
+                    className="rounded p-0.5 text-faint hover:text-rose-600"
                   >
                     <X className="size-3.5" />
                   </button>
                 </div>
               ))}
               {answered.length > 0 && (
-                <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-neutral-400">
-                  Answered
-                </div>
+                <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-faint">Answered</div>
               )}
               {answered.map((r) => (
                 <Link

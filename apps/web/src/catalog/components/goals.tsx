@@ -1,18 +1,18 @@
 import { runQuery, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { Circle, CircleCheck, CircleSlash } from 'lucide-react';
+import { Circle, CircleCheck, CircleSlash, Shapes, Target } from 'lucide-react';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
 import { EditOptionsButton, OptionDot, useOptions } from '../options';
 import { QuickAdd, useCreate } from '../quickadd';
-import { Empty } from '../ui';
+import { EmptyState } from '../empty-state';
 
 type GoalNode = { goal: Entity<'goal'>; children: GoalNode[] };
 
 const GOAL_ICONS = {
-  open: <Circle className="size-4 text-neutral-400" />,
+  open: <Circle className="size-4 text-faint" />,
   achieved: <CircleCheck className="size-4 text-emerald-500" />,
-  dropped: <CircleSlash className="size-4 text-neutral-400" />,
+  dropped: <CircleSlash className="size-4 text-faint" />,
 };
 
 function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolean }) {
@@ -27,7 +27,7 @@ function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolea
       >
         <span className="mt-0.5">{GOAL_ICONS[meaning] ?? GOAL_ICONS.open}</span>
         <div className="min-w-0">
-          <div className={clsx('text-sm font-medium', dropped && 'text-neutral-400 line-through')}>
+          <div className={clsx('text-sm font-medium', dropped && 'text-faint line-through')}>
             {goal.data.title}
           </div>
           {showCriteria && goal.data.successCriteria.length > 0 && (
@@ -57,13 +57,18 @@ export function GoalTree({ node }: { node: NodeOf<'GoalTree'> }) {
   const data = useViewData();
   const goals = runQuery(data, 'goal', node.filter);
   const create = useCreate();
-  const addGoal = <QuickAdd label="Add goal" onAdd={(title) => create('goal', { title })} />;
+  const addGoal = (variant?: 'button') => (
+    <QuickAdd label="Add goal" variant={variant} onAdd={(title) => create('goal', { title })} />
+  );
   if (!goals.length) {
     return (
-      <>
-        <Empty>No goals yet</Empty>
-        {addGoal}
-      </>
+      <EmptyState
+        icon={Target}
+        title={data.goals.length ? 'No goals match this list' : 'No goals yet'}
+        hint="Say what this project should achieve, so the work can be checked against it."
+      >
+        {addGoal('button')}
+      </EmptyState>
     );
   }
   const nodes = new Map(goals.map((goal) => [goal.id, { goal, children: [] as GoalNode[] }]));
@@ -77,7 +82,7 @@ export function GoalTree({ node }: { node: NodeOf<'GoalTree'> }) {
       {roots.map((root) => (
         <GoalItem key={root.goal.id} node={root} showCriteria={node.showCriteria ?? true} />
       ))}
-      <li className="-mx-2">{addGoal}</li>
+      <li className="-mx-2">{addGoal()}</li>
     </ul>
   );
 }
@@ -95,7 +100,13 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
       <div className="-mt-1 flex justify-end">
         <EditOptionsButton field="scope_item.kind" label="Edit groups" />
       </div>
-      {!data.scopeItems.length && <Empty>No scope defined yet</Empty>}
+      {!data.scopeItems.length && (
+        <EmptyState
+          icon={Shapes}
+          title="No scope defined yet"
+          hint="Add what’s in, what’s out and what’s for later in the groups below."
+        />
+      )}
       {
         <div className={clsx('grid gap-4', columns.length > 1 && 'sm:grid-cols-2 lg:grid-cols-3')}>
           {columns.map((column) => {
@@ -104,8 +115,7 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
               <div key={column.value} className="min-w-0">
                 <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-soft uppercase">
                   <OptionDot field="scope_item.kind" value={column.value} />
-                  {column.label}{' '}
-                  <span className="font-normal text-neutral-400">{items.length}</span>
+                  {column.label} <span className="font-normal text-faint">{items.length}</span>
                 </h4>
                 <ul className="space-y-2">
                   {items.map((item) => (

@@ -8,13 +8,14 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { FileText } from 'lucide-react';
+import { ChartNoAxesColumn, FileText } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { formatDate } from '../../lib/format';
 import { Bar as ChartBar, CHART, emphasisOf } from '../chart';
 import { useViewData, type ViewData } from '../context';
 import { labelOf } from '../interactive';
-import { Empty, isHttp, Uri } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { isHttp, Uri } from '../ui';
 import { CertaintyMark, ClaimBasis } from './knowledge';
 
 /**
@@ -312,7 +313,13 @@ export function FindingChart({ node }: { node: Node }) {
           })}
         </ul>
       ) : (
-        <Empty>No numbers to draw yet</Empty>
+        <EmptyState
+          icon={ChartNoAxesColumn}
+          title="No numbers to draw yet"
+          hint="Findings with a figure (a number and its unit) show up here as bars."
+        >
+          <AskAgentButton question="Add the figures this chart should compare, with their sources." />
+        </EmptyState>
       )}
     </figure>
   );

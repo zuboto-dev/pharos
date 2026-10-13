@@ -9,7 +9,7 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, Images, X } from 'lucide-react';
 import {
   useEffect,
   useId,
@@ -24,7 +24,7 @@ import { useResource } from '../../lib/api';
 import { useExit } from '../../lib/motion';
 import { CHART } from '../chart';
 import { useViewData, type ViewData } from '../context';
-import { Empty } from '../ui';
+import { AddFilesActions, EmptyState } from '../empty-state';
 import { GlanceDate } from '../../files/glance';
 import { FileTypeIcon } from './file-list';
 import { CertaintyMark } from './knowledge';
@@ -247,7 +247,7 @@ export function Lightbox({
   const data = useViewData();
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const touchX = useRef<number | null>(null);
+  const touch = useRef<{ x: number; y: number } | null>(null);
   const captionId = useId();
   const picture = pictures[index]!;
   const resolved = resolve(data, picture);
@@ -299,12 +299,16 @@ export function Lightbox({
     }
   };
 
+  // Touch (v0.2 B9): swipe sideways for the next or previous picture, down to close.
   const onTouchEnd = (e: TouchEvent) => {
-    const start = touchX.current;
-    touchX.current = null;
-    const end = e.changedTouches[0]?.clientX;
-    if (start === null || end === undefined || !many) return;
-    if (Math.abs(end - start) > 50) step(end < start ? 1 : -1);
+    const start = touch.current;
+    touch.current = null;
+    const end = e.changedTouches[0];
+    if (!start || !end) return;
+    const dx = end.clientX - start.x;
+    const dy = (end.clientY ?? 0) - start.y;
+    if (dy > 80 && Math.abs(dx) < dy / 2) onClose();
+    else if (many && Math.abs(dx) > 50 && Math.abs(dy) < Math.abs(dx)) step(dx < 0 ? 1 : -1);
   };
 
   const navButton =
@@ -341,7 +345,8 @@ export function Lightbox({
         className="relative flex min-h-0 flex-1 items-center justify-center gap-2 px-2 sm:px-5"
         onClick={(e) => e.target === e.currentTarget && onClose()}
         onTouchStart={(e) => {
-          touchX.current = e.touches[0]?.clientX ?? null;
+          const t = e.touches[0];
+          touch.current = t ? { x: t.clientX, y: t.clientY ?? 0 } : null;
         }}
         onTouchEnd={onTouchEnd}
       >
@@ -378,7 +383,7 @@ export function Lightbox({
       >
         <p className="font-semibold text-white">{picture.title}</p>
         {description && <p className="text-neutral-300">{description}</p>}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
           <Source picture={picture} className="text-sky-300 dark:text-sky-300" />
           <button
             type="button"
@@ -510,7 +515,13 @@ export function Gallery({ node }: { node: Node }) {
           {items}
         </ul>
       ) : (
-        <Empty>No pictures yet</Empty>
+        <EmptyState
+          icon={Images}
+          title="No pictures yet"
+          hint="Photos and scans from this project’s files show up here."
+        >
+          <AddFilesActions />
+        </EmptyState>
       )}
       {lightbox.shown !== null && pictures[lightbox.shown] && (
         <Lightbox

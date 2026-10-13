@@ -15,6 +15,12 @@ describe('guidance', () => {
     expect(line).toContain('status: {not: ["done", "cancelled"]}');
   });
 
+  it('tells agents that empty blocks explain themselves (v0.2 B8)', () => {
+    const ready = VIEW_GUIDELINES.slice(VIEW_GUIDELINES.indexOf('## Before you say it is ready'));
+    expect(ready).toContain('Empty blocks explain themselves');
+    expect(ready).toContain('Ask an agent');
+  });
+
   it('briefs the answering agent with the open questions and everything it needs to answer', () => {
     const store = new Store(openDatabase(':memory:'));
     const person = { kind: 'human' as const, name: 'me' };

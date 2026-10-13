@@ -12,7 +12,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import dataset from './__fixtures__/dataset.json';
 import { ViewDataProvider } from './context';
 import { ViewRenderer } from './renderer';
+import { readFileSync } from 'node:fs';
 import { contrastIssues } from '../test/contrast';
+
+// A variable path, so Vite leaves the URL alone.
+const cssFile = '../index.css';
 
 const data = dataset as unknown as ProjectDataset;
 
@@ -200,6 +204,99 @@ describe('dark mode contrast', () => {
         expect(contrastIssues(container, 'dark')).toEqual([]);
         unmount();
       }
+    });
+  }
+});
+
+// v0.2 B10: and in light mode, where B6 left faint text at about 2.6:1.
+describe('light mode contrast', () => {
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    it(`${name} has readable text in light mode`, () => {
+      for (const d of [data, empty]) {
+        const { container, unmount } = renderSpec(spec, d);
+        expect(contrastIssues(container, 'light')).toEqual([]);
+        unmount();
+      }
+    });
+  }
+});
+
+// v0.2 B9: every block fits a 390 px phone. happy-dom doesn't lay out, so this reads the classes
+// that decide width (scripts/phone-check.mjs measures real pages in Chrome): anything wider than
+// the phone, at the base (phone) breakpoint, must sit inside a box that scrolls sideways itself.
+describe('phone width', () => {
+  const PHONE_PX = 390 - 2 * 16;
+  const REM = 16;
+  /** The phone-width size a class sets, in px (`w-[30rem]`, `min-w-96`, `w-[420px]`). */
+  const sizeOf = (cls: string): number | undefined => {
+    const m = /^(?:min-)?w-(?:\[(\d+(?:\.\d+)?)(px|rem)\]|(\d+(?:\.\d+)?))$/.exec(cls);
+    if (!m) return undefined;
+    if (m[3]) return Number(m[3]) * 4; // the spacing scale: 0.25rem a step
+    return Number(m[1]) * (m[2] === 'rem' ? REM : 1);
+  };
+  const scrolls = (el: Element) =>
+    !!el.parentElement?.closest(
+      '.overflow-x-auto, .overflow-auto, .overflow-x-scroll, .overflow-hidden, .overflow-x-hidden',
+    );
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    it(`${name} fits a phone`, () => {
+      for (const d of [data, empty]) {
+        const { container, unmount } = renderSpec(spec, d);
+        for (const el of container.querySelectorAll('[class]')) {
+          for (const cls of el.classList) {
+            const px = sizeOf(cls);
+            if (px && px > PHONE_PX)
+              expect(scrolls(el), `${name}: .${cls} is wider than a phone`).toBe(true);
+          }
+        }
+        for (const table of container.querySelectorAll('table'))
+          expect(
+            table.closest('.overflow-x-auto'),
+            `${name}: a table that can't scroll`,
+          ).toBeTruthy();
+        unmount();
+      }
+    });
+  }
+
+  it('makes every control 44 px to tap on touch screens', () => {
+    const css = readFileSync(new URL(cssFile, import.meta.url), 'utf8');
+    const rule = css.slice(css.indexOf('@media (pointer: coarse)'));
+    expect(rule).toMatch(/min-height: 44px;\s*min-width: 44px;/);
+    expect(css).toMatch(/@utility tap-area[\s\S]*width: max\(100%, 44px\)/);
+  });
+});
+
+// v0.2 B8: a block with nothing to show says what's missing and the next step ("icon, line and a
+// button"), never a bare "Nothing matches".
+describe('empty states', () => {
+  const bare: ProjectDataset = { ...empty, claims: [], terms: [], files: [], records: [] };
+  // Blocks that always have something to show: layout, the project itself, numbers (a zero is an
+  // answer), fixed text, and blocks whose content comes from the spec.
+  const ALWAYS = new Set([
+    'Grid',
+    'Section',
+    'Tabs',
+    'ProjectHeader',
+    'StatCards',
+    'ProgressRing',
+    'Callout',
+    'KanbanBoard',
+    'ActivityFeed',
+    'Stat',
+    'Text',
+    'Layers',
+    'StartHere',
+  ]);
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    if (ALWAYS.has(name)) continue;
+    it(`${name} says what's missing and what to do`, () => {
+      const { container } = renderSpec(spec, bare);
+      const state = container.querySelector('[data-empty-state]');
+      expect(state, name).not.toBeNull();
+      expect(state!.querySelector('svg')).not.toBeNull();
+      expect(state!.querySelector('p.font-medium')?.textContent).toBeTruthy();
+      expect(container.textContent).not.toMatch(/Nothing matches/);
     });
   }
 });

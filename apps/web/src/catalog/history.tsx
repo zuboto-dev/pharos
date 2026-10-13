@@ -4,6 +4,7 @@ import { Bot, Cog, RotateCcw, User } from 'lucide-react';
 import { useState } from 'react';
 import { ApiError, getJson, useResource } from '../lib/api';
 import { formatDate, timeAgo } from '../lib/format';
+import { SkeletonRows } from './skeleton';
 import { useViewData } from './context';
 import { BUTTON, Empty } from './ui';
 
@@ -28,9 +29,9 @@ export function RevisionItem({ rev }: { rev: RevisionSummary }) {
         onClick={() => actions.open({ revision: rev.id })}
         className="flex w-full gap-2.5 rounded-control px-1.5 py-1.5 text-left hover:bg-sunken"
       >
-        <Icon className="mt-0.5 size-4 shrink-0 text-neutral-400" />
+        <Icon className="mt-0.5 size-4 shrink-0 text-faint" />
         <span className="min-w-0 text-sm">
-          <span className={clsx('block', rev.revertedBy && 'text-neutral-400 line-through')}>
+          <span className={clsx('block', rev.revertedBy && 'text-faint line-through')}>
             {rev.message}
           </span>
           <span className="text-xs text-muted">
@@ -89,8 +90,8 @@ function HistoryList({ filter }: { filter: FilterKey }) {
   const latest = useResource<RevisionSummary[]>(`/api/history?${query}&v=${version}`);
   const [older, setOlder] = useState<RevisionSummary[]>([]);
   const [more, setMore] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  if (!latest.data)
-    return <Empty>{latest.status === 'loading' ? 'Loading…' : 'Couldn’t load history'}</Empty>;
+  if (latest.status === 'loading') return <SkeletonRows rows={5} label="Loading history" />;
+  if (!latest.data) return <Empty>Couldn’t load history</Empty>;
   const first = latest.data;
   const seen = new Set(first.map((r) => r.id));
   const revisions = [...first, ...older.filter((r) => !seen.has(r.id))];
@@ -119,7 +120,7 @@ function HistoryList({ filter }: { filter: FilterKey }) {
     <div className="space-y-4">
       {groups.map((g) => (
         <section key={g.day} aria-label={g.day}>
-          <h3 className="mb-1 text-xs font-medium text-neutral-400">{g.day}</h3>
+          <h3 className="mb-1 text-xs font-medium text-faint">{g.day}</h3>
           <ul className="-mx-1.5 space-y-0.5">
             {g.revisions.map((rev) => (
               <RevisionItem key={rev.id} rev={rev} />

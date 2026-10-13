@@ -1,39 +1,104 @@
 import clsx from 'clsx';
+import type { CSSProperties, ReactNode } from 'react';
 
-// A calm placeholder while something loads (W11.6, v0.2 B8): soft grey lines where the content
-// will be, no spinner. Reduced motion keeps it still. Generic on purpose: a block, a list or a
-// page can use it.
+// Loading skeletons (v0.2 B8, W11.6): calm, token-styled placeholders in the shape of what's
+// coming, instead of blank boxes, spinners or "Loading…". The shimmer is a slow sweep of a lighter band
+// (index.css `.ph-skeleton`); with reduced motion it stands still. Generic on purpose: pages,
+// blocks, the drawer, history and lazily loaded components all build on these pieces.
 
-const WIDTHS = ['w-3/4', 'w-full', 'w-5/6', 'w-2/3', 'w-11/12', 'w-1/2'];
+/** One placeholder shape: a bar by default; give it a size and a radius with `className`. */
+export function SkeletonShape({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <span
+      aria-hidden
+      data-skeleton
+      className={clsx('ph-skeleton block h-3 rounded-control', className)}
+      style={style}
+    />
+  );
+}
 
+/**
+ * A region that is loading: announced once to screen readers by `label` ("Loading history"),
+ * with the placeholder shapes inside hidden from them.
+ */
+export function Loading({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div role="status" aria-label={label} aria-busy="true" className={className}>
+      {children}
+      <span className="sr-only">{label}…</span>
+    </div>
+  );
+}
+
+/** Line widths that look like text, cycled, so a block of lines doesn't read as a grid. */
+const WIDTHS = ['92%', '78%', '85%', '64%', '88%', '70%'];
+
+/** Lines of text-shaped bars, announced by `label`: the placeholder for a block or a list. */
 export function Skeleton({
   lines = 3,
   label = 'Loading',
   className,
 }: {
-  /** How many lines of text to suggest (default 3). */
   lines?: number;
-  /** What screen readers hear while it loads. */
   label?: string;
   className?: string;
 }) {
   return (
-    <div
-      role="status"
-      aria-label={label}
-      aria-busy="true"
-      className={clsx('space-y-2.5', className)}
-    >
+    <Loading label={label} className={clsx('space-y-2.5 py-1', className)}>
       {Array.from({ length: lines }, (_, i) => (
-        <div
-          key={i}
-          aria-hidden
-          className={clsx(
-            'h-3 rounded-full bg-subtle motion-safe:animate-pulse',
-            WIDTHS[i % WIDTHS.length],
-          )}
-        />
+        <SkeletonShape key={i} style={{ width: WIDTHS[i % WIDTHS.length] }} />
       ))}
+    </Loading>
+  );
+}
+
+/** List rows: a small round mark (icon or avatar), a line and a shorter second line. */
+export function SkeletonRows({
+  rows = 3,
+  label = 'Loading',
+  className,
+}: {
+  rows?: number;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <Loading label={label} className={clsx('space-y-3 py-1', className)}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-start gap-2.5">
+          <SkeletonShape className="size-5 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
+            <SkeletonShape style={{ width: WIDTHS[i % WIDTHS.length] }} />
+            <SkeletonShape className="h-2.5" style={{ width: '40%' }} />
+          </div>
+        </div>
+      ))}
+    </Loading>
+  );
+}
+
+/** A block-shaped placeholder (a panel with a title bar and a few lines), for boards and pages. */
+export function SkeletonBlock({ className, lines = 3 }: { className?: string; lines?: number }) {
+  return (
+    <div
+      aria-hidden
+      className={clsx('rounded-block border border-line bg-surface p-panel', className)}
+    >
+      <SkeletonShape className="mb-4 h-3.5 w-1/3" />
+      <div className="space-y-2.5">
+        {Array.from({ length: lines }, (_, i) => (
+          <SkeletonShape key={i} style={{ width: WIDTHS[i % WIDTHS.length] }} />
+        ))}
+      </div>
     </div>
   );
 }

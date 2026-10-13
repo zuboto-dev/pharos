@@ -9,12 +9,23 @@ import {
   type Operation,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { CalendarClock, Check, Minus, PenLine, Plus, Star, Undo2 } from 'lucide-react';
+import {
+  CalendarClock,
+  Check,
+  ListPlus,
+  Minus,
+  PenLine,
+  Plus,
+  Scale,
+  Star,
+  Undo2,
+} from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { EntityRef } from '../interactive';
-import { BUTTON, Badge, Empty } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { BUTTON, Badge } from '../ui';
 
 /**
  * A decision the reader makes on the page (R10.19): the question, its options side by side with
@@ -117,12 +128,14 @@ function OptionCard({
             type="button"
             disabled={busy}
             onClick={onChoose}
+            // "Choose this" on the card (no quotes inside quotes); the option's name for screen readers.
+            aria-label={`Choose ${option.label}`}
             className={clsx(
               recommended ? BUTTON.primary : BUTTON.secondary,
-              'min-h-10 w-full sm:min-h-0 sm:w-auto',
+              'min-h-11 w-full sm:min-h-0 sm:w-auto',
             )}
           >
-            Choose “{option.label}”
+            Choose this
           </button>
         </div>
       )}
@@ -135,7 +148,16 @@ type Mode = 'idle' | 'answer' | 'later';
 export function DecisionBlock({ node }: { node: NodeOf<'DecisionBlock'> }) {
   const data = useViewData();
   const decision = data.decisions.find((d) => d.id === node.decision);
-  if (!decision) return <Empty>This decision was deleted or isn’t in this project</Empty>;
+  if (!decision)
+    return (
+      <EmptyState
+        icon={Scale}
+        title="This decision was deleted or isn’t in this project"
+        hint="Ask your agent to set it up again, or to point this block at another one."
+      >
+        <AskAgentButton question="Set up the decision this block should show, with its options." />
+      </EmptyState>
+    );
   return <Decision decision={decision} />;
 }
 
@@ -291,7 +313,13 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
             ))}
           </ul>
         ) : (
-          <Empty>No options yet: ask your agent to add them</Empty>
+          <EmptyState
+            icon={ListPlus}
+            title="No options yet"
+            hint="Your agent lays the options out side by side, with pros, cons and sources."
+          >
+            <AskAgentButton question="Add the options for this decision, with pros, cons and sources." />
+          </EmptyState>
         ))}
 
       {!answered && recommended && (

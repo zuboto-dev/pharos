@@ -1,11 +1,21 @@
 import { runQuery, taskProgress, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { FolderGit2, Info, CircleCheck, TriangleAlert, OctagonAlert, Flag } from 'lucide-react';
+import {
+  CircleCheck,
+  FileText,
+  Flag,
+  FolderGit2,
+  Info,
+  OctagonAlert,
+  PenLine,
+  TriangleAlert,
+} from 'lucide-react';
+import { EmptyState } from '../empty-state';
 import { useViewData } from '../context';
 import { EntityRef } from '../interactive';
 import { useMarkdownTerms } from '../terms';
 import { Bar, CHART } from '../chart';
-import { Empty, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
+import { BUTTON, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
 
 export function ProjectHeader() {
   const { project, repository, tasks, stageById } = useViewData();
@@ -42,7 +52,7 @@ export function ProjectHeader() {
           <span className="text-muted">Progress</span>
           <span className="font-medium tabular-nums">
             {progress}%{' '}
-            <span className="font-normal text-neutral-400">
+            <span className="font-normal text-faint">
               ({done}/{total} tasks)
             </span>
           </span>
@@ -212,10 +222,32 @@ export function Callout({ node }: { node: NodeOf<'Callout'> }) {
   );
 }
 
+/** An empty Markdown block: the project's description can be written in its details. */
+function NoDescription({ source }: { source?: string }) {
+  const { project, actions } = useViewData();
+  if (source !== 'project.description')
+    return <EmptyState icon={FileText} title="Nothing written here yet" />;
+  return (
+    <EmptyState
+      icon={FileText}
+      title="No description yet"
+      hint="Say what this project is and why it matters, in a few lines."
+    >
+      <button
+        type="button"
+        onClick={() => actions.open({ entity: project.id })}
+        className={BUTTON.accent}
+      >
+        <PenLine className="size-3.5" aria-hidden /> Write a description
+      </button>
+    </EmptyState>
+  );
+}
+
 export function MarkdownBlock({ node }: { node: NodeOf<'Markdown'> }) {
   const { project } = useViewData();
   const terms = useMarkdownTerms(node.terms);
   const content = node.source === 'project.description' ? project.data.description : node.content;
-  if (!content?.trim()) return <Empty>No description yet</Empty>;
+  if (!content?.trim()) return <NoDescription source={node.source} />;
   return <Markdown {...terms}>{content}</Markdown>;
 }

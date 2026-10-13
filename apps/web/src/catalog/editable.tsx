@@ -38,14 +38,14 @@ function useSaveField(entity: Entity) {
 const INPUT =
   'w-full rounded-control border border-sky-300 bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900';
 const EDIT_HINT =
-  'inline-flex shrink-0 items-center rounded p-0.5 text-neutral-400 opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100';
+  'tap-area relative inline-flex shrink-0 items-center rounded p-0.5 text-faint opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100 pointer-coarse:opacity-100';
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-ink-soft"
+      className="inline-flex items-center gap-1 text-sm text-faint hover:text-ink-soft"
     >
       <Plus className="size-3.5" /> {label}
     </button>
@@ -133,7 +133,7 @@ export function EditableMarkdown({ entity, field }: { entity: Entity; field: str
           <button type="button" onClick={() => setDraft(null)} className={BUTTON.secondary}>
             Cancel
           </button>
-          <span className="text-xs text-neutral-400">Markdown · ⌘↵ to save · Esc to cancel</span>
+          <span className="text-xs text-faint">Markdown · ⌘↵ to save · Esc to cancel</span>
         </div>
       </div>
     );
@@ -237,7 +237,7 @@ export function EditableDate({ entity, field }: { entity: Entity; field: string 
           aria-label={`Clear ${words(field)}`}
           title={`Clear (${formatDate(value, true)})`}
           onClick={() => save(field, null)}
-          className="rounded p-0.5 text-neutral-400 hover:text-rose-600"
+          className="rounded p-0.5 text-faint hover:text-rose-600"
         >
           <X className="size-3.5" />
         </button>

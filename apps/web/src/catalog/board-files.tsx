@@ -14,6 +14,8 @@ export type BoardFiles = {
   /** Whether a FileView widget with this id is on the board. */
   has: (widgetId: string) => boolean;
   show: (widgetId: string, fileId: string) => void;
+  /** Another widget on the board, by id (v0.2 B10: StartHere reads the block it points at). */
+  widget: (widgetId: string) => Widget | undefined;
 };
 
 const BoardFilesContext = createContext<BoardFiles | null>(null);
@@ -46,8 +48,9 @@ export function BoardFilesProvider({
       fileViews: [...defaults.keys()],
       has: (id) => defaults.has(id),
       show,
+      widget: (id) => widgets.find((w) => w.id === id),
     }),
-    [picked, defaults, show],
+    [picked, defaults, show, widgets],
   );
   return <BoardFilesContext.Provider value={value}>{children}</BoardFilesContext.Provider>;
 }

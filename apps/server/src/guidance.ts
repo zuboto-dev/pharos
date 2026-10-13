@@ -216,6 +216,10 @@ Example board (ids from project_snapshot.files):
   a draft). Fix unknown fields, unintended empty widgets, width warnings, and the view-level
   warnings of an explanation view. An empty widget is fine only when "nothing" is the answer, and then
   say so in the headline.
+- Empty blocks explain themselves: the page shows what's missing and the next step, with a button
+  the reader can use (Add task, Add files, Record a decision, Ask an agent). Don't add a Text or
+  Callout saying "nothing here yet"; a question asked from an empty block arrives prefilled, so
+  answer it by adding the missing data, not by changing the view.
 - In chat, keep it short: one or two sentences with the answer and the link. The view carries the detail.
 `;
 

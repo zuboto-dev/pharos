@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FileTypeIcon } from '../catalog/components/file-list';
+import { Skeleton } from '../catalog/skeleton';
 import { BUTTON, Markdown } from '../catalog/ui';
 import { AudioPreview } from './audio';
 import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } from './files';
@@ -52,6 +53,15 @@ function NoPreview({ path, children }: { path: string; children: ReactNode }) {
   );
 }
 
+/** The preview while it loads: a frame of text-shaped lines, about as tall as a short page. */
+export function PreviewSkeleton({ label = 'Loading the preview' }: { label?: string }) {
+  return (
+    <Frame>
+      <Skeleton lines={6} label={label} className="bg-surface p-4" />
+    </Frame>
+  );
+}
+
 /** Markdown images would fetch from the web; show their text instead. */
 const NO_IMAGES = {
   img: ({ alt }: { alt?: string }) => <span className="text-muted">[image: {alt}]</span>,
@@ -81,8 +91,7 @@ function TextPreview({
   }, [file.id, key]);
   const state = loaded?.key === key ? loaded : { status: 'loading' as const };
 
-  if (state.status === 'loading')
-    return <NoPreview path={file.data.path}>Loading the preview…</NoPreview>;
+  if (state.status === 'loading') return <PreviewSkeleton />;
   if (state.status === 'error')
     return <NoPreview path={file.data.path}>Couldn’t load the preview.</NoPreview>;
   return (

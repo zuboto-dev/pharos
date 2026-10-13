@@ -23,6 +23,7 @@ import {
   Plus,
   RotateCcw,
   Undo2,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -36,6 +37,7 @@ import {
   type ViewActions,
 } from '../catalog/context';
 import { DetailDrawer } from '../catalog/drawer';
+import { EmptyState } from '../catalog/empty-state';
 import { FilesPage } from '../files/FilesPage';
 import { FolderRequestNotice } from '../files/FolderRequests';
 import { ExpiryNotice } from '../files/expiry-notice';
@@ -288,7 +290,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  if (dataset.status === 'loading') return <ProjectSkeleton />;
+  if (dataset.status === 'loading') return <ProjectSkeleton files={filesPage} />;
   if (!dataset.data) {
     const notFound = dataset.error instanceof ApiError && dataset.error.status === 404;
     return <LoadError notFound={notFound} what="Project" />;
@@ -450,11 +452,11 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           <p className="text-xs text-muted">
             <span className="hidden md:inline">
               Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
-              (double-click the bottom edge to fit content), use ⚙ for its settings, or remove it
-              with ✕.
+              (double-click the bottom edge to fit content), use the gear for its settings, or
+              remove it with the cross.
             </span>
             <span className="md:hidden">
-              Use ↑ ↓ to move widgets, ⚙ for settings, and ✕ to remove them.
+              Use ↑ ↓ to move widgets, the gear for settings, and the cross to remove them.
             </span>{' '}
             Changes are saved as revisions.
           </p>
@@ -467,9 +469,36 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
           )}
         {!filesPage && board.widgets.length === 0 && !editing && (
-          <div className="rounded-block border border-dashed border-neutral-300 p-10 text-center text-sm text-muted dark:border-neutral-700">
-            This view is empty. Use <strong>Customize</strong> → Add widget, or ask your agent to
-            build it (for example, “make this a view of what’s left in the current stage”).
+          <div className="rounded-block border border-dashed border-line-strong">
+            <EmptyState
+              icon={LayoutGrid}
+              title="This view is empty"
+              hint="Add blocks yourself, or ask your agent to build it (for example, “make this a view of what’s left in the current stage”)."
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(true);
+                  setPicking(true);
+                }}
+                className={BUTTON.accent}
+              >
+                <Plus className="size-3.5" aria-hidden /> Add a block
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAsking({
+                    label: active ? `View “${active.data.name}”` : 'This view',
+                    viewId: active?.id,
+                    question: 'Build this view: ',
+                  })
+                }
+                className={BUTTON.secondary}
+              >
+                <MessageCircleQuestion className="size-3.5" aria-hidden /> Ask an agent
+              </button>
+            </EmptyState>
           </div>
         )}
         {!filesPage && (
@@ -544,10 +573,10 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           <button
             type="button"
             onClick={() => setNotice(null)}
-            className="font-semibold"
+            className="-m-0.5 rounded-control p-0.5 opacity-80 hover:opacity-100"
             aria-label="Dismiss"
           >
-            ×
+            <X className="size-4" aria-hidden />
           </button>
         </div>
       )}

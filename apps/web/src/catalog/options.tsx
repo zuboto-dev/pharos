@@ -75,7 +75,7 @@ export function EditOptionsButton({
         title={`Edit ${OPTION_FIELDS[field].label.toLowerCase()} options`}
         aria-label={`Edit ${OPTION_FIELDS[field].label.toLowerCase()} options`}
         className={clsx(
-          'inline-flex items-center gap-1 rounded-control p-1 text-xs text-neutral-400 hover:bg-subtle hover:text-ink-soft',
+          'inline-flex items-center gap-1 rounded-control p-1 text-xs text-faint hover:bg-subtle hover:text-ink-soft',
           className,
         )}
       >
@@ -260,7 +260,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                       }
                     />
                   </label>
-                  <span className="w-14 text-right text-xs text-neutral-400 tabular-nums">
+                  <span className="w-14 text-right text-xs text-faint tabular-nums">
                     {used ? plural(used, 'use') : ''}
                   </span>
                   <div className="flex">
@@ -269,7 +269,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                       aria-label={`Move ${option.label} up`}
                       disabled={i === 0}
                       onClick={() => move(i, -1)}
-                      className="rounded p-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30"
+                      className="rounded p-1 text-faint hover:text-neutral-700 disabled:opacity-30"
                     >
                       <ArrowUp className="size-3.5" />
                     </button>
@@ -278,7 +278,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                       aria-label={`Move ${option.label} down`}
                       disabled={i === options.length - 1}
                       onClick={() => move(i, 1)}
-                      className="rounded p-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30"
+                      className="rounded p-1 text-faint hover:text-neutral-700 disabled:opacity-30"
                     >
                       <ArrowDown className="size-3.5" />
                     </button>
@@ -297,7 +297,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                             })
                           : remove(option.value, null)
                       }
-                      className="rounded p-1 text-neutral-400 hover:text-rose-600 disabled:opacity-30"
+                      className="rounded p-1 text-faint hover:text-rose-600 disabled:opacity-30"
                     >
                       <Trash2 className="size-3.5" />
                     </button>

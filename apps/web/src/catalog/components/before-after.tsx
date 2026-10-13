@@ -9,6 +9,8 @@ import {
 import clsx from 'clsx';
 import { CHART, Legend } from '../chart';
 import { useViewData, type ViewData } from '../context';
+import { Columns2 } from 'lucide-react';
+import { AskAgentButton, EmptyState } from '../empty-state';
 import { Empty } from '../ui';
 import { CertaintyMark, ClaimBasis } from './knowledge';
 
@@ -100,9 +102,9 @@ function Pane({
         {label && <span className="font-normal normal-case"> · {label}</span>}
       </h3>
       {!claim ? (
-        <Empty>This passage was deleted or isn’t in this project</Empty>
+        <Empty>This passage was deleted or isn’t in this project.</Empty>
       ) : !quote ? (
-        <Empty>No passage quoted</Empty>
+        <Empty>No passage quoted yet.</Empty>
       ) : parts.length > 0 ? (
         <Passage parts={parts} />
       ) : (
@@ -139,7 +141,15 @@ export function BeforeAfter({ node }: { node: NodeOf<'BeforeAfter'> }) {
   const before = findClaim(data, node.before);
   const after = findClaim(data, node.after);
   if (!before && !after)
-    return <Empty>These passages were deleted or aren’t in this project</Empty>;
+    return (
+      <EmptyState
+        icon={Columns2}
+        title="These passages were deleted or aren’t in this project"
+        hint="Ask your agent to quote the passages to compare."
+      >
+        <AskAgentButton question="Quote the before and after passages this block should compare." />
+      </EmptyState>
+    );
   const beforeQuote = before?.data.quote ?? '';
   const afterQuote = after?.data.quote ?? '';
   const changed = changedLines(beforeQuote, afterQuote);

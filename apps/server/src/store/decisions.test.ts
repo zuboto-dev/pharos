@@ -192,6 +192,36 @@ describe('decision with options (R10.19)', () => {
     expect(decision(id).data.chosenOptionId).toBeUndefined();
   });
 
+  it('takes option sources created in the same apply ("$ref")', () => {
+    const made = store.apply(agent, {
+      message: 'A finding and the decision it backs',
+      operations: [
+        {
+          op: 'create',
+          type: 'claim',
+          ref: 'c',
+          data: { projectId, statement: 'Readers acted sooner on one step', checkedOn: TODAY },
+        },
+        {
+          op: 'create',
+          type: 'decision',
+          ref: 'd',
+          data: {
+            projectId,
+            title: 'Which one?',
+            options: [{ ...OPTIONS[0], claimIds: ['$c'] }, OPTIONS[1]],
+          },
+        },
+      ],
+    });
+    expect(decision(made.created.d!).data.options![0]!.claimIds).toEqual([made.created.c]);
+    expect(
+      refusal(() =>
+        choose(made.created.d!, agent, { options: [{ ...OPTIONS[0], claimIds: ['$x'] }] }),
+      ).message,
+    ).toMatch(/unknown ref "\$x"/);
+  });
+
   it('cites claims as sources and drops one that is deleted', () => {
     const claim = store.apply(human, {
       message: 'A finding',

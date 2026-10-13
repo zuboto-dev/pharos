@@ -678,6 +678,26 @@ function agentDecisionIssue(store: Store, changes: Change[]): string | undefined
   return undefined;
 }
 
+/** A decision option's sources (R10.19) may name a claim created in the same apply as "$ref". */
+function resolveOptionClaims(
+  data: Data,
+  resolve: (value: unknown, path: string) => unknown,
+  context: string,
+): Data {
+  if (!Array.isArray(data.options)) return data;
+  const options = (data.options as Data[]).map((o, i) =>
+    Array.isArray(o?.claimIds)
+      ? {
+          ...o,
+          claimIds: o.claimIds.map((id, j) =>
+            resolve(id, `${context}.data.options[${i}].claimIds[${j}]`),
+          ),
+        }
+      : o,
+  );
+  return { ...data, options };
+}
+
 /** One in-progress revision. Writes go straight to the DB inside the SQL transaction. */
 class Transaction {
   readonly changes: Change[] = [];
@@ -719,6 +739,7 @@ class Transaction {
         const id = newId(op.type);
         let data = resolveRefs(op.type, op.data);
         if (op.type === 'record') data = this.resolveRecordRefs(data, resolve);
+        if (op.type === 'decision') data = resolveOptionClaims(data, resolve, this.context);
         this.create(op.type, id, this.withDefaults(op.type, data));
         // A project started from a pack (it has record types) brings its own pages instead of
         // the project-management Overview.
@@ -732,6 +753,7 @@ class Transaction {
         const entity = this.require(op.type, id);
         const next: Data = { ...entity.data };
         let patch = resolveRefs(op.type, op.data);
+        if (op.type === 'decision') patch = resolveOptionClaims(patch, resolve, this.context);
         if (op.type === 'record') {
           const rest = this.resolveRecordRefs(
             {

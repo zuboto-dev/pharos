@@ -28,7 +28,7 @@ import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
 import { CalendarCheck, PieChart } from 'lucide-react';
 import { AskAgentButton, EmptyState } from '../empty-state';
-import { Badge, Dot, type Tone } from '../ui';
+import { Badge, Dot, isHttp, Uri, type Tone } from '../ui';
 
 /**
  * Blocks for a project's own records (R8): what's due, and planned against spent. Their numbers
@@ -84,6 +84,9 @@ export function RecordValue({ at, data }: { at: Resolved; data: ViewData }): Rea
     return <span className="whitespace-nowrap tabular-nums">{formatNumber(value, def?.unit)}</span>;
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))
     return <span className="whitespace-nowrap tabular-nums">{formatDate(value, true)}</span>;
+  // A web address (a "Link" field): its glance, with the full address in the tooltip (v0.2 B10).
+  if (typeof value === 'string' && isHttp(value))
+    return <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />;
   return String(value);
 }
 

@@ -132,6 +132,9 @@ function FieldValue({
   if (typeof value === 'string' && DATETIME.test(value))
     return <span className="tabular-nums">{formatDate(value.slice(0, 10), true)}</span>;
   if (Array.isArray(value)) return value.map(String).join(', ');
+  // Any other web address: its glance (v0.2 B10), not the raw URL.
+  if (typeof value === 'string' && isHttp(value))
+    return <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />;
   if (typeof value === 'string' && LONG_TEXT.has(field)) {
     return <span className="line-clamp-2 text-muted">{value.replace(/[*_`#>]/g, '')}</span>;
   }

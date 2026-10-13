@@ -142,15 +142,21 @@ export const OptionValue = z
   .regex(/^[a-z0-9_]+$/, 'Use lowercase letters, digits, and underscores')
   .max(40);
 
+// Shared once in the apply tool's JSON schema ($defs) instead of once per option list (C1).
+const StoredValue = OptionValue.describe('Stored value; keep it stable when renaming').meta({
+  id: 'OptionValue',
+});
+const OptionColorSchema = z.enum(OPTION_COLORS).meta({ id: 'OptionColor' });
+
 function optionList(key: OptionKey) {
   const meanings = OPTION_FIELDS[key].meanings as unknown as [string, ...string[]];
   return z
     .array(
       z.strictObject({
-        value: OptionValue.describe('Stored value; keep it stable when renaming'),
+        value: StoredValue,
         label: z.string().min(1).max(40),
-        meaning: z.enum(meanings).describe('Which built-in meaning this option counts as'),
-        color: z.enum(OPTION_COLORS).optional(),
+        meaning: z.enum(meanings),
+        color: OptionColorSchema.optional(),
       }),
     )
     .min(1)
@@ -166,7 +172,7 @@ function optionList(key: OptionKey) {
         seen.add(o.value);
       });
     })
-    .describe(`Options in display order. Meanings: ${meanings.join(', ')}`);
+    .describe('In display order; meaning: the built-in meaning it counts as');
 }
 
 export const ProjectOptions = z
@@ -176,7 +182,9 @@ export const ProjectOptions = z
       z.ZodOptional<ReturnType<typeof optionList>>
     >,
   )
-  .describe('Custom option lists for this project; omitted fields use the defaults');
+  .describe('Custom option lists for this project; omitted fields use the defaults')
+  // Shared once in the apply tool's JSON schema ($defs), not repeated per operation (C1).
+  .meta({ id: 'ProjectOptions' });
 export type ProjectOptions = z.infer<typeof ProjectOptions>;
 
 export type Option = { value: string; label: string; meaning: string; color: OptionColor };

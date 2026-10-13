@@ -4,6 +4,9 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   ENTITIES,
   ENTITY_TYPES,
+  OWNER_DECISION_FIELDS,
+  decisionIssues,
+  decisionWarnings,
   type ApplyInput,
   type Author,
   type Change,
@@ -27,6 +30,18 @@ import {
   optionsFor,
   valueFor,
   type OptionKey,
+  Board,
+  checkBoardQueries,
+  findRecordType,
+  findingKey,
+  formatFinding,
+  recordFieldIssues,
+  recordTypeIssues,
+  resolvePath,
+  toBoard,
+  type QueryFinding,
+  type RecordType,
+  type ViewSpec,
 } from '@pharos/schema';
 import { AgentFiles, agentApplyIssue, prepareAgentOperations } from './agent-files.js';
 import { PharosError, formatPath } from './errors.js';
@@ -418,6 +433,7 @@ export class Store {
       claims: this.list('claim', { projectId }),
       terms: this.list('term', { projectId }),
       files: this.list('file', { projectId }),
+      records: this.list('record', { projectId }),
     };
   }
 
@@ -581,7 +597,8 @@ export class Store {
       // Checked on everything the operations did, including what a delete cascaded to and what
       // an undo removes, not only on the operations an agent sent (R7.9).
       if (author.kind === 'agent') {
-        const issue = new AgentFiles(this).changesIssue(tx.changes);
+        const issue =
+          new AgentFiles(this).changesIssue(tx.changes) ?? agentDecisionIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
       tx.validate();
@@ -629,6 +646,58 @@ function agentArtifactFileIssue(op: Operation): string | undefined {
   return "agents can't set fileId; put the local path in uri and Pharos links it to the project file";
 }
 
+/**
+ * A decision with options is the owner's to make (R10.19): agents propose it (options, their
+ * recommendation and why) but never choose, answer, defer or accept it, and can't change the
+ * options once the owner chose. Checked on everything a revision does, undos included.
+ */
+function agentDecisionIssue(store: Store, changes: Change[]): string | undefined {
+  for (const change of changes) {
+    if (change.type !== 'decision' || !change.after) continue;
+    const before: Data = change.before ?? {};
+    const after = change.after;
+    const what = describe('decision', change.id, after);
+    const changed = (field: string) => !isDeepStrictEqual(before[field], after[field]);
+    const owner = OWNER_DECISION_FIELDS.find(changed);
+    if (owner)
+      return `${what}: only the owner chooses, answers or defers a decision (${owner}); they do it in Pharos on a page with a DecisionBlock`;
+    const options = after.options as unknown[] | undefined;
+    if (!options?.length) continue;
+    if (
+      before.chosenOptionId &&
+      ['options', 'recommendedOptionId', 'recommendationReason'].some(changed)
+    )
+      return `${what}: the owner already chose; its options and recommendation can't change`;
+    const project = store.get(after.projectId as string) as Entity<'project'> | null;
+    if (
+      changed('status') &&
+      meaningOf(project, 'decision.status', after.status as string) === 'accepted'
+    )
+      return `${what}: a decision with options is accepted when the owner chooses one in Pharos; keep its status "proposed"`;
+  }
+  return undefined;
+}
+
+/** A decision option's sources (R10.19) may name a claim created in the same apply as "$ref". */
+function resolveOptionClaims(
+  data: Data,
+  resolve: (value: unknown, path: string) => unknown,
+  context: string,
+): Data {
+  if (!Array.isArray(data.options)) return data;
+  const options = (data.options as Data[]).map((o, i) =>
+    Array.isArray(o?.claimIds)
+      ? {
+          ...o,
+          claimIds: o.claimIds.map((id, j) =>
+            resolve(id, `${context}.data.options[${i}].claimIds[${j}]`),
+          ),
+        }
+      : o,
+  );
+  return { ...data, options };
+}
+
 /** One in-progress revision. Writes go straight to the DB inside the SQL transaction. */
 class Transaction {
   readonly changes: Change[] = [];
@@ -668,8 +737,14 @@ class Transaction {
           throw new PharosError('invalid', `${this.context}.ref: "${op.ref}" is already used`);
         }
         const id = newId(op.type);
-        this.create(op.type, id, this.withDefaults(op.type, resolveRefs(op.type, op.data)));
-        if (op.type === 'project') this.createDefaultViews(id);
+        let data = resolveRefs(op.type, op.data);
+        if (op.type === 'record') data = this.resolveRecordRefs(data, resolve);
+        if (op.type === 'decision') data = resolveOptionClaims(data, resolve, this.context);
+        this.create(op.type, id, this.withDefaults(op.type, data));
+        // A project started from a pack (it has record types) brings its own pages instead of
+        // the project-management Overview.
+        if (op.type === 'project' && !(op.data.recordTypes as unknown[] | undefined)?.length)
+          this.createDefaultViews(id);
         refs.set(op.ref ?? `${index}`, id);
         return id;
       }
@@ -677,7 +752,24 @@ class Transaction {
         const id = resolve(op.id, `${this.context}.id`) as string;
         const entity = this.require(op.type, id);
         const next: Data = { ...entity.data };
-        for (const [key, value] of Object.entries(resolveRefs(op.type, op.data))) {
+        let patch = resolveRefs(op.type, op.data);
+        if (op.type === 'decision') patch = resolveOptionClaims(patch, resolve, this.context);
+        if (op.type === 'record') {
+          const rest = this.resolveRecordRefs(
+            {
+              recordType: (entity.data as Data).recordType,
+              ...patch,
+              projectId: (entity.data as Data).projectId,
+            },
+            resolve,
+          );
+          delete rest.projectId; // only needed to look up the record types
+          // Fields merge, so "log the odometer" sends only the odometer.
+          if (rest.fields)
+            rest.fields = { ...((entity.data as Data).fields as Data), ...(rest.fields as Data) };
+          patch = rest;
+        }
+        for (const [key, value] of Object.entries(patch)) {
           if (value === null) delete next[key];
           else if (value !== undefined) next[key] = value;
         }
@@ -690,6 +782,24 @@ class Transaction {
         return id;
       }
     }
+  }
+
+  /**
+   * A record's reference and file fields may name another create in the same apply as "$ref"
+   * (a pack's examples do); other fields keep their text, even when it starts with "$".
+   */
+  private resolveRecordRefs(data: Data, resolve: (value: unknown, path: string) => unknown): Data {
+    const fields = data.fields as Data | undefined;
+    if (!fields || typeof data.projectId !== 'string') return data;
+    const project = this.store.get(data.projectId) as Entity<'project'> | null;
+    const type = findRecordType(project, String(data.recordType));
+    if (!type) return data;
+    const out: Data = { ...fields };
+    for (const def of type.fields) {
+      if ((def.kind === 'reference' || def.kind === 'file') && typeof out[def.key] === 'string')
+        out[def.key] = resolve(out[def.key], `${this.context}.data.fields.${def.key}`);
+    }
+    return { ...data, fields: out };
   }
 
   /**
@@ -773,6 +883,13 @@ class Transaction {
         defaults[field] = valueFor(project as Entity<'project'>, key, defaults[field] as string);
       }
     }
+    // A decision with options waits for the owner's choice (R10.19).
+    if (
+      type === 'decision' &&
+      (data.options as unknown[] | undefined)?.length &&
+      project?.type === 'project'
+    )
+      defaults.status = valueFor(project as Entity<'project'>, 'decision.status', 'proposed');
     const out: Data = { ...defaults, ...data };
     if (hasOrder(type) && out.order === undefined) {
       // Items inside a project are ordered per project; projects and workspace-wide items
@@ -883,6 +1000,59 @@ class Transaction {
         }
       }
     }
+    // Record fields (R8) point at records and files by the project's record types, not ENTITIES.
+    for (const entity of doomed) {
+      if (entity.type !== 'record' && entity.type !== 'file') continue;
+      const pointing = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'record' AND EXISTS (SELECT 1 FROM json_each(data, '$.fields') WHERE value = ?)",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of pointing) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id)!;
+        const fields = { ...((current.data as Data).fields as Data) };
+        for (const [key, value] of Object.entries(fields))
+          if (value === entity.id) delete fields[key];
+        this.update(current, { ...current.data, fields });
+      }
+    }
+    // An artifact's picture may be a project file (R7.13): it goes with the file.
+    for (const entity of doomed) {
+      if (entity.type !== 'file') continue;
+      const pictured = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'artifact' AND json_extract(data, '$.image') = ?",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of pictured) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id)!;
+        const next: Data = { ...current.data };
+        delete next.image;
+        this.update(current, next);
+      }
+    }
+    // A decision option's sources (R10.19) are claims inside its options.
+    for (const entity of doomed) {
+      if (entity.type !== 'claim') continue;
+      const citing = this.db
+        .prepare(
+          "SELECT * FROM entities WHERE type = 'decision' AND EXISTS (SELECT 1 FROM json_each(data, '$.options') AS o, json_each(o.value, '$.claimIds') AS c WHERE c.value = ?)",
+        )
+        .all(entity.id) as EntityRow[];
+      for (const row of citing) {
+        if (doomedIds.has(row.id)) continue;
+        const current = this.store.get(row.id) as Entity<'decision'>;
+        const options = (current.data.options ?? []).map((o) => {
+          if (!o.claimIds?.includes(entity.id)) return o;
+          const rest = { ...o, claimIds: o.claimIds.filter((id) => id !== entity.id) };
+          if (!rest.claimIds.length) delete (rest as { claimIds?: string[] }).claimIds;
+          return rest;
+        });
+        this.update(current, { ...current.data, options });
+      }
+    }
     // request.aboutId can point at any entity type, so it isn't a typed ref; clear it by hand.
     for (const entity of doomed) {
       const asked = this.db
@@ -970,6 +1140,25 @@ class Transaction {
       }
       issues.push(...this.optionIssues(entity, prefix));
       if (entity.type === 'term') issues.push(...this.termIssues(entity as Entity<'term'>, prefix));
+      if (entity.type === 'record')
+        issues.push(...this.recordIssues(entity as Entity<'record'>, prefix));
+      if (entity.type === 'project') {
+        const types = (entity as Entity<'project'>).data.recordTypes ?? [];
+        issues.push(...recordTypeIssues(types).map((i) => `${prefix}: recordTypes: ${i}`));
+        // Its records must still fit the types (a type in use can't go, a field can't change kind).
+        for (const record of this.store.list('record', { projectId: entity.id }))
+          if (!this.touched.has(record.id))
+            issues.push(
+              ...this.recordIssues(
+                record,
+                `${prefix}: ${describe('record', record.id, record.data)}`,
+              ),
+            );
+      }
+      if (entity.type === 'view')
+        issues.push(...this.viewQueryIssues(entity as Entity<'view'>, prefix));
+      if (entity.type === 'decision')
+        issues.push(...this.decisionChoiceIssues(entity as Entity<'decision'>, prefix));
     }
     for (const [id, context] of this.claimsToCheck()) {
       const claim = this.store.get(id) as Entity<'claim'>;
@@ -1064,6 +1253,23 @@ class Transaction {
     return row?.kind;
   }
 
+  /** Options must be consistent (R10.19) and cite claims of the same project. */
+  private decisionChoiceIssues(decision: Entity<'decision'>, prefix: string): string[] {
+    const issues = decisionIssues(decision.data).map((i) => `${prefix}: ${i}`);
+    for (const option of decision.data.options ?? []) {
+      for (const id of option.claimIds ?? []) {
+        const claim = this.store.get(id);
+        if (claim?.type !== 'claim')
+          issues.push(`${prefix}: options "${option.id}".claimIds → claim ${id} not found`);
+        else if ((claim.data as Data).projectId !== decision.data.projectId)
+          issues.push(
+            `${prefix}: options "${option.id}".claimIds → claim ${id} belongs to another project`,
+          );
+      }
+    }
+    return issues;
+  }
+
   /** Two terms in a project can't share a word or another form, ignoring case. */
   private termIssues(term: Entity<'term'>, prefix: string): string[] {
     const forms = (t: Entity<'term'>) =>
@@ -1082,16 +1288,100 @@ class Transaction {
     return issues;
   }
 
-  /** Warnings for what this transaction wrote: claims that don't show what they rest on. */
+  /**
+   * Warnings for what this transaction wrote: claims that don't show what they rest on, and the
+   * warn-level query findings of views (R8.5).
+   */
   warnings(): string[] {
     const out: string[] = [];
     for (const id of this.touched.keys()) {
-      const claim = this.store.get(id);
-      if (claim?.type !== 'claim') continue;
-      const project = this.store.get((claim.data as Data).projectId as string);
-      out.push(...claimWarnings(claim as Entity<'claim'>, project as Entity<'project'> | null));
+      const entity = this.store.get(id);
+      if (entity?.type === 'view') {
+        out.push(
+          ...this.viewFindings(entity as Entity<'view'>)
+            .filter((f) => f.level === 'warn')
+            .map(
+              (f) => `view ${id} ("${(entity.data as Data).name as string}"): ${formatFinding(f)}`,
+            ),
+        );
+        continue;
+      }
+      if (entity?.type === 'decision') {
+        const data = (entity as Entity<'decision'>).data;
+        if (data.options && !data.chosenOptionId && !data.answer)
+          out.push(...decisionWarnings(data).map((w) => `decision ${id} ("${data.title}") ${w}`));
+        continue;
+      }
+      if (entity?.type !== 'claim') continue;
+      const project = this.store.get((entity.data as Data).projectId as string);
+      out.push(...claimWarnings(entity as Entity<'claim'>, project as Entity<'project'> | null));
     }
     return out;
+  }
+
+  /** Query findings of a view's own spec (templates are built in and trusted). */
+  private viewFindings(view: Entity<'view'>, spec = view.data.spec): QueryFinding[] {
+    if (!spec) return [];
+    const project = this.store.get(view.data.projectId) as Entity<'project'> | null;
+    const parsed = Board.safeParse(toBoard(spec as ViewSpec));
+    return parsed.success ? checkBoardQueries(parsed.data, project) : [];
+  }
+
+  /**
+   * Query checks on every view write (R8.8): a write may not add a reject-level finding. Findings
+   * the view already had don't block an unrelated edit such as a resize.
+   */
+  private viewQueryIssues(view: Entity<'view'>, prefix: string): string[] {
+    const rejects = this.viewFindings(view).filter((f) => f.level === 'reject');
+    if (!rejects.length) return [];
+    const first = this.changes.find((c) => c.id === view.id);
+    const before = first?.before as Entity<'view'>['data'] | null | undefined;
+    const old = new Set(before ? this.viewFindings({ ...view, data: before }).map(findingKey) : []);
+    return rejects
+      .filter((f) => !old.has(findingKey(f)))
+      .map((f) => `${prefix}: ${formatFinding(f)}`);
+  }
+
+  /**
+   * A record must fit its type (R8): the type exists in its project, fields have the right kind,
+   * references point at records of the right type and files at files in the same project.
+   */
+  private recordIssues(record: Entity<'record'>, prefix: string): string[] {
+    const project = this.store.get(record.data.projectId) as Entity<'project'> | null;
+    const types: RecordType[] = project?.data.recordTypes ?? [];
+    const type = findRecordType(project, record.data.recordType);
+    if (!type)
+      return [
+        `${prefix}: recordType "${record.data.recordType}" isn't one of this project's record types (${types.map((t) => t.key).join(', ') || 'none; add recordTypes to the project or apply a pack'})`,
+      ];
+    const issues = recordFieldIssues(type, record.data.fields, !!record.data.interval).map(
+      (i) => `${prefix}: ${i}`,
+    );
+    for (const def of type.fields) {
+      const value = record.data.fields[def.key];
+      if (typeof value !== 'string' || (def.kind !== 'reference' && def.kind !== 'file')) continue;
+      const target = this.store.get(value);
+      const expected = def.kind === 'file' ? 'file' : 'record';
+      if (!target || target.type !== expected)
+        issues.push(`${prefix}: fields.${def.key} → ${expected} ${value} not found`);
+      else if ((target.data as Data).projectId !== record.data.projectId)
+        issues.push(`${prefix}: fields.${def.key} → ${value} belongs to another project`);
+      else if (target.id === record.id)
+        issues.push(`${prefix}: fields.${def.key} can't point at itself`);
+      else if (def.kind === 'reference' && (target as Entity<'record'>).data.recordType !== def.to)
+        issues.push(
+          `${prefix}: fields.${def.key} must point at a ${def.to} record, not a ${(target as Entity<'record'>).data.recordType}`,
+        );
+    }
+    const from = record.data.interval?.meter?.from;
+    if (from) {
+      const at = resolvePath(project, { type: 'record', recordType: type }, from);
+      if (!at.ok || !['meter', 'number'].includes(at.info.kind))
+        issues.push(
+          `${prefix}: interval.meter.from "${from}" must name a number or meter field, e.g. "fields.vehicle.fields.odometer"`,
+        );
+    }
+    return issues;
   }
 
   /** Option fields must use the project's options; a project's options must cover what's in use. */

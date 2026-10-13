@@ -1,6 +1,13 @@
 import {
   ENTITIES,
+  chartBars,
   fieldReader,
+  formatBar,
+  formatTotal,
+  statResult,
+  sumRows,
+  tableTotals,
+  type Resolved,
   findOption,
   optionKeyOf,
   optionsFor,
@@ -23,11 +30,12 @@ import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
 import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
 import { useOpenItem } from '../open-item';
-import { DOT_TONES, Empty, isHttp, Markdown, StatusBadge, Uri } from '../ui';
+import { DOT_TONES, Empty, ProgressBar, isHttp, Markdown, StatusBadge, Uri } from '../ui';
 import { linkedFileOf } from '../source-file';
 import { FileTypeIcon } from './file-list';
 import { Bar, CHART } from '../chart';
 import { MiniBar } from './overview';
+import { RecordValue } from './records';
 
 type Reader = ReturnType<typeof fieldReader>;
 
@@ -61,13 +69,18 @@ function FieldValue({
   type,
   field,
   ownerId,
+  at,
 }: {
   value: unknown;
   type: EntityType;
   field: string;
   /** The item the value belongs to, when it is the row itself (an artifact's `uri` opens it). */
   ownerId?: string;
+  /** Where the value was read (records format their fields from the record type, R8). */
+  at?: Resolved;
 }): ReactNode {
+  const data = useViewData();
+  if (type === 'record' && at) return <RecordValue at={at} data={data} />;
   if (
     value === undefined ||
     value === null ||
@@ -160,6 +173,8 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   const rows = runQuery(data, node.query.type, node.query);
   if (!rows.length) return <Empty>Nothing matches</Empty>;
   const labelField = ENTITIES[node.query.type].label;
+  // A ledger (R8): totals under number, money and meter columns, money per currency.
+  const totals = node.total ? tableTotals(data, node) : undefined;
   return (
     <div className="-mx-4 -my-4 overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -182,7 +197,8 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
               className="cursor-pointer border-b border-line-soft last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
             >
               {node.columns.map((c) => {
-                const { value, type, field } = read(row, c.field);
+                const at = read(row, c.field);
+                const { value, type, field } = at;
                 return (
                   <td
                     key={c.field}
@@ -195,6 +211,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
                         value={value}
                         type={type}
                         field={field}
+                        at={at}
                         ownerId={c.field.includes('.') ? undefined : row.id}
                       />
                     </div>
@@ -204,6 +221,17 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
             </tr>
           ))}
         </tbody>
+        {totals && (
+          <tfoot>
+            <tr className="border-t border-line-strong font-medium">
+              {node.columns.map((c, i) => (
+                <td key={c.field} className="px-3 py-2 tabular-nums first:pl-4">
+                  {totals[c.field] ? formatTotal(totals[c.field]!) : i === 0 ? 'Total' : ''}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
@@ -254,10 +282,41 @@ function groupCounts(rows: Entity[], by: string, read: Reader, data: ViewData): 
   return [...bars.values()];
 }
 
+/** CountChart adding up a field (`sum`) or by month or year (`bucket`), R8. */
+function SumChart({ node }: { node: NodeOf<'CountChart'> }) {
+  const data = useViewData();
+  const bars = chartBars(data, node);
+  if (!bars.length) return <Empty>Nothing matches</Empty>;
+  const max = Math.max(...bars.map((b) => Math.abs(b.value)), 1);
+  return (
+    <ul
+      className="space-y-2"
+      aria-label={`${node.sum ? 'Total' : 'Count'} by ${pathLabel(node.by)}`}
+    >
+      {bars.map((bar) => (
+        <li
+          key={`${bar.key}|${bar.currency ?? ''}`}
+          className="grid grid-cols-[minmax(3rem,7rem)_1fr_auto] items-center gap-3 text-sm"
+        >
+          <span className={clsx('truncate', !bar.key && 'text-neutral-400')}>{bar.label}</span>
+          <span className="h-3 overflow-hidden rounded-full bg-subtle">
+            <span
+              className="block h-full rounded-full bg-sky-500"
+              style={{ width: `${(Math.abs(bar.value) / max) * 100}%` }}
+            />
+          </span>
+          <span className="text-right tabular-nums">{formatBar(bar)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
   const data = useViewData();
   const read = useReader();
   const rows = runQuery(data, node.query.type, node.query);
+  if (node.sum || node.bucket) return <SumChart node={node} />;
   if (!rows.length) return <Empty>Nothing matches</Empty>;
   let bars = groupCounts(rows, node.by, read, data);
   bars.sort((a, b) =>
@@ -310,14 +369,24 @@ function percent(data: ViewData, query: Query, of: Query): number {
 
 export function Stat({ node }: { node: NodeOf<'Stat'> }) {
   const data = useViewData();
-  const n = count(data, node.query);
-  const value = node.of ? `${percent(data, node.query, node.of)}%` : n;
+  // Counts, shares and sums (R8: money per currency, a target with a bar) come from one place.
+  const r = statResult(data, node);
+  const n = typeof r.value === 'number' ? r.value : 1;
   // A "bad" number that is zero is good news; don't paint it red.
   const tone = node.tone === 'bad' && n === 0 ? 'neutral' : (node.tone ?? 'neutral');
   return (
     <div className="flex h-full flex-col justify-between rounded-block border border-line bg-surface px-4 py-3">
       <div className={CHART.figureLabel}>{node.label}</div>
-      <div className={clsx('mt-1', CHART.figure, STAT_TONES[tone])}>{value}</div>
+      <div className={clsx('mt-1', CHART.figure, STAT_TONES[tone])}>{r.text}</div>
+      {r.target && (
+        <div className="mt-1 space-y-1">
+          <div className={clsx('text-xs', CHART.value.rest)}>
+            of {formatTotal(r.target)}
+            {r.percent !== undefined ? ` · ${r.percent}%` : ''}
+          </div>
+          <ProgressBar value={r.percent ?? 0} />
+        </div>
+      )}
       {node.caption && <div className="mt-0.5 text-xs text-faint">{node.caption}</div>}
     </div>
   );
@@ -343,13 +412,15 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
               <TermText text={labels[i]!} ranges={termRanges[i]} />
             </span>
             {node.secondary?.map((path) => {
-              const { value, type, field } = read(row, path);
+              const at = read(row, path);
+              const { value, type, field } = at;
               return (
                 <span key={path} className="shrink-0 text-xs text-muted">
                   <FieldValue
                     value={value}
                     type={type}
                     field={field}
+                    at={at}
                     ownerId={path.includes('.') ? undefined : row.id}
                   />
                 </span>
@@ -399,6 +470,10 @@ export function fillTemplate(node: NodeOf<'Text'>, data: ViewData): string {
     if ('bar' in v) {
       const [n, total] = [count(data, v.bar.query), count(data, v.bar.of)];
       return `[${n} of ${total}](#pharos-bar-${n}-${total})`;
+    }
+    if ('sum' in v) {
+      const rows = runQuery(data, v.sum.query.type, v.sum.query);
+      return formatTotal(sumRows(data, rows, v.sum.field, {}, v.sum.query));
     }
     return projectValue(data, v.project);
   });

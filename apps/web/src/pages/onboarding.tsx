@@ -5,8 +5,12 @@ import { BUTTON } from '../catalog/ui';
 
 const MCP_COMMAND = 'claude mcp add --transport http pharos http://localhost:4300/mcp';
 
-/** True for a project with nothing planned yet: no goals, stages, tasks, or scope. */
+/**
+ * True for a project with nothing planned yet: no goals, stages, tasks, or scope. A project that
+ * keeps records (started from a pack, R8) isn't a plan to fill in, so it never is.
+ */
 export function isEmptyProject(data: ProjectDataset): boolean {
+  if (data.project.data.recordTypes?.length) return false;
   return !data.goals.length && !data.stages.length && !data.tasks.length && !data.scopeItems.length;
 }
 

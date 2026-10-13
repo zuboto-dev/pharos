@@ -609,6 +609,10 @@ function Folders() {
           </Row>
         ))}
       </dl>
+      <p className="text-sm text-muted">
+        Agents can ask for a folder when they need one. Nothing is shared until you approve it here
+        or on the project page.
+      </p>
       <DenyRules folders={list} />
       <div
         role="note"

@@ -1,4 +1,10 @@
-import { runQuery, type EntityDiff, type NodeOf, type RevisionSummary } from '@pharos/schema';
+import {
+  decisionState,
+  runQuery,
+  type EntityDiff,
+  type NodeOf,
+  type RevisionSummary,
+} from '@pharos/schema';
 import { Bot, Cog, File, FileText, Link2, Package, Palette, User } from 'lucide-react';
 import { useResource } from '../../lib/api';
 import { formatDate, localToday, plural, timeAgo } from '../../lib/format';
@@ -130,6 +136,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
           : undefined;
         const decider = decidedBy?.data.name;
         const excerpt = decision.data.body ? plainExcerpt(decision.data.body) : '';
+        const state = decisionState(decision.data);
         return (
           <li key={decision.id}>
             <Clickable
@@ -138,6 +145,15 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
             >
               <span className="min-w-0">
                 <span className="block text-sm font-medium">{decision.data.title}</span>
+                {state.kind !== 'open' && (
+                  <span className="block text-sm text-ink-soft">
+                    {state.kind === 'chosen'
+                      ? `Chose: ${state.option.label}`
+                      : state.kind === 'answered'
+                        ? `Answer: ${state.answer}`
+                        : `Later: by ${formatDate(state.until, true)}`}
+                  </span>
+                )}
                 {excerpt && <span className="line-clamp-1 text-xs text-muted">{excerpt}</span>}
                 <LinkedFiles ids={decision.data.fileIds} className="mt-1" />
               </span>

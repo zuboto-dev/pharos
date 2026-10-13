@@ -18,6 +18,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
+import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
 import { useViewData, type OpenTarget } from './context';
@@ -33,6 +34,7 @@ import {
 import { AUTHOR_ICONS, ProjectHistory, RevertButton, RevisionItem } from './history';
 import { QuickAdd, useCreate } from './quickadd';
 import { ArtifactSourcePanel } from './source-file';
+import { ArtifactPicture } from './artifact-picture';
 import { Select, type SelectOption } from './select';
 import { Badge, Empty, toneOf } from './ui';
 
@@ -40,7 +42,7 @@ const HIDDEN = new Set(['projectId', 'order', 'spec', 'template']);
 /** Long text, edited as markdown above the fields. */
 const MARKDOWN = new Set(['description', 'body', 'rationale']);
 /** One-line text people can edit in place (shown even when empty, to add it). */
-const SHORT_TEXT = new Set(['summary', 'estimate', 'uri', 'path', 'url', 'question']);
+const SHORT_TEXT = new Set(['summary', 'estimate', 'uri', 'path', 'url', 'question', 'alt']);
 
 /** Human-readable field name, e.g. assigneeId → "Assignee", dependsOn → "Depends on". */
 function fieldLabel(field: string): string {
@@ -158,7 +160,14 @@ function Fields({ entity }: { entity: Entity }) {
     const ref = refs[field];
     let content: ReactNode;
     const optionKey = optionKeyOf(entity.type, field);
-    if (optionKey) {
+    if (entity.type === 'artifact' && field === 'image') {
+      content = <ArtifactPicture artifact={entity as Entity<'artifact'>} />;
+    } else if (entity.type === 'artifact' && field === 'tags') {
+      content = <EditableList entity={entity} field={field} />;
+    } else if (entity.type === 'decision' && DECISION_FIELDS.has(field)) {
+      if (value === undefined) continue;
+      content = <DecisionField decision={entity as Entity<'decision'>} field={field} />;
+    } else if (optionKey) {
       const choices = optionsFor(data.project, optionKey).map((o) => ({
         value: o.value,
         label: o.label,
@@ -229,6 +238,31 @@ function Fields({ entity }: { entity: Entity }) {
     );
   }
   return <dl className="divide-y divide-line-soft">{rows}</dl>;
+}
+
+/** A decision's options and the owner's choice (R10.19), read here; answered in a DecisionBlock. */
+const DECISION_FIELDS = new Set(['options', 'recommendedOptionId', 'chosenOptionId']);
+
+function DecisionField({ decision, field }: { decision: Entity<'decision'>; field: string }) {
+  const options = decision.data.options ?? [];
+  const label = (id: string | undefined) => options.find((o) => o.id === id)?.label ?? id;
+  if (field !== 'options')
+    return <span>{label((decision.data as Record<string, unknown>)[field] as string)}</span>;
+  return (
+    <ul className="list-disc space-y-0.5 pl-4">
+      {options.map((o) => (
+        <li key={o.id}>
+          {o.label}
+          {o.id === decision.data.recommendedOptionId && (
+            <span className="text-muted"> · recommended</span>
+          )}
+          {o.id === decision.data.chosenOptionId && (
+            <span className="text-emerald-700 dark:text-emerald-400"> · chosen</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -668,6 +702,12 @@ export function DetailDrawer({
             <FileDetails
               key={entity.id}
               file={entity as Entity<'file'>}
+              history={<EntityHistory id={entity.id} />}
+            />
+          ) : entity?.type === 'record' ? (
+            <RecordDetails
+              key={entity.id}
+              record={entity as Entity<'record'>}
               history={<EntityHistory id={entity.id} />}
             />
           ) : entity ? (

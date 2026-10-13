@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { CountChart, DataList, DataTable, Stat, TextBlock } from './generic';
 import { GoalTree, ScopeBoard } from './goals';
 import { BeforeAfter } from './before-after';
+import { DecisionBlock } from './decision-block';
 import { FileList } from './file-list';
 import { FileView } from './file-view';
 import { Gallery } from './gallery';
@@ -12,6 +13,7 @@ import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
 import { MilestoneList, StageTracker, Timeline } from './plan';
 import { StartHere } from './start-here';
+import { CategoryBreakdown, DueTracker } from './records';
 import { AssigneeMatrix, DependencyGraph, KanbanBoard, TaskChecklist, TaskTable } from './work';
 
 type LeafName = Exclude<ComponentName, 'Grid' | 'Section' | 'Tabs'>;
@@ -44,6 +46,7 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   AssigneeMatrix: { render: AssigneeMatrix },
   ArtifactGallery: { render: ArtifactGallery },
   DecisionLog: { render: DecisionLog },
+  DecisionBlock: { render: DecisionBlock },
   FileList: { render: FileList },
   FileView: { render: FileView },
   Gallery: { render: Gallery },
@@ -58,4 +61,6 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   BeforeAfter: { render: BeforeAfter, bare: true },
   FindingChart: { render: FindingChart },
   StartHere: { render: StartHere, bare: true },
+  DueTracker: { render: DueTracker },
+  CategoryBreakdown: { render: CategoryBreakdown },
 };

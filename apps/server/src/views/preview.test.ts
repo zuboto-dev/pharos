@@ -108,8 +108,13 @@ describe('view_preview', () => {
     expect(w.scope).toMatchObject({ empty: true, shows: 'nothing' }); // only the "out" group, which is empty
     expect(result.layout).toEqual(['row 2 uses 10 of 12 columns before "by" wraps']);
     expect(result.summary).toBe(
-      '7 widgets; 3 show an empty state (oops, nothing, scope); see warnings',
+      '7 widgets; 3 show an empty state (oops, nothing, scope); 2 query problems would refuse the save; see warnings',
     );
+    // The same findings that refuse a save (R8.8), with a path and a suggestion each.
+    expect(result.findings).toMatchObject([
+      { level: 'reject', path: 'widgets[1].node.query.where.dueDat', suggestion: 'dueDate' },
+      { level: 'reject', path: 'widgets[1].node.columns[1].field', suggestion: 'stage.name' },
+    ]);
   });
 
   it('lists decisions newest first, like the decision log does', () => {

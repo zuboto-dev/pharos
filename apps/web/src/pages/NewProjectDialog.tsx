@@ -20,7 +20,13 @@ function Label({ text, children }: { text: string; children: React.ReactNode }) 
   );
 }
 
-/** Creates a project by hand (saved as a revision by you), optionally with a new repository. */
+/** A pack a project can start from (R8), as GET /api/packs lists it. */
+type PackSummary = { key: string; name: string; description: string; recordTypes: string[] };
+
+/**
+ * Creates a project by hand (saved as a revision by you), optionally with a new repository, or
+ * from a pack (R8): its record types and page, in one revision.
+ */
 export function NewProjectDialog({
   onClose,
   initial = {},
@@ -31,6 +37,10 @@ export function NewProjectDialog({
 }) {
   const navigate = useNavigate();
   const repositories = useResource<Entity<'repository'>[]>('/api/entities/repository');
+  const packs = useResource<PackSummary[]>('/api/packs');
+  const [pack, setPack] = useState('');
+  const [examples, setExamples] = useState(false);
+  const chosen = packs.data?.find((p) => p.key === pack);
   const [name, setName] = useState('');
   const [summary, setSummary] = useState('');
   const [status, setStatus] = useState<string>('planning');
@@ -46,8 +56,26 @@ export function NewProjectDialog({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const startFromPack = async () => {
+    setSaving(true);
+    try {
+      const result = await postJson<{ projectId: string }>('/api/packs/apply', {
+        pack,
+        name: name.trim(),
+        examples,
+      });
+      notifyProjectsChanged();
+      onClose();
+      navigate(`/projects/${result.projectId}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? [err.message, ...err.issues].join('\n') : String(err));
+      setSaving(false);
+    }
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (pack) return startFromPack();
     const operations: Operation[] = [];
     if (repository === NEW_REPO) {
       operations.push({
@@ -127,49 +155,84 @@ export function NewProjectDialog({
             className={FIELD}
           />
         </Label>
-        <Label text="Summary">
-          <input
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="One line about the project"
-            className={FIELD}
+        <Label text="Start from">
+          <Select
+            label="Start from"
+            value={pack}
+            onChange={setPack}
+            options={[
+              { value: '', label: 'A blank project', description: 'Goals, stages and tasks' },
+              ...(packs.data ?? []).map((p) => ({
+                value: p.key,
+                label: `${p.name} pack`,
+                description: p.description,
+              })),
+            ]}
           />
         </Label>
-        <div className="grid grid-cols-2 gap-3">
-          <Label text="Status">
-            <Select
-              label="Status"
-              value={status}
-              onChange={setStatus}
-              options={ProjectStatus.options.map((s) => ({
-                value: s,
-                label: humanize(s),
-                color: toneOf(s),
-              }))}
+        {chosen && (
+          <div className="space-y-2 rounded-tile bg-sunken p-3 text-sm">
+            <p>
+              Keeps {chosen.recordTypes.join(', ').toLowerCase()} records and opens on its own page.
+              Undo it from History in one step.
+            </p>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={examples}
+                onChange={(e) => setExamples(e.target.checked)}
+              />
+              Add made-up examples to see how it looks
+            </label>
+          </div>
+        )}
+        {!chosen && (
+          <Label text="Summary">
+            <input
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="One line about the project"
+              className={FIELD}
             />
           </Label>
-          <Label text="Repository">
-            <Select
-              label="Repository"
-              value={repository}
-              onChange={setRepository}
-              options={[
-                { value: '', label: 'None' },
-                ...(repositories.data ?? []).map((r) => ({
-                  value: r.id,
-                  label: r.data.name,
-                  ...(r.data.path ? { description: r.data.path } : {}),
-                })),
-                {
-                  value: NEW_REPO,
-                  label: 'New repository…',
-                  description: 'Add a repository with this project',
-                },
-              ]}
-            />
-          </Label>
-        </div>
-        {repository === NEW_REPO && (
+        )}
+        {!chosen && (
+          <div className="grid grid-cols-2 gap-3">
+            <Label text="Status">
+              <Select
+                label="Status"
+                value={status}
+                onChange={setStatus}
+                options={ProjectStatus.options.map((s) => ({
+                  value: s,
+                  label: humanize(s),
+                  color: toneOf(s),
+                }))}
+              />
+            </Label>
+            <Label text="Repository">
+              <Select
+                label="Repository"
+                value={repository}
+                onChange={setRepository}
+                options={[
+                  { value: '', label: 'None' },
+                  ...(repositories.data ?? []).map((r) => ({
+                    value: r.id,
+                    label: r.data.name,
+                    ...(r.data.path ? { description: r.data.path } : {}),
+                  })),
+                  {
+                    value: NEW_REPO,
+                    label: 'New repository…',
+                    description: 'Add a repository with this project',
+                  },
+                ]}
+              />
+            </Label>
+          </div>
+        )}
+        {!chosen && repository === NEW_REPO && (
           <div className="grid grid-cols-2 gap-3 rounded-tile bg-sunken p-3">
             <Label text="Repository name">
               <input
@@ -189,10 +252,12 @@ export function NewProjectDialog({
             </Label>
           </div>
         )}
-        <p className="text-xs text-muted">
-          The project starts with the default Overview. Ask your agent to fill in goals, stages, and
-          tasks, or add them as you go.
-        </p>
+        {!chosen && (
+          <p className="text-xs text-muted">
+            The project starts with the default Overview. Ask your agent to fill in goals, stages,
+            and tasks, or add them as you go.
+          </p>
+        )}
         {error && <p className="text-sm whitespace-pre-line text-rose-600">{error}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={BUTTON.secondary}>

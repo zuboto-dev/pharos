@@ -30,7 +30,20 @@ import {
   type Query,
   type QueryableType,
   type ViewNode,
-  type Where,
+  DUE_BAND_LABELS,
+  categoryBreakdown,
+  chartBars,
+  checkBoardQueries,
+  dueRows,
+  decisionState,
+  decisionWarnings,
+  formatBar,
+  formatNumber,
+  formatTotal,
+  statResult,
+  sumRows,
+  tableTotals,
+  type QueryFinding,
 } from '@pharos/schema';
 import { AgentFiles } from '../store/agent-files.js';
 import { claimWarnings, type Store } from '../store/store.js';
@@ -45,42 +58,6 @@ export type WidgetPreview = {
   empty: boolean;
   warnings: string[];
 };
-
-const HOPS: Record<string, EntityType> = {
-  stage: 'stage',
-  assignee: 'assignee',
-  task: 'task',
-  parent: 'goal',
-  project: 'project',
-};
-const META = new Set(['id', 'createdAt', 'updatedAt']);
-
-/** Whether a field path exists on a type (one hop allowed), so typos don't silently match nothing. */
-function pathProblem(type: EntityType, path: string): string | null {
-  const dot = path.indexOf('.');
-  if (dot > 0) {
-    const hop = HOPS[path.slice(0, dot)];
-    if (!hop)
-      return `"${path}": "${path.slice(0, dot)}" isn't a reference you can follow (use stage., assignee., task., parent.)`;
-    if (!(`${path.slice(0, dot)}Id` in ENTITIES[type].data.shape)) {
-      return `"${path}": ${type} has no ${path.slice(0, dot)}`;
-    }
-    // Report the full path the agent wrote, not just the part after the hop.
-    const rest = path.slice(dot + 1);
-    return pathProblem(hop, rest)?.replace(`"${rest}"`, `"${path}"`) ?? null;
-  }
-  if (META.has(path) || path in ENTITIES[type].data.shape) return null;
-  return `"${path}" isn't a field of ${type} (fields: ${Object.keys(ENTITIES[type].data.shape).join(', ')})`;
-}
-
-function filterProblems(type: QueryableType, filter: Filter | undefined): string[] {
-  const wheres: Where[] = [...(filter?.where ? [filter.where] : []), ...(filter?.anyOf ?? [])];
-  const paths = [
-    ...wheres.flatMap((w) => Object.keys(w)),
-    ...(filter?.sort ?? []).map((s) => s.field),
-  ];
-  return paths.map((p) => pathProblem(type, p)).filter((p): p is string => p !== null);
-}
 
 function plural(n: number, word: string): string {
   if (n === 1) return `${n} ${word}`;
@@ -121,15 +98,10 @@ function describeLeaf(
   node: ViewNode,
   ctx: Context,
 ): { shows: string; empty: boolean; warnings: string[] } {
+  // Unknown fields and other query findings come from checkBoardQueries (previewBoard).
   const warnings: string[] = [];
-  const tasksOf = (filter?: Filter) => {
-    warnings.push(...filterProblems('task', filter));
-    return runQuery(ctx.data, 'task', filter, { today: ctx.today });
-  };
-  const queryOf = (q: Query) => {
-    warnings.push(...filterProblems(q.type, q));
-    return q;
-  };
+  const tasksOf = (filter?: Filter) => runQuery(ctx.data, 'task', filter, { today: ctx.today });
+  const queryOf = (q: Query) => q;
   const n = node as Record<string, unknown> & { component: ComponentName };
   if (node.component === 'StartHere') return describeStartHere(node, ctx, warnings);
   if (node.component === 'BeforeAfter') return describeBeforeAfter(node, ctx, warnings);
@@ -157,10 +129,10 @@ function describeLeaf(
     }
     case 'Stat': {
       const s = node as NodeOf<'Stat'>;
-      const value = count(ctx, queryOf(s.query));
-      const shown = s.of
-        ? `${Math.round((value / Math.max(1, count(ctx, queryOf(s.of)))) * 100)}%`
-        : String(value);
+      const r = statResult(ctx.data, s, { today: ctx.today });
+      const shown = r.target
+        ? `${r.text} of ${formatTotal(r.target)} (${r.percent ?? 0}%)`
+        : r.text;
       return { shows: `${s.label}: ${shown}`, empty: false, warnings };
     }
     case 'ProgressRing': {
@@ -189,6 +161,11 @@ function describeLeaf(
         }
         if ('bar' in v)
           return miniBar(count(ctx, queryOf(v.bar.query)), count(ctx, queryOf(v.bar.of)));
+        if ('sum' in v) {
+          const q = v.sum.query;
+          const rows = runQuery(ctx.data, q.type, q, { today: ctx.today });
+          return formatTotal(sumRows(ctx.data, rows, v.sum.field, { today: ctx.today }, q));
+        }
         const stage = ctx.data.stages.find((s) => s.id === ctx.data.project.data.currentStageId);
         return {
           name: ctx.data.project.data.name,
@@ -338,25 +315,64 @@ function describeLeaf(
     case 'DataTable':
     case 'DataList': {
       const q = queryOf((node as NodeOf<'DataTable'> | NodeOf<'DataList'>).query);
-      const fields =
-        node.component === 'DataTable'
-          ? (node as NodeOf<'DataTable'>).columns.map((c) => c.field)
-          : ((node as NodeOf<'DataList'>).secondary ?? []);
-      warnings.push(
-        ...fields.map((f) => pathProblem(q.type, f)).filter((p): p is string => p !== null),
-      );
+      const shown = sample(ctx, q, 3, n.hideCodes === true);
+      const totals =
+        node.component === 'DataTable' && (node as NodeOf<'DataTable'>).total
+          ? Object.entries(tableTotals(ctx.data, node as NodeOf<'DataTable'>, { today: ctx.today }))
+              .map(([field, total]) => `${field} ${formatTotal(total)}`)
+              .join(', ')
+          : '';
       return {
-        shows: sample(ctx, q, 3, n.hideCodes === true),
+        shows: totals && shown !== 'nothing' ? `${shown}; total: ${totals}` : shown,
         empty: !count(ctx, q),
+        warnings,
+      };
+    }
+    case 'DueTracker': {
+      const d = node as NodeOf<'DueTracker'>;
+      const rows = dueRows(ctx.data, d, { today: ctx.today });
+      const parts = rows.slice(0, 5).map(({ record, due, unit }) => {
+        if (!due)
+          return `“${record.data.title}” (${record.type === 'file' ? 'no expiry date' : 'no schedule'})`;
+        const when = [
+          due.date && `${record.type === 'file' ? 'expires' : 'due'} ${due.date}`,
+          due.left !== undefined &&
+            (due.left < 0
+              ? `${formatNumber(-due.left, unit)} over`
+              : `${formatNumber(due.left, unit)} left`),
+        ].filter(Boolean);
+        return `${DUE_BAND_LABELS[due.band]}: “${record.data.title}” (${when.join(', ')})`;
+      });
+      return {
+        shows: rows.length
+          ? `${parts.join(' · ')}${rows.length > 5 ? ' · …' : ''}`
+          : 'Nothing due (shows an empty state)',
+        empty: !rows.length,
+        warnings,
+      };
+    }
+    case 'CategoryBreakdown': {
+      const b = categoryBreakdown(ctx.data, node as NodeOf<'CategoryBreakdown'>, {
+        today: ctx.today,
+      });
+      const parts = b.rows
+        .slice(0, 6)
+        .map((r) => `${r.label} ${formatTotal(r.spent)} of ${formatTotal(r.planned)}`);
+      return {
+        shows: b.rows.length
+          ? `${parts.join(' · ')}${b.rows.length > 6 ? ' · …' : ''}; total ${formatTotal(b.spent)} of ${formatTotal(b.planned)}`
+          : 'No categories (shows an empty state)',
+        empty: !b.rows.length,
         warnings,
       };
     }
     case 'CountChart': {
       const c = node as NodeOf<'CountChart'>;
       const q = queryOf(c.query);
-      const problem = pathProblem(q.type, c.by);
-      if (problem) warnings.push(problem);
-      const parts = countGroups(ctx, q, c.by).map((g) => `${g.label} ${g.count}`);
+      const parts =
+        c.sum || c.bucket
+          ? chartBars(ctx.data, c, { today: ctx.today }).map((b) => `${b.label} ${formatBar(b)}`)
+          : countGroups(ctx, q, c.by).map((g) => `${g.label} ${g.count}`);
       return {
         shows: parts.length ? parts.join(' · ') : 'Nothing matches',
         empty: !parts.length,
@@ -411,6 +427,32 @@ function describeLeaf(
         empty: false,
         warnings,
       };
+    }
+    case 'DecisionBlock': {
+      const id = (node as NodeOf<'DecisionBlock'>).decision;
+      const decision = ctx.data.decisions.find((d) => d.id === id);
+      if (!decision) {
+        warnings.push(
+          `decision ${id} not found in this project; create the decision with options first (apply, type "decision")`,
+        );
+        return { shows: 'A note that the decision isn’t in the project', empty: true, warnings };
+      }
+      const state = decisionState(decision.data);
+      if (state.kind === 'open' || state.kind === 'deferred')
+        warnings.push(...decisionWarnings(decision.data).map((w) => `decision ${id} ${w}`));
+      const options = decision.data.options ?? [];
+      const listed = options
+        .map(
+          (o) => `${o.label}${o.id === decision.data.recommendedOptionId ? ' (recommended)' : ''}`,
+        )
+        .join(' / ');
+      const shows =
+        state.kind === 'chosen'
+          ? `“${decision.data.title}”: the owner chose “${state.option.label}”`
+          : state.kind === 'answered'
+            ? `“${decision.data.title}”: the owner answered “${state.answer}”`
+            : `“${decision.data.title}”: ${plural(options.length, 'option')} to choose from (${listed})${state.kind === 'deferred' ? `, deferred until ${state.until}` : ''}`;
+      return { shows, empty: false, warnings };
     }
     case 'ActivityFeed': {
       const n2 = new AgentFiles(ctx.store).revisions(
@@ -541,7 +583,6 @@ function describeExplaining(
   const flow = node.orientation === 'flow';
   if (flow) warnings.push(...flowWarnings(node));
   const parts = node.layers.map((layer) => {
-    warnings.push(...filterProblems('claim', layer.items));
     const pill = layer.pill?.claim ? find(layer.pill.claim) : undefined;
     const rows = layerClaims(ctx, layer);
     shown.push(...rows);
@@ -585,7 +626,6 @@ function layerClaims(ctx: Context, layer: LayerSpec): Entity<'claim'>[] {
 /** A step's task progress, "2 of 9 done" (cancelled left out, by meaning), when it sets progress. */
 function layerProgress(ctx: Context, layer: LayerSpec, warnings?: string[]): string | undefined {
   if (!layer.progress) return undefined;
-  warnings?.push(...filterProblems('task', { where: layer.progress }));
   const tasks = runQuery(ctx.data, 'task', { where: layer.progress }, { today: ctx.today });
   const p = taskProgress(tasks, ctx.data.project);
   if (!p.total)
@@ -835,17 +875,12 @@ function describeFindingChart(
   if (node.bars && node.count)
     warnings.push('set bars or count, not both: the chart draws bars and ignores count');
   if (node.bars) {
-    warnings.push(...filterProblems('claim', node.bars));
     const rows = runQuery(ctx.data, 'claim', node.bars, { today: ctx.today });
     for (const c of rows) {
       check(c);
       if (!c.data.figure)
         warnings.push(`claim ${c.id} has no figure, so it draws no bar: add figure {value, label}`);
     }
-  } else if (node.count) {
-    warnings.push(...filterProblems(node.count.query.type, node.count.query));
-    const problem = pathProblem(node.count.query.type, node.count.by);
-    if (problem) warnings.push(problem);
   }
 
   const bars = findingBars(node, ctx);
@@ -906,8 +941,6 @@ function describeGallery(
     warnings.push(
       'no pictures chosen: set artifacts (e.g. {"where": {"tags": "ui-examples"}}) for artifacts with an image, or files for project image files',
     );
-  warnings.push(...filterProblems('artifact', node.artifacts));
-  warnings.push(...filterProblems('file', node.files));
   const claim = claimById(ctx, node.claim);
   if (node.claim && !claim) warnings.push(`claim ${node.claim} not found in this project`);
   if (claim) warnings.push(...claimWarnings(claim, ctx.data.project));
@@ -1078,6 +1111,10 @@ function describeStartHere(
         `step ${i + 1} "${step.label}" points at widget "${step.target}", which isn't on this board`,
       );
   });
+  if (node.yourPartTarget && !ctx.widgetIds.has(node.yourPartTarget))
+    warnings.push(
+      `yourPartTarget points at widget "${node.yourPartTarget}", which isn't on this board`,
+    );
   if (node.purpose === 'needs-you' && !node.due)
     warnings.push('a needs-you page says by when: set due');
 
@@ -1197,6 +1234,17 @@ function visibleText(node: ViewNode, ctx: Context): { texts: string[]; marked: s
       const claim = node.claim ? ctx.data.claims.find((c) => c.id === node.claim) : undefined;
       const bars = findingBars(node, ctx).map((b) => `${b.label} ${b.value}${b.unit ?? ''}`);
       return { texts: [title, claim?.data.statement ?? '', ...bars], marked: [] };
+    }
+    case 'DecisionBlock': {
+      // The question, each option's label and what it leads to, and why it's recommended; pros
+      // and cons are short points, like table cells.
+      const d = ctx.data.decisions.find((x) => x.id === node.decision);
+      if (!d) return { texts: [title], marked: [] };
+      const said = (d.data.options ?? []).flatMap((o) => [o.label, o.summary ?? '']);
+      return {
+        texts: [title, d.data.title, ...said, d.data.recommendationReason ?? ''],
+        marked: [],
+      };
     }
     case 'Gallery': {
       // Captions are data, like rows; the claim heading it is read first.
@@ -1373,6 +1421,12 @@ function describeNode(
   return describeLeaf(node, ctx);
 }
 
+/** A finding as a widget warning: the message, plus a corrected example when there is one. */
+function findingLine(f: QueryFinding): string {
+  const level = f.level === 'reject' ? '' : '(warning) ';
+  return `${level}${f.message}${f.example !== undefined ? `; e.g. ${JSON.stringify(f.example)}` : ''}`;
+}
+
 function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -1387,11 +1441,13 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
     today,
     widgetIds: new Map(board.widgets.map((w) => [w.id, w.node.component])),
   };
+  // Query checks (R8.7): the same findings that refuse a save, so a draft shows them first.
+  const findings = checkBoardQueries(board, ctx.data.project);
   const widgets: WidgetPreview[] = board.widgets.map((w) => {
     const width = w.w ?? BOARD_COLUMNS;
     const d = describeNode(w.node, ctx);
     const min = COMPONENT_INFO[w.node.component].minColumns;
-    const warnings = [...d.warnings];
+    const warnings = [...findings.filter((f) => f.widget === w.id).map(findingLine), ...d.warnings];
     if (width < min)
       warnings.push(
         `width ${width} is below the minimum of ${min} columns for ${w.node.component}`,
@@ -1435,15 +1491,19 @@ export function previewBoard(store: Store, projectId: string, board: Board, toda
   ];
 
   const empty = widgets.filter((w) => w.empty).map((w) => w.id);
+  const rejects = findings.filter((f) => f.level === 'reject').length;
   return {
     widgets,
     layout,
     warnings,
+    /** Structured query findings; "reject" ones refuse a save (docs/reframe/r8-notes.md). */
+    findings,
     summary:
       `${plural(widgets.length, 'widget')}` +
       (empty.length
         ? `; ${empty.length} show an empty state (${empty.join(', ')})`
         : '; none empty') +
+      (rejects ? `; ${plural(rejects, 'query problem')} would refuse the save` : '') +
       (widgets.some((w) => w.warnings.length) || layout.length || warnings.length
         ? '; see warnings'
         : ''),

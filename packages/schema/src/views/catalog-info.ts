@@ -175,6 +175,13 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
     suggestedColumns: 6,
     example: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
   },
+  DecisionBlock: {
+    category: 'outputs',
+    use: 'A decision the reader makes on this page (needs-you): the question, 2–5 options side by side, each with what it leads to (summary), pros and cons in a few words and claimIds as sources, and your recommendation marked with its reason. The reader chooses, writes another answer or defers; you never choose. Store the options on the decision (options, recommendedOptionId, recommendationReason) and point StartHere yourPartTarget at this widget. Once chosen it shows the answer compactly, and DecisionLog lists it.',
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: { component: 'DecisionBlock', decision: 'dec_empty_state' },
+  },
   FileList: {
     category: 'outputs',
     use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders; agents add them only from files_unadded (after the owner approves a folder), so never invent file ids or paths. For one document set (e.g. business registration papers), tag its files and filter on the tag: {"where": {"tags": "business-registration"}}; papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. Set `showIn` to the id of a FileView widget on the same board so a tapped row shows that file there instead of opening the drawer. You see each file\'s details, never its contents.',
@@ -221,7 +228,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DataTable: {
     category: 'data',
-    use: 'Any entity type with chosen columns, e.g. artifacts with kind, status, and stage; or tasks with due date and assignee. Use when no domain component shows the fields you need.',
+    use: 'Any entity type with chosen columns, e.g. artifacts with kind, status, and stage; or tasks with due date and assignee. Use when no domain component shows the fields you need. For records, columns are "fields.<key>" and money shows in its currency; `total: true` adds a total row (a ledger), and a log is records sorted by date, newest first.',
     minColumns: 4,
     suggestedColumns: 12,
     example: {
@@ -242,7 +249,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   CountChart: {
     category: 'data',
-    use: 'How things are distributed: count of any entity type by any field (status, kind, stage, assignee). Good for "where is the work?" questions.',
+    use: 'How things are distributed: count of any entity type by any field (status, kind, stage, assignee). Good for "where is the work?" questions. `sum` adds up a number or money field instead (e.g. cost per year: by "fields.date", bucket "year", sum "fields.cost").',
     minColumns: 3,
     suggestedColumns: 6,
     example: {
@@ -254,7 +261,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   Stat: {
     category: 'data',
-    use: 'One key number with context, e.g. overdue tasks, or the share of deliverables delivered. Pair several in a row.',
+    use: 'One key number with context, e.g. overdue tasks, or the share of deliverables delivered. Pair several in a row. `sum` shows a total (money per currency) instead of a count; with `target`, "saved of target" with a bar.',
     minColumns: 2,
     suggestedColumns: 3,
     example: {
@@ -281,7 +288,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   Text: {
     category: 'data',
-    use: 'A sentence or two with live numbers, as a headline or summary at the top of an answer. `{bar: {query, of}}` draws a word-sized bar inline instead of a number.',
+    use: 'A sentence or two with live numbers, as a headline or summary at the top of an answer. `{bar: {query, of}}` draws a word-sized bar inline instead of a number; `{sum: {query, field}}` gives a total. Every number in the text should come from a value, so it can be checked.',
     minColumns: 3,
     suggestedColumns: 12,
     example: {
@@ -405,6 +412,37 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       ],
     },
   },
+  DueTracker: {
+    category: 'data',
+    use: 'What\'s due among repeating records (services, bills, renewals): each with its next date and/or reading, in four bands (past due, very urgent, urgent, not urgent), most urgent first. The records need an interval; `show` adds a field such as the amount. Files with an expiryDate work too (`{"type": "file", "where": {"expiryDate": {"exists": true}}}`): urgent within 60 days, very urgent within 14, past due once expired.',
+    minColumns: 4,
+    suggestedColumns: 7,
+    example: {
+      component: 'DueTracker',
+      title: "What's due",
+      query: { type: 'record', where: { recordType: 'reminder' } },
+    },
+  },
+  CategoryBreakdown: {
+    category: 'data',
+    use: 'Planned against spent per category (a budget): categories are records with a planned amount, spending records point at their category. One bar each, what is left or over, and a total; currencies are never converted.',
+    minColumns: 4,
+    suggestedColumns: 7,
+    example: {
+      component: 'CategoryBreakdown',
+      title: 'This month',
+      categories: { type: 'record', where: { recordType: 'category' } },
+      planned: 'fields.planned',
+      spent: {
+        query: {
+          type: 'record',
+          where: { recordType: 'spending', 'fields.date': { gte: '$monthStart' } },
+        },
+        by: 'fields.category',
+        sum: 'fields.amount',
+      },
+    },
+  },
   Grid: {
     category: 'layout',
     use: 'Rarely needed: a board already lays widgets out in columns. Only for side-by-side components inside Tabs.',
@@ -434,6 +472,8 @@ Components read live project data; never copy data into a view. Findings live in
 - dates relative to today: "$today", "$today+7d", "$today-2w"; "$currentStage" is the project's current stage id, "$project" the project id
 - fields can follow one reference: "stage.status", "stage.targetDate", "assignee.kind", "task.status" (artifacts), "parent.status" (goals); also "createdAt", "updatedAt"
 - \`anyOf: [where, where]\` adds an "or": at least one must also match
+- records (a project's own kinds, R8): query \`{type: "record", where: {recordType: "service"}}\`; fields are "fields.<key>", one hop through a reference "fields.vehicle.title", money parts "fields.cost.amount" (minor units) and "fields.cost.currency", and for repeating records "due.date", "due.band"; dates also "$monthStart", "$monthStart+1m", "$yearStart"
+- every filter, sort, group, sum and column is checked when a view is saved: an unknown field, record type or option value, a sum over text, or a value that doesn't fit its field refuses the save with the allowed values and a corrected example; a record query without recordType only warns
 - statuses and other option fields match by meaning too (e.g. "in_progress" matches a custom "In review"), and ranges follow the option order (priority {gte: "high"})
 Examples: overdue tasks {where: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}} · due this week {where: {dueDate: {gte: "$today", lte: "$today+7d"}}} · blocked or late {anyOf: [{status: "blocked"}, {"stage.targetDate": {lt: "$today"}, status: {not: "done"}}]}
 Good views answer one question each (e.g. "what's left this stage?"), lead with the most important widget, and use 3–8 widgets.`;

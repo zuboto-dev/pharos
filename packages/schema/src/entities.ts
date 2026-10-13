@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { DECISION_CHOICE_FIELDS } from './decisions.js';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
+import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
 import { ViewSpec } from './views/board.js';
 import { GALLERY, ImageRef } from './views/pictures.js';
 
@@ -68,6 +70,9 @@ export const ProjectData = z.strictObject({
   status: ProjectStatus,
   currentStageId: Id.optional().describe('Stage the project is currently in'),
   options: ProjectOptions.optional(),
+  recordTypes: RecordTypes.optional().describe(
+    'Kinds of records this project keeps (R8), e.g. a car service; usually set by a pack',
+  ),
   pinned: z.boolean().optional().describe('Pinned projects are listed first in the sidebar'),
   sectionId: Id.optional().describe('Sidebar section, for projects without a repository'),
   order: Order.describe('Position among its sibling projects in the sidebar'),
@@ -146,6 +151,8 @@ export const DecisionData = z.strictObject({
   ),
   decisionDate: IsoDate.optional().describe('YYYY-MM-DD the decision was made'),
   fileIds: FileIds,
+  // R10.19: options the owner chooses from on a page.
+  ...DECISION_CHOICE_FIELDS,
 });
 
 export const ViewData = z.strictObject({
@@ -293,6 +300,23 @@ export const FileData = z.strictObject({
   taskIds: z.array(Id).describe('Tasks this file belongs to'),
 });
 
+/**
+ * One record of a kind the project defines (R8): a service, a bill, a spending. Its fields are
+ * checked against the record type in `project.data.recordTypes`.
+ */
+export const RecordData = z.strictObject({
+  projectId: Id,
+  recordType: RecordKey.describe("Key of one of the project's record types"),
+  title: Text.max(200),
+  fields: z
+    .record(z.string(), FieldValue)
+    .describe('Values by field key; money is {amount (minor units), currency}'),
+  interval: Interval.optional().describe('When it repeats (record types with interval: true)'),
+  notes: Markdown.optional(),
+  order: Order,
+  fileIds: FileIds,
+});
+
 export const ENTITY_TYPES = [
   'section',
   'repository',
@@ -309,6 +333,7 @@ export const ENTITY_TYPES = [
   'claim',
   'term',
   'file',
+  'record',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -466,6 +491,13 @@ export const ENTITIES = {
     },
     label: 'title',
   },
+  record: {
+    prefix: 'rec',
+    data: RecordData,
+    defaults: { fields: {} },
+    refs: { projectId: projectRef, fileIds: { type: 'file', many: true, onDelete: 'unset' } },
+    label: 'title',
+  },
 } satisfies Record<EntityType, EntityDef>;
 
 export type EntityDataMap = { [T in EntityType]: z.infer<(typeof ENTITIES)[T]['data']> };
@@ -489,6 +521,17 @@ export function createSchema(type: EntityType): z.ZodObject {
 }
 
 /**
+ * The same schema without its own description (C1): an update's fields are described once, in the
+ * create operation of the same type, which keeps the apply tool's JSON schema small. Checks stay;
+ * a schema shared by id ($defs) is kept as it is.
+ */
+function undescribed(schema: z.ZodType): z.ZodType {
+  const meta = z.globalRegistry.get(schema);
+  if (!meta?.description || meta.id) return schema;
+  return schema.clone(schema._zod.def);
+}
+
+/**
  * Patch input: every field optional, `null` clears an optional field.
  * `projectId` can't change: entities don't move between projects.
  */
@@ -498,7 +541,7 @@ export function patchSchema(type: EntityType): z.ZodObject {
   for (const [key, field] of Object.entries(shape)) {
     if (key === 'projectId') continue;
     const inner = field instanceof z.ZodOptional ? (field.unwrap() as z.ZodType) : field;
-    patch[key] = inner.nullable().optional();
+    patch[key] = undescribed(inner).nullable().optional();
   }
   return z.strictObject(patch);
 }

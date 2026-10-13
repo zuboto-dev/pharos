@@ -1,0 +1,509 @@
+{
+  "fixtures": {
+    "october": [
+      {
+        "ref": "groceries",
+        "recordType": "category",
+        "title": "Groceries",
+        "fields": { "planned": { "amount": 40000, "currency": "EUR" } }
+      },
+      {
+        "ref": "transport",
+        "recordType": "category",
+        "title": "Transport",
+        "fields": { "planned": { "amount": 15000, "currency": "EUR" } }
+      },
+      {
+        "ref": "eating",
+        "recordType": "category",
+        "title": "Eating out",
+        "fields": { "planned": { "amount": 12000, "currency": "EUR" } }
+      },
+      {
+        "ref": "fun",
+        "recordType": "category",
+        "title": "Fun",
+        "fields": { "planned": { "amount": 10000, "currency": "EUR" } }
+      },
+      {
+        "ref": "home",
+        "recordType": "category",
+        "title": "Home",
+        "fields": { "planned": { "amount": 8000, "currency": "EUR" } }
+      },
+      {
+        "ref": "sp1",
+        "recordType": "spending",
+        "title": "Weekly shop",
+        "fields": {
+          "date": "2026-10-01",
+          "amount": { "amount": 8240, "currency": "EUR" },
+          "category": "$groceries"
+        }
+      },
+      {
+        "ref": "sp2",
+        "recordType": "spending",
+        "title": "Train pass",
+        "fields": {
+          "date": "2026-10-02",
+          "amount": { "amount": 4500, "currency": "EUR" },
+          "category": "$transport"
+        }
+      },
+      {
+        "ref": "sp3",
+        "recordType": "spending",
+        "title": "Game on sale",
+        "fields": {
+          "date": "2026-10-03",
+          "amount": { "amount": 2500, "currency": "USD" },
+          "category": "$fun"
+        }
+      },
+      {
+        "ref": "sp4",
+        "recordType": "spending",
+        "title": "Lunch",
+        "fields": {
+          "date": "2026-10-04",
+          "amount": { "amount": 3880, "currency": "EUR" },
+          "category": "$eating"
+        }
+      },
+      {
+        "ref": "sp5",
+        "recordType": "spending",
+        "title": "Weekly shop",
+        "fields": {
+          "date": "2026-10-05",
+          "amount": { "amount": 6415, "currency": "EUR" },
+          "category": "$groceries"
+        }
+      },
+      {
+        "ref": "sp6",
+        "recordType": "spending",
+        "title": "Light bulbs",
+        "fields": {
+          "date": "2026-10-06",
+          "amount": { "amount": 3499, "currency": "EUR" },
+          "category": "$home"
+        }
+      },
+      {
+        "ref": "sp7",
+        "recordType": "spending",
+        "title": "Taxi",
+        "fields": {
+          "date": "2026-10-07",
+          "amount": { "amount": 2750, "currency": "EUR" },
+          "category": "$transport"
+        }
+      },
+      {
+        "ref": "sp8",
+        "recordType": "spending",
+        "title": "Dinner out",
+        "fields": {
+          "date": "2026-10-09",
+          "amount": { "amount": 5600, "currency": "EUR" },
+          "category": "$eating"
+        }
+      },
+      {
+        "ref": "sp9",
+        "recordType": "spending",
+        "title": "Weekly shop",
+        "fields": {
+          "date": "2026-10-10",
+          "amount": { "amount": 9120, "currency": "EUR" },
+          "category": "$groceries"
+        }
+      },
+      {
+        "ref": "sp10",
+        "recordType": "spending",
+        "title": "Gift",
+        "fields": { "date": "2026-10-11", "amount": { "amount": 2000, "currency": "EUR" } }
+      },
+      {
+        "ref": "sp11",
+        "recordType": "spending",
+        "title": "Birthday dinner",
+        "fields": {
+          "date": "2026-10-12",
+          "amount": { "amount": 4000, "currency": "EUR" },
+          "category": "$eating"
+        }
+      },
+      {
+        "ref": "sp0",
+        "recordType": "spending",
+        "title": "Weekly shop",
+        "fields": {
+          "date": "2026-09-25",
+          "amount": { "amount": 10200, "currency": "EUR" },
+          "category": "$groceries"
+        }
+      },
+      {
+        "ref": "b_rent",
+        "recordType": "bill",
+        "title": "Rent",
+        "fields": { "amount": { "amount": 95000, "currency": "EUR" }, "category": "$home" },
+        "interval": { "every": { "n": 1, "unit": "months" }, "lastDate": "2026-10-01" }
+      },
+      {
+        "ref": "b_phone",
+        "recordType": "bill",
+        "title": "Phone",
+        "fields": { "amount": { "amount": 2500, "currency": "EUR" } },
+        "interval": { "every": { "n": 1, "unit": "months" }, "lastDate": "2026-09-18" }
+      },
+      {
+        "ref": "b_internet",
+        "recordType": "bill",
+        "title": "Internet",
+        "fields": { "amount": { "amount": 3500, "currency": "EUR" }, "category": "$home" },
+        "interval": { "every": { "n": 1, "unit": "months" }, "lastDate": "2026-09-30" }
+      },
+      {
+        "ref": "b_streaming",
+        "recordType": "bill",
+        "title": "Streaming",
+        "fields": { "amount": { "amount": 1299, "currency": "USD" }, "category": "$fun" },
+        "interval": { "every": { "n": 1, "unit": "months" }, "lastDate": "2026-09-11" }
+      },
+      {
+        "ref": "b_insurance",
+        "recordType": "bill",
+        "title": "Home insurance",
+        "fields": { "amount": { "amount": 18000, "currency": "EUR" }, "category": "$home" },
+        "interval": { "every": { "n": 1, "unit": "years" }, "lastDate": "2025-11-20" }
+      },
+      {
+        "ref": "g_fund",
+        "recordType": "goal",
+        "title": "Emergency fund",
+        "fields": {
+          "target": { "amount": 500000, "currency": "EUR" },
+          "saved": { "amount": 320000, "currency": "EUR" }
+        }
+      },
+      {
+        "ref": "g_trip",
+        "recordType": "goal",
+        "title": "Summer trip",
+        "fields": {
+          "target": { "amount": 120000, "currency": "EUR" },
+          "saved": { "amount": 30000, "currency": "EUR" }
+        }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "money-planned-vs-spent",
+      "version": 1,
+      "pack": "money",
+      "description": "Planned against spent per category this month, with an overspent category, spending without a category and the totals",
+      "tags": ["categories", "sum", "month"],
+      "today": "2026-10-13",
+      "fixture": "october",
+      "facts": [
+        {
+          "id": "groceries",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Groceries",
+          "planned": [{ "amount": 40000, "currency": "EUR" }],
+          "spent": [{ "amount": 23775, "currency": "EUR" }]
+        },
+        {
+          "id": "eating-over",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Eating out",
+          "planned": [{ "amount": 12000, "currency": "EUR" }],
+          "spent": [{ "amount": 13480, "currency": "EUR" }]
+        },
+        {
+          "id": "other",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Other",
+          "planned": 0,
+          "spent": [{ "amount": 2000, "currency": "EUR" }]
+        },
+        {
+          "id": "totals",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Total",
+          "planned": [{ "amount": 85000, "currency": "EUR" }],
+          "spent": [
+            { "amount": 50004, "currency": "EUR" },
+            { "amount": 2500, "currency": "USD" }
+          ]
+        },
+        {
+          "id": "headline-spent",
+          "widget": "headline",
+          "kind": "text",
+          "value": "spent",
+          "expect": [
+            { "amount": 50004, "currency": "EUR" },
+            { "amount": 2500, "currency": "USD" }
+          ]
+        },
+        {
+          "id": "headline-planned",
+          "widget": "headline",
+          "kind": "text",
+          "value": "planned",
+          "expect": [{ "amount": 85000, "currency": "EUR" }]
+        },
+        { "id": "rows", "widget": "spending", "kind": "rows", "expect": 11 },
+        {
+          "id": "ledger-total",
+          "widget": "spending",
+          "kind": "total",
+          "column": "fields.amount",
+          "expect": [
+            { "amount": 50004, "currency": "EUR" },
+            { "amount": 2500, "currency": "USD" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "money-mixed-currencies",
+      "version": 1,
+      "pack": "money",
+      "description": "A category planned in euros with spending in dollars: shown apart, never converted",
+      "tags": ["currency", "mixed"],
+      "today": "2026-10-13",
+      "fixture": "october",
+      "facts": [
+        {
+          "id": "fun",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Fun",
+          "planned": [{ "amount": 10000, "currency": "EUR" }],
+          "spent": [{ "amount": 2500, "currency": "USD" }]
+        }
+      ]
+    },
+    {
+      "id": "money-upcoming-bills",
+      "version": 1,
+      "pack": "money",
+      "description": "Bills by when they're due, in four bands; the headline counts those due in 30 days",
+      "tags": ["bills", "due", "interval"],
+      "today": "2026-10-13",
+      "fixture": "october",
+      "facts": [
+        {
+          "id": "streaming-late",
+          "widget": "bills",
+          "kind": "due",
+          "record": "Streaming",
+          "band": "past_due",
+          "date": "2026-10-11"
+        },
+        {
+          "id": "phone-soon",
+          "widget": "bills",
+          "kind": "due",
+          "record": "Phone",
+          "band": "very_urgent",
+          "date": "2026-10-18"
+        },
+        {
+          "id": "internet",
+          "widget": "bills",
+          "kind": "due",
+          "record": "Internet",
+          "band": "urgent",
+          "date": "2026-10-30"
+        },
+        {
+          "id": "rent",
+          "widget": "bills",
+          "kind": "due",
+          "record": "Rent",
+          "band": "urgent",
+          "date": "2026-11-01"
+        },
+        {
+          "id": "insurance",
+          "widget": "bills",
+          "kind": "due",
+          "record": "Home insurance",
+          "band": "not_urgent",
+          "date": "2026-11-20"
+        },
+        {
+          "id": "bills-30-days",
+          "widget": "headline",
+          "kind": "text",
+          "value": "bills",
+          "expect": 4
+        }
+      ]
+    },
+    {
+      "id": "money-savings",
+      "version": 1,
+      "pack": "money",
+      "description": "Savings progress: saved against the target over every goal",
+      "tags": ["goal", "target"],
+      "today": "2026-10-13",
+      "fixture": "october",
+      "facts": [
+        {
+          "id": "saved",
+          "widget": "savings",
+          "kind": "stat",
+          "expect": [{ "amount": 350000, "currency": "EUR" }],
+          "target": [{ "amount": 620000, "currency": "EUR" }],
+          "percent": 56
+        }
+      ]
+    },
+    {
+      "id": "money-empty-month",
+      "version": 1,
+      "pack": "money",
+      "description": "The first days of a month with nothing spent yet: every category at zero, plans unchanged",
+      "tags": ["empty", "month"],
+      "today": "2026-11-03",
+      "fixture": "october",
+      "facts": [
+        {
+          "id": "groceries-zero",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Groceries",
+          "planned": [{ "amount": 40000, "currency": "EUR" }],
+          "spent": [{ "amount": 0, "currency": "EUR" }]
+        },
+        { "id": "no-rows", "widget": "spending", "kind": "rows", "expect": 0 },
+        {
+          "id": "headline-zero",
+          "widget": "headline",
+          "kind": "text",
+          "value": "spent",
+          "expect": [{ "amount": 0, "currency": "EUR" }]
+        }
+      ]
+    }
+  ],
+  "queryChecks": [
+    {
+      "id": "money-mixed-currency-sum",
+      "version": 1,
+      "pack": "money",
+      "description": "A sum over spending in two currencies is allowed and shows two totals",
+      "tags": ["currency", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "Stat",
+            "label": "Spent",
+            "query": { "type": "record", "where": { "recordType": "spending" } },
+            "sum": "fields.amount"
+          }
+        }
+      ],
+      "expect": "accept"
+    },
+    {
+      "id": "money-range-on-money",
+      "version": 1,
+      "pack": "money",
+      "description": "A range straight on a money field is refused; .amount (in cents) is the way",
+      "tags": ["operator-mismatch", "money"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "spending", "fields.amount": { "gt": 100 } }
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["operator-mismatch"]
+    },
+    {
+      "id": "money-amount-range",
+      "version": 1,
+      "pack": "money",
+      "description": "A range on fields.amount.amount (cents) is allowed",
+      "tags": ["money", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DataList",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "spending", "fields.amount.amount": { "gt": 5000 } }
+            }
+          }
+        }
+      ],
+      "expect": "accept"
+    },
+    {
+      "id": "money-no-record-type",
+      "version": 1,
+      "pack": "money",
+      "description": "A record query without a record type only warns",
+      "tags": ["no-record-type", "warn"],
+      "widgets": [
+        { "id": "w", "node": { "component": "DataList", "query": { "type": "record" } } }
+      ],
+      "expect": "accept",
+      "codes": ["no-record-type"]
+    },
+    {
+      "id": "money-mixed-valid-invalid",
+      "version": 1,
+      "pack": "money",
+      "description": "One bad block among good ones refuses the whole page",
+      "tags": ["mixed"],
+      "widgets": [
+        {
+          "id": "good",
+          "node": {
+            "component": "DataList",
+            "query": { "type": "record", "where": { "recordType": "bill" } }
+          }
+        },
+        {
+          "id": "bad",
+          "node": {
+            "component": "CategoryBreakdown",
+            "categories": { "type": "record", "where": { "recordType": "category" } },
+            "planned": "fields.plan",
+            "spent": {
+              "query": { "type": "record", "where": { "recordType": "spending" } },
+              "by": "fields.category",
+              "sum": "fields.amount"
+            }
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-sum-field"]
+    }
+  ]
+}

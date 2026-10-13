@@ -38,6 +38,7 @@ import {
 import { DetailDrawer } from '../catalog/drawer';
 import { FilesPage } from '../files/FilesPage';
 import { FolderRequestNotice } from '../files/FolderRequests';
+import { ExpiryNotice } from '../files/expiry-notice';
 import { dismissAnswer, keepAnswer } from './answers';
 import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboarding';
 import { AskDialog, RequestsButton } from './requests';
@@ -441,6 +442,8 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         </div>
         {/* An agent waiting for a folder for this project (R7.12): approve it here. */}
         <FolderRequestNotice projectId={projectId!} onAnswered={reload} />
+        {/* Files that expired or expire within 60 days (R7.15). */}
+        {!editing && <ExpiryNotice />}
         {filesPage && <FilesPage onAdded={reload} />}
         {active && !editing && <ViewUpdated view={active} />}
         {editing && (

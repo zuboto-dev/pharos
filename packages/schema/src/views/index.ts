@@ -9,3 +9,8 @@ export * from './similar.js';
 export * from './text-tools.js';
 export * from './pictures.js';
 export * from './gallery.js';
+export * from './dates.js';
+export * from './due.js';
+export * from './fields.js';
+export * from './blocks.js';
+export * from './check-queries.js';

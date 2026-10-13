@@ -41,6 +41,7 @@ export const TYPE_LABELS: Record<EntityType, string> = {
   claim: 'Claim',
   term: 'Term',
   file: 'File',
+  record: 'Record',
 };
 
 export function labelOf(entity: Entity): string {

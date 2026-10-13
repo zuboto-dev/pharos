@@ -61,6 +61,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   AssigneeMatrix: { component: 'AssigneeMatrix' },
   ArtifactGallery: { component: 'ArtifactGallery' },
   DecisionLog: { component: 'DecisionLog', filter: { limit: 2 } },
+  DecisionBlock: { component: 'DecisionBlock', decision: 'dec_missing' },
   ActivityFeed: { component: 'ActivityFeed' },
   DataTable: COMPONENT_INFO.DataTable.example,
   CountChart: COMPONENT_INFO.CountChart.example,
@@ -75,6 +76,8 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   Gallery: COMPONENT_INFO.Gallery.example,
   ClaimCard: COMPONENT_INFO.ClaimCard.example,
   StartHere: COMPONENT_INFO.StartHere.example,
+  DueTracker: COMPONENT_INFO.DueTracker.example,
+  CategoryBreakdown: COMPONENT_INFO.CategoryBreakdown.example,
 };
 
 const empty: ProjectDataset = {

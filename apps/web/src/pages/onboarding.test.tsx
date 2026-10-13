@@ -17,6 +17,19 @@ describe('getting started', () => {
       true,
     );
     expect(isEmptyProject({ ...data, goals: [], stages: [], scopeItems: [] })).toBe(false);
+    // A pack project (R8) keeps records, not a plan: no "get it planned" panel.
+    const pack = {
+      ...data,
+      goals: [],
+      stages: [],
+      tasks: [],
+      scopeItems: [],
+      project: {
+        ...data.project,
+        data: { ...data.project.data, recordTypes: [{ key: 'bill', name: 'Bill', fields: [] }] },
+      },
+    } as ProjectDataset;
+    expect(isEmptyProject(pack)).toBe(false);
   });
 
   it('offers the MCP command and a planning prompt naming the project, and stays hidden once dismissed', () => {

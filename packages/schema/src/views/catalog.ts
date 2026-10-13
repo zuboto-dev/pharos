@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DUE_BANDS } from '../records.js';
 import { Filter, Query, Where } from './query.js';
 
 /**
@@ -244,6 +245,13 @@ export const DecisionLogNode = component('DecisionLog', 'Decisions, newest first
   filter: Filter.optional(),
 });
 
+/** R10.19: one proposed decision the reader answers on the page. */
+export const DecisionBlockNode = component(
+  'DecisionBlock',
+  "One proposed decision: its options side by side with what each leads to, pros, cons and sources, the recommendation marked, and buttons to choose, write another answer or decide later. Once answered it shows the owner's choice.",
+  { decision: z.string().min(1).describe('Id of a decision with options in this project') },
+);
+
 /** Filter controls a FileList can show above its rows (R7). */
 export const FILE_LIST_CONTROLS = ['search', 'kind', 'tag', 'issuer', 'expiry'] as const;
 /** Details a FileList row can show after the title. */
@@ -387,6 +395,12 @@ export const DataTableNode = component(
       .array(z.strictObject({ field: FieldPath, label: z.string().optional() }))
       .min(1)
       .describe('Columns in order. Clicking a row opens that item'),
+    total: z
+      .boolean()
+      .optional()
+      .describe(
+        'Add a total row under number, money and meter columns (a ledger); money is totalled per currency',
+      ),
   },
 );
 
@@ -403,6 +417,13 @@ export const CountChartNode = component(
       .optional()
       .describe("Biggest first (count) or in the field's natural order (default)"),
     limit: z.number().int().min(1).max(50).optional().describe('Show at most this many bars'),
+    sum: FieldPath.optional().describe(
+      'Bars add up this number, money or meter field instead of counting, e.g. "fields.cost"',
+    ),
+    bucket: z
+      .enum(['month', 'year'])
+      .optional()
+      .describe('When `by` is a date: one bar per month or year, in date order'),
   },
 );
 
@@ -413,6 +434,12 @@ export const StatNode = component(
     label: z.string(),
     query: Query,
     of: Query.optional().describe('With this, shows a percentage of it instead of a count'),
+    sum: FieldPath.optional().describe(
+      'Show the total of this number, money or meter field over the matching rows instead of a count, e.g. "fields.amount"',
+    ),
+    target: FieldPath.optional().describe(
+      'With sum: the total of this field over the same rows is the target, shown as "x of y" with a bar, e.g. savings "fields.saved" of "fields.target"',
+    ),
     tone: z.enum(['neutral', 'good', 'warning', 'bad']).optional(),
     caption: z.string().optional().describe('Small text under the number'),
   },
@@ -437,6 +464,9 @@ const TextValue = z.union([
   z.strictObject({
     project: z.enum(['name', 'summary', 'status', 'currentStage', 'currentStageTarget']),
   }),
+  z
+    .strictObject({ sum: z.strictObject({ query: Query, field: FieldPath }) })
+    .describe('The total of a number, money or meter field, e.g. money per currency'),
 ]);
 
 export const TextNode = component(
@@ -448,9 +478,50 @@ export const TextNode = component(
       .record(z.string().regex(/^\w+$/), TextValue)
       .optional()
       .describe(
-        'Named values: {count: query}, {percent: {query, of}}, {bar: {query, of}} (a word-sized bar), or {project: field}',
+        'Named values: {count: query}, {percent: {query, of}}, {bar: {query, of}} (a word-sized bar), {sum: {query, field}}, or {project: field}',
       ),
     terms,
+  },
+);
+
+// ------------------------------------------------------------------ records (R8)
+// Blocks for a project's own records: what's due, and money planned against money spent.
+
+export const DueTrackerNode = component(
+  'DueTracker',
+  "Repeating records (an interval: every N days or N km, whichever first) by when they're due, in four bands: past due, very urgent, urgent, not urgent.",
+  {
+    query: Query.describe(
+      'Repeating records, e.g. {"type": "record", "where": {"recordType": "reminder"}}, or files by expiryDate',
+    ),
+    show: z
+      .array(FieldPath)
+      .max(3)
+      .optional()
+      .describe('Fields shown after each title, e.g. ["fields.amount"]'),
+    bands: z
+      .array(z.enum(DUE_BANDS))
+      .optional()
+      .describe('Only these bands (default all), e.g. ["past_due", "very_urgent", "urgent"]'),
+    limit: z.number().int().min(1).max(50).optional(),
+  },
+);
+
+export const CategoryBreakdownNode = component(
+  'CategoryBreakdown',
+  'Planned against spent per category: one bar per category with what is left or how far over, and a total. Money stays in its currency.',
+  {
+    categories: Query.describe(
+      'The categories, e.g. {"type": "record", "where": {"recordType": "category"}}',
+    ),
+    planned: FieldPath.describe('Field of a category holding its plan, e.g. "fields.planned"'),
+    spent: z.strictObject({
+      query: Query.describe(
+        'What was spent, e.g. this month\'s spending {"type": "record", "where": {"recordType": "spending", "fields.date": {"gte": "$monthStart"}}}',
+      ),
+      by: FieldPath.describe('Reference from a spending to its category, e.g. "fields.category"'),
+      sum: FieldPath.describe('The amount to add up, e.g. "fields.amount"'),
+    }),
   },
 );
 
@@ -730,6 +801,11 @@ export const StartHereNode = component(
       .describe(
         `The reader's part in one line under ${START_HERE.yourPartChars} characters, the only place the page says it, e.g. "Nothing now. When G1 resumes: approve the 3 test cases and targets."`,
       ),
+    yourPartTarget: z
+      .string()
+      .min(1)
+      .optional()
+      .describe('Id of the widget where the reader does it, e.g. a DecisionBlock; adds a button'),
     claim: z
       .string()
       .min(1)
@@ -779,6 +855,7 @@ const LEAF_NODES = [
   AssigneeMatrixNode,
   ArtifactGalleryNode,
   DecisionLogNode,
+  DecisionBlockNode,
   FileListNode,
   FileViewNode,
   GalleryNode,
@@ -793,6 +870,8 @@ const LEAF_NODES = [
   BeforeAfterNode,
   FindingChartNode,
   StartHereNode,
+  DueTrackerNode,
+  CategoryBreakdownNode,
 ] as const;
 
 type Common = { title?: string; span?: number };

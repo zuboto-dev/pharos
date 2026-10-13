@@ -27,6 +27,7 @@ import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { registerGuidance } from './guidance.js';
 import type { Presence, PresenceTarget } from './presence.js';
+import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { changesSince, unseenCount } from './views/changes.js';
 import { catalogDescribe, catalogList } from './views/catalog.js';
 import {
@@ -66,8 +67,9 @@ Changing data:
 - Statuses, priorities, scope groups, and artifact kinds can be customized per project (project.options); use values from the project's options, shown in project_snapshot.
 - When you start work on a task, claim it in one apply: set its assigneeId to you and its status to in progress (project_snapshot lists assignees; if none has your name, create one in the same apply with kind "agent" and use its ref). Mark it done when you finish, and leave tasks assigned to someone else alone unless the user hands them to you.
 - Findings are claims (one plain sentence, with checkedOn, sourceIds and authorId) and terms explain a word. A claim's certainty is "reading" (your analysis; the default), "verified" (From source: needs a source artifact with an http(s) uri and a checkedOn date that is not in the future) or "confirmed" (Confirmed by you: needs confirmedById, a decision the owner accepted in Pharos themselves; you can't confirm one yourself). Pharos refuses a claim that doesn't meet its certainty: without a linked source you read and a checkedOn date, keep it at "reading". For a finding the owner should confirm, create the decision with status "proposed" (the default, "accepted", records no acceptance by the owner, so it can never back a confirmed claim), ask the owner to accept it in Pharos, and only then set the claim to "confirmed" with confirmedById. Show what a claim rests on: a "verified" claim carries quote, the exact passage from the source, word for word (max 300 characters; quoteSourceId names which of its sourceIds when there are several), and a "reading" claim carries assumption, the one assumption it rests on (max 200). Add locator (max 60 characters, e.g. "§7 Completion", "line 42", "commit deb7096") so the reader finds the quote in its source; figure {value, unit, label} when the claim states a number a FindingChart draws (on "verified", the value must appear in the quote); and weakBecause ("one-source", "indirect" or "disagree") when the evidence is thin, which shows after the mark. apply warns about a claim with no source, a "verified" claim without a quote, a "reading" claim without an assumption, a "verified" figure missing from its quote, and weakBecause "one-source" on a claim without exactly one source.
-- Record meaningful choices as decisions so the reasoning stays traceable: set decidedById (the assignee who made the call, usually the person who asked, not you unless you decided) and decisionDate.
+- Record meaningful choices as decisions so the reasoning stays traceable: set decidedById (the assignee who made the call, usually the person who asked, not you unless you decided) and decisionDate. When the owner has to choose, give the decision options (2–5), recommendedOptionId and recommendationReason, and show it in a DecisionBlock; only the owner chooses (see "Decisions for the reader" in pharos://guide/views).
 - Files (type "file", in project_snapshot.files) are documents on the owner's disk, in folders the owner shares with Pharos. You see only their details (title, kind, issuer, issuedDate, expiryDate, tags, size, taskIds): never their notes, or anything from folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when its folder allows it (canReadText in the snapshot) and it is a .txt, .csv or .md file. To bring documents in: if no folder holds them, ask with ${FOLDER_REQUEST_TOOL} {path, level, reason, projectId} and tell the owner in one line to click Approve in Pharos; check with ${FOLDER_REQUEST_STATUS_TOOL}. Once approved, ${FILES_UNADDED_TOOL} lists the files you can add; add them with apply (create type "file" with only ${AGENT_FILE_CREATE_FIELDS.join(', ')}; rootId is the folderId) and set kind, tags, issuer and dates with updates in the same apply ("$ref"). You can't remove or move files. Link files to the tasks, decisions, goals, stages and claims they belong to with fileIds (ids of files you can see). Don't look for the files on disk yourself. Sources (artifacts) never show an absolute local path in uri; a uri relative to the project's approved folder (e.g. "records/2024/certificate.pdf") is fine, and Pharos links it to the file once the file is added. Sources and findings taken only from hidden files aren't shown, and a quote taken from a file whose folder allows details only is left out. To manage a set of documents (e.g. business registration papers): add and tag them, link the related tasks and decisions, then build one view with a StartHere, a FileList filtered to the tag (showIn: the FileView's id), a FileView of the key document and the linked tasks and decisions; "Document sets" in pharos://guide/views has the recipe.
+- Records (type "record") are a project's own kinds of things, such as a car service or a bill: recordType (a key of project.recordTypes, listed in project_snapshot.recordTypes), title, fields (by field key: text, number, money {amount in cents, currency}, date, option, reference (a record id), file, meter) and, for record types that repeat, interval {every: {n, unit}, meter: {n, from}, lastDate, lastMeter}. An update's fields are merged into the record's. To set up a project for a kind of life admin (a car, money), use pack_list and pack_apply instead of inventing record types; read the guide it returns.
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
 Generating views (what the user sees):
@@ -82,6 +84,7 @@ Generating views (what the user sees):
 - Research about anything visual (UI, products, places, cars, diagrams) must show its examples as pictures: store each as an artifact with image (an https address, or a project image file id), alt, uri (the page it comes from) and a shared tag, and show them in a Gallery filtered on the tag; layout "compare" puts two side by side for before/after or option A/B. "Pictures" in pharos://guide/views has the recipe.
 - Prefer adjusting an existing view when the user asks to change "the board" or "the overview"; create a new view when they want a different angle (e.g. "a view for this week's work").
 - view_create, view_answer, and view_update return a preview of the saved view: read it before telling the user the view is ready, and fix unknown fields, empty widgets you didn't intend, and its warnings (per widget, and for the whole view). Use view_preview for drafts or other views.
+- Query checks: every filter, sort, group, sum and column in a view is checked against the project's fields (record fields included) before it is saved. An unknown field, record type or option value, a sum over something that isn't a number, an unreadable relative date, or a value that doesn't fit its field (e.g. a range on money; use "fields.amount.amount" in cents) refuses the save; the error gives the JSON path, the allowed values, the closest match and a corrected example, so fix exactly that and retry. A record query without recordType, or a field only some of its record types have, only warns. Empty results, custom option values and mixed currencies are fine.
 - People can rearrange views too, so read a view with view_get before editing it, and keep widget ids stable.
 
 History:
@@ -510,6 +513,30 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       mark(() => [{ ...viewTarget(input.viewId, 'editing'), viewId: undefined }]);
       return run(() => deleteView(store, author(), input));
     },
+  );
+
+  server.registerTool(
+    'pack_list',
+    {
+      title: 'List packs',
+      description:
+        'Packs a project can start from (R8): each sets up record types (e.g. car services, bills), option lists and a hand-made page.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    () => run(() => listPacks()),
+  );
+
+  server.registerTool(
+    'pack_apply',
+    {
+      title: 'Apply a pack',
+      description:
+        "Start a new project from a pack (name) or add a pack to a project (projectId), in one revision that history_revert undoes. Returns the pages it made and the pack's guide: read it before adding records.",
+      inputSchema: PackApplyInput.shape,
+      annotations: { destructiveHint: true },
+    },
+    (input) => run(() => applyPack(store, author(), input)),
   );
 
   registerGuidance(server, store);

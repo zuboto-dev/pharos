@@ -2,19 +2,23 @@ import type { ComponentName, NodeOf } from '@pharos/schema';
 import type { ReactNode } from 'react';
 import { CountChart, DataList, DataTable, Stat, TextBlock } from './generic';
 import { GoalTree, ScopeBoard } from './goals';
-import { BeforeAfter } from './before-after';
-import { DecisionBlock } from './decision-block';
 import { FileList } from './file-list';
-import { FileView } from './file-view';
-import { Gallery } from './gallery';
-import { FindingChart } from './finding-chart';
-import { ClaimCard, Layers } from './knowledge';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
 import { MilestoneList, StageTracker, Timeline } from './plan';
-import { StartHere } from './start-here';
 import { CategoryBreakdown, DueTracker } from './records';
+import { lazyBlock } from '../lazy-block';
 import { AssigneeMatrix, DependencyGraph, KanbanBoard, TaskChecklist, TaskTable } from './work';
+
+// Heavy blocks load on first use (W11.6): each comes in its own chunk with a calm skeleton.
+const Layers = lazyBlock(() => import('./knowledge').then((m) => m.Layers), 6);
+const ClaimCard = lazyBlock(() => import('./knowledge').then((m) => m.ClaimCard), 3);
+const FindingChart = lazyBlock(() => import('./finding-chart').then((m) => m.FindingChart), 5);
+const BeforeAfter = lazyBlock(() => import('./before-after').then((m) => m.BeforeAfter), 4);
+const StartHere = lazyBlock(() => import('./start-here').then((m) => m.StartHere), 4);
+const Gallery = lazyBlock(() => import('./gallery').then((m) => m.Gallery), 6);
+const FileView = lazyBlock(() => import('./file-view').then((m) => m.FileView), 6);
+const DecisionBlock = lazyBlock(() => import('./decision-block').then((m) => m.DecisionBlock), 6);
 
 type LeafName = Exclude<ComponentName, 'Grid' | 'Section' | 'Tabs'>;
 

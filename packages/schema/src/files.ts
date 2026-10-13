@@ -229,7 +229,7 @@ export const FILES_UNADDED_TOOL = 'files_unadded';
 // ------------------------------------------------------------------ file types (allowlist)
 
 /** How the file drawer previews a file; `none` means details and actions only. */
-export type PreviewKind = 'pdf' | 'image' | 'text' | 'markdown' | 'none';
+export type PreviewKind = 'pdf' | 'image' | 'text' | 'markdown' | 'audio' | 'none';
 
 export type FileType = {
   mime: string;
@@ -276,10 +276,14 @@ export const FILE_TYPES: Readonly<Record<string, FileType>> = {
   pages: { mime: 'application/vnd.apple.pages', preview: 'none', open: true },
   numbers: { mime: 'application/vnd.apple.numbers', preview: 'none', open: true },
   key: { mime: 'application/vnd.apple.keynote', preview: 'none', open: true },
-  // Audio previews come in R9; it can be downloaded and opened now.
-  m4a: { mime: 'audio/mp4', preview: 'none', open: true },
-  mp3: { mime: 'audio/mpeg', preview: 'none', open: true },
-  wav: { mime: 'audio/wav', preview: 'none', open: true },
+  // Audio plays in place (R9): the drawer, a FileView, FileList rows and record file fields.
+  m4a: { mime: 'audio/mp4', preview: 'audio', open: true },
+  mp3: { mime: 'audio/mpeg', preview: 'audio', open: true },
+  wav: { mime: 'audio/wav', preview: 'audio', open: true },
+  ogg: { mime: 'audio/ogg', preview: 'audio', open: true },
+  flac: { mime: 'audio/flac', preview: 'audio', open: true },
+  aiff: { mime: 'audio/aiff', preview: 'none', open: true },
+  aif: { mime: 'audio/aiff', preview: 'none', open: true },
 };
 
 export const UNKNOWN_FILE_TYPE: FileType = {

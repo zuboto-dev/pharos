@@ -22,6 +22,7 @@ import { Select } from '../select';
 import { AddFilesActions, EmptyState, FILES_HINT } from '../empty-state';
 import { Badge, BUTTON } from '../ui';
 import { GlanceDate } from '../../files/glance';
+import { PlayButton, isAudio } from '../../files/audio';
 
 // The project's files (docs/reframe/roadmap-2.md §3): find a named document fast and open it in
 // the file drawer (preview, details, actions). Grouped by kind, with a name search and filters
@@ -35,7 +36,7 @@ type Detail = NonNullable<NodeOf<'FileList'>['details']>[number];
 type ExpiryFilter = '' | Expiry | 'any' | 'none';
 
 const SPREADSHEETS = new Set(['csv', 'xls', 'xlsx', 'numbers']);
-const AUDIO = new Set(['m4a', 'mp3', 'wav']);
+const AUDIO = new Set(['m4a', 'mp3', 'wav', 'ogg', 'flac', 'aif', 'aiff']);
 
 /** An icon for the file's type, from its extension (never its contents). */
 export function FileTypeIcon({ path, className }: { path: string; className?: string }) {
@@ -361,7 +362,10 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
             )}
             <ul className="divide-y divide-line-soft">
               {group.files.map((file) => (
-                <li key={file.id}>
+                <li
+                  key={file.id}
+                  className="flex items-center gap-1 [&>[role=button]]:min-w-0 [&>[role=button]]:flex-1"
+                >
                   <FileRow
                     file={file}
                     details={details}
@@ -370,6 +374,10 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
                     onOpen={target ? () => openFile(file.id) : undefined}
                     shown={shownId === file.id}
                   />
+                  {/* Audio plays in place (R9), beside the row rather than inside its button. */}
+                  {isAudio(file.data.path) && (
+                    <PlayButton fileId={file.id} title={file.data.title} className="mr-1" />
+                  )}
                 </li>
               ))}
             </ul>

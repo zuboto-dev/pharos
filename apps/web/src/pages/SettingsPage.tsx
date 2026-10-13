@@ -8,7 +8,7 @@ import {
 import clsx from 'clsx';
 import { Check, Copy, Folder, Monitor, Moon, Sun } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { SkeletonLines, SkeletonRows } from '../catalog/skeleton';
+import { Skeleton, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 import { FolderRequestCard, useFolderRequests } from '../files/FolderRequests';
 import { ApiError, postJson, useResource } from '../lib/api';
@@ -685,7 +685,7 @@ export function SettingsPage() {
             <Row label="Version">{s.version}</Row>
           </dl>
         ) : (
-          <SkeletonLines lines={4} label="Loading settings" />
+          <Skeleton lines={4} label="Loading settings" />
         )}
       </Section>
     </div>

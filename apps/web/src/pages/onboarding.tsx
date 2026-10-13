@@ -1,7 +1,7 @@
 import type { ProjectDataset } from '@pharos/schema';
 import { Check, Copy, Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
-import { Loading, Skeleton, SkeletonBlock, SkeletonRows } from '../catalog/skeleton';
+import { Loading, SkeletonShape, SkeletonBlock, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 
 const MCP_COMMAND = 'claude mcp add --transport http pharos http://localhost:4300/mcp';
@@ -106,18 +106,18 @@ export function ProjectSkeleton({ files = false }: { files?: boolean } = {}) {
       className="mx-auto max-w-7xl space-y-5 p-4 md:p-8"
     >
       <div className="flex items-end gap-4 border-b border-line pb-2.5">
-        <Skeleton className="h-4 w-20" />
-        <Skeleton className="h-4 w-14" />
-        <Skeleton className="hidden h-4 w-16 sm:block" />
+        <SkeletonShape className="h-4 w-20" />
+        <SkeletonShape className="h-4 w-14" />
+        <SkeletonShape className="hidden h-4 w-16 sm:block" />
         <span className="flex-1" />
-        <Skeleton className="size-7 rounded-control" />
-        <Skeleton className="size-7 rounded-control" />
+        <SkeletonShape className="size-7 rounded-control" />
+        <SkeletonShape className="size-7 rounded-control" />
       </div>
       {files ? (
         <>
           <div className="space-y-2">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="w-2/3 max-w-md" />
+            <SkeletonShape className="h-5 w-24" />
+            <SkeletonShape className="w-2/3 max-w-md" />
           </div>
           <div className="rounded-block border border-line bg-surface p-panel">
             <SkeletonRows rows={5} label="Loading files" />
@@ -129,8 +129,8 @@ export function ProjectSkeleton({ files = false }: { files?: boolean } = {}) {
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="space-y-3 rounded-block border border-line bg-surface p-tile">
-                <Skeleton className="h-2.5 w-1/2" />
-                <Skeleton className="h-6 w-1/3" />
+                <SkeletonShape className="h-2.5 w-1/2" />
+                <SkeletonShape className="h-6 w-1/3" />
               </div>
             ))}
           </div>
@@ -148,7 +148,7 @@ export function ProjectSkeleton({ files = false }: { files?: boolean } = {}) {
 export function HomeSkeleton() {
   return (
     <Loading label="Loading projects" className="mx-auto max-w-5xl space-y-6 p-6 md:p-8">
-      <Skeleton className="h-6 w-40" />
+      <SkeletonShape className="h-6 w-40" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <SkeletonBlock key={i} lines={2} />

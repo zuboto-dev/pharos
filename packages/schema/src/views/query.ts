@@ -52,6 +52,13 @@ export const Filter = z.strictObject({
     .optional()
     .describe('At least one of these must also match (an "or"), e.g. overdue OR blocked'),
   sort: Sort.optional().describe('Default: manual order, then creation'),
+  onePer: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Keep only the first row for each value of this field, after sorting (R9), e.g. the latest mix of each song: sort by "fields.date" desc with onePer "fields.song"',
+    ),
   limit: z.number().int().min(1).optional(),
 });
 export type Filter = z.infer<typeof Filter>;

@@ -87,6 +87,27 @@ const MOVED_CANDIDATES = 20;
 const codeOf = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code;
 
 /** `Content-Disposition` with the real file name (RFC 6266 / 5987), safe for any name. */
+/**
+ * One byte range from a Range header ("bytes=0-", "bytes=100-199", "bytes=-500"), clamped to the
+ * file; undefined for no header or anything else (several ranges, other units: served whole).
+ */
+export function byteRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | 'unsatisfiable' | undefined {
+  const m = header?.trim().match(/^bytes=(\d*)-(\d*)$/);
+  if (!m || (m[1] === '' && m[2] === '')) return undefined;
+  if (m[1] === '') {
+    const n = Number(m[2]);
+    if (n === 0 || size === 0) return 'unsatisfiable';
+    return { start: Math.max(0, size - n), end: size - 1 };
+  }
+  const start = Number(m[1]);
+  const end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  if (start >= size || end < start) return 'unsatisfiable';
+  return { start, end };
+}
+
 export function contentDisposition(kind: 'inline' | 'attachment', name: string): string {
   const fallback = name.replace(/[^\x20-\x7e]|["\\%;]/g, '_');
   const encoded = encodeURIComponent(name).replace(
@@ -291,7 +312,7 @@ export class FileService {
    * the real file name. HTML, SVG and anything off the allowlist only ever download, as
    * `application/octet-stream`.
    */
-  async contents(fileId: string, mode: 'content' | 'download'): Promise<Response> {
+  async contents(fileId: string, mode: 'content' | 'download', range?: string): Promise<Response> {
     const { entity, folder } = await this.reachable(fileId);
     const { handle, stats: info, resolvedPath } = await this.openSafely(folder, entity.data.path);
     // The type of what is really there; a link named "a.pdf" to "b.html" is not a PDF.
@@ -302,15 +323,29 @@ export class FileService {
     const inline = mode === 'content' && type.preview !== 'none';
     const isText = type.preview === 'text' || type.preview === 'markdown';
     const truncated = inline && isText && info.size > TEXT_PREVIEW_MAX_BYTES;
-    const length = truncated ? TEXT_PREVIEW_MAX_BYTES : info.size;
+    // Audio players ask for byte ranges to seek (Safari won't play without them; R9).
+    const part = inline && type.preview === 'audio' ? byteRange(range, info.size) : undefined;
+    if (part === 'unsatisfiable') {
+      await handle.close();
+      return new Response(null, {
+        status: 416,
+        headers: { 'content-range': `bytes */${info.size}`, 'cache-control': 'private, no-store' },
+      });
+    }
+    const start = part ? part.start : 0;
+    const length = part
+      ? part.end - part.start + 1
+      : truncated
+        ? TEXT_PREVIEW_MAX_BYTES
+        : info.size;
 
     const stream = handle.createReadStream({
-      start: 0,
-      ...(length > 0 ? { end: length - 1 } : {}),
+      start,
+      ...(length > 0 ? { end: start + length - 1 } : {}),
       autoClose: true,
     });
     // Hash lazily, while the file is read in full anyway (finds it again after it moves).
-    if (!truncated) {
+    if (!truncated && !part) {
       const hash = createHash('sha256');
       let read = 0;
       stream.on('data', (chunk: Buffer | string) => {
@@ -353,7 +388,12 @@ export class FileService {
       'cache-control': 'private, no-store',
     });
     if (truncated) headers.set('x-pharos-truncated', String(TEXT_PREVIEW_MAX_BYTES));
-    return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, { headers });
+    if (inline && type.preview === 'audio') headers.set('accept-ranges', 'bytes');
+    if (part) headers.set('content-range', `bytes ${part.start}-${part.end}/${info.size}`);
+    return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
+      status: part ? 206 : 200,
+      headers,
+    });
   }
 
   /**

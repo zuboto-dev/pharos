@@ -20,7 +20,7 @@ import {
 import { useEffect, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router';
-import { Loading, Skeleton } from '../catalog/skeleton';
+import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
@@ -269,7 +269,7 @@ export function Sidebar() {
     return (
       <Loading label="Loading projects" className="space-y-3 px-4 py-2">
         {[70, 55, 80, 60].map((w) => (
-          <Skeleton key={w} style={{ width: `${w}%` }} />
+          <SkeletonShape key={w} style={{ width: `${w}%` }} />
         ))}
       </Loading>
     );

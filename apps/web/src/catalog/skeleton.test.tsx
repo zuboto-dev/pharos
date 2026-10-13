@@ -7,7 +7,7 @@ import dataset from './__fixtures__/dataset.json';
 import { ViewDataProvider } from './context';
 import { ProjectHistory } from './history';
 import { ViewRenderer } from './renderer';
-import { SkeletonLines, SkeletonRows } from './skeleton';
+import { Skeleton, SkeletonRows } from './skeleton';
 
 afterEach(() => {
   cleanup();
@@ -33,7 +33,7 @@ describe('loading skeletons (v0.2 B8)', () => {
       expect(container.querySelectorAll('[data-skeleton]').length).toBeGreaterThan(3);
       unmount();
     }
-    render(<SkeletonLines lines={4} />);
+    render(<Skeleton lines={4} />);
     expect(screen.getByRole('status').querySelectorAll('[data-skeleton]').length).toBe(4);
   });
 

@@ -1,0 +1,274 @@
+{
+  "fixtures": {
+    "term": [
+      {
+        "ref": "stats",
+        "recordType": "subject",
+        "title": "Statistics",
+        "fields": { "target": 40 }
+      },
+      { "ref": "spanish", "recordType": "subject", "title": "Spanish", "fields": { "target": 30 } },
+      {
+        "ref": "history",
+        "recordType": "subject",
+        "title": "Art history",
+        "fields": { "target": 20 }
+      },
+      {
+        "ref": "se1",
+        "recordType": "session",
+        "title": "Regression chapter",
+        "fields": { "subject": "$stats", "date": "2026-09-23", "hours": 2, "kind": "reading" }
+      },
+      {
+        "ref": "se2",
+        "recordType": "session",
+        "title": "Problem set 3",
+        "fields": { "subject": "$stats", "date": "2026-10-01", "hours": 3, "kind": "practice" }
+      },
+      {
+        "ref": "se3",
+        "recordType": "session",
+        "title": "Past paper 2024",
+        "fields": { "subject": "$stats", "date": "2026-10-10", "hours": 2.5, "kind": "past_paper" }
+      },
+      {
+        "ref": "se4",
+        "recordType": "session",
+        "title": "Verb drills",
+        "fields": { "subject": "$spanish", "date": "2026-10-04", "hours": 1, "kind": "flashcards" }
+      },
+      {
+        "ref": "se5",
+        "recordType": "session",
+        "title": "Conversation class",
+        "fields": { "subject": "$spanish", "date": "2026-10-11", "hours": 1.5, "kind": "lecture" }
+      },
+      {
+        "ref": "se6",
+        "recordType": "session",
+        "title": "Baroque painters",
+        "fields": { "subject": "$history", "date": "2026-10-08", "hours": 2, "kind": "reading" }
+      },
+      {
+        "ref": "se7",
+        "recordType": "session",
+        "title": "Summer course",
+        "fields": { "subject": "$history", "date": "2026-09-15", "hours": 18, "kind": "lecture" }
+      },
+      {
+        "ref": "e0",
+        "recordType": "exam",
+        "title": "Statistics quiz",
+        "fields": { "subject": "$stats", "date": "2026-09-30", "kind": "quiz" }
+      },
+      {
+        "ref": "e1",
+        "recordType": "exam",
+        "title": "Statistics midterm",
+        "fields": {
+          "subject": "$stats",
+          "date": "2026-10-22",
+          "kind": "written",
+          "place": "Hall B"
+        }
+      },
+      {
+        "ref": "e2",
+        "recordType": "exam",
+        "title": "Spanish oral",
+        "fields": { "subject": "$spanish", "date": "2026-11-06", "kind": "oral" }
+      },
+      {
+        "ref": "e3",
+        "recordType": "exam",
+        "title": "Art history essay exam",
+        "fields": { "subject": "$history", "date": "2026-12-12", "kind": "written" }
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "study-hours-against-target",
+      "version": 1,
+      "pack": "study",
+      "description": "Hours per subject against its target, the totals, the last week and hours per month",
+      "tags": ["target", "sum", "bucket"],
+      "today": "2026-10-13",
+      "fixture": "term",
+      "facts": [
+        { "id": "hours", "widget": "headline", "kind": "text", "value": "hours", "expect": 30 },
+        { "id": "target", "widget": "headline", "kind": "text", "value": "target", "expect": 90 },
+        { "id": "week", "widget": "headline", "kind": "text", "value": "week", "expect": 6 },
+        {
+          "id": "exams-month",
+          "widget": "headline",
+          "kind": "text",
+          "value": "exams",
+          "expect": 2
+        },
+        {
+          "id": "stats",
+          "widget": "targets",
+          "kind": "category",
+          "category": "Statistics",
+          "planned": 40,
+          "spent": 7.5
+        },
+        {
+          "id": "spanish",
+          "widget": "targets",
+          "kind": "category",
+          "category": "Spanish",
+          "planned": 30,
+          "spent": 2.5
+        },
+        {
+          "id": "history-reached",
+          "widget": "targets",
+          "kind": "category",
+          "category": "Art history",
+          "planned": 20,
+          "spent": 20
+        },
+        {
+          "id": "total",
+          "widget": "targets",
+          "kind": "category",
+          "category": "Total",
+          "planned": 90,
+          "spent": 30
+        },
+        { "id": "sep", "widget": "per-month", "kind": "bar", "label": "Sep 2026", "expect": 20 },
+        { "id": "oct", "widget": "per-month", "kind": "bar", "label": "Oct 2026", "expect": 10 },
+        {
+          "id": "log-total",
+          "widget": "log",
+          "kind": "total",
+          "column": "fields.hours",
+          "expect": 30
+        }
+      ]
+    },
+    {
+      "id": "study-next-exams",
+      "version": 1,
+      "pack": "study",
+      "description": "Exams from today on, in the due bands by their own date; a past quiz is left out",
+      "tags": ["date", "due", "exam"],
+      "today": "2026-10-13",
+      "fixture": "term",
+      "facts": [
+        { "id": "rows", "widget": "exams", "kind": "rows", "expect": 3 },
+        {
+          "id": "midterm",
+          "widget": "exams",
+          "kind": "due",
+          "record": "Statistics midterm",
+          "band": "urgent",
+          "date": "2026-10-22"
+        },
+        {
+          "id": "oral",
+          "widget": "exams",
+          "kind": "due",
+          "record": "Spanish oral",
+          "band": "urgent",
+          "date": "2026-11-06"
+        },
+        {
+          "id": "essay",
+          "widget": "exams",
+          "kind": "due",
+          "record": "Art history essay exam",
+          "band": "not_urgent"
+        }
+      ]
+    },
+    {
+      "id": "study-exam-week",
+      "version": 1,
+      "pack": "study",
+      "description": "Four days before the midterm it is very urgent",
+      "tags": ["date", "due"],
+      "today": "2026-10-18",
+      "fixture": "term",
+      "facts": [
+        {
+          "id": "midterm-close",
+          "widget": "exams",
+          "kind": "due",
+          "record": "Statistics midterm",
+          "band": "very_urgent"
+        }
+      ]
+    }
+  ],
+  "queryChecks": [
+    {
+      "id": "study-target-typo",
+      "version": 1,
+      "pack": "study",
+      "description": "A planned field the subject doesn't have is refused",
+      "tags": ["unknown-sum-field"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "CategoryBreakdown",
+            "categories": { "type": "record", "where": { "recordType": "subject" } },
+            "planned": "fields.targets",
+            "spent": {
+              "query": { "type": "record", "where": { "recordType": "session" } },
+              "by": "fields.subject",
+              "sum": "fields.hours"
+            },
+            "aim": "target"
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["unknown-sum-field"]
+    },
+    {
+      "id": "study-date-not-a-date",
+      "version": 1,
+      "pack": "study",
+      "description": "A DueTracker date that isn't a date field is refused",
+      "tags": ["date", "operator-mismatch"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DueTracker",
+            "query": { "type": "record", "where": { "recordType": "exam" } },
+            "date": "fields.place"
+          }
+        }
+      ],
+      "expect": "reject",
+      "codes": ["operator-mismatch"]
+    },
+    {
+      "id": "study-date-ok",
+      "version": 1,
+      "pack": "study",
+      "description": "A DueTracker over exams by their date field is allowed",
+      "tags": ["date", "allowed"],
+      "widgets": [
+        {
+          "id": "w",
+          "node": {
+            "component": "DueTracker",
+            "query": {
+              "type": "record",
+              "where": { "recordType": "exam", "fields.date": { "gte": "$today" } }
+            },
+            "date": "fields.date"
+          }
+        }
+      ],
+      "expect": "accept"
+    }
+  ]
+}

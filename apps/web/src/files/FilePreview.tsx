@@ -3,8 +3,9 @@ import clsx from 'clsx';
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FileTypeIcon } from '../catalog/components/file-list';
-import { SkeletonLines } from '../catalog/skeleton';
+import { Skeleton } from '../catalog/skeleton';
 import { BUTTON, Markdown } from '../catalog/ui';
+import { AudioPreview } from './audio';
 import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } from './files';
 
 /**
@@ -56,7 +57,7 @@ function NoPreview({ path, children }: { path: string; children: ReactNode }) {
 export function PreviewSkeleton({ label = 'Loading the preview' }: { label?: string }) {
   return (
     <Frame>
-      <SkeletonLines lines={6} label={label} className="bg-surface p-4" />
+      <Skeleton lines={6} label={label} className="bg-surface p-4" />
     </Frame>
   );
 }
@@ -169,6 +170,8 @@ export function FilePreview({
           <NewTabLink fileId={file.id}>Open the PDF in a new tab</NewTabLink>
         </NoPreview>
       );
+    case 'audio':
+      return <AudioPreview fileId={file.id} title={file.data.title} />;
     case 'text':
     case 'markdown':
       return <TextPreview file={file} markdown={type.preview === 'markdown'} size={size} />;

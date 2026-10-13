@@ -18,7 +18,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
-import { Loading, Skeleton, SkeletonRows } from './skeleton';
+import { Loading, SkeletonShape, SkeletonRows } from './skeleton';
 import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
@@ -435,9 +435,9 @@ function RevisionSkeleton() {
   return (
     <Loading label="Loading revision" className="space-y-6">
       <div className="space-y-2">
-        <Skeleton className="h-2.5 w-20" />
-        <Skeleton className="h-5 w-3/4" />
-        <Skeleton className="w-1/2" />
+        <SkeletonShape className="h-2.5 w-20" />
+        <SkeletonShape className="h-5 w-3/4" />
+        <SkeletonShape className="w-1/2" />
       </div>
       <SkeletonRows rows={3} label="Loading changes" />
     </Loading>

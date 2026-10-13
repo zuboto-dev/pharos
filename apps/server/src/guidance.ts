@@ -2,6 +2,7 @@ import {
   BOARD_GUIDE,
   COMPONENT_INFO,
   FILE_TEXT_TOOL,
+  PACK_GUIDE,
   similarAnswers,
   type ComponentName,
 } from '@pharos/schema';
@@ -618,6 +619,17 @@ export function registerGuidance(server: McpServer, store: Store): void {
       mimeType: 'text/markdown',
     },
     (uri) => text(uri.href, examplesMarkdown()),
+  );
+  server.registerResource(
+    'pack-guide',
+    'pharos://guide/packs',
+    {
+      title: 'Setting up a pack project',
+      description:
+        'Pick a pack, apply it, add records and files, adjust the page and pass the query and fact checks',
+      mimeType: 'text/markdown',
+    },
+    (uri) => text(uri.href, PACK_GUIDE),
   );
   server.registerResource(
     'project-snapshot',

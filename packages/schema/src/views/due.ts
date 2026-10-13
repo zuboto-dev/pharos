@@ -98,3 +98,13 @@ export function fileDue(expiryDate: string | undefined, today: string): Due | un
     band: band(days, FILE_EXPIRY_SOON.veryUrgentDays, FILE_EXPIRY_SOON.urgentDays),
   };
 }
+
+/**
+ * A one-off date as a due date (R9), e.g. an exam: the same four bands as a repeating record
+ * (urgent within 30 days, very urgent within 7), past due once the day has gone.
+ */
+export function dateDue(date: string, today: string): Due | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return undefined;
+  const days = daysBetween(today, date);
+  return { date, days, band: band(days, DUE_SOON.veryUrgentDays, DUE_SOON.urgentDays) };
+}

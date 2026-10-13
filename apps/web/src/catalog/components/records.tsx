@@ -21,6 +21,7 @@ import {
 } from '@pharos/schema';
 import clsx from 'clsx';
 import { useMemo, type ReactNode } from 'react';
+import { PlayButton, isAudio } from '../../files/audio';
 import { formatDate, plural } from '../../lib/format';
 import { CHART } from '../chart';
 import { useViewData, type ViewData } from '../context';
@@ -64,7 +65,20 @@ export function RecordValue({ at, data }: { at: Resolved; data: ViewData }): Rea
       </span>
     );
   }
-  if ((def?.kind === 'reference' || def?.kind === 'file') && typeof value === 'string')
+  if (def?.kind === 'file' && typeof value === 'string') {
+    const file = data.entityById.get(value) as Entity<'file'> | undefined;
+    if (!file) return <span>—</span>;
+    // A mix next to its song (R9): play it right here, the name opens the file.
+    if (isAudio(file.data.path))
+      return (
+        <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
+          <PlayButton fileId={file.id} title={file.data.title} />
+          <EntityRef id={value} />
+        </span>
+      );
+    return <EntityRef id={value} />;
+  }
+  if (def?.kind === 'reference' && typeof value === 'string')
     return data.entityById.has(value) ? <EntityRef id={value} /> : <span>—</span>;
   if (typeof value === 'number')
     return <span className="whitespace-nowrap tabular-nums">{formatNumber(value, def?.unit)}</span>;
@@ -240,7 +254,14 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
       <ul className="space-y-2.5">
         {b.rows.map((row) => {
           const pct = share(row.spent, row.planned);
-          const over = pct !== undefined && pct > 100;
+          // A target (R9, e.g. study hours) is reached, not overspent: past it is good news.
+          const target = node.aim === 'target';
+          const over = !target && pct !== undefined && pct > 100;
+          const reached = target && pct !== undefined && pct >= 100;
+          const togo =
+            target && row.id && row.planned.kind === 'number' && row.spent.kind === 'number'
+              ? row.planned.value - row.spent.value
+              : undefined;
           const currency =
             row.planned.kind === 'money' ? row.planned.amounts[0]?.currency : undefined;
           const left =
@@ -274,12 +295,22 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
                 <div
                   className={clsx(
                     'h-full rounded-full',
-                    CHART.fill[over ? 'bad' : row.id ? 'highlight' : 'rest'],
+                    CHART.fill[over ? 'bad' : reached ? 'ok' : row.id ? 'highlight' : 'rest'],
                   )}
                   style={{ width: `${Math.min(100, pct ?? (row.id ? 0 : 100))}%` }}
                 />
               </div>
-              {left !== undefined && currency && (
+              {togo !== undefined && row.planned.kind === 'number' && (
+                <div
+                  className={clsx(
+                    'mt-0.5 text-xs tabular-nums',
+                    reached ? 'text-ok' : 'text-faint',
+                  )}
+                >
+                  {togo <= 0 ? 'Target reached' : `${formatNumber(togo, row.planned.unit)} to go`}
+                </div>
+              )}
+              {!target && left !== undefined && currency && (
                 <div
                   className={clsx(
                     'mt-0.5 text-xs tabular-nums',

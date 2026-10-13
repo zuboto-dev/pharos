@@ -102,7 +102,8 @@ describe('a claim source on disk', () => {
     const { open, findSourceFile } = renderCard(lease('file_lease'), [file]);
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     const popover = screen.getByRole('dialog');
-    expect(within(popover).getByText(LEASE_PATH).tagName).toBe('CODE');
+    // At a glance (v0.2 B2): the title, not the path; the path is in the file's details.
+    expect(popover.textContent).not.toContain(LEASE_PATH);
     fireEvent.click(within(popover).getByRole('button', { name: 'Office lease' }));
     expect(open).toHaveBeenCalledWith({ entity: 'file_lease' });
 
@@ -125,7 +126,7 @@ describe('a claim source on disk', () => {
     expect(findSourceFile).toHaveBeenCalledWith('art_lease');
   });
 
-  it('keeps the path as text and says how to make it open when unmatched', async () => {
+  it('says how to make an unmatched source open, without writing out its path', async () => {
     const { open } = renderCard(lease(), [], {
       state: 'not-in-folder',
       path: LEASE_PATH,
@@ -134,8 +135,8 @@ describe('a claim source on disk', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     const popover = screen.getByRole('dialog');
-    expect(within(popover).getByText(LEASE_PATH).tagName).toBe('CODE');
     expect(await within(popover).findByText(/Not in a folder you share with Pharos/)).toBeTruthy();
+    expect(popover.textContent).not.toContain(LEASE_PATH);
     expect(within(popover).getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe(
       '/settings',
     );

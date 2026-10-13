@@ -504,21 +504,25 @@ export function DetailDrawer({
   target,
   onClose,
   onBack,
+  leaving = false,
 }: {
   target: OpenTarget;
   onClose: () => void;
   /** Returns to the details shown before this one, when there were any. */
   onBack?: () => void;
+  /** Closing: it slides and fades out (index.css motion) before it goes. */
+  leaving?: boolean;
 }) {
   const { entityById } = useViewData();
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const data = useViewData();
   useEffect(() => {
+    if (leaving) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, leaving]);
 
   const entity = 'entity' in target ? entityById.get(target.entity) : undefined;
   const kind =
@@ -536,13 +540,25 @@ export function DetailDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex justify-end"
+      className={clsx('fixed inset-0 z-40 flex justify-end', leaving && 'pointer-events-none')}
       role="dialog"
       aria-modal="true"
       aria-label={kind}
+      aria-hidden={leaving || undefined}
     >
-      <div className="absolute inset-0 bg-neutral-900/20 dark:bg-black/40" onClick={onClose} />
-      <aside className="relative flex h-full w-full flex-col bg-white shadow-xl sm:w-[30rem] dark:bg-neutral-900">
+      <div
+        className={clsx(
+          'absolute inset-0 bg-neutral-900/20 dark:bg-black/40',
+          leaving ? 'animate-fade-out' : 'animate-fade-in',
+        )}
+        onClick={onClose}
+      />
+      <aside
+        className={clsx(
+          'relative flex h-full w-full flex-col bg-white shadow-xl sm:w-[30rem] dark:bg-neutral-900',
+          leaving ? 'animate-drawer-out' : 'animate-drawer-in',
+        )}
+      >
         <header className="flex items-center justify-between gap-2 border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
           <div className="flex items-center gap-2 text-sm text-neutral-500">
             {onBack && (

@@ -181,9 +181,12 @@ describe('every artifact opens', () => {
     fireEvent.click(screen.getByText('Company seal'));
     expect(open).toHaveBeenLastCalledWith({ entity: 'art_local0000001' });
     // The uri column opens the same way.
-    fireEvent.click(screen.getByRole('button', { name: 'brand/company-seal.png' }));
+    // At a glance (v0.2 B2): the file name, and "Web page" for a web address.
+    fireEvent.click(screen.getByRole('button', { name: 'company-seal.png' }));
     expect(open).toHaveBeenLastCalledWith({ entity: 'art_local0000001' });
-    expect(screen.getByRole('link', { name: /example\.com\/registry/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /^Web page/ }).getAttribute('href')).toBe(
+      'https://example.com/registry',
+    );
   });
 
   it('opens list items too (DataList)', () => {

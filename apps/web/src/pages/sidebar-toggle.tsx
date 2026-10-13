@@ -48,9 +48,12 @@ export const shortcutLabel = () => (isMac() ? '⌘\\' : 'Ctrl+\\');
  */
 export function useSidebarHidden() {
   const [hidden, setHidden] = useState(readHidden);
+  // Toggled since the page loaded: the sidebar (or its rail) fades in as it comes back.
+  const [toggled, setToggled] = useState(false);
   const moveFocus = useRef(false);
   const toggle = useCallback((fromButton = false) => {
     moveFocus.current = fromButton;
+    setToggled(true);
     setHidden((h) => {
       saveHidden(!h);
       return !h;
@@ -65,7 +68,7 @@ export function useSidebarHidden() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toggle]);
-  return { hidden, toggle, moveFocus };
+  return { hidden, toggle, moveFocus, toggled };
 }
 
 const BUTTON =

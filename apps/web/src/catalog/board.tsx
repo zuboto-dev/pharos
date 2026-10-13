@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -16,13 +17,26 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { humanize } from '../lib/format';
+import { EXIT_MS } from '../lib/motion';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
 import { useViewData } from './context';
+import { useLiveBoard } from './live';
 import { Node } from './renderer';
 import { WidgetSettings } from './settings';
 
 export type BoardChange = (board: Board, message: string) => void;
+
+/** The widgets to draw: the board's, with the ones just removed back at their old places. */
+export function withLeaving(
+  widgets: readonly Widget[],
+  leaving: readonly { widget: Widget; index: number }[],
+): { widget: Widget; index: number; gone: boolean }[] {
+  const list = widgets.map((widget, index) => ({ widget, index, gone: false }));
+  for (const g of [...leaving].sort((a, b) => a.index - b.index))
+    list.splice(Math.min(g.index, list.length), 0, { widget: g.widget, index: -1, gone: true });
+  return list;
+}
 
 type Preview = { id: string; w: number; h: number | undefined; atMin?: boolean };
 type Guides = { x: number | null; y: number | null };
@@ -66,7 +80,14 @@ type BoardProps = {
   onChange: BoardChange;
   /** The view this board belongs to, so widgets can say where a question was asked from. */
   view?: { id: string; name: string };
+  /**
+   * Whether the latest update is the owner's own (made on this page), so changed blocks aren't
+   * marked; live updates from agents and other tabs are (v0.2 B4). Edit mode is always quiet.
+   */
+  quiet?: () => boolean;
 };
+
+const NEVER_QUIET = () => false;
 
 /**
  * A 12-column board of widgets. In edit mode, widgets can be reordered by dragging their grip,
@@ -82,9 +103,31 @@ export function BoardView(props: BoardProps) {
   );
 }
 
-function BoardGrid({ board, editing, onChange, view }: BoardProps) {
-  const { actions } = useViewData();
-  const container = useRef<HTMLDivElement>(null);
+function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: BoardProps) {
+  const { actions, version } = useViewData();
+  const container = useLiveBoard<HTMLDivElement>(
+    version,
+    board.widgets.map((w) => w.id),
+    quiet,
+    editing,
+  );
+  // Widgets just removed stay a moment to fade out where they were (not when the whole board was
+  // swapped for new widgets: then the new ones simply fade in).
+  const [seen, setSeen] = useState(board.widgets);
+  const [leaving, setLeaving] = useState<{ widget: Widget; index: number }[]>([]);
+  if (seen !== board.widgets) {
+    const now = new Set(board.widgets.map((w) => w.id));
+    const before = new Set(seen.map((w) => w.id));
+    const gone = seen.flatMap((widget, index) => (now.has(widget.id) ? [] : [{ widget, index }]));
+    const added = board.widgets.some((w) => !before.has(w.id));
+    setSeen(board.widgets);
+    if (gone.length && !added) setLeaving(gone);
+  }
+  useEffect(() => {
+    if (!leaving.length) return;
+    const timer = setTimeout(() => setLeaving([]), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [leaving]);
   const elements = useRef(new Map<string, HTMLDivElement>());
   const [preview, setPreview] = useState<Preview | null>(null);
   const [guides, setGuides] = useState<Guides>({ x: null, y: null });
@@ -225,7 +268,20 @@ function BoardGrid({ board, editing, onChange, view }: BoardProps) {
       className={clsx('relative grid grid-cols-1 md:grid-cols-12', editing && 'pb-4')}
       style={{ gap: GAP }}
     >
-      {board.widgets.map((widget, index) => {
+      {withLeaving(board.widgets, leaving).map(({ widget, index, gone }) => {
+        if (gone)
+          return (
+            <div
+              key={`leaving-${widget.id}`}
+              aria-hidden
+              inert
+              data-leaving={widget.id}
+              style={placement(widget, null)}
+              className="pointer-events-none flex min-w-0 animate-fade-out flex-col *:flex-1 md:[grid-column:var(--col)]"
+            >
+              <Node node={widget.node} />
+            </div>
+          );
         const name = widgetName(widget);
         const resizing = preview?.id === widget.id;
         return (

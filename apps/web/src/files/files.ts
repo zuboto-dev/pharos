@@ -26,6 +26,23 @@ export const addFilesUrl = (projectId: string) => fill(FILE_ROUTES.add, { projec
 /** The last part of a path, e.g. "2025/Tax/receipt.pdf" → "receipt.pdf". */
 export const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
+/**
+ * What to call a document that has no title: the last part of its address, without the folders
+ * ("business-registration/company-seal.png" → "company-seal.png"). Never the folders or the host.
+ */
+export function glanceName(uri: string): string {
+  const path = uri.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  return decodeURIComponentSafe(fileName(path)) || uri;
+}
+
+function decodeURIComponentSafe(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
 /** The lowercase extension without the dot, or '' when there is none. */
 export function extensionOf(path: string): string {
   const name = fileName(path);

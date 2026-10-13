@@ -2,19 +2,19 @@ import { fileUrl, type Entity, type FileInfo, type NodeOf } from '@pharos/schema
 import { FileQuestion } from 'lucide-react';
 import { FileActions, MissingNotice } from '../../files/FileDetails';
 import { FilePreview } from '../../files/FilePreview';
-import { fileName, formatSize } from '../../files/files';
+import { fileName } from '../../files/files';
+import { GlanceDate } from '../../files/glance';
 import { useResource } from '../../lib/api';
-import { formatDate } from '../../lib/format';
 import { useBoardFiles, useWidgetId } from '../board-files';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
-import { OptionBadge } from '../options';
-import { Badge, Empty } from '../ui';
-import { ExpiryBadge, FileTypeIcon } from './file-list';
+import { Empty } from '../ui';
+import { FileTypeIcon } from './file-list';
 
-// One file shown inline in a view (R7.11): the same preview, actions and missing-file notice as
-// the file drawer, with the details a reader checks first. The title opens the drawer for the
-// rest (notes, tasks, where it is on disk). A FileList on the same board can switch the file.
+// One file shown inline in a view (R7.11): the same preview and missing-file notice as the file
+// drawer, under a glance (v0.2 B2): its type icon, name and the one date that matters, with the
+// actions as a row of icons. The title opens the drawer for the rest (kind, issuer, tags, notes,
+// tasks, where it is on disk). A FileList on the same board can switch the file.
 
 function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'full' }) {
   const { version } = useViewData();
@@ -23,11 +23,12 @@ function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'ful
   const known = info.data && typeof info.data.available === 'boolean' ? info.data : undefined;
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5">
+      {/* The glance (v0.2 B2): type icon, name and the one date that matters. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Clickable
           id={file.id}
           title={`${fileName(d.path)}: open the details`}
-          className="-mx-1 flex items-start gap-2 rounded-md px-1 py-0.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+          className="-mx-1 flex min-w-0 items-start gap-2 rounded-md px-1 py-0.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
         >
           <FileTypeIcon
             path={d.path}
@@ -37,18 +38,7 @@ function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'ful
             {d.title}
           </span>
         </Clickable>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
-          <OptionBadge field="file.kind" value={d.kind} />
-          {d.issuer && <span>{d.issuer}</span>}
-          {d.issuedDate && <span>Issued {formatDate(d.issuedDate)}</span>}
-          {d.expiryDate && <ExpiryBadge date={d.expiryDate} />}
-          {size === 'full' && <span>{formatSize(d.size)}</span>}
-          {d.tags.map((tag) => (
-            <Badge key={tag} tone="muted">
-              #{tag}
-            </Badge>
-          ))}
-        </div>
+        <GlanceDate file={d} />
       </div>
       {known && <MissingNotice file={file} info={known} />}
       {info.status === 'error' && !known && (
@@ -56,7 +46,7 @@ function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'ful
           Couldn’t reach the file service, so the preview and actions are off for now.
         </p>
       )}
-      <FileActions file={file} info={known} />
+      <FileActions file={file} info={known} compact />
       {known && <FilePreview file={file} available={known.available} size={size} />}
     </div>
   );

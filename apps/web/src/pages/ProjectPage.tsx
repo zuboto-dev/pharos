@@ -44,9 +44,11 @@ import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
+import { ICON_BUTTON, Tip } from '../catalog/tip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
+import { useExit } from '../lib/motion';
 import { humanize, timeAgo } from '../lib/format';
 
 /** The question an answer view answers, and how long it stays. */
@@ -123,7 +125,7 @@ function WidgetPicker({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute top-full right-0 z-40 mt-2 max-h-[min(24rem,70vh)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="absolute top-full right-0 z-40 mt-2 max-h-[min(24rem,70vh)] w-80 animate-pop-in max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
         {PICKABLE.map((name) => (
           <button
             key={name}
@@ -141,6 +143,9 @@ function WidgetPicker({
     </>
   );
 }
+
+/** How long after the owner's own change a reload counts as theirs, not a live update. */
+const OWN_CHANGE_MS = 2500;
 
 type Notice =
   | { kind: 'error'; text: string }
@@ -169,6 +174,10 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     reveal.current = null;
   }, [dataset.version]);
   const { reload } = dataset;
+  // When the owner last changed something from this page: the reload that follows isn't a live
+  // update, so the blocks it changes aren't marked (v0.2 B4).
+  const ownChangeAt = useRef(0);
+  const quiet = useCallback(() => Date.now() - ownChangeAt.current < OWN_CHANGE_MS, []);
   // Announce answers that arrive while this page is open (the first load just records what exists).
   const seenAnswers = useRef<Set<string> | null>(null);
   useEffect(() => {
@@ -199,6 +208,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
       operations: Operation[],
       options?: { undoable?: boolean },
     ): Promise<ApplyOutcome> => {
+      ownChangeAt.current = Date.now();
       try {
         const result = await postJson<{
           revision: { id: number } | null;
@@ -226,7 +236,12 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   // (in the drawer or the browser) returns to the previous one.
   const location = useLocation();
   const drawerDepth = (location.state as { drawerDepth?: number } | null)?.drawerDepth ?? 0;
-  const drawerOpen = targetFrom(params) !== null;
+  // The drawer's target, kept for a moment after it closes so the drawer can slide out.
+  const paramsKey = params.toString();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `params` changes with `paramsKey`.
+  const openTarget = useMemo(() => targetFrom(params), [paramsKey]);
+  const drawer = useExit(openTarget);
+  const drawerOpen = openTarget !== null;
   const open = useCallback(
     (target: OpenTarget) =>
       setParams(
@@ -241,6 +256,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   );
   const revert = useCallback<NonNullable<ViewActions['revert']>>(
     async (revision, message) => {
+      ownChangeAt.current = Date.now();
       try {
         const result = await postJson<{ revision: { id: number } | null }>(
           `/api/revisions/${revision}/revert`,
@@ -287,7 +303,6 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     return <Navigate to={`/projects/${projectId}`} replace />;
   const spec: ViewSpec = active ? specOf(active) : TEMPLATES.overview;
   const board = toBoard(spec);
-  const target = targetFrom(params);
 
   /** Saves a layout change. A template view keeps its template, so it can be reset later. */
   const saveBoard = async (next: Board, message: string) => {
@@ -320,6 +335,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   };
   const undo = async (revision: number) => {
     setNotice(null);
+    ownChangeAt.current = Date.now();
     try {
       await postJson(`/api/revisions/${revision}/revert`, {
         message: `Undo: ${notice?.kind === 'undo' ? notice.text : 'last change'}`,
@@ -338,7 +354,8 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   return (
     <ViewDataProvider data={dataset.data} version={dataset.version} actions={actions}>
       <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
-        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 border-b border-neutral-200 dark:border-neutral-800">
+        {/* One line at every width (v0.2 B1): the tabs give way (into More), never the icons. */}
+        <div className="flex flex-nowrap items-end gap-2 border-b border-neutral-200 dark:border-neutral-800">
           <ViewTabs
             projectId={projectId!}
             views={dataset.data.views}
@@ -346,73 +363,78 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             onCreated={() => setEditing(true)}
           />
           {(active || filesPage) && (
-            <div className="relative mb-1.5 flex shrink-0 items-center gap-2">
+            <div className="relative mb-1.5 flex shrink-0 items-center gap-1.5">
               {editing ? (
                 <>
                   {canReset && (
-                    <button
-                      type="button"
-                      onClick={() => void resetToTemplate()}
-                      className={BUTTON.secondary}
-                    >
-                      <RotateCcw className="size-3.5" /> Reset layout
-                    </button>
+                    <Tip label="Reset layout" align="end">
+                      <button
+                        type="button"
+                        onClick={() => void resetToTemplate()}
+                        aria-label="Reset layout"
+                        className={ICON_BUTTON.secondary}
+                      >
+                        <RotateCcw className="size-4" aria-hidden />
+                      </button>
+                    </Tip>
                   )}
                   <button
                     type="button"
                     onClick={() => setPicking((p) => !p)}
+                    aria-expanded={picking}
                     className={BUTTON.secondary}
                   >
-                    <Plus className="size-3.5" /> Add widget
+                    <Plus className="size-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Add widget</span>
+                    <span className="sr-only sm:hidden">Add widget</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditing(false)}
                     className={BUTTON.primary}
                   >
-                    <Check className="size-3.5" /> Done
+                    <Check className="size-3.5" aria-hidden /> Done
                   </button>
                   {picking && <WidgetPicker onPick={addWidget} onClose={() => setPicking(false)} />}
                 </>
               ) : (
                 <>
-                  <Link
-                    to={`/projects/${projectId}/files`}
-                    aria-current={filesPage ? 'page' : undefined}
-                    title="Documents from your folders in this project"
-                    className={clsx(
-                      BUTTON.secondary,
-                      filesPage &&
-                        'border-neutral-400 bg-neutral-100 dark:border-neutral-500 dark:bg-neutral-800',
-                    )}
-                  >
-                    <FolderOpen className="size-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Files</span>
-                    <span className="sr-only sm:hidden">Files</span>
-                  </Link>
+                  <Tip label={filesPage ? 'Files (open now)' : 'Files'} align="end">
+                    <Link
+                      to={`/projects/${projectId}/files`}
+                      aria-current={filesPage ? 'page' : undefined}
+                      aria-label="Files"
+                      className={filesPage ? ICON_BUTTON.pressed : ICON_BUTTON.secondary}
+                    >
+                      <FolderOpen className="size-4" aria-hidden />
+                    </Link>
+                  </Tip>
                   <RequestsButton
                     projectId={projectId!}
                     requests={dataset.data.requests ?? []}
                     apply={apply}
                   />
-                  <button
-                    type="button"
-                    onClick={() => open({ history: true })}
-                    className={BUTTON.secondary}
-                    aria-label="History"
-                    title="Every change to this project"
-                  >
-                    <History className="size-3.5" />
-                    <span className="hidden sm:inline">History</span>
-                  </button>
-                  {!filesPage && (
+                  <Tip label="History" align="end">
                     <button
                       type="button"
-                      onClick={() => setEditing(true)}
-                      className={BUTTON.secondary}
+                      onClick={() => open({ history: true })}
+                      className={ICON_BUTTON.secondary}
+                      aria-label="History"
                     >
-                      <LayoutGrid className="size-3.5" /> Customize
+                      <History className="size-4" aria-hidden />
                     </button>
+                  </Tip>
+                  {!filesPage && (
+                    <Tip label="Customize" align="end">
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className={ICON_BUTTON.secondary}
+                        aria-label="Customize"
+                      >
+                        <LayoutGrid className="size-4" aria-hidden />
+                      </button>
+                    </Tip>
                   )}
                 </>
               )}
@@ -450,20 +472,24 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           </div>
         )}
         {!filesPage && (
-          <ViewRenderer
-            key={active?.id}
-            view={active ? { id: active.id, name: active.data.name } : undefined}
-            spec={board}
-            editing={editing}
-            onChange={(next, message) => void saveBoard(next, message)}
-          />
+          // A tab switch fades the new view in (opacity only, so nothing shifts).
+          <div key={active?.id} className="animate-fade-in">
+            <ViewRenderer
+              view={active ? { id: active.id, name: active.data.name } : undefined}
+              spec={board}
+              editing={editing}
+              onChange={(next, message) => void saveBoard(next, message)}
+              quiet={quiet}
+            />
+          </div>
         )}
       </div>
-      {target && (
+      {drawer.shown && (
         <DetailDrawer
-          target={target}
+          target={drawer.shown}
           onClose={close}
-          onBack={drawerDepth > 0 ? () => navigate(-1) : undefined}
+          onBack={drawerDepth > 0 && !drawer.leaving ? () => navigate(-1) : undefined}
+          leaving={drawer.leaving}
         />
       )}
       {asking && (

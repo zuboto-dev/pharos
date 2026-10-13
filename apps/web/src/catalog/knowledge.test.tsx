@@ -399,7 +399,8 @@ describe('ClaimCard', () => {
     fireEvent.click(button);
     const popover = screen.getByRole('dialog');
     expect(popover.textContent).not.toContain('(no link)');
-    expect(within(popover).getByText('docs/notes.md').tagName).toBe('CODE');
+    // At a glance (v0.2 B2) the source shows its title; the path is in its details.
+    expect(popover.textContent).not.toContain('docs/notes.md');
     expect(within(popover).getByText(/Every answer cites its file/).tagName).toBe('BLOCKQUOTE');
     fireEvent.click(within(popover).getByRole('button', { name: 'Notes' }));
     expect(open).toHaveBeenCalledWith({ entity: 'art_local' });

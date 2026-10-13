@@ -147,11 +147,15 @@ describe('generic data components', () => {
           <ViewRenderer spec={node} />
         </ViewDataProvider>,
       );
-      const link = screen.getByRole('link', { name: /example\.com\/mcp-server/ });
+      // At a glance (v0.2 B2): "Web page" and the file name, never the host or the folders.
+      const link = screen.getByRole('link', { name: /^Web page/ });
       expect(link.getAttribute('href')).toBe('https://example.com/mcp-server');
       expect(link.getAttribute('target')).toBe('_blank');
+      expect(document.body.textContent).not.toContain('example.com');
       // A local path opens like its artifact (R7.12).
-      expect(screen.getByRole('button', { name: 'docs/SCOPE.md' })).toBeTruthy();
+      const local = screen.getByRole('button', { name: 'SCOPE.md' });
+      expect(local.textContent).toBe('SCOPE.md');
+      expect(local.getAttribute('title')).toBe('Open “SCOPE.md”');
       expect(screen.getAllByRole('link')).toHaveLength(1);
       cleanup();
     }

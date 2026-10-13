@@ -16,6 +16,7 @@ import clsx from 'clsx';
 import { FileText } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import type { Components } from 'react-markdown';
+import { glanceName } from '../../files/files';
 import { formatDate, humanize } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, labelOf } from '../interactive';
@@ -23,6 +24,8 @@ import { OptionBadge } from '../options';
 import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
 import { useOpenItem } from '../open-item';
 import { DOT_TONES, Empty, isHttp, Markdown, StatusBadge, Uri } from '../ui';
+import { linkedFileOf } from '../source-file';
+import { FileTypeIcon } from './file-list';
 import { MiniBar } from './overview';
 
 type Reader = ReturnType<typeof fieldReader>;
@@ -79,11 +82,20 @@ function FieldValue({
     return <StatusBadge value={value} />;
   // An artifact's address opens like the artifact (R7.12): a web page in a new tab, a document
   // in the FileView or drawer, or the panel saying which folder it needs.
+  // At a glance (v0.2 B2): the document's icon and name, never its folders or host.
   if (type === 'artifact' && field === 'uri' && typeof value === 'string')
     return ownerId && !isHttp(value) ? (
       <UriButton id={ownerId} uri={value} />
     ) : (
       <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />
+    );
+  // A file's path is where it is on disk: the name is enough here, the rest is in its details.
+  if (type === 'file' && field === 'path' && typeof value === 'string')
+    return (
+      <span className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 sm:max-w-[18rem]">
+        <FileTypeIcon path={value} className="size-3.5 text-neutral-400" />
+        <span className="truncate">{glanceName(value)}</span>
+      </span>
     );
   const ref = (ENTITIES[type].refs as Record<string, { many?: boolean } | undefined>)[field];
   if (ref) {
@@ -113,21 +125,33 @@ function FieldValue({
   return String(value);
 }
 
-/** A local document path that opens like its artifact. */
+/**
+ * A local document that opens like its artifact, at a glance (v0.2 B2): the project file's icon
+ * and title when the source is one, else the file name. Where it is shows in its details.
+ */
 function UriButton({ id, uri }: { id: string; uri: string }) {
   const open = useOpenItem();
+  const { entityById } = useViewData();
+  const artifact = entityById.get(id) as Entity<'artifact'> | undefined;
+  const fileId = artifact ? linkedFileOf(entityById, artifact) : undefined;
+  const file = fileId ? (entityById.get(fileId) as Entity<'file'>) : undefined;
+  const name = file?.data.title ?? glanceName(uri);
   return (
     <button
       type="button"
-      title={uri}
+      title={`Open “${name}”`}
       onClick={(e) => {
         e.stopPropagation();
         open(id);
       }}
       className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 text-left text-xs text-sky-700 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 sm:max-w-[18rem] dark:text-sky-300"
     >
-      <FileText className="size-3 shrink-0" aria-hidden />
-      <span className="truncate">{uri}</span>
+      {file ? (
+        <FileTypeIcon path={file.data.path} className="size-3" />
+      ) : (
+        <FileText className="size-3 shrink-0" aria-hidden />
+      )}
+      <span className="truncate">{name}</span>
     </button>
   );
 }

@@ -185,7 +185,8 @@ describe('FindingChart', () => {
     expect(panel.textContent).toContain('Sources (2)');
     expect(within(panel).getByRole('link', { name: /OpenUI benchmark/ })).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Notes' })).toBeTruthy();
-    expect(panel.textContent).toContain('docs/notes.md');
+    // At a glance (v0.2 B2): the source's title; its path is in its details.
+    expect(panel.textContent).not.toContain('docs/notes.md');
     fireEvent.click(basis);
     expect(panel.textContent).not.toContain('Assumes:');
     // The mark's popover names the assumption too.
@@ -214,11 +215,11 @@ describe('FindingChart', () => {
     expect(plain.querySelector('[data-track]')).toBeNull();
   });
 
-  it('opens a local source in the drawer and shows its path', () => {
+  it('opens a local source in the drawer, where its path is', () => {
     const { open } = renderChart({ bars: { where: { tags: 'local' } } });
     fireEvent.click(screen.getByRole('button', { name: /^Fit, 82\.8%/ }));
     const panel = screen.getByRole('region');
-    expect(panel.textContent).toContain('docs/notes.md');
+    expect(panel.textContent).not.toContain('docs/notes.md');
     fireEvent.click(within(panel).getByRole('button', { name: 'Notes' }));
     expect(open).toHaveBeenCalledWith({ entity: 'art_notes' });
   });

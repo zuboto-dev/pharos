@@ -119,7 +119,7 @@
   "cases": [
     {
       "id": "music-latest-mix",
-      "version": 1,
+      "version": 2,
       "pack": "music",
       "description": "One row per song with its newest mix (onePer after a date sort), most finished song first; a song without a mix isn't listed",
       "tags": ["onePer", "audio", "latest"],
@@ -173,7 +173,7 @@
           "kind": "cell",
           "row": 2,
           "column": "fields.song.fields.stage",
-          "expect": "demo"
+          "expect": "Demo"
         }
       ]
     },

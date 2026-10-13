@@ -107,23 +107,39 @@ export class Presence {
   }
 
   /**
-   * Clears the marks in `projectIds` that started at or after `since`: what an answering run's
-   * agent did over MCP, once the run is over (its MCP session may not close by itself).
+   * Clears the marks in `projectIds` that started at or after `since` by the answering run's
+   * agent: what it did over MCP, once the run is over (its MCP session may not close by itself).
+   * The agent is `agent`, or else whoever holds a run's mark (source "runner:…") there. Other
+   * agents working in the same project keep their marks (v0.2 review, gap 12).
    */
-  clearProjects(projectIds: readonly string[], since: number): void {
+  clearProjects(projectIds: readonly string[], since: number, agent?: string): void {
+    const agents = new Set(
+      agent
+        ? [agentLabel(agent)]
+        : [...this.marks.values()]
+            .filter((m) => m.source.startsWith('runner:') && projectIds.includes(m.projectId))
+            .map((m) => m.agent),
+    );
     let removed = false;
     for (const [key, mark] of this.marks)
-      if (projectIds.includes(mark.projectId) && mark.since >= since) {
+      if (projectIds.includes(mark.projectId) && mark.since >= since && agents.has(mark.agent)) {
         this.marks.delete(key);
         removed = true;
       }
     if (removed) this.changed();
   }
 
-  /** Every live mark, with how long each has left. */
+  /**
+   * Every live mark, with how long each has left. A mark found expired here (before its timer
+   * ran) is removed and the removal published, so listeners never keep it (v0.2 review, gap 12).
+   */
   state(): PresenceState {
     const now = this.now();
-    this.prune(now);
+    if (this.prune(now)) this.changed();
+    return this.snapshot(now);
+  }
+
+  private snapshot(now: number): PresenceState {
     const entries: PresenceEntry[] = [...this.marks.values()].map((m) => ({
       agent: m.agent,
       projectId: m.projectId,
@@ -160,7 +176,9 @@ export class Presence {
   }
 
   private changed(): void {
-    const state = this.state();
+    const now = this.now();
+    this.prune(now);
+    const state = this.snapshot(now);
     for (const fn of this.listeners) {
       try {
         fn(state);

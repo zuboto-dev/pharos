@@ -311,8 +311,8 @@ export class AgentRunner {
       // The run is over (finished, failed, timed out or paused): its marks go, including what
       // its agent marked over MCP during the run (its session may not close by itself).
       try {
+        presence?.clearProjects(projectIds, started, agentName);
         presence?.clearSource(source);
-        presence?.clearProjects(projectIds, started);
       } catch (error) {
         console.error('[pharos] Could not clear the answering marks:', error);
       }

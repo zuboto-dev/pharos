@@ -16,16 +16,24 @@ export type Due = {
   band: DueBand;
 };
 
+/** About how many days one unit is, for estimating how many steps have passed. */
+const UNIT_DAYS = { days: 1, weeks: 7, months: 30.436875, years: 365.2425 } as const;
+
 function nextDate(interval: Interval): string | undefined {
   const { every, lastDate, startDate, mode } = interval;
   if (!every) return undefined;
   if (mode === 'fixed' && startDate) {
     // The schedule's first date after it was last done (or its start, if never).
     if (!lastDate || lastDate < startDate) return startDate;
-    let date = startDate;
-    for (let k = 1; date <= lastDate && k < 5000; k++)
-      date = addUnits(startDate, every.n * k, every.unit);
-    return date;
+    // The first occurrence k (counted from the start, so month ends stay anchored) after
+    // lastDate: estimated from the elapsed days, then corrected by a step or two (v0.2 review,
+    // gap 11: a capped loop stopped advancing on long daily schedules).
+    const at = (k: number) => addUnits(startDate, every.n * k, every.unit);
+    const step = every.n * UNIT_DAYS[every.unit];
+    let k = Math.max(1, Math.floor(daysBetween(startDate, lastDate) / step));
+    while (k > 1 && at(k - 1) > lastDate) k--;
+    while (at(k) <= lastDate) k++;
+    return at(k);
   }
   return lastDate ? addUnits(lastDate, every.n, every.unit) : startDate;
 }

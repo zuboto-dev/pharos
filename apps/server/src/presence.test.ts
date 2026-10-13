@@ -287,3 +287,16 @@ describe('shellRunner', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe('clearing a finished run (v0.2 review, gap 12)', () => {
+  it("clears only the named agent's marks since the run started", () => {
+    let now = 5_000;
+    const presence = new Presence({ now: () => now });
+    presence.touch('Claude Code', { projectId: 'p1', activity: 'working' }, 'mcp:a');
+    now += 1;
+    presence.touch('Codex', { projectId: 'p1', activity: 'editing' }, 'mcp:b');
+    presence.clearProjects(['p1'], 5_000, 'Claude Code');
+    expect(presence.state().entries.map((e) => e.agent)).toEqual(['Codex']);
+    presence.dispose();
+  });
+});

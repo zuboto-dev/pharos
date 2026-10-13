@@ -8,7 +8,7 @@ import { applyPack } from '../packs/service.js';
 import { openDatabase } from '../store/database.js';
 import { projectSnapshot } from '../store/snapshot.js';
 import { Store } from '../store/store.js';
-import { previewView } from '../views/service.js';
+import { getView, previewView } from '../views/service.js';
 import { ActionService } from './service.js';
 
 /**
@@ -261,12 +261,12 @@ describe('regression cases (R10.15)', () => {
     );
   });
 
-  it("a person's edit survives an agent's retry", () => {
+  it("a person's edit survives a retry of the form", () => {
     const s = setup('money');
     const rent = s.record('Rent');
     const submission = markPaid(s, rent);
-    const first = s.actions.run(agent, submission) as ActionDone;
-    expect(s.store.revision(first.revision!)!.author).toEqual(agent);
+    const first = s.actions.run(human, submission) as ActionDone;
+    expect(s.store.revision(first.revision!)!.author).toEqual(human);
     // The owner corrects the date.
     const corrected = s.record('Rent');
     s.store.apply(human, {
@@ -281,9 +281,14 @@ describe('regression cases (R10.15)', () => {
       ],
     });
     const latest = s.store.latestRevisionId();
-    // The agent retries: the same key replays, a new key with its old revision is stale.
-    expect(s.actions.run(agent, submission).status).toBe('duplicate');
-    expect(s.actions.run(agent, { ...submission, idempotencyKey: key() }).status).toBe('stale');
+    // A retry: the same key replays, a new key with its old revision is stale.
+    expect(s.actions.run(human, submission).status).toBe('duplicate');
+    expect(s.actions.run(human, { ...submission, idempotencyKey: key() }).status).toBe('stale');
+    // An agent can't mark it paid at all (v0.2 review, gap 5).
+    expect(s.actions.run(agent, markPaid(s, s.record('Rent')))).toMatchObject({
+      status: 'invalid',
+      fieldErrors: { form: expect.stringMatching(/owner/) },
+    });
     expect(s.record('Rent').data.interval?.lastDate).toBe('2026-10-12');
     expect(s.store.latestRevisionId()).toBe(latest);
   });
@@ -385,14 +390,15 @@ describe('over REST and MCP', () => {
     );
     expect((await post({ ...body, idempotencyKey: key(), widgetId: 'gone' })).status).toBe(404);
     expect((await post({ ...body, projectId: 'prj_other' })).status).toBe(400);
-    // An agent's header is its author.
+    // An agent's header is its author, and marking a bill paid is the owner's (v0.2 review, gap 5).
     const fresh = s.record('Phone');
+    const latest = s.store.latestRevisionId();
     const byAgent = await post(
       { ...markPaid(s, fresh), projectId: undefined },
       { 'x-pharos-author': 'agent:Opus 5.5' },
     );
-    const agentResult = (await byAgent.json()) as { revision: number };
-    expect(s.store.revision(agentResult.revision)!.author).toEqual(agent);
+    expect(byAgent.status).toBe(400);
+    expect(s.store.latestRevisionId()).toBe(latest);
   });
 
   it('action_run submits as the agent; project_snapshot lists the actions and revisions', async () => {
@@ -416,12 +422,45 @@ describe('over REST and MCP', () => {
     const run = (args: Record<string, unknown>) =>
       client.callTool({ name: 'action_run', arguments: args }) as Promise<CallToolResult>;
     const car = s.record('Blue hatchback');
-    const ok = await run(logService(s, { vehicle: car.id, date: TODAY, kind: 'oil' }));
+    // Log a service marks its reminder done, which only the owner records (v0.2 review, gap 5).
+    const latest = s.store.latestRevisionId();
+    const refused = await run(logService(s, { vehicle: car.id, date: TODAY, kind: 'oil' }));
+    expect(refused.isError).toBe(true);
+    expect((refused.content[0] as { text: string }).text).toMatch(/Only the owner/);
+    expect(s.store.latestRevisionId()).toBe(latest);
+    // An action that only adds a record runs as the agent.
+    const view = s.store.get(s.viewId) as Entity<'view'>;
+    const board = getView(s.store, s.viewId).board;
+    s.store.apply(human, {
+      message: 'An action that only adds a service',
+      operations: [
+        {
+          op: 'update',
+          type: 'view',
+          id: view.id,
+          data: {
+            spec: {
+              ...board,
+              widgets: [
+                ...board.widgets,
+                {
+                  id: 'add-service',
+                  node: { component: 'Action', label: 'Add a service', recordType: 'service' },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+    const ok = await run(
+      logService(s, { vehicle: car.id, date: TODAY, kind: 'oil' }, { widgetId: 'add-service' }),
+    );
     expect(ok.isError).toBeFalsy();
     const text = (ok.content[0] as { text: string }).text;
     const revision = (JSON.parse(text) as { revision: number }).revision;
     expect(s.store.revision(revision)!.author).toEqual(agent);
-    const bad = await run(logService(s, { vehicle: car.id }));
+    const bad = await run(logService(s, { vehicle: car.id }, { widgetId: 'add-service' }));
     expect(bad.isError).toBe(true);
     expect((bad.content[0] as { text: string }).text).toMatch(/Date is required/);
   });

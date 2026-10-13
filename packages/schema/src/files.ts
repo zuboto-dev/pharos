@@ -194,6 +194,11 @@ export const FolderRequest = z.strictObject({
   decidedAt: z.iso.datetime().optional(),
   /** The folder (root) it became, or the folder already holding it. */
   folderId: FolderId.optional(),
+  /**
+   * The requested directory's identity ("dev:ino") when asked: approval refuses a different
+   * directory put at the path since (v0.2 review, gap 2). Absent on requests saved before.
+   */
+  identity: z.string().min(1).max(80).optional(),
 });
 export type FolderRequest = z.infer<typeof FolderRequest>;
 export const FolderRequests = z.array(FolderRequest);

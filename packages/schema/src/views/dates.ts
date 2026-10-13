@@ -1,5 +1,15 @@
 /** Calendar dates as YYYY-MM-DD, with no time zone surprises (all arithmetic in UTC). */
 
+/**
+ * Whether a string is a date that exists on the calendar, as YYYY-MM-DD: "2026-02-30" has the
+ * right shape but never happened (v0.2 review, gap 9). Records, queries and action forms share it.
+ */
+export function isCalendarDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
 export function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

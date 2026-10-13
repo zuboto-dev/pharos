@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { lstatSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import {
   FOLDER_REQUESTS_SETTING,
@@ -22,7 +23,34 @@ import {
   savedFolders,
 } from './folders.js';
 import { sameOriginOnly } from './routes.js';
+import { identityOf } from './safety.js';
 import type { FileScanner } from './scan.js';
+
+/** The identity ("dev:ino") of the directory at a real path now, or null if it isn't one. */
+function directoryIdentity(path: string): string | null {
+  try {
+    const stats = lstatSync(path, { bigint: true });
+    return stats.isDirectory() ? identityOf(stats) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether the directory at the request's path is still the one asked about: not a link now, still
+ * resolving to itself, and (when recorded) the same directory identity.
+ */
+function stillTheRequestedFolder(request: FolderRequest): boolean {
+  try {
+    if (lstatSync(request.path).isSymbolicLink()) return false;
+    if (realpathSync(request.path) !== request.path) return false;
+  } catch {
+    return false;
+  }
+  const identity = directoryIdentity(request.path);
+  if (!identity) return false;
+  return request.identity === undefined || request.identity === identity;
+}
 
 /**
  * Folder requests (R7.12, owner decision 2026-10-13): an agent asks for a folder with the MCP tool
@@ -166,7 +194,8 @@ export function requestFolder(
   const declined = requests.find((r) => r.path === path && r.status === 'declined');
   if (declined) return declined;
   const pending = requests.find((r) => r.path === path && r.status === 'pending');
-  if (pending) {
+  const identity = directoryIdentity(path) ?? undefined;
+  if (pending && pending.identity === identity) {
     // The same request again: keep one, naming the project and the higher level asked for.
     const merged: FolderRequest = {
       ...pending,
@@ -193,10 +222,14 @@ export function requestFolder(
     requestedBy,
     requestedAt: now,
     status: 'pending',
+    ...(identity ? { identity } : {}),
   };
-  // An earlier approval of this path whose folder was removed since is replaced by the new ask.
+  // An earlier approval of this path whose folder was removed since is replaced by the new ask,
+  // and so is a pending one for a directory replaced at this path since it was asked.
   saveRequests(store, [
-    ...requests.filter((r) => !(r.path === path && r.status === 'approved')),
+    ...requests.filter(
+      (r) => !(r.path === path && (r.status === 'approved' || r.status === 'pending')),
+    ),
     request,
   ]);
   return request;
@@ -221,6 +254,18 @@ export function approveRequest(
 ): { request: FolderRequest; folder: FileFolder } {
   const requests = savedRequests(store);
   const request = findRequest(requests, id);
+  // The path must still name the directory the agent asked about (v0.2 review, gap 2): a folder
+  // moved away, or a link or another folder put in its place, needs a fresh request.
+  if (!stillTheRequestedFolder(request)) {
+    saveRequests(
+      store,
+      requests.filter((r) => r.id !== id),
+    );
+    throw new PharosError(
+      'conflict',
+      `The folder at ${request.path} changed since the agent asked for it, so this request was removed; the agent can ask again`,
+    );
+  }
   const holder = savedFolders(store).find((f) => folderContains(f.path, request.path));
   if (holder?.level === 'hidden')
     throw new PharosError(

@@ -297,6 +297,9 @@ function index(data: ProjectDataset): Map<string, Entity> {
   return new Map(all.map((e) => [e.id, e]));
 }
 
+const isMissing = (value: unknown) =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length);
+
 export function runQuery<T extends QueryableType>(
   data: ProjectDataset,
   type: T,
@@ -315,6 +318,11 @@ export function runQuery<T extends QueryableType>(
       for (const { field: path, dir } of sort) {
         const a = resolveField(x, path, run);
         const b = resolveField(y, path, run);
+        // Rows without a value come last either way (v0.2 review, gap 11): an undated row is
+        // never the newest.
+        const aMissing = isMissing(a.value);
+        if (aMissing !== isMissing(b.value)) return aMissing ? 1 : -1;
+        if (aMissing) continue;
         // Option fields (e.g. priority) sort in the project's option order, not alphabetically.
         const key = optionKeyOf(a.type, a.field);
         const c = key

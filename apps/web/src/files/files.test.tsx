@@ -129,6 +129,14 @@ describe('FileList', () => {
     expect(screen.getByRole('region', { name: 'Statement' })).toBeTruthy();
   });
 
+  it('lays the filters out side by side under the search (v0.2 B10)', () => {
+    renderList();
+    const kind = screen.getByRole('button', { name: 'Kind' });
+    const grid = kind.parentElement!;
+    expect(grid.className).toMatch(/grid .*lg:grid-cols-4/);
+    expect(grid.contains(screen.getByRole('searchbox', { name: 'Find a file' }))).toBe(false);
+  });
+
   it('finds a file by any words of its name, issuer or tag, and Enter opens the first match', () => {
     renderList();
     const search = screen.getByRole('searchbox', { name: 'Find a file' });

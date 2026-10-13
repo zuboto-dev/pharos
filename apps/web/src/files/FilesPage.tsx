@@ -5,7 +5,8 @@ import { FileList } from '../catalog/components/file-list';
 import { useViewData } from '../catalog/context';
 import { AddFilesProvider } from '../catalog/empty-state';
 import { SourceStatus } from '../catalog/source-file';
-import { BUTTON, Panel } from '../catalog/ui';
+import { FileTypeIcon } from '../catalog/components/file-list';
+import { BUTTON, Badge, Panel } from '../catalog/ui';
 import { useResource } from '../lib/api';
 import { plural } from '../lib/format';
 import { AddFilesDialog } from './AddFilesDialog';
@@ -36,25 +37,32 @@ function MentionedFiles({ projectId, version }: { projectId: string; version: nu
   if (!list.length) return null;
   return (
     <section aria-label="Mentioned but not in Pharos yet" className="space-y-2">
-      <h2 className="text-sm font-semibold">Mentioned but not in Pharos yet</h2>
-      <p className="text-sm text-muted">
-        Documents this project points to that Pharos can’t open yet.
-      </p>
+      {/* The same group heading as the file list's kinds (v0.2 B10), with what it means under it. */}
+      <div className="space-y-0.5 px-1">
+        <h2 className="text-xs font-medium tracking-wide text-muted uppercase">
+          Mentioned but not in Pharos yet{' '}
+          <span className="font-normal text-faint">{list.length}</span>
+        </h2>
+        <p className="text-sm text-muted">
+          Documents this project points to that Pharos can’t open yet.
+        </p>
+      </div>
       <Panel>
         <ul className="-my-2 divide-y divide-line-soft">
           {list.map((m) => (
             <li key={m.artifactId} className="space-y-1 py-2.5">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <button
                   type="button"
                   onClick={() => actions.open({ entity: m.artifactId })}
-                  className="min-w-0 truncate text-left text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
+                  title={m.uri}
+                  className="flex min-w-0 items-center gap-2 text-left text-sm font-medium hover:underline"
                 >
-                  {m.title}
+                  <FileTypeIcon path={m.uri} className="size-4 shrink-0 text-faint" />
+                  <span className="truncate">{m.title}</span>
                 </button>
-                <span className="text-xs font-medium text-warn">{WHY[m.match.state]}</span>
+                <Badge tone="amber">{WHY[m.match.state]}</Badge>
               </div>
-              <code className="block truncate text-xs text-muted">{m.uri}</code>
               <SourceStatus match={m.match} onApproved={() => setRefresh((n) => n + 1)} />
             </li>
           ))}

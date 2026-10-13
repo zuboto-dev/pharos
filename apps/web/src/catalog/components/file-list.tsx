@@ -264,7 +264,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Kind"
         value={kind}
         onChange={setKind}
-        className="w-auto"
         options={[
           { value: '', label: 'All kinds' },
           ...kinds.map((k) => ({
@@ -281,7 +280,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Tag"
         value={tag}
         onChange={setTag}
-        className="w-auto"
         options={[
           { value: '', label: 'All tags' },
           ...tags.map((t) => ({ value: t, label: `#${t}` })),
@@ -294,7 +292,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Issuer"
         value={issuer}
         onChange={setIssuer}
-        className="w-auto"
         options={[
           { value: '', label: 'All issuers' },
           ...issuers.map((i) => ({ value: i, label: i })),
@@ -307,7 +304,6 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
         label="Expiry"
         value={expiry}
         onChange={(v) => setExpiry(v as ExpiryFilter)}
-        className="w-auto"
         options={EXPIRY_CHOICES}
       />
     ),
@@ -326,9 +322,9 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   return (
     <div className="space-y-3">
       {(controls.has('search') || filters.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-2">
           {controls.has('search') && (
-            <label className="relative min-w-0 flex-1 basis-48">
+            <label className="relative block min-w-0">
               <span className="sr-only">Find a file</span>
               <Search
                 className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
@@ -344,7 +340,9 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
               />
             </label>
           )}
-          {filters}
+          {filters.some(Boolean) && (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">{filters}</div>
+          )}
         </div>
       )}
       {filtering && (

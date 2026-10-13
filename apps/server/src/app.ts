@@ -13,6 +13,7 @@ import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { createMcpServer } from './mcp.js';
+import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -281,6 +282,12 @@ export function createApp(
       store.apply(author, author.kind === 'agent' ? input : await files.checkPersonEdits(input)),
     );
   });
+
+  // Packs (R8): start a project for a car, money, … from data, in one revision.
+  api.get('/packs', (c) => c.json(listPacks()));
+  api.post('/packs/apply', async (c) =>
+    c.json(applyPack(store, authorOf(c), PackApplyInput.parse(await c.req.json()))),
+  );
 
   api.get('/projects/:id/data', (c) => {
     const dataset = store.dataset(c.req.param('id'));

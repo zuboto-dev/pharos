@@ -1,0 +1,90 @@
+{
+  "car-due-bands": {
+    "version": 1,
+    "hash": "128c3169189e6c"
+  },
+  "car-service-log": {
+    "version": 1,
+    "hash": "1ff14dd975edc5"
+  },
+  "car-cost-per-year": {
+    "version": 1,
+    "hash": "1a61025d41b6fc"
+  },
+  "car-empty": {
+    "version": 1,
+    "hash": "0ebddf661fead6"
+  },
+  "car-typo-record-field": {
+    "version": 1,
+    "hash": "16e054ef7aac29"
+  },
+  "car-sum-over-text": {
+    "version": 1,
+    "hash": "17adc1f5827162"
+  },
+  "car-intentional-empty": {
+    "version": 1,
+    "hash": "1a08d4539c7013"
+  },
+  "car-custom-option": {
+    "version": 1,
+    "hash": "11971e48ab7fd9"
+  },
+  "car-option-typo": {
+    "version": 1,
+    "hash": "1e8bd816b2dd9d"
+  },
+  "car-unknown-record-type": {
+    "version": 1,
+    "hash": "054c63090e797a"
+  },
+  "car-bad-relative-date": {
+    "version": 1,
+    "hash": "11ca3a79869a6e"
+  },
+  "car-hop-too-far": {
+    "version": 1,
+    "hash": "1345fc5b7a81a6"
+  },
+  "money-planned-vs-spent": {
+    "version": 1,
+    "hash": "1e5f6017e08fb2"
+  },
+  "money-mixed-currencies": {
+    "version": 1,
+    "hash": "0a6c891018cd25"
+  },
+  "money-upcoming-bills": {
+    "version": 1,
+    "hash": "16b7fd7db3bac3"
+  },
+  "money-savings": {
+    "version": 1,
+    "hash": "1dc31b313e085a"
+  },
+  "money-empty-month": {
+    "version": 1,
+    "hash": "005f7e19194b22"
+  },
+  "money-mixed-currency-sum": {
+    "version": 1,
+    "hash": "12b81aeb754721"
+  },
+  "money-range-on-money": {
+    "version": 1,
+    "hash": "1dea5923e482c7"
+  },
+  "money-amount-range": {
+    "version": 1,
+    "hash": "1549ffc6c9668d"
+  },
+  "money-no-record-type": {
+    "version": 1,
+    "hash": "06db75bc8aa09f"
+  },
+  "money-mixed-valid-invalid": {
+    "version": 1,
+    "hash": "0f9578ae6e8d4b"
+  }
+}

@@ -18,6 +18,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
+import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
 import { useViewData, type OpenTarget } from './context';
@@ -673,6 +674,12 @@ export function DetailDrawer({
             <FileDetails
               key={entity.id}
               file={entity as Entity<'file'>}
+              history={<EntityHistory id={entity.id} />}
+            />
+          ) : entity?.type === 'record' ? (
+            <RecordDetails
+              key={entity.id}
+              record={entity as Entity<'record'>}
               history={<EntityHistory id={entity.id} />}
             />
           ) : entity ? (

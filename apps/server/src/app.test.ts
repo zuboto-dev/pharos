@@ -48,6 +48,8 @@ describe('MCP', () => {
       'history_list',
       'history_revert',
       'list',
+      'pack_apply',
+      'pack_list',
       'project_snapshot',
       'view_answer',
       'view_create',
@@ -63,7 +65,9 @@ describe('MCP', () => {
     expect(apply).not.toContain('"Board"');
     // R7.12 added about 2.1k on top of R7.13 (49.6k): agents add scanned files, and five types
     // link files (fileIds).
-    expect(apply.length).toBeLessThan(50_000);
+    // R8 added about 9.4k: the record entity (fields, interval) and project.recordTypes. C1 in
+    // v0.2 batch 3 shrinks the apply schema; until then the cap moves with it.
+    expect(apply.length).toBeLessThan(60_000);
     expect(client.getInstructions()).toContain('apply');
   });
 

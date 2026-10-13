@@ -33,7 +33,9 @@ export const Where = z
       '"assignee.kind", "task.status", "parent.status"; also "id", "createdAt", "updatedAt". ' +
       'Conditions: exact value, array (any of), {not: value|array}, {exists: bool}, {contains: text}, ' +
       'or a range {gt|gte|lt|lte: value}. Special values: "$currentStage", "$project", and dates relative to ' +
-      'today: "$today", "$today+7d", "$today-2w". Array fields such as dependsOn match when they contain the value.',
+      'today: "$today", "$today+7d", "$today-2w", "$monthStart", "$monthStart+1m", "$yearStart". Records: ' +
+      '"recordType", "fields.<key>", one hop through a reference "fields.vehicle.title", ' +
+      'money "fields.cost.amount" (minor units), and for repeating records "due.band", "due.date". Array fields such as dependsOn match when they contain the value.',
   );
 export type Where = z.infer<typeof Where>;
 
@@ -64,6 +66,7 @@ export const QueryableType = z.enum([
   'claim',
   'term',
   'file',
+  'record',
 ]);
 export type QueryableType = z.infer<typeof QueryableType>;
 
@@ -87,4 +90,6 @@ export type ProjectDataset = {
   terms: Entity<'term'>[];
   /** Project files (R7). For agents, R7.5 leaves out hidden folders and scan-only fields. */
   files: Entity<'file'>[];
+  /** Records of the project's own kinds (R8); older datasets come without them. */
+  records?: Entity<'record'>[];
 };

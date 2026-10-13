@@ -456,7 +456,7 @@ export class Store {
   apply(author: Author, input: ApplyInput): ApplyResult {
     if (author.kind === 'agent') {
       input.operations.forEach((op, index) => {
-        const issue = agentFileIssue(op);
+        const issue = agentFileIssue(op) ?? agentArtifactFileIssue(op);
         if (issue) throw new PharosError('invalid', `operations[${index}]: ${issue}`);
       });
     }
@@ -566,6 +566,16 @@ function agentFileIssue(op: Operation): string | undefined {
   return scanned.length
     ? `${scanned.join(', ')} come from the folder scan; agents can't change them`
     : undefined;
+}
+
+/**
+ * An artifact's `fileId` (R7.6) is set by Pharos, which links a local source to the project file
+ * at its path (or with its contents), and by the owner. Agents record the path in `uri` instead,
+ * so they can't point a claim at a file from a folder they can't see.
+ */
+function agentArtifactFileIssue(op: Operation): string | undefined {
+  if (op.type !== 'artifact' || op.op === 'delete' || !('fileId' in op.data)) return undefined;
+  return "agents can't set fileId; put the local path in uri and Pharos links it to the project file";
 }
 
 /** One in-progress revision. Writes go straight to the DB inside the SQL transaction. */

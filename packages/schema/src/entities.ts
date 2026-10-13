@@ -119,7 +119,9 @@ export const ArtifactData = z.strictObject({
   kind: optionField('artifact.kind'),
   status: optionField('artifact.status'),
   uri: z.string().optional().describe('Path or URL of the deliverable'),
-  fileId: Id.optional().describe('The project file it is, so a local source opens'),
+  fileId: Id.optional().describe(
+    'The project file it is, so a local source opens. Set by Pharos (matching uri) or the owner; agents put the local path in uri instead',
+  ),
   stageId: Id.optional(),
   taskId: Id.optional(),
 });

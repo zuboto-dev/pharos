@@ -40,6 +40,7 @@ import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboar
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ViewRenderer } from '../catalog/renderer';
+import { findSourceFile } from '../catalog/source-file';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
@@ -253,7 +254,7 @@ export function ProjectPage() {
   );
   const [asking, setAsking] = useState<AskAbout | null>(null);
   const actions = useMemo<ViewActions>(
-    () => ({ apply, open, revert, ask: setAsking }),
+    () => ({ apply, open, revert, ask: setAsking, findSourceFile }),
     [apply, open, revert],
   );
   const close = useCallback(() => setParams({}), [setParams]);

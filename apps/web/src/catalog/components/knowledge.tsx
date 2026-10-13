@@ -19,6 +19,7 @@ import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
 import { useOptions } from '../options';
 import { Popover, usePopover } from '../popover';
+import { LocalSourcePath, linkedFileOf } from '../source-file';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
 import { Badge, Dot, Empty, isHttp, Uri, type Tone } from '../ui';
 import {
@@ -115,18 +116,19 @@ function quoteSourceOf(byId: ViewData['entityById'], claim: Claim): Artifact | u
 
 /**
  * A source's title: a link that opens in a new tab for a web address, otherwise a button that
- * opens the artifact in the drawer (a local file can't be opened from the browser).
+ * opens the project file it is (R7.6), or else the artifact, in the drawer.
  */
 function SourceTitle({ source, onOpen }: { source: Artifact; onOpen?: () => void }) {
-  const { actions } = useViewData();
+  const { actions, entityById } = useViewData();
   if (isHttp(source.data.uri)) return <Uri uri={source.data.uri}>{source.data.title}</Uri>;
+  const fileId = linkedFileOf(entityById, source);
   return (
     <button
       type="button"
       onClick={(e) => {
         e.stopPropagation();
         onOpen?.();
-        actions.open({ entity: source.id });
+        actions.open({ entity: fileId ?? source.id });
       }}
       className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
     >
@@ -259,11 +261,7 @@ export function CertaintyMark({
                   <div className="flex min-w-0">
                     <SourceTitle source={s} onOpen={() => close(false)} />
                   </div>
-                  {s.data.uri && !isHttp(s.data.uri) && (
-                    <code className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
-                      {s.data.uri}
-                    </code>
-                  )}
+                  <LocalSourcePath source={s} onOpen={() => close(false)} />
                   {s.id === quoteSource?.id && quote && (
                     <blockquote className="border-l-2 border-neutral-300 pl-2 text-xs break-words text-neutral-700 italic dark:border-neutral-600 dark:text-neutral-300">
                       “{quote}”

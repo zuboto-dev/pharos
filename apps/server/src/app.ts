@@ -6,6 +6,7 @@ import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import type { AgentRunner, AgentStatus } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
+import { artifactFileRoutes, watchArtifactLinks } from './files/artifact-file.js';
 import { z } from 'zod';
 import { createMcpServer } from './mcp.js';
 import { PharosError, formatPath } from './store/errors.js';
@@ -228,6 +229,10 @@ export function createApp(
       }),
     );
   });
+
+  // Claim sources on disk (R7.6): where an artifact's local path is among the project files.
+  api.route('/', artifactFileRoutes(store));
+  watchArtifactLinks(store, feed);
 
   app.route('/api', api);
 

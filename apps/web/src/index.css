@@ -50,9 +50,9 @@
   --ph-ink: var(--color-neutral-900);
   --ph-ink-soft: var(--color-neutral-700);
   --ph-muted: var(--color-neutral-500);
-  --ph-faint: var(--color-neutral-400);
-  --ph-accent: var(--color-sky-600);
-  --ph-accent-strong: var(--color-sky-700);
+  --ph-faint: var(--color-neutral-500);
+  --ph-accent: var(--color-sky-700);
+  --ph-accent-strong: var(--color-sky-800);
   --ph-danger: var(--color-rose-600);
   --ph-warn: var(--color-amber-700);
   --ph-ok: var(--color-emerald-600);

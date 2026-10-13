@@ -230,7 +230,7 @@ function RenameInput({ value, onDone }: { value: string; onDone: (name: string |
 
 const ROW = 'group/row relative flex items-center gap-1 rounded-control pr-1 text-sm';
 const MORE =
-  'shrink-0 rounded p-0.5 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100 dark:hover:bg-neutral-700';
+  'shrink-0 rounded p-0.5 text-faint opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100 dark:hover:bg-neutral-700';
 
 /**
  * The project sidebar: pinned projects, folders (repositories), loose projects, and sections.
@@ -486,7 +486,7 @@ export function Sidebar() {
               <span className="truncate">{project.data.name}</span>
               {agents.length > 0 && <span className="sr-only"> ({workingLine(agents, 'it')})</span>}
               {inPinned && project.data.repositoryId && (
-                <span className="ml-auto truncate text-xs text-neutral-400">
+                <span className="ml-auto truncate text-xs text-faint">
                   {repositoryById.get(project.data.repositoryId)?.data.name}
                 </span>
               )}
@@ -553,7 +553,7 @@ export function Sidebar() {
               <ChevronRight className={clsx('size-3 shrink-0 transition', open && 'rotate-90')} />
               <FolderGit2 className="size-3.5 shrink-0" />
               <span className="truncate">{repository.data.name}</span>
-              {!open && <span className="font-normal text-neutral-400">{projects.length}</span>}
+              {!open && <span className="font-normal text-faint">{projects.length}</span>}
             </button>
           )}
           <button
@@ -569,10 +569,7 @@ export function Sidebar() {
           <ul>
             {projects.map((p) => projectRow(p, depth + 1))}
             {!projects.length && (
-              <li
-                className="py-1 text-xs text-neutral-400"
-                style={{ paddingLeft: (depth + 1) * 12 + 8 }}
-              >
+              <li className="py-1 text-xs text-faint" style={{ paddingLeft: (depth + 1) * 12 + 8 }}>
                 {pinnedIn(repository.id)
                   ? `${pinnedIn(repository.id)} pinned above`
                   : 'No projects'}
@@ -779,7 +776,7 @@ export function Sidebar() {
       <div
         className={clsx(
           ROW,
-          'mt-2 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase',
+          'mt-2 text-[11px] font-semibold tracking-wide text-faint uppercase',
           dropHighlight(section.id),
         )}
         {...dropProps(
@@ -838,7 +835,7 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4" aria-label="Projects">
         {w.tree.pinned.length > 0 && (
           <div className="pb-2">
-            <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold tracking-wide text-neutral-400 uppercase">
+            <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold tracking-wide text-faint uppercase">
               <Pin className="size-3" /> Pinned
             </div>
             <ul>{w.tree.pinned.map((p) => projectRow(p, 0, true))}</ul>
@@ -852,7 +849,7 @@ export function Sidebar() {
               <ul>
                 {items(list, 0)}
                 {!list.length && (
-                  <li className="px-2 py-1 text-xs text-neutral-400">
+                  <li className="px-2 py-1 text-xs text-faint">
                     Empty: drag projects or folders here
                   </li>
                 )}
@@ -863,7 +860,7 @@ export function Sidebar() {
         {drag && (w.tree.sections.length > 0 || drag.type === 'project') && (
           <div
             className={clsx(
-              'mt-2 rounded-control border border-dashed border-neutral-300 px-2 py-2 text-center text-xs text-neutral-400 dark:border-neutral-700',
+              'mt-2 rounded-control border border-dashed border-neutral-300 px-2 py-2 text-center text-xs text-faint dark:border-neutral-700',
               dropHighlight('top'),
             )}
             {...dropProps(

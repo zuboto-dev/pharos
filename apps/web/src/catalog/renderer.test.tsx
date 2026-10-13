@@ -208,6 +208,19 @@ describe('dark mode contrast', () => {
   }
 });
 
+// v0.2 B10: and in light mode, where B6 left faint text at about 2.6:1.
+describe('light mode contrast', () => {
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    it(`${name} has readable text in light mode`, () => {
+      for (const d of [data, empty]) {
+        const { container, unmount } = renderSpec(spec, d);
+        expect(contrastIssues(container, 'light')).toEqual([]);
+        unmount();
+      }
+    });
+  }
+});
+
 // v0.2 B9: every block fits a 390 px phone. happy-dom doesn't lay out, so this reads the classes
 // that decide width (scripts/phone-check.mjs measures real pages in Chrome): anything wider than
 // the phone, at the base (phone) breakpoint, must sit inside a box that scrolls sideways itself.

@@ -76,7 +76,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
       type="button"
       aria-label={`Copy ${label}`}
       onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
-      className="shrink-0 rounded p-1 text-neutral-400 hover:bg-subtle hover:text-ink-soft"
+      className="shrink-0 rounded p-1 text-faint hover:bg-subtle hover:text-ink-soft"
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </button>
@@ -398,7 +398,7 @@ function FolderRow({
             </form>
           ) : (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <Folder className="size-4 shrink-0 text-neutral-400" />
+              <Folder className="size-4 shrink-0 text-faint" />
               {folder.label}
             </p>
           )}

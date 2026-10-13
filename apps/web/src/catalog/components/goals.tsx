@@ -10,9 +10,9 @@ import { EmptyState } from '../empty-state';
 type GoalNode = { goal: Entity<'goal'>; children: GoalNode[] };
 
 const GOAL_ICONS = {
-  open: <Circle className="size-4 text-neutral-400" />,
+  open: <Circle className="size-4 text-faint" />,
   achieved: <CircleCheck className="size-4 text-emerald-500" />,
-  dropped: <CircleSlash className="size-4 text-neutral-400" />,
+  dropped: <CircleSlash className="size-4 text-faint" />,
 };
 
 function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolean }) {
@@ -27,7 +27,7 @@ function GoalItem({ node, showCriteria }: { node: GoalNode; showCriteria: boolea
       >
         <span className="mt-0.5">{GOAL_ICONS[meaning] ?? GOAL_ICONS.open}</span>
         <div className="min-w-0">
-          <div className={clsx('text-sm font-medium', dropped && 'text-neutral-400 line-through')}>
+          <div className={clsx('text-sm font-medium', dropped && 'text-faint line-through')}>
             {goal.data.title}
           </div>
           {showCriteria && goal.data.successCriteria.length > 0 && (
@@ -115,8 +115,7 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
               <div key={column.value} className="min-w-0">
                 <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-ink-soft uppercase">
                   <OptionDot field="scope_item.kind" value={column.value} />
-                  {column.label}{' '}
-                  <span className="font-normal text-neutral-400">{items.length}</span>
+                  {column.label} <span className="font-normal text-faint">{items.length}</span>
                 </h4>
                 <ul className="space-y-2">
                   {items.map((item) => (

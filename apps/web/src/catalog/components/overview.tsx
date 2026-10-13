@@ -52,7 +52,7 @@ export function ProjectHeader() {
           <span className="text-muted">Progress</span>
           <span className="font-medium tabular-nums">
             {progress}%{' '}
-            <span className="font-normal text-neutral-400">
+            <span className="font-normal text-faint">
               ({done}/{total} tasks)
             </span>
           </span>

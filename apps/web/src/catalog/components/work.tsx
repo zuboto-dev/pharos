@@ -89,7 +89,7 @@ function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: 
             className={clsx(
               'text-sm leading-snug font-medium',
               meaning === 'cancelled' && 'line-through',
-              meaning === 'done' && 'text-neutral-400',
+              meaning === 'done' && 'text-faint',
             )}
           >
             {task.data.title}
@@ -107,14 +107,14 @@ function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: 
               finished={meaning === 'done' || meaning === 'cancelled'}
             />
           )}
-          {estimate && <span className="text-xs text-neutral-400">{estimate}</span>}
+          {estimate && <span className="text-xs text-faint">{estimate}</span>}
         </div>
         {(assigneeId || dependsOn.length > 0) && (
           <div className="flex items-center justify-between gap-2">
             <AssigneeLabel id={assigneeId} />
             {dependsOn.length > 0 && (
               <span
-                className="inline-flex items-center gap-1 text-xs text-neutral-400"
+                className="inline-flex items-center gap-1 text-xs text-faint"
                 title={`Depends on ${plural(dependsOn.length, 'task')}`}
               >
                 <GitBranch className="size-3.5" /> {dependsOn.length}
@@ -268,7 +268,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
           <div className="group/col flex items-center gap-2 px-1 pb-2 text-xs font-semibold text-ink-soft">
             {optionField && column.key && <OptionDot field={optionField} value={column.key} />}
             {column.label}
-            <span className="font-normal text-neutral-400">{column.tasks.length}</span>
+            <span className="font-normal text-faint">{column.tasks.length}</span>
             {optionField && (
               <EditOptionsButton
                 field={optionField}
@@ -427,8 +427,8 @@ function TaskRow({ task, title, children }: { task: Task; title: ReactNode; chil
           <TaskCheck task={task} />
           <span
             className={clsx(
-              meaning === 'cancelled' && 'text-neutral-400 line-through',
-              meaning === 'done' && 'text-neutral-400',
+              meaning === 'cancelled' && 'text-faint line-through',
+              meaning === 'done' && 'text-faint',
             )}
           >
             {title}
@@ -517,7 +517,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
               <span
                 className={clsx(
                   'min-w-0 flex-1 truncate text-sm',
-                  meaning(task) === 'done' && 'text-neutral-400 line-through',
+                  meaning(task) === 'done' && 'text-faint line-through',
                 )}
               >
                 {task.data.title}
@@ -577,7 +577,7 @@ function GraphNode({ task, x, y }: { task: Task; x: number; y: number }) {
         className="flex h-full items-center gap-2 rounded-tile border border-line-strong bg-surface px-3 transition hover:border-sky-300 hover:shadow-sm dark:hover:border-sky-800"
       >
         <OptionDot field="task.status" value={task.data.status} />
-        <span className={clsx('line-clamp-2 text-xs font-medium', done && 'text-neutral-400')}>
+        <span className={clsx('line-clamp-2 text-xs font-medium', done && 'text-faint')}>
           {task.data.title}
         </span>
       </Clickable>

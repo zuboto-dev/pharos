@@ -110,7 +110,7 @@ function FieldValue({
   if (type === 'file' && field === 'path' && typeof value === 'string')
     return (
       <span className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 sm:max-w-[18rem]">
-        <FileTypeIcon path={value} className="size-3.5 text-neutral-400" />
+        <FileTypeIcon path={value} className="size-3.5 text-faint" />
         <span className="truncate">{glanceName(value)}</span>
       </span>
     );
@@ -318,7 +318,7 @@ function SumChart({ node }: { node: NodeOf<'CountChart'> }) {
           key={`${bar.key}|${bar.currency ?? ''}`}
           className="grid grid-cols-[minmax(3rem,7rem)_1fr_auto] items-center gap-3 text-sm"
         >
-          <span className={clsx('truncate', !bar.key && 'text-neutral-400')}>{bar.label}</span>
+          <span className={clsx('truncate', !bar.key && 'text-faint')}>{bar.label}</span>
           <span className="h-3 overflow-hidden rounded-full bg-subtle">
             <span
               className="block h-full rounded-full bg-sky-500"

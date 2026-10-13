@@ -142,7 +142,7 @@ export function AddFilesDialog({
               <label className="relative block">
                 <span className="sr-only">Search your folders</span>
                 <Search
-                  className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-neutral-400"
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
                   aria-hidden
                 />
                 <input
@@ -179,7 +179,7 @@ export function AddFilesDialog({
                         <label
                           className={
                             added
-                              ? 'flex items-center gap-2.5 rounded-control px-2 py-1.5 text-neutral-400'
+                              ? 'flex items-center gap-2.5 rounded-control px-2 py-1.5 text-faint'
                               : 'flex cursor-pointer items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken'
                           }
                         >
@@ -190,7 +190,7 @@ export function AddFilesDialog({
                             onChange={() => toggle(file)}
                             className="size-4 shrink-0 accent-neutral-900 dark:accent-neutral-100"
                           />
-                          <FileTypeIcon path={file.path} className="size-4 text-neutral-400" />
+                          <FileTypeIcon path={file.path} className="size-4 text-faint" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm">{fileName(file.path)}</span>
                             <span className="block truncate text-xs text-muted">

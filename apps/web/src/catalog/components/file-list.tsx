@@ -321,7 +321,7 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
             <label className="relative min-w-0 flex-1 basis-48">
               <span className="sr-only">Find a file</span>
               <Search
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-neutral-400"
+                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-faint"
                 aria-hidden
               />
               <input

@@ -74,7 +74,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <Icon className="size-4 shrink-0 text-neutral-400" />
+                <Icon className="size-4 shrink-0 text-faint" />
                 <span className="truncate text-sm font-medium" title={artifact.data.title}>
                   {artifact.data.title}
                 </span>
@@ -179,7 +179,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
                 <LinkedFiles ids={decision.data.fileIds} className="mt-1" />
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <span className="text-right text-xs text-neutral-400">
+                <span className="text-right text-xs text-faint">
                   {decider && <span className="text-ink-soft">{decider} · </span>}
                   {formatDate(decision.data.decisionDate ?? decision.createdAt.slice(0, 10), true)}
                 </span>
@@ -250,9 +250,7 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
                     {rev.revertOf && ` · reverts #${rev.revertOf}`}
                   </span>
                   {labels.length > 0 && (
-                    <span className="block truncate text-xs text-neutral-400">
-                      {labels.join(' · ')}
-                    </span>
+                    <span className="block truncate text-xs text-faint">{labels.join(' · ')}</span>
                   )}
                 </span>
               </button>

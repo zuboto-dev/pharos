@@ -290,7 +290,7 @@ function TaskList({ tasks }: { tasks: Entity<'task'>[] }) {
               className={clsx(
                 'flex-1 truncate text-sm',
                 options.meaning('task.status', task.data.status) === 'done' &&
-                  'text-neutral-400 line-through',
+                  'text-faint line-through',
               )}
             >
               {task.data.title}

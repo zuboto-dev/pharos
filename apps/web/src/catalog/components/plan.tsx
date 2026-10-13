@@ -129,9 +129,7 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                 )}
               </div>
               <StageProgressLine progress={progress} current={current} />
-              {dateRange(stage) && (
-                <div className="text-xs text-neutral-400">{dateRange(stage)}</div>
-              )}
+              {dateRange(stage) && <div className="text-xs text-faint">{dateRange(stage)}</div>}
             </Clickable>
           </li>
         );
@@ -209,7 +207,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
           />
         ))}
         <div
-          className="relative h-5 text-xs text-neutral-400"
+          className="relative h-5 text-xs text-faint"
           style={{ gridColumn: 2, gridRow: rows + 1 }}
         >
           {/* Labels too close to "Today" are hidden so they don't overlap it. */}
@@ -225,7 +223,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
               </span>
             ))}
           <span
-            className="absolute -translate-x-1/2 font-medium text-rose-500"
+            className="absolute -translate-x-1/2 font-medium text-danger"
             style={{ left: `${pos(today)}%` }}
           >
             Today
@@ -339,9 +337,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
                 ) : (
                   <OptionBadge field="stage.status" value={stage.data.status} />
                 )}
-                {dateRange(stage) && (
-                  <span className="text-xs text-neutral-400">{dateRange(stage)}</span>
-                )}
+                {dateRange(stage) && <span className="text-xs text-faint">{dateRange(stage)}</span>}
               </div>
               {stage.data.description && (
                 <p className="text-sm text-muted">{stage.data.description}</p>

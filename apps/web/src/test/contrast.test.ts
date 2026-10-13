@@ -24,8 +24,11 @@ describe('contrast check', () => {
       '<p class="text-neutral-500 dark:text-neutral-400">Pair</p><p class="text-muted">Token</p><p class="text-faint">Faint</p>',
     );
     expect(contrastIssues(block, 'dark')).toEqual([]);
-    // In light mode the faint token is neutral-400, which is below AA (kept for quiet text).
-    expect(contrastIssues(block, 'light').map((i) => i.text)).toEqual(['Faint']);
+    // v0.2 B10: the faint token reaches AA in light mode too (it was neutral-400, about 2.6:1).
+    expect(contrastIssues(block, 'light')).toEqual([]);
+    expect(
+      contrastIssues(html('<p class="text-neutral-400">Raw</p>'), 'light').map((i) => i.text),
+    ).toEqual(['Raw']);
   });
 
   it('composites translucent backgrounds and counts large text at 3:1', () => {

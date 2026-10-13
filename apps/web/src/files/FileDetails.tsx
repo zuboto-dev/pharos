@@ -332,7 +332,7 @@ function LinkedTasks({ file }: { file: Entity<'file'> }) {
           }}
         />
       )}
-      {!linked.length && !others.length && <span className="text-neutral-400">None</span>}
+      {!linked.length && !others.length && <span className="text-faint">None</span>}
     </div>
   );
 }
@@ -457,7 +457,7 @@ export function FileDetails({ file, history }: { file: Entity<'file'>; history?:
                 </span>
               </span>
             ) : (
-              <span className="text-neutral-400">{info.data ? 'Removed' : '…'}</span>
+              <span className="text-faint">{info.data ? 'Removed' : '…'}</span>
             )}
           </Row>
           <Row label="Path">

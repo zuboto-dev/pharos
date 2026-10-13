@@ -383,7 +383,7 @@ export function Lightbox({
       >
         <p className="font-semibold text-white">{picture.title}</p>
         {description && <p className="text-neutral-300">{description}</p>}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
           <Source picture={picture} className="text-sky-300 dark:text-sky-300" />
           <button
             type="button"

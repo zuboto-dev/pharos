@@ -712,7 +712,7 @@ function Stack({
                   <ChevronDown
                     aria-hidden
                     className={clsx(
-                      'hidden size-4 text-neutral-400 motion-safe:transition sm:block',
+                      'hidden size-4 text-faint motion-safe:transition sm:block',
                       isOpen && 'rotate-180',
                     )}
                   />
@@ -981,7 +981,7 @@ function Flow({
                       <ChevronDown
                         aria-hidden
                         className={clsx(
-                          'mt-0.5 size-4 shrink-0 text-neutral-400 motion-safe:transition-transform',
+                          'mt-0.5 size-4 shrink-0 text-faint motion-safe:transition-transform',
                           isOpen && 'rotate-180',
                         )}
                       />

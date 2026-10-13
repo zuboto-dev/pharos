@@ -38,7 +38,7 @@ function CopyLine({ label, text }: { label: string; text: string }) {
         onClick={() => {
           void navigator.clipboard?.writeText(text).then(() => setCopied(true));
         }}
-        className="shrink-0 rounded p-1 text-neutral-400 hover:bg-neutral-700 hover:text-white"
+        className="shrink-0 rounded p-1 text-faint hover:bg-neutral-700 hover:text-white"
       >
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
       </button>
@@ -67,7 +67,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
           }
           setDismissed(true);
         }}
-        className="absolute top-3 right-3 rounded p-1 text-neutral-400 hover:bg-white hover:text-ink-soft dark:hover:bg-neutral-800"
+        className="absolute top-3 right-3 rounded p-1 text-faint hover:bg-white hover:text-ink-soft dark:hover:bg-neutral-800"
       >
         <X className="size-4" />
       </button>

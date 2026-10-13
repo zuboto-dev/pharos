@@ -203,12 +203,12 @@ export function Select({
           {selected?.color && (
             <span className={clsx('size-2 shrink-0 rounded-full', DOT_TONES[selected.color])} />
           )}
-          <span className={clsx('truncate', !selected && 'text-neutral-400')}>
+          <span className={clsx('truncate', !selected && 'text-faint')}>
             {selected?.label ?? placeholder}
           </span>
         </span>
         <ChevronDown
-          className={clsx('size-4 shrink-0 text-neutral-400 transition', open && 'rotate-180')}
+          className={clsx('size-4 shrink-0 text-faint transition', open && 'rotate-180')}
         />
       </button>
       {panel}

@@ -57,6 +57,8 @@ describe('music page', () => {
     expect(screen.getAllByRole('button', { name: /^Play “Night Bus mix 3”/ })).toHaveLength(2);
     expect(screen.queryAllByRole('button', { name: /^Play “Night Bus mix 1”/ })).toHaveLength(1);
     expect(text()).toMatch(/Total.*12\.5 h/);
+    // Songs by stage reads the stage labels, in the stages' own order.
+    expect(text()).toMatch(/Songs by stageIdea1Demo1Recording1Mixing1/);
   });
 
   it('plays a mix in place and stops the one before', async () => {

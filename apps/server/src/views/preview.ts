@@ -12,6 +12,7 @@ import {
   ENTITIES,
   fieldReader,
   findOption,
+  findRecordType,
   galleryContents,
   isPictureFile,
   meaningOf,
@@ -488,18 +489,26 @@ function countGroups(ctx: Context, q: Query, by: string): Group[] {
       ...ctx.data.goals,
     ].map((e) => [e.id, e]),
   );
-  const display = (v: unknown, type: EntityType, field: string): string => {
+  const display = (v: unknown, type: EntityType, field: string, recordType?: string): string => {
     if (v === undefined || v === null || v === '') return 'None';
     const target = typeof v === 'string' ? byId.get(v) : undefined;
     if (target) return String(target.data[ENTITIES[target.type].label] ?? v);
+    // A record's own option field (R9) reads as its label, e.g. "Mixing".
+    const own =
+      type === 'record' && recordType
+        ? findRecordType(ctx.data.project, recordType)
+            ?.fields.find((f) => `fields.${f.key}` === field)
+            ?.options?.find((o) => o.value === v)
+        : undefined;
+    if (own) return own.label;
     const key = optionKeyOf(type, field);
     return (key && findOption(ctx.data.project, key, String(v))?.label) || String(v);
   };
   const groups = new Map<string, Group>();
   for (const row of runQuery(ctx.data, q.type, q, { today: ctx.today })) {
-    const { value, type, field } = read(row, by);
+    const { value, type, field, recordType } = read(row, by);
     for (const v of Array.isArray(value) ? value : [value]) {
-      const label = display(v, type, field);
+      const label = display(v, type, field, recordType);
       const group = groups.get(label) ?? { label, values: new Set<string>(), count: 0 };
       group.values.add(String(v ?? ''));
       group.count++;

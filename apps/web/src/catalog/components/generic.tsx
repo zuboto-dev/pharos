@@ -9,6 +9,7 @@ import {
   tableTotals,
   type Resolved,
   findOption,
+  findRecordType,
   optionKeyOf,
   optionsFor,
   runQuery,
@@ -243,7 +244,13 @@ type Bar = { key: string; label: ReactNode; count: number; color?: OptionColor; 
 function groupCounts(rows: Entity[], by: string, read: Reader, data: ViewData): Bar[] {
   const bars = new Map<string, Bar>();
   for (const row of rows) {
-    const { value, type, field } = read(row, by);
+    const { value, type, field, recordType } = read(row, by);
+    // A record's own option field (R9: songs by stage) keeps its labels, colours and order.
+    const recordOptions =
+      type === 'record' && recordType
+        ? findRecordType(data.project, recordType)?.fields.find((f) => `fields.${f.key}` === field)
+            ?.options
+        : undefined;
     const values = Array.isArray(value) ? value : [value];
     for (const v of values.length ? values : [undefined]) {
       const key = v === undefined || v === null || v === '' ? '' : String(v);
@@ -253,15 +260,23 @@ function groupCounts(rows: Entity[], by: string, read: Reader, data: ViewData): 
         continue;
       }
       const optionKey = optionKeyOf(type, field);
-      const option = optionKey && key ? findOption(data.project, optionKey, key) : undefined;
+      const recordIndex = recordOptions ? recordOptions.findIndex((o) => o.value === key) : -1;
+      const option =
+        recordIndex >= 0
+          ? recordOptions![recordIndex]
+          : optionKey && key
+            ? findOption(data.project, optionKey, key)
+            : undefined;
       const target = key ? data.entityById.get(key) : undefined;
       // Natural order: the project's option order, or the referenced item's own order.
       const rank =
-        option && optionKey
-          ? optionsFor(data.project, optionKey).findIndex((o) => o.value === key)
-          : target
-            ? ((target.data as { order?: number }).order ?? target.createdRev)
-            : Infinity;
+        recordIndex >= 0
+          ? recordIndex
+          : option && optionKey
+            ? optionsFor(data.project, optionKey).findIndex((o) => o.value === key)
+            : target
+              ? ((target.data as { order?: number }).order ?? target.createdRev)
+              : Infinity;
       bars.set(key, {
         key,
         label: !key

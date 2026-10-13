@@ -9,7 +9,7 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, ImageOff, Images, X } from 'lucide-react';
 import {
   useEffect,
   useId,
@@ -24,7 +24,7 @@ import { useResource } from '../../lib/api';
 import { useExit } from '../../lib/motion';
 import { CHART } from '../chart';
 import { useViewData, type ViewData } from '../context';
-import { Empty } from '../ui';
+import { AddFilesActions, EmptyState } from '../empty-state';
 import { GlanceDate } from '../../files/glance';
 import { FileTypeIcon } from './file-list';
 import { CertaintyMark } from './knowledge';
@@ -510,7 +510,13 @@ export function Gallery({ node }: { node: Node }) {
           {items}
         </ul>
       ) : (
-        <Empty>No pictures yet</Empty>
+        <EmptyState
+          icon={Images}
+          title="No pictures yet"
+          hint="Photos and scans from this project’s files show up here."
+        >
+          <AddFilesActions />
+        </EmptyState>
       )}
       {lightbox.shown !== null && pictures[lightbox.shown] && (
         <Lightbox

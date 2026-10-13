@@ -3,6 +3,7 @@ import { FilePlus } from 'lucide-react';
 import { useState } from 'react';
 import { FileList } from '../catalog/components/file-list';
 import { useViewData } from '../catalog/context';
+import { AddFilesProvider } from '../catalog/empty-state';
 import { SourceStatus } from '../catalog/source-file';
 import { BUTTON, Panel } from '../catalog/ui';
 import { useResource } from '../lib/api';
@@ -65,7 +66,19 @@ function MentionedFiles({ projectId, version }: { projectId: string; version: nu
 
 export function FilesPage({ onAdded }: { onAdded: () => void }) {
   const { project, files = [], version } = useViewData();
-  const [adding, setAdding] = useState(false);
+  // "Add files" in an empty block links here with ?add=1: open the picker right away (v0.2 B8).
+  const [adding, setAdding] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('add') !== '1') return false;
+    params.delete('add');
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}`,
+    );
+    return true;
+  });
   const [added, setAdded] = useState<number | null>(null);
   return (
     <div className="space-y-4">
@@ -88,9 +101,11 @@ export function FilesPage({ onAdded }: { onAdded: () => void }) {
         </p>
       )}
       <Panel>
-        <FileList
-          node={{ component: 'FileList', details: ['issuer', 'issuedDate', 'expiryDate'] }}
-        />
+        <AddFilesProvider onAdd={() => setAdding(true)}>
+          <FileList
+            node={{ component: 'FileList', details: ['issuer', 'issuedDate', 'expiryDate'] }}
+          />
+        </AddFilesProvider>
       </Panel>
       <MentionedFiles projectId={project.id} version={version} />
       {adding && (

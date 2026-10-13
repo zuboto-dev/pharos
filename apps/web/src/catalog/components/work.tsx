@@ -1,6 +1,6 @@
 import { runQuery, stripWorkCode, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { Bot, GitBranch, Play, User } from 'lucide-react';
+import { Bot, CircleCheck, GitBranch, ListChecks, ListTodo, Play, User, Users } from 'lucide-react';
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { formatDate, humanize, plural } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
@@ -9,7 +9,8 @@ import { LinkedFiles } from '../linked-files';
 import { EditOptionsButton, OptionBadge, OptionDot, useOptions } from '../options';
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
 import { firstUses, TermText, useTermMatcher } from '../terms';
-import { Badge, Empty } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { Badge } from '../ui';
 
 type Task = Entity<'task'>;
 type GroupBy = NonNullable<NodeOf<'KanbanBoard'>['groupBy']>;
@@ -317,9 +318,10 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
   // F6: titles without their work codes when asked; terms in rows only when asked.
   const titles = tasks.map((t) => (node.hideCodes ? stripWorkCode(t.data.title) : t.data.title));
   const termRanges = firstUses(titles, useTermMatcher(node.terms ?? false));
-  const addTask = (
+  const addTask = (variant?: 'button') => (
     <QuickAdd
       label="Add task"
+      variant={variant}
       onAdd={(title) =>
         create('task', {
           ...defaultsFrom(node.filter?.where, data.project.data.currentStageId),
@@ -331,10 +333,14 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
   const columns: TaskColumn[] = node.columns ?? ['status', 'priority', 'stage', 'assignee'];
   if (!tasks.length) {
     return (
-      <>
-        <Empty>No tasks yet</Empty>
-        {addTask}
-      </>
+      <EmptyState
+        icon={ListTodo}
+        title={data.tasks.length ? 'No tasks match this list' : 'No tasks yet'}
+        hint="Add one here, or ask your agent to break the work into tasks."
+      >
+        {addTask('button')}
+        <AskAgentButton question="Break the work in this list into tasks." />
+      </EmptyState>
     );
   }
   const cell = (task: Task, column: TaskColumn) => {
@@ -397,7 +403,7 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
           ))}
         </tbody>
       </table>
-      <div className="px-2 py-1">{addTask}</div>
+      <div className="px-2 py-1">{addTask()}</div>
     </div>
   );
 }
@@ -454,9 +460,10 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
   const assignee = node.assigneeKind
     ? data.assignees.find((a) => a.data.kind === node.assigneeKind)
     : undefined;
-  const addTask = (
+  const addTask = (variant?: 'button') => (
     <QuickAdd
       label={assignee ? `Add task for ${assignee.data.name}` : 'Add task'}
+      variant={variant}
       onAdd={(title) =>
         create('task', {
           ...defaultsFrom(node.filter?.where, data.project.data.currentStageId),
@@ -468,17 +475,34 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
   );
   if (!tasks.length) {
     return (
-      <div className="space-y-1">
-        <Empty>
-          {node.assigneeKind === 'human' ? 'Nothing is assigned to people right now' : 'No tasks'}
-        </Empty>
-        {addTask}
-      </div>
+      <EmptyState
+        icon={ListChecks}
+        title={
+          node.assigneeKind === 'human'
+            ? 'Nothing is assigned to people right now'
+            : data.tasks.length
+              ? 'No tasks match this list'
+              : 'No tasks yet'
+        }
+        hint={
+          node.assigneeKind === 'human'
+            ? 'Tasks for you show up here when you or an agent assign one.'
+            : 'Add the first one, or ask your agent to plan the work.'
+        }
+      >
+        {addTask('button')}
+      </EmptyState>
     );
   }
   return (
     <div className="space-y-2">
-      {visible.length === 0 && <Empty>All done 🎉</Empty>}
+      {visible.length === 0 && (
+        <EmptyState
+          icon={CircleCheck}
+          title="All done"
+          hint="Every task in this list is finished."
+        />
+      )}
       <ul className="-mx-2 space-y-0.5">
         {visible.map((task) => (
           <li key={task.id}>
@@ -517,7 +541,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
           </li>
         ))}
       </ul>
-      <div className="-mx-2">{addTask}</div>
+      <div className="-mx-2">{addTask()}</div>
       {hideDone && finished.length > 0 && (
         <button
           type="button"
@@ -599,8 +623,26 @@ export function DependencyGraph({ node }: { node: NodeOf<'DependencyGraph'> }) {
     return { position, edges, width, height, linked: edges.length > 0 };
   }, [tasks, data.taskById]);
 
-  if (!tasks.length) return <Empty>No tasks yet</Empty>;
-  if (!layout.linked) return <Empty>No dependencies between these tasks</Empty>;
+  if (!tasks.length)
+    return (
+      <EmptyState
+        icon={GitBranch}
+        title="No tasks yet"
+        hint="The graph draws tasks and what each one waits for, once there are tasks."
+      >
+        <AskAgentButton question="Plan the tasks for this work, with what each one depends on." />
+      </EmptyState>
+    );
+  if (!layout.linked)
+    return (
+      <EmptyState
+        icon={GitBranch}
+        title="No dependencies between these tasks"
+        hint="Open a task and set what it depends on, or ask your agent to order the work."
+      >
+        <AskAgentButton question="Which of these tasks depend on each other? Set their dependencies." />
+      </EmptyState>
+    );
   return (
     <div className="overflow-auto">
       <div className="relative" style={{ width: layout.width, height: layout.height }}>
@@ -653,7 +695,16 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
   const data = useViewData();
   const options = useOptions();
   const tasks = runQuery(data, 'task', node.filter);
-  if (!tasks.length) return <Empty>No tasks yet</Empty>;
+  if (!tasks.length)
+    return (
+      <EmptyState
+        icon={Users}
+        title="No tasks yet"
+        hint="Who does what shows up here once tasks are assigned."
+      >
+        <AskAgentButton question="Plan the tasks for this work and who should do each one." />
+      </EmptyState>
+    );
   const statuses = options
     .list('task.status')
     .filter((o) => o.meaning !== 'cancelled' || tasks.some((t) => t.data.status === o.value));

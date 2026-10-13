@@ -35,7 +35,7 @@ export function AskDialog({
   answers?: Entity<'view'>[];
   onOpenAnswer?: (viewId: string) => void;
 }) {
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(about.question ?? '');
   const earlier = question.trim()
     ? similarAnswers(question, answers, (v) => v.data.question).slice(0, 3)
     : [];

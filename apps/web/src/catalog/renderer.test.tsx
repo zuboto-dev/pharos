@@ -203,3 +203,37 @@ describe('dark mode contrast', () => {
     });
   }
 });
+
+// v0.2 B8: a block with nothing to show says what's missing and the next step ("icon, line and a
+// button"), never a bare "Nothing matches".
+describe('empty states', () => {
+  const bare: ProjectDataset = { ...empty, claims: [], terms: [], files: [], records: [] };
+  // Blocks that always have something to show: layout, the project itself, numbers (a zero is an
+  // answer), fixed text, and blocks whose content comes from the spec.
+  const ALWAYS = new Set([
+    'Grid',
+    'Section',
+    'Tabs',
+    'ProjectHeader',
+    'StatCards',
+    'ProgressRing',
+    'Callout',
+    'KanbanBoard',
+    'ActivityFeed',
+    'Stat',
+    'Text',
+    'Layers',
+    'StartHere',
+  ]);
+  for (const [name, spec] of Object.entries(SAMPLES)) {
+    if (ALWAYS.has(name)) continue;
+    it(`${name} says what's missing and what to do`, () => {
+      const { container } = renderSpec(spec, bare);
+      const state = container.querySelector('[data-empty-state]');
+      expect(state, name).not.toBeNull();
+      expect(state!.querySelector('svg')).not.toBeNull();
+      expect(state!.querySelector('p.font-medium')?.textContent).toBeTruthy();
+      expect(container.textContent).not.toMatch(/Nothing matches/);
+    });
+  }
+});

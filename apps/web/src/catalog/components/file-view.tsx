@@ -1,5 +1,5 @@
 import { fileUrl, type Entity, type FileInfo, type NodeOf } from '@pharos/schema';
-import { FileQuestion } from 'lucide-react';
+import { FileQuestion, FileSearch } from 'lucide-react';
 import { FileActions, MissingNotice } from '../../files/FileDetails';
 import { FilePreview, PreviewSkeleton } from '../../files/FilePreview';
 import { fileName } from '../../files/files';
@@ -8,7 +8,7 @@ import { useResource } from '../../lib/api';
 import { useBoardFiles, useWidgetId } from '../board-files';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
-import { Empty } from '../ui';
+import { AskAgentButton, EmptyState } from '../empty-state';
 import { FileTypeIcon } from './file-list';
 
 // One file shown inline in a view (R7.11): the same preview and missing-file notice as the file
@@ -56,19 +56,25 @@ export function FileView({ node }: { node: NodeOf<'FileView'> }) {
   const boardFiles = useBoardFiles();
   const widgetId = useWidgetId();
   const fileId = (widgetId && boardFiles?.shown(widgetId)) || node.file;
-  if (!fileId) return <Empty>Pick a file in the list to show it here.</Empty>;
+  if (!fileId)
+    return (
+      <EmptyState
+        icon={FileSearch}
+        title="No file picked"
+        hint="Pick a file in the list to show it here."
+      />
+    );
   const file = files?.find((f) => f.id === fileId);
   if (!file)
     return (
-      <div
-        role="note"
-        className="flex flex-col items-center gap-2 px-4 py-6 text-center text-sm text-muted"
-      >
-        <FileQuestion className="size-8 text-faint" aria-hidden />
-        <p>
-          This file isn’t in the project. It may have been removed; add it again from the Files
-          page, or ask your agent to point this widget at another file.
-        </p>
+      <div role="note">
+        <EmptyState
+          icon={FileQuestion}
+          title="This file isn’t in the project"
+          hint="It may have been removed. Add it again, or ask your agent to point this block at another file."
+        >
+          <AskAgentButton question="Point this block at another file in the project." />
+        </EmptyState>
       </div>
     );
   return <FileCard key={file.id} file={file} size={node.size ?? 'full'} />;

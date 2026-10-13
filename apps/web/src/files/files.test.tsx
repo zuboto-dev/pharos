@@ -202,7 +202,11 @@ describe('FileList', () => {
         <ViewRenderer spec={{ component: 'FileList' }} />
       </ViewDataProvider>,
     );
-    expect(screen.getByText('No files added to this project yet')).toBeTruthy();
+    expect(screen.getByText('No files in this project yet')).toBeTruthy();
+    // The next step (v0.2 B8): add files, from the Files page's picker.
+    expect(screen.getByRole('link', { name: 'Add files' }).getAttribute('href')).toMatch(
+      /\/files\?add=1$/,
+    );
   });
 });
 

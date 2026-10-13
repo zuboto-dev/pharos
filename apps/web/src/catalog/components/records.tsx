@@ -25,7 +25,9 @@ import { formatDate, plural } from '../../lib/format';
 import { CHART } from '../chart';
 import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
-import { Badge, Dot, Empty, type Tone } from '../ui';
+import { CalendarCheck, PieChart } from 'lucide-react';
+import { AskAgentButton, EmptyState } from '../empty-state';
+import { Badge, Dot, type Tone } from '../ui';
 
 /**
  * Blocks for a project's own records (R8): what's due, and planned against spent. Their numbers
@@ -97,7 +99,16 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
   const data = useViewData();
   const rows = useMemo(() => dueRows(data, node), [data, node]);
   const read = useMemo(() => fieldReader(data), [data]);
-  if (!rows.length) return <Empty>Nothing is due</Empty>;
+  if (!rows.length)
+    return (
+      <EmptyState
+        icon={CalendarCheck}
+        title="Nothing is due"
+        hint="Services, payments and expiring documents show up here when a date or a reading comes near."
+      >
+        <AskAgentButton question="What should this list track? Add the records with their due dates." />
+      </EmptyState>
+    );
   return (
     <ul className="-mx-2 divide-y divide-line-soft">
       {rows.map(({ record, due, unit }) => {
@@ -214,7 +225,16 @@ function amounts(total: Total): string {
 export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> }) {
   const data = useViewData();
   const b = useMemo(() => categoryBreakdown(data, node), [data, node]);
-  if (!b.rows.length) return <Empty>No categories yet</Empty>;
+  if (!b.rows.length)
+    return (
+      <EmptyState
+        icon={PieChart}
+        title="No categories yet"
+        hint="Spending shows up here by category once there are records with amounts."
+      >
+        <AskAgentButton question="Set up the categories and plan for this breakdown." />
+      </EmptyState>
+    );
   return (
     <div className="space-y-3">
       <ul className="space-y-2.5">

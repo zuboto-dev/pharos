@@ -20,6 +20,7 @@ import { humanize } from '../lib/format';
 import { EXIT_MS } from '../lib/motion';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
+import { AskHereProvider } from './empty-state';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
 import { BLOCK_PRESENCE_OUTLINE, BlockPresence, ViewPresence, useViewPresence } from './presence';
@@ -322,7 +323,21 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
             )}
           >
             <WidgetIdProvider id={widget.id}>
-              <Node node={widget.node} />
+              <AskHereProvider
+                ask={
+                  actions.ask
+                    ? (question) =>
+                        actions.ask!({
+                          label: view ? `${name} in ${view.name}` : name,
+                          viewId: view?.id,
+                          widgetId: widget.id,
+                          question,
+                        })
+                    : null
+                }
+              >
+                <Node node={widget.node} />
+              </AskHereProvider>
             </WidgetIdProvider>
             {!editing && present.widgets.has(widget.id) && (
               <BlockPresence agent={present.widgets.get(widget.id)!} />

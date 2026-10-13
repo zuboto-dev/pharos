@@ -30,7 +30,8 @@ import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
 import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
 import { useOpenItem } from '../open-item';
-import { DOT_TONES, Empty, ProgressBar, isHttp, Markdown, StatusBadge, Uri } from '../ui';
+import { NothingMatches } from '../empty-state';
+import { DOT_TONES, ProgressBar, isHttp, Markdown, StatusBadge, Uri } from '../ui';
 import { linkedFileOf } from '../source-file';
 import { FileTypeIcon } from './file-list';
 import { Bar, CHART } from '../chart';
@@ -171,7 +172,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   const read = useReader();
   const openItem = useOpenItem();
   const rows = runQuery(data, node.query.type, node.query);
-  if (!rows.length) return <Empty>Nothing matches</Empty>;
+  if (!rows.length) return <NothingMatches type={node.query.type} />;
   const labelField = ENTITIES[node.query.type].label;
   // A ledger (R8): totals under number, money and meter columns, money per currency.
   const totals = node.total ? tableTotals(data, node) : undefined;
@@ -286,7 +287,7 @@ function groupCounts(rows: Entity[], by: string, read: Reader, data: ViewData): 
 function SumChart({ node }: { node: NodeOf<'CountChart'> }) {
   const data = useViewData();
   const bars = chartBars(data, node);
-  if (!bars.length) return <Empty>Nothing matches</Empty>;
+  if (!bars.length) return <NothingMatches type={node.query.type} />;
   const max = Math.max(...bars.map((b) => Math.abs(b.value)), 1);
   return (
     <ul
@@ -317,7 +318,7 @@ export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
   const read = useReader();
   const rows = runQuery(data, node.query.type, node.query);
   if (node.sum || node.bucket) return <SumChart node={node} />;
-  if (!rows.length) return <Empty>Nothing matches</Empty>;
+  if (!rows.length) return <NothingMatches type={node.query.type} />;
   let bars = groupCounts(rows, node.by, read, data);
   bars.sort((a, b) =>
     node.sort === 'count'
@@ -399,7 +400,7 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
   // F6: labels without their work codes when asked; terms in rows only when asked.
   const labels = rows.map((row) => (node.hideCodes ? stripWorkCode(labelOf(row)) : labelOf(row)));
   const termRanges = firstUses(labels, useTermMatcher(node.terms ?? false));
-  if (!rows.length) return <Empty>Nothing matches</Empty>;
+  if (!rows.length) return <NothingMatches type={node.query.type} />;
   return (
     <ul className="-mx-2 space-y-0.5">
       {rows.map((row, i) => (

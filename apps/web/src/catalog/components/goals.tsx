@@ -1,11 +1,11 @@
 import { runQuery, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { Circle, CircleCheck, CircleSlash } from 'lucide-react';
+import { Circle, CircleCheck, CircleSlash, Shapes, Target } from 'lucide-react';
 import { useViewData } from '../context';
 import { Clickable } from '../interactive';
 import { EditOptionsButton, OptionDot, useOptions } from '../options';
 import { QuickAdd, useCreate } from '../quickadd';
-import { Empty } from '../ui';
+import { EmptyState } from '../empty-state';
 
 type GoalNode = { goal: Entity<'goal'>; children: GoalNode[] };
 
@@ -57,13 +57,18 @@ export function GoalTree({ node }: { node: NodeOf<'GoalTree'> }) {
   const data = useViewData();
   const goals = runQuery(data, 'goal', node.filter);
   const create = useCreate();
-  const addGoal = <QuickAdd label="Add goal" onAdd={(title) => create('goal', { title })} />;
+  const addGoal = (variant?: 'button') => (
+    <QuickAdd label="Add goal" variant={variant} onAdd={(title) => create('goal', { title })} />
+  );
   if (!goals.length) {
     return (
-      <>
-        <Empty>No goals yet</Empty>
-        {addGoal}
-      </>
+      <EmptyState
+        icon={Target}
+        title={data.goals.length ? 'No goals match this list' : 'No goals yet'}
+        hint="Say what this project should achieve, so the work can be checked against it."
+      >
+        {addGoal('button')}
+      </EmptyState>
     );
   }
   const nodes = new Map(goals.map((goal) => [goal.id, { goal, children: [] as GoalNode[] }]));
@@ -77,7 +82,7 @@ export function GoalTree({ node }: { node: NodeOf<'GoalTree'> }) {
       {roots.map((root) => (
         <GoalItem key={root.goal.id} node={root} showCriteria={node.showCriteria ?? true} />
       ))}
-      <li className="-mx-2">{addGoal}</li>
+      <li className="-mx-2">{addGoal()}</li>
     </ul>
   );
 }
@@ -95,7 +100,13 @@ export function ScopeBoard({ node }: { node: NodeOf<'ScopeBoard'> }) {
       <div className="-mt-1 flex justify-end">
         <EditOptionsButton field="scope_item.kind" label="Edit groups" />
       </div>
-      {!data.scopeItems.length && <Empty>No scope defined yet</Empty>}
+      {!data.scopeItems.length && (
+        <EmptyState
+          icon={Shapes}
+          title="No scope defined yet"
+          hint="Add what’s in, what’s out and what’s for later in the groups below."
+        />
+      )}
       {
         <div className={clsx('grid gap-4', columns.length > 1 && 'sm:grid-cols-2 lg:grid-cols-3')}>
           {columns.map((column) => {

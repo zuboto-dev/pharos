@@ -31,6 +31,7 @@ describe('motion tokens', () => {
     for (const [, name, value] of animations) {
       if (name === 'block-changed') continue; // a colour fade, not a movement
       if (name === 'presence') continue; // a slow looping pulse (v0.2 B5), not a transition
+      if (name === 'shimmer') continue; // a loading skeleton's slow sweep (v0.2 B8), still when reduced
       expect(value, name).toMatch(/var\(--motion-(quick|base|slow)\) var\(--ease-calm(-out)?\)/);
     }
   });

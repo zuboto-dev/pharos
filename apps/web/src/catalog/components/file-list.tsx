@@ -1,6 +1,16 @@
 import { FILE_LIST_CONTROLS, fileTypeOf, runQuery, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { File, FileAudio, FileImage, FileSpreadsheet, FileText, Search, X } from 'lucide-react';
+import {
+  File,
+  FileAudio,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  Search,
+  SearchX,
+  X,
+} from 'lucide-react';
 import { useMemo, useState, type KeyboardEvent } from 'react';
 import { expiryOf, extensionOf, fileName, formatSize, type Expiry } from '../../files/files';
 import { formatDate, localToday, plural } from '../../lib/format';
@@ -9,7 +19,8 @@ import { useViewData } from '../context';
 import { Clickable } from '../interactive';
 import { OptionBadge, useOptions } from '../options';
 import { Select } from '../select';
-import { Badge, Empty } from '../ui';
+import { AddFilesActions, EmptyState, FILES_HINT } from '../empty-state';
+import { Badge, BUTTON } from '../ui';
 import { GlanceDate } from '../../files/glance';
 
 // The project's files (docs/reframe/roadmap-2.md §3): find a named document fast and open it in
@@ -199,9 +210,13 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
 
   if (!all.length) {
     return (
-      <Empty>
-        {data.files?.length ? 'No files match this list' : 'No files added to this project yet'}
-      </Empty>
+      <EmptyState
+        icon={data.files?.length ? SearchX : FolderOpen}
+        title={data.files?.length ? 'No files match this list' : 'No files in this project yet'}
+        hint={data.files?.length ? 'Files that match its filter show up here.' : FILES_HINT}
+      >
+        {!data.files?.length && <AddFilesActions />}
+      </EmptyState>
     );
   }
 
@@ -360,7 +375,13 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
             </ul>
           </section>
         ))}
-        {!shown.length && <Empty>No files match. Try fewer words or clear the filters.</Empty>}
+        {!shown.length && (
+          <EmptyState icon={SearchX} title="No files match" hint="Try fewer words.">
+            <button type="button" onClick={clear} className={BUTTON.secondary}>
+              Clear the filters
+            </button>
+          </EmptyState>
+        )}
       </div>
     </div>
   );

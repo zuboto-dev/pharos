@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useViewData } from './context';
 import { TYPE_LABELS } from './interactive';
+import { BUTTON } from './ui';
 
 /**
  * Field values a new item should get so it shows up in a widget filtered by `where`: exact
@@ -44,10 +45,13 @@ export function QuickAdd({
   label,
   onAdd,
   className,
+  variant = 'row',
 }: {
   label: string;
   onAdd: (title: string) => Promise<unknown>;
   className?: string;
+  /** `button`: a button for an empty state (v0.2 B8), instead of a quiet row under a list. */
+  variant?: 'row' | 'button';
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
@@ -60,19 +64,23 @@ export function QuickAdd({
           e.stopPropagation();
           setOpen(true);
         }}
-        className={clsx(
-          'flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left text-sm text-muted hover:bg-subtle hover:text-ink',
-          className,
-        )}
+        className={
+          variant === 'button'
+            ? clsx(BUTTON.accent, className)
+            : clsx(
+                'flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left text-sm text-muted hover:bg-subtle hover:text-ink',
+                className,
+              )
+        }
       >
-        <Plus className="size-3.5" /> {label}
+        <Plus className="size-3.5" aria-hidden /> {label}
       </button>
     );
   }
   return (
     <form
       data-no-open
-      className={className}
+      className={clsx(variant === 'button' && 'w-full', className)}
       onClick={(e) => e.stopPropagation()}
       onSubmit={(e) => {
         e.preventDefault();

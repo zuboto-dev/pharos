@@ -36,6 +36,7 @@ import {
   type ViewActions,
 } from '../catalog/context';
 import { DetailDrawer } from '../catalog/drawer';
+import { EmptyState } from '../catalog/empty-state';
 import { FilesPage } from '../files/FilesPage';
 import { FolderRequestNotice } from '../files/FolderRequests';
 import { ExpiryNotice } from '../files/expiry-notice';
@@ -467,9 +468,36 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
           )}
         {!filesPage && board.widgets.length === 0 && !editing && (
-          <div className="rounded-block border border-dashed border-neutral-300 p-10 text-center text-sm text-muted dark:border-neutral-700">
-            This view is empty. Use <strong>Customize</strong> → Add widget, or ask your agent to
-            build it (for example, “make this a view of what’s left in the current stage”).
+          <div className="rounded-block border border-dashed border-line-strong">
+            <EmptyState
+              icon={LayoutGrid}
+              title="This view is empty"
+              hint="Add blocks yourself, or ask your agent to build it (for example, “make this a view of what’s left in the current stage”)."
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(true);
+                  setPicking(true);
+                }}
+                className={BUTTON.accent}
+              >
+                <Plus className="size-3.5" aria-hidden /> Add a block
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAsking({
+                    label: active ? `View “${active.data.name}”` : 'This view',
+                    viewId: active?.id,
+                    question: 'Build this view: ',
+                  })
+                }
+                className={BUTTON.secondary}
+              >
+                <MessageCircleQuestion className="size-3.5" aria-hidden /> Ask an agent
+              </button>
+            </EmptyState>
           </div>
         )}
         {!filesPage && (

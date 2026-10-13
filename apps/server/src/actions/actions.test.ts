@@ -373,7 +373,16 @@ describe('over REST and MCP', () => {
     expect(s.store.revision(result.revision)!.author).toEqual({ kind: 'human', name: 'me' });
     expect((await post(body)).status).toBe(200);
     expect((await post({ ...body, idempotencyKey: key() })).status).toBe(409);
-    expect((await post({ ...body, idempotencyKey: key(), values: {} })).status).toBe(400);
+    const now = s.record('Rent').updatedRev;
+    expect(
+      (await post({ ...body, idempotencyKey: key(), expectedRevision: now, values: {} })).status,
+    ).toBe(400);
+    // Marked paid today already: a second time today is refused, not logged twice.
+    const twice = await post({ ...body, idempotencyKey: key(), expectedRevision: now });
+    expect(twice.status).toBe(400);
+    expect(((await twice.json()) as { fieldErrors: { date: string } }).fieldErrors.date).toMatch(
+      /Already marked done/,
+    );
     expect((await post({ ...body, idempotencyKey: key(), widgetId: 'gone' })).status).toBe(404);
     expect((await post({ ...body, projectId: 'prj_other' })).status).toBe(400);
     // An agent's header is its author.

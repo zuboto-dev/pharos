@@ -172,7 +172,7 @@ export function AskDialog({
         )}
         <p className="text-xs text-muted">
           {agent.configured && agent.enabled
-            ? 'Your agent will start on it in a moment; '
+            ? 'Your agent will start on it in a moment. '
             : 'Your agent sees open questions when it next checks Pharos (or ask it: “answer my questions in Pharos”). '}
           {mode === 'block'
             ? 'The block shows when it is working on it, and you can undo the change.'

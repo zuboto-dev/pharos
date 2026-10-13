@@ -163,6 +163,29 @@ export class ActionService {
       )
         return { v, status: 'not_found', message: 'That record is in another project' };
     }
+    // A record someone changed since the form was filled is stale before anything else: the
+    // person sees what changed, not errors worked out against values they never saw.
+    const target =
+      form.kind === 'done' && submission.recordId ? lookup(submission.recordId) : undefined;
+    if (
+      target?.type === 'record' &&
+      (target.data as { recordType: string }).recordType === form.type.key &&
+      submission.expectedRevision !== undefined &&
+      target.updatedRev !== submission.expectedRevision
+    ) {
+      const record = target as Entity<'record'>;
+      return {
+        v,
+        status: 'stale',
+        message: `“${record.data.title}” changed since the form was opened; check it and send again`,
+        current: {
+          recordId: record.id,
+          revision: record.updatedRev,
+          title: record.data.title,
+          ...(record.data.interval?.lastDate ? { lastDate: record.data.interval.lastDate } : {}),
+        },
+      };
+    }
     const errors = submissionErrors(form, submission, lookup);
     if (form.kind === 'done' && submission.expectedRevision === undefined && !errors.recordId)
       errors.form =
@@ -172,22 +195,6 @@ export class ActionService {
         `Check ${Object.keys(errors).length === 1 ? 'this field' : 'these fields'}`,
         errors,
       );
-
-    if (form.kind === 'done') {
-      const record = lookup(submission.recordId!) as Entity<'record'>;
-      if (record.updatedRev !== submission.expectedRevision)
-        return {
-          v,
-          status: 'stale',
-          message: `“${record.data.title}” changed since the form was opened; check it and send again`,
-          current: {
-            recordId: record.id,
-            revision: record.updatedRev,
-            title: record.data.title,
-            ...(record.data.interval?.lastDate ? { lastDate: record.data.interval.lastDate } : {}),
-          },
-        };
-    }
 
     if (!this.reserve(submission.idempotencyKey, project.id, fingerprint)) {
       const raced = this.row(submission.idempotencyKey);

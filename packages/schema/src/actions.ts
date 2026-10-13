@@ -436,6 +436,13 @@ export function submissionErrors(
     else if (field.kind === 'record' && !(found as Entity<'record'>).data.interval)
       errors[field.key] = `${field.label}: that record doesn't repeat`;
   }
+  // Marking done again on (or before) the day it was last done would log it twice, e.g. a second
+  // spending for the same rent: say so instead.
+  const last =
+    target?.type === 'record' ? (target as Entity<'record'>).data.interval?.lastDate : undefined;
+  const date = submission.values.date;
+  if (last && typeof date === 'string' && !errors.date && !errors.recordId && date <= last)
+    errors.date = `Already marked done on ${last}; pick a later date`;
   return errors;
 }
 

@@ -143,6 +143,31 @@ describe('field checks (R10.4)', () => {
   });
 });
 
+describe('marking done twice (R10.4)', () => {
+  it('refuses a date on or before the day it was last done', () => {
+    const def = MONEY_PACK.views[0]!.widgets.find((w) => w.id === 'mark-paid')!.node as ActionDef;
+    const { form } = actionForm(def, moneyProject);
+    const rent = {
+      id: 'rec_rent',
+      type: 'record',
+      data: {
+        projectId: 'p1',
+        recordType: 'bill',
+        interval: { every: { n: 1, unit: 'months' }, lastDate: '2026-10-01' },
+      },
+    };
+    const errors = (date: string) =>
+      submissionErrors(
+        form!,
+        { projectId: 'p1', recordId: 'rec_rent', values: { date } },
+        () => rent as never,
+      );
+    expect(errors('2026-10-01').date).toBe('Already marked done on 2026-10-01; pick a later date');
+    expect(errors('2026-09-30').date).toMatch(/Already marked done/);
+    expect(errors('2026-10-02')).toEqual({});
+  });
+});
+
 describe('the submission (R10.3)', () => {
   const submission = {
     v: 1,

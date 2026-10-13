@@ -63,6 +63,7 @@ export const QueryableType = z.enum([
   'decision',
   'claim',
   'term',
+  'file',
 ]);
 export type QueryableType = z.infer<typeof QueryableType>;
 
@@ -84,4 +85,6 @@ export type ProjectDataset = {
   requests: Entity<'request'>[];
   claims: Entity<'claim'>[];
   terms: Entity<'term'>[];
+  /** Project files (R7). For agents, R7.5 leaves out hidden folders and scan-only fields. */
+  files: Entity<'file'>[];
 };

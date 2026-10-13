@@ -95,6 +95,31 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // v5: the folder scan cache (R7): what each folder in Settings holds, so the owner can add files
+  // to a project. A cache, not project data: rebuilt by scanning, never revisions. Folders
+  // themselves are a setting (FOLDERS_SETTING), so root_id has no foreign key. sha256 is filled
+  // lazily (on first read) and cleared when size or modified_at change.
+  `
+  CREATE TABLE file_scan (
+    root_id TEXT NOT NULL,
+    path TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    modified_at TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    sha256 TEXT,
+    seen_at TEXT NOT NULL,
+    PRIMARY KEY (root_id, path)
+  );
+  CREATE INDEX file_scan_sha256 ON file_scan(sha256);
+
+  CREATE TABLE file_scan_status (
+    root_id TEXT PRIMARY KEY,
+    started_at TEXT,
+    finished_at TEXT,
+    files INTEGER,
+    error TEXT
+  );
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

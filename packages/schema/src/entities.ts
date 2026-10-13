@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { ViewSpec } from './views/board.js';
 
@@ -7,6 +8,7 @@ export {
   Certainty,
   ArtifactStatus,
   DecisionStatus,
+  FileKind,
   GoalStatus,
   ScopeKind,
   StageStatus,
@@ -117,6 +119,7 @@ export const ArtifactData = z.strictObject({
   kind: optionField('artifact.kind'),
   status: optionField('artifact.status'),
   uri: z.string().optional().describe('Path or URL of the deliverable'),
+  fileId: Id.optional().describe('The project file it is, so a local source opens'),
   stageId: Id.optional(),
   taskId: Id.optional(),
 });
@@ -243,6 +246,39 @@ export const TermData = z.strictObject({
   ),
 });
 
+/**
+ * A file on the owner's disk, added to a project from a folder in Settings (R7). The file stays
+ * where it is; Pharos keeps where it is and its details. `rootId` is a folder id from the
+ * settings, not an entity, so removing a folder leaves its files here, shown as missing.
+ * SCAN_FILE_FIELDS (files.ts) are set by the scan only.
+ */
+export const FileData = z.strictObject({
+  projectId: Id,
+  title: Text.max(200).describe('Shown name, e.g. "Certificate of incorporation"'),
+  rootId: FolderId,
+  path: FilePath,
+  size: z.number().int().min(0).describe('Bytes'),
+  modifiedAt: z.iso.datetime().describe('Last modified on disk'),
+  sha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional()
+    .describe('Filled when first read; finds the file again after it moves'),
+  mimeType: z.string().min(1).optional().describe('From the allowlist in files.ts'),
+  kind: optionField('file.kind'),
+  issuer: z
+    .string()
+    .min(1)
+    .max(120)
+    .optional()
+    .describe('Who issued it or sent it, e.g. a bank, an agency, a supplier'),
+  issuedDate: IsoDate.optional().describe('YYYY-MM-DD it was issued'),
+  expiryDate: IsoDate.optional().describe('YYYY-MM-DD it expires or must be renewed'),
+  tags: z.array(z.string().min(1).max(40)),
+  notes: Markdown.optional(),
+  taskIds: z.array(Id).describe('Tasks this file belongs to'),
+});
+
 export const ENTITY_TYPES = [
   'section',
   'repository',
@@ -258,6 +294,7 @@ export const ENTITY_TYPES = [
   'request',
   'claim',
   'term',
+  'file',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -343,6 +380,7 @@ export const ENTITIES = {
       projectId: projectRef,
       stageId: { type: 'stage', onDelete: 'unset' },
       taskId: { type: 'task', onDelete: 'unset' },
+      fileId: { type: 'file', onDelete: 'unset' },
     },
     label: 'title',
   },
@@ -392,6 +430,17 @@ export const ENTITIES = {
     defaults: { alsoCalled: [] },
     refs: { projectId: projectRef, sourceId: { type: 'artifact', onDelete: 'unset' } },
     label: 'word',
+  },
+  file: {
+    prefix: 'file',
+    data: FileData,
+    // A meaning; the store picks the project's value for it.
+    defaults: { kind: 'other', tags: [], taskIds: [] },
+    refs: {
+      projectId: projectRef,
+      taskIds: { type: 'task', many: true, onDelete: 'unset' },
+    },
+    label: 'title',
   },
 } satisfies Record<EntityType, EntityDef>;
 

@@ -69,6 +69,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   Layers: COMPONENT_INFO.Layers.example,
   BeforeAfter: COMPONENT_INFO.BeforeAfter.example,
   FindingChart: COMPONENT_INFO.FindingChart.example,
+  FileList: COMPONENT_INFO.FileList.example,
   ClaimCard: COMPONENT_INFO.ClaimCard.example,
   StartHere: COMPONENT_INFO.StartHere.example,
 };

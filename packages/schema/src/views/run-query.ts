@@ -11,6 +11,7 @@ const DATASET_KEYS = {
   decision: 'decisions',
   claim: 'claims',
   term: 'terms',
+  file: 'files',
 } as const satisfies Record<QueryableType, keyof ProjectDataset>;
 
 /** References a field path may follow one hop through, e.g. "stage.status" via `stageId`. */
@@ -18,6 +19,7 @@ const HOPS: Record<string, { field: string; type: EntityType }> = {
   stage: { field: 'stageId', type: 'stage' },
   assignee: { field: 'assigneeId', type: 'assignee' },
   task: { field: 'taskId', type: 'task' },
+  file: { field: 'fileId', type: 'file' },
   parent: { field: 'parentId', type: 'goal' },
   project: { field: 'projectId', type: 'project' },
 };
@@ -207,6 +209,8 @@ function index(data: ProjectDataset): Map<string, Entity> {
     ...data.goals,
     ...data.stages,
     ...data.tasks,
+    // Older datasets (and test fixtures) may come without files.
+    ...(data.files ?? []),
   ];
   return new Map(all.map((e) => [e.id, e]));
 }
@@ -218,7 +222,7 @@ export function runQuery<T extends QueryableType>(
   context: QueryContext = {},
 ): Entity<T>[] {
   const run: Run = { data, byId: index(data), today: context.today ?? localToday() };
-  let rows = (data[DATASET_KEYS[type]] as Entity<T>[]).filter(
+  let rows = ((data[DATASET_KEYS[type]] ?? []) as Entity<T>[]).filter(
     (e) =>
       (!filter.where || matches(e, filter.where, run)) &&
       (!filter.anyOf?.length || filter.anyOf.some((w) => matches(e, w, run))),

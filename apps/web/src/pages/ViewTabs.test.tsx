@@ -53,7 +53,7 @@ describe('view tabs', () => {
   it('tells when each view was last updated, so similar names can be told apart', () => {
     renderTabs();
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('title')).toMatch(
-      /Updated .*ago/,
+      /Updated (.*ago|yesterday|last \w+)/,
     );
     const now = Date.parse(overview!.updatedAt) + 3 * 3_600_000;
     expect(

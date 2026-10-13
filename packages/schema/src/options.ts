@@ -14,6 +14,16 @@ export const ArtifactStatus = z.enum(['expected', 'in_progress', 'delivered']);
 export const DecisionStatus = z.enum(['proposed', 'accepted', 'rejected', 'superseded']);
 /** How sure a claim is, weakest first. */
 export const Certainty = z.enum(['reading', 'verified', 'confirmed']);
+/** What a project file is (R7); a project can rename these or add its own, e.g. "Tax form". */
+export const FileKind = z.enum([
+  'statement',
+  'receipt',
+  'contract',
+  'certificate',
+  'manual',
+  'audio',
+  'other',
+]);
 
 export const OPTION_FIELDS = {
   'task.status': {
@@ -70,6 +80,12 @@ export const OPTION_FIELDS = {
     meanings: Certainty.options,
     label: 'Certainty',
   },
+  'file.kind': {
+    type: 'file',
+    field: 'kind',
+    meanings: FileKind.options,
+    label: 'File kind',
+  },
 } as const;
 
 export type OptionKey = keyof typeof OPTION_FIELDS;
@@ -115,6 +131,10 @@ const MEANING_COLORS: Record<string, OptionColor> = {
   reading: 'amber',
   verified: 'green',
   confirmed: 'violet',
+  statement: 'blue',
+  receipt: 'green',
+  contract: 'violet',
+  certificate: 'amber',
 };
 
 export const OptionValue = z

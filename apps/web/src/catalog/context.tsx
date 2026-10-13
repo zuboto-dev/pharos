@@ -67,6 +67,7 @@ export function ViewDataProvider({
       ...data.decisions,
       ...data.claims,
       ...data.terms,
+      ...(data.files ?? []),
       ...data.views,
     ];
     return {

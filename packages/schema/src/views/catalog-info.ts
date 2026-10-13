@@ -175,6 +175,18 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
     suggestedColumns: 6,
     example: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
   },
+  FileList: {
+    category: 'outputs',
+    use: 'The project\'s files (statements, receipts, contracts, certificates, manuals) as a list grouped by kind, with a name search and filters for kind, tag, issuer and expiry; the reader opens a file to preview it, download it or reveal it in Finder. Files stay in the owner\'s folders and only the owner adds them, so never invent file ids or paths. Narrow with `filter`, e.g. papers expiring within 60 days {"where": {"expiryDate": {"lte": "$today+60d"}}}. You see each file\'s details, never its contents.',
+    minColumns: 4,
+    suggestedColumns: 12,
+    example: {
+      component: 'FileList',
+      title: 'Company papers',
+      filter: { where: { kind: ['contract', 'certificate'] } },
+      details: ['issuer', 'expiryDate'],
+    },
+  },
   ActivityFeed: {
     category: 'outputs',
     use: 'Recent changes: who changed what and why.',

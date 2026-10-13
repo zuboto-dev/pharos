@@ -53,10 +53,11 @@ describe('MCP', () => {
       'view_preview',
       'view_update',
     ]);
-    // View editing lives in the view tools, keeping apply's schema small.
+    // View editing lives in the view tools, keeping apply's schema small. Files (R7) added about
+    // 2k: agents may only update a file's details.
     const apply = JSON.stringify(tools.find((t) => t.name === 'apply')!.inputSchema);
     expect(apply).not.toContain('"Board"');
-    expect(apply.length).toBeLessThan(45_000);
+    expect(apply.length).toBeLessThan(47_500);
     expect(client.getInstructions()).toContain('apply');
   });
 

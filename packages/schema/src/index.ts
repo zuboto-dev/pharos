@@ -1,5 +1,6 @@
 export * from './health.js';
 export * from './entities.js';
+export * from './files.js';
 export {
   OPTION_COLORS,
   OPTION_FIELDS,

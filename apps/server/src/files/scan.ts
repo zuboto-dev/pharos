@@ -1,8 +1,8 @@
-import { opendir, realpath, stat } from 'node:fs/promises';
+import { lstat, opendir } from 'node:fs/promises';
 import type { DatabaseSync } from 'node:sqlite';
 import { setImmediate as yieldToEvents } from 'node:timers/promises';
 import { FilePath, fileTypeOf, type FileFolder, type ScanStatus } from '@pharos/schema';
-import { isAllowedDir, isAllowedName } from './safety.js';
+import { PathRefused, approvedRoot, isAllowedDir, isAllowedName, plainDir } from './safety.js';
 
 /**
  * The scan cache (R7.2): what's in each folder the owner added, kept in the `file_scan` tables.
@@ -57,6 +57,10 @@ const toEntry = (r: ScanRow): ScanEntry => ({
 
 /** A folder error in plain words (never file contents; paths only the owner typed). */
 export function folderProblem(error: unknown): string {
+  if (error instanceof PathRefused)
+    return error.reason === 'replaced'
+      ? 'This folder was replaced since it was added (moved, or a link put in its place). Remove it and add it again.'
+      : 'A folder inside changed while it was scanned; scan again.';
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   switch (code) {
     case 'ENOENT':
@@ -193,10 +197,11 @@ export class FileScanner {
         .run(new Date().toISOString(), files, error, folder.id);
 
     let root: string;
+    let rootIdentity: string;
     try {
-      root = await realpath(folder.path);
-      if (!(await stat(root)).isDirectory())
-        throw Object.assign(new Error('Not a folder'), { code: 'ENOTDIR' });
+      // Still the folder the owner added (not replaced, not a link to elsewhere).
+      root = await approvedRoot(folder);
+      rootIdentity = await plainDir(root);
     } catch (error) {
       finish(null, folderProblem(error));
       return;
@@ -212,12 +217,19 @@ export class FileScanner {
       await yieldToEvents();
     };
 
-    const stack: { dir: string; rel: string; depth: number }[] = [{ dir: root, rel: '', depth: 0 }];
+    const stack: { dir: string; rel: string; depth: number; identity: string }[] = [
+      { dir: root, rel: '', depth: 0, identity: rootIdentity },
+    ];
     try {
       while (stack.length && !stopped) {
-        const { dir, rel, depth } = stack.pop()!;
+        const { dir, rel, depth, identity } = stack.pop()!;
         let handle;
+        let found: ScanEntry[] = [];
+        let subdirs: typeof stack = [];
         try {
+          // Each folder must still be the real folder seen from its parent, not a link put in its
+          // place, before and after it is listed; the root must still be the approved one.
+          if ((await plainDir(dir)) !== identity) throw new PathRefused('outside');
           handle = await opendir(dir);
         } catch (error) {
           if (depth === 0) throw error;
@@ -230,21 +242,27 @@ export class FileScanner {
           // Symlinks are never followed while scanning: a link can lead anywhere.
           if (dirent.isSymbolicLink()) continue;
           if (dirent.isDirectory()) {
-            if (depth + 1 < this.maxDepth && isAllowedDir(name))
-              stack.push({ dir: `${dir}/${name}`, rel: relPath, depth: depth + 1 });
+            if (depth + 1 < this.maxDepth && isAllowedDir(name)) {
+              const sub = `${dir}/${name}`;
+              const subIdentity = await plainDir(sub).catch(() => null);
+              if (subIdentity)
+                subdirs.push({ dir: sub, rel: relPath, depth: depth + 1, identity: subIdentity });
+              else skipped++;
+            }
             continue;
           }
           if (!dirent.isFile() || !isAllowedName(name)) continue;
           let info;
           try {
-            info = await stat(`${dir}/${name}`);
+            // lstat: a name swapped for a link since it was listed is skipped below.
+            info = await lstat(`${dir}/${name}`);
           } catch {
             skipped++;
             continue;
           }
           if (!info.isFile() || !isAllowedName(name, info.size)) continue;
           if (!FilePath.safeParse(relPath).success) continue;
-          batch.push({
+          found.push({
             rootId: folder.id,
             path: relPath,
             size: info.size,
@@ -252,11 +270,27 @@ export class FileScanner {
             mimeType: fileTypeOf(name).mime,
             sha256: null,
           });
-          count++;
-          if (count >= this.maxFiles) {
+          if (count + found.length >= this.maxFiles) {
             stopped = true;
             break;
           }
+        }
+        // Listed through a replaced folder: keep nothing from it.
+        const rootSame = await approvedRoot(folder).then(
+          () => true,
+          () => false,
+        );
+        if (!rootSame) throw new PathRefused('replaced');
+        if ((await plainDir(dir).catch(() => null)) !== identity) {
+          if (depth === 0) throw new PathRefused('replaced');
+          skipped++;
+          found = [];
+          subdirs = [];
+        }
+        stack.push(...subdirs);
+        for (const entry of found) {
+          batch.push(entry);
+          count++;
           if (batch.length >= this.batchSize) await flush();
         }
       }

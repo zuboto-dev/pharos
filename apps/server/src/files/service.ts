@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
-import { open, stat, type FileHandle } from 'node:fs/promises';
+import { stat, type FileHandle } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import {
   AddFilesInput,
@@ -22,7 +21,13 @@ import {
 import { PharosError } from '../store/errors.js';
 import type { ApplyResult, Store } from '../store/store.js';
 import { FileScanner, type ScanOptions } from './scan.js';
-import { PathRefused, extensionOf, isAllowedPath, resolveInside } from './safety.js';
+import {
+  PathRefused,
+  isAllowedPath,
+  openInside,
+  resolveInside,
+  type OpenedFile,
+} from './safety.js';
 
 /**
  * Project files on the owner's disk (R7.2): resolving a file id to a real path inside its folder,
@@ -60,7 +65,7 @@ export type FileServiceOptions = ScanOptions & {
 };
 
 type Located =
-  | { ok: true; entity: Entity<'file'>; folder: FileFolder; real: string }
+  | { ok: true; entity: Entity<'file'>; folder: FileFolder; real: string; resolvedPath: string }
   | {
       ok: false;
       entity: Entity<'file'>;
@@ -140,10 +145,11 @@ export class FileService {
       return { ok: false, entity, folder, missing: 'folder-unavailable', error };
     }
     try {
-      const real = await resolveInside(folder.path, entity.data.path);
-      if (!(await stat(real)).isFile()) throw new PathRefused('not-allowed');
-      return { ok: true, entity, folder, real };
+      const { real, resolvedPath } = await resolveInside(folder, entity.data.path);
+      return { ok: true, entity, folder, real, resolvedPath };
     } catch (error) {
+      if (error instanceof PathRefused && error.reason === 'replaced')
+        return { ok: false, entity, folder, missing: 'folder-unavailable', refused: true, error };
       return {
         ok: false,
         entity,
@@ -201,8 +207,9 @@ export class FileService {
   async hashLocal(folder: FileFolder, path: string): Promise<string | null> {
     let handle: FileHandle | undefined;
     try {
-      handle = await this.openReadOnly(await resolveInside(folder.path, path));
-      const info = await handle.stat();
+      const opened = await openInside(folder, path);
+      handle = opened.handle;
+      const info = opened.stats;
       // A size with no blocks on disk is an iCloud placeholder ("dataless" file).
       if (info.size > HASH_LOCAL_MAX_BYTES || (info.size > 0 && info.blocks === 0)) return null;
       const hash = createHash('sha256');
@@ -221,6 +228,12 @@ export class FileService {
   private async reachable(fileId: string) {
     const at = await this.locate(fileId);
     if (at.ok) return at;
+    if (at.refused && at.missing === 'folder-unavailable')
+      throw new FileError(
+        403,
+        'forbidden',
+        'Its folder was replaced since it was added; remove it and add it again in Settings',
+      );
     if (at.refused) throw new FileError(403, 'forbidden', 'Pharos doesn\u2019t serve this file');
     if (at.missing === 'folder-removed')
       throw new FileError(404, 'folder-removed', 'Its folder was removed in Settings');
@@ -229,28 +242,14 @@ export class FileService {
     throw new FileError(404, 'file-gone', "The file isn't at its path any more");
   }
 
-  /** Opens a resolved path read-only, refusing anything that isn't a plain file. */
-  private async openReadOnly(real: string): Promise<FileHandle> {
-    let handle: FileHandle;
+  /** Opens a file through the safe reader (see `openInside`), as a FileError when refused. */
+  private async openSafely(folder: FileFolder, path: string): Promise<OpenedFile> {
     try {
-      // O_NOFOLLOW: if the path was swapped for a symlink since it was resolved, refuse it.
-      handle = await open(real, constants.O_RDONLY | constants.O_NOFOLLOW);
+      return await openInside(folder, path);
     } catch (error) {
-      if (codeOf(error) === 'ELOOP') throw new FileError(403, 'forbidden', 'Not a plain file');
+      if (error instanceof PathRefused)
+        throw new FileError(403, 'forbidden', 'Pharos doesn\u2019t serve this file');
       throw this.readError(error);
-    }
-    try {
-      if (!(await handle.stat()).isFile()) throw new FileError(403, 'forbidden', 'Not a file');
-      // ".key" is Keynote (a zip) or a private key: only a Keynote document goes out.
-      if (extensionOf(real) === 'key') {
-        const { buffer, bytesRead } = await handle.read(Buffer.alloc(4), 0, 4, 0);
-        if (bytesRead < 4 || buffer.toString('latin1') !== 'PK\u0003\u0004')
-          throw new FileError(403, 'forbidden', 'Pharos doesn\u2019t serve key files');
-      }
-      return handle;
-    } catch (error) {
-      await handle.close().catch(() => {});
-      throw error instanceof FileError ? error : this.readError(error);
     }
   }
 
@@ -276,19 +275,12 @@ export class FileService {
    * `application/octet-stream`.
    */
   async contents(fileId: string, mode: 'content' | 'download'): Promise<Response> {
-    const { entity, real } = await this.reachable(fileId);
-    const handle = await this.openReadOnly(real);
-    let info;
-    try {
-      info = await handle.stat();
-    } catch (error) {
-      await handle.close().catch(() => {});
-      throw this.readError(error);
-    }
+    const { entity, folder } = await this.reachable(fileId);
+    const { handle, stats: info, resolvedPath } = await this.openSafely(folder, entity.data.path);
     // The type of what is really there; a link named "a.pdf" to "b.html" is not a PDF.
     const type =
-      fileTypeOf(real).mime === fileTypeOf(entity.data.path).mime
-        ? fileTypeOf(real)
+      fileTypeOf(resolvedPath).mime === fileTypeOf(entity.data.path).mime
+        ? fileTypeOf(resolvedPath)
         : UNKNOWN_FILE_TYPE;
     const inline = mode === 'content' && type.preview !== 'none';
     const isText = type.preview === 'text' || type.preview === 'markdown';
@@ -351,12 +343,12 @@ export class FileService {
   async action(fileId: string, action: FileAction): Promise<void> {
     if (this.platform !== 'darwin')
       throw new FileError(400, 'unsupported', 'This works on macOS only');
-    const { entity, real } = await this.reachable(fileId);
+    const { entity, folder, real } = await this.reachable(fileId);
     if (action === 'open') {
       if (!fileTypeOf(real).open || !fileTypeOf(entity.data.path).open)
         throw new FileError(403, 'forbidden', 'Pharos only opens documents; reveal it in Finder');
       // Same checks as reading it (a plain file; a ".key" must be Keynote).
-      await (await this.openReadOnly(real)).close();
+      await (await this.openSafely(folder, entity.data.path)).handle.close();
     }
     try {
       await this.opener(action === 'reveal' ? ['-R', real] : [real]);

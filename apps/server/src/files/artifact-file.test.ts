@@ -223,10 +223,11 @@ describe('linking artifact.fileId', () => {
     await expect
       .poll(() => store.getOfType('artifact', lease).data.fileId, { timeout: 2000 })
       .toBe(fileId);
-    const res = await app.request(`/api/artifacts/${lease}/file`);
+    const page = { headers: { 'sec-fetch-site': 'same-origin' } };
+    const res = await app.request(`/api/artifacts/${lease}/file`, page);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ state: 'linked', fileId });
-    expect((await app.request('/api/artifacts/artifact_missing/file')).status).toBe(404);
+    expect((await app.request('/api/artifacts/artifact_missing/file', page)).status).toBe(404);
   });
 
   it("doesn't let agents set fileId", () => {

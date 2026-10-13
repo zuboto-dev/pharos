@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { realpathSync, statSync } from 'node:fs';
+import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import {
@@ -17,6 +17,8 @@ import {
 import { Hono, type Context } from 'hono';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
+import { originMatches, sameOriginOnly } from './routes.js';
+import { identityOf } from './safety.js';
 import type { FileScanner } from './scan.js';
 
 /**
@@ -186,10 +188,23 @@ function newFolderId(): string {
  * these routes at all.
  */
 function notAPerson(c: Context): string | null {
-  const author = c.req.header('x-pharos-author');
-  if (author && !author.startsWith('human:'))
+  if (isAgent(c))
     return 'Only a person can add folders or give agents more access, on the Settings page';
-  if (!c.req.header('origin') || c.req.header('sec-fetch-site') !== 'same-origin')
+  return notThePage(c);
+}
+
+/** Whether the request declares an author other than a person. */
+const isAgent = (c: Context) => {
+  const author = c.req.header('x-pharos-author');
+  return author !== undefined && !author.startsWith('human:');
+};
+
+/**
+ * Why a folder write doesn't come from the Settings page, or null: a write needs both an `Origin`
+ * naming this very origin and `Sec-Fetch-Site: same-origin`, as a browser's `fetch` sends them.
+ */
+function notThePage(c: Context): string | null {
+  if (!originMatches(c) || c.req.header('sec-fetch-site') !== 'same-origin')
     return 'Add folders and change access on the Settings page in Pharos';
   return null;
 }
@@ -231,7 +246,15 @@ export function folderRoutes(store: Store, options: FolderRouteOptions = {}) {
     return index;
   };
 
-  routes.get('/', (c) => c.json(savedFolders(store).map(status)));
+  // Every folder route answers the Pharos page only (R7.9), reads included: the list names the
+  // owner's folders and paths.
+  routes.use('*', sameOriginOnly);
+
+  routes.get('/', (c) => {
+    // Agents learn about files through MCP (AgentFiles), never the folder list.
+    if (isAgent(c)) return forbidden(c, 'Folders are shown on the Settings page in Pharos');
+    return c.json(savedFolders(store).map(status));
+  });
 
   routes.post('/', async (c) => {
     const refusal = notAPerson(c);
@@ -248,6 +271,8 @@ export function folderRoutes(store: Store, options: FolderRouteOptions = {}) {
       label: input.label ?? basename(path),
       level: input.level ?? DEFAULT_FOLDER_LEVEL,
       addedAt: new Date().toISOString(),
+      // Pinned: a folder later replaced at this path (moved, or a link put there) is refused.
+      identity: identityOf(lstatSync(path, { bigint: true })),
     };
     save([...folders, folder]);
     options.scanner?.scan(folder); // in the background; it logs its own errors
@@ -264,15 +289,14 @@ export function folderRoutes(store: Store, options: FolderRouteOptions = {}) {
       ...(input.label !== undefined ? { label: input.label } : {}),
       ...(input.level !== undefined ? { level: input.level } : {}),
     };
-    // Lowering a level only takes access away, so anyone may; anything else needs a person.
+    // Lowering a level only takes access away, so an agent may, from the Settings page like any
+    // folder write (R7.9); anything else needs a person.
     const lowersOnly =
       input.label === undefined &&
       input.level !== undefined &&
       LEVEL_RANK[input.level] <= LEVEL_RANK[current.level];
-    if (!lowersOnly) {
-      const refusal = notAPerson(c);
-      if (refusal) return forbidden(c, refusal);
-    }
+    const refusal = lowersOnly ? notThePage(c) : notAPerson(c);
+    if (refusal) return forbidden(c, refusal);
     folders[index] = next;
     save(folders);
     return c.json(status(next));

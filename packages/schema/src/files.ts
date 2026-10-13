@@ -98,6 +98,13 @@ export const FileFolder = z.strictObject({
   label: z.string().trim().min(1).max(60).describe('Shown instead of the path, e.g. "Company"'),
   level: FolderLevel,
   addedAt: z.iso.datetime(),
+  identity: z
+    .string()
+    .regex(/^\d+:\d+$/)
+    .optional()
+    .describe(
+      'Device and inode of the folder when it was added (R7.9); Pharos refuses a folder replaced since',
+    ),
 });
 export type FileFolder = z.infer<typeof FileFolder>;
 

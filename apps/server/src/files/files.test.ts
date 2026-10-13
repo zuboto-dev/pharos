@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { isAllowedDir, isAllowedName, isAllowedPath } from './safety.js';
+import { folderIdentity, isAllowedDir, isAllowedName, isAllowedPath } from './safety.js';
 import { FileService, contentDisposition } from './service.js';
 
 const ROOT_ID = 'root_test01';
@@ -198,6 +198,29 @@ describe('safety rules', () => {
     expect(isAllowedDir('node_modules')).toBe(false);
     expect(isAllowedDir('Tool.app')).toBe(false);
     expect(isAllowedPath('2025/.ssh/notes.txt')).toBe(false);
+  });
+
+  it('refuses backups of secrets and credential names with any extension (R7.9)', () => {
+    for (const name of [
+      'credentials.json.bak',
+      'server.pem.bak',
+      'server.pem~',
+      'id_rsa.orig',
+      'prod.env.old',
+      'terraform.tfstate.backup',
+      'terraform.tfstate.1700000000.backup',
+      'credentials.csv',
+      'secrets.md',
+      'passwords.xlsx',
+      'config.env.json',
+      'vault.kdbx.bak2',
+    ])
+      expect(isAllowedName(name), name).toBe(false);
+    for (const name of ['notes.txt.bak', 'report.old', 'Secret plan.md', 'plan.txt~'])
+      expect(isAllowedName(name), name).toBe(true);
+    // A backup of a ".key" is a key or a Keynote document like the original.
+    expect(isAllowedName('server.key.bak', 1_700)).toBe(false);
+    expect(isAllowedName('deck.key.bak', 200_000)).toBe(true);
   });
 
   it('writes the real file name safely in Content-Disposition', () => {
@@ -406,6 +429,21 @@ describe('serving', () => {
     expect((await app.request(`/api/files/${deck}/download`, { headers: ORIGIN })).status).toBe(
       200,
     );
+  });
+
+  it('refuses a folder replaced by another real folder since it was added (R7.9)', async () => {
+    write('pinned.txt', 'inside the folder');
+    writeFileSync(join(outside, 'pinned.txt'), 'outside the folder');
+    const real = realpathSync(root);
+    setFolders([{ identity: await folderIdentity(real) }]);
+    const id = record('pinned.txt');
+    expect((await app.request(`/api/files/${id}/content`, { headers: ORIGIN })).status).toBe(200);
+    renameSync(root, join(base, 'Moved away'));
+    renameSync(outside, root);
+    const res = await app.request(`/api/files/${id}/content`, { headers: ORIGIN });
+    expect(res.status).toBe(403);
+    expect(await res.text()).not.toContain('outside the folder');
+    expect((await scan()).error).toMatch(/replaced/);
   });
 
   it('can never be given a path that climbs out', () => {

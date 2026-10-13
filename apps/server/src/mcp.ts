@@ -264,7 +264,15 @@ export function createMcpServer(store: Store): McpServer {
       inputSchema: { fileId: z.string() },
       annotations: { readOnlyHint: true },
     },
-    ({ fileId }) => run(() => readAgentFileText(store, fileId)),
+    async ({ fileId }) => {
+      try {
+        return json(await readAgentFileText(store, fileId));
+      } catch (err) {
+        return run(() => {
+          throw err;
+        });
+      }
+    },
   );
 
   server.registerTool(

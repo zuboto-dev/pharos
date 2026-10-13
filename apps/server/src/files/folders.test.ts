@@ -16,7 +16,9 @@ let store: Store;
 let app: ReturnType<typeof createApp>;
 let files: FileService;
 
-const BROWSER = { origin: 'http://localhost:5173', 'sec-fetch-site': 'same-origin' };
+// The request goes to http://localhost, so the page's origin is http://localhost (R7.9 compares
+// full origins; through the Vite proxy both are http://localhost:5173).
+const BROWSER = { origin: 'http://localhost', 'sec-fetch-site': 'same-origin' };
 
 function request(
   method: string,

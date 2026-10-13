@@ -158,6 +158,10 @@ describe('a board under live updates', () => {
     height.mockReturnValue(400);
     update(boardOf({ ...ring('Ring'), id: 'a2' }, { ...goals, id: 'b2' }), 2);
     expect(grid.style.minHeight).toBe('1800px');
+    // The feed often reloads the same change twice: the second reload doesn't let go early.
+    update(boardOf({ ...ring('Ring'), id: 'a2' }, { ...goals, id: 'b2' }), 3);
+    act(() => vi.advanceTimersByTime(600));
+    expect(grid.style.minHeight).toBe('1800px');
     act(() => vi.advanceTimersByTime(1300));
     expect(grid.style.minHeight).toBe('');
     height.mockRestore();

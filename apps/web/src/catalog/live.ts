@@ -124,9 +124,34 @@ export function useLiveBoard<T extends HTMLElement>(
     };
   }, []);
 
+  // The timer that lets go of a held height; it outlives re-renders (a second reload of the same
+  // change must not let go early), and goes with the board.
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (hold.current) clearTimeout(hold.current);
+    },
+    [],
+  );
+
   useLayoutEffect(() => {
     const root = container.current;
     if (!root) return;
+    // Blocks swapped (an agent replaced the view): keep the board's height while they load, so
+    // the page under the reader doesn't shrink and the scroll position stays where it was. This
+    // comes first: anything below that reads layout would otherwise see the short board.
+    const swapped = lastIds.current !== idsKey;
+    lastIds.current = idsKey;
+    if (swapped && height.current > 0) {
+      const held = Math.max(height.current, parseFloat(root.style.minHeight) || 0);
+      root.style.minHeight = `${held}px`;
+      if (hold.current) clearTimeout(hold.current);
+      hold.current = setTimeout(() => {
+        root.style.minHeight = '';
+        hold.current = null;
+      }, HOLD_MS);
+    } else if (!hold.current) height.current = root.offsetHeight;
+
     const after = blocksIn(root);
     const { entered, changed } = diffBlocks(seen.current, after);
     const calm = isQuiet.current();
@@ -140,16 +165,6 @@ export function useLiveBoard<T extends HTMLElement>(
         if (el) mark(el, CHANGED_CLASS);
       }
     seen.current = after;
-
-    // Blocks swapped (an agent replaced the view): keep the board's height while they load, so
-    // the page under the reader doesn't shrink and the scroll position stays where it was.
-    let release: ReturnType<typeof setTimeout> | undefined;
-    const swapped = lastIds.current !== idsKey;
-    if (swapped && height.current > 0) {
-      root.style.minHeight = `${height.current}px`;
-      release = setTimeout(() => (root.style.minHeight = ''), HOLD_MS);
-    } else height.current = root.offsetHeight;
-    lastIds.current = idsKey;
 
     // Focus lost because its element was replaced: give it to the same control in the new one.
     const was = focused.current;
@@ -173,13 +188,7 @@ export function useLiveBoard<T extends HTMLElement>(
       seen.current = blocksIn(root);
       height.current = naturalHeight(root);
     }, SETTLE_MS);
-    return () => {
-      clearTimeout(settle);
-      if (release) {
-        clearTimeout(release);
-        root.style.minHeight = '';
-      }
-    };
+    return () => clearTimeout(settle);
   }, [version, idsKey]);
   return container;
 }

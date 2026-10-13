@@ -24,6 +24,8 @@ import { useResource } from '../../lib/api';
 import { useExit } from '../../lib/motion';
 import { useViewData, type ViewData } from '../context';
 import { Empty } from '../ui';
+import { GlanceDate } from '../../files/glance';
+import { FileTypeIcon } from './file-list';
 import { CertaintyMark } from './knowledge';
 
 /**
@@ -170,6 +172,43 @@ function Source({ picture, className }: { picture: GalleryPicture; className?: s
       )}
     >
       <span className="truncate">{picture.sourceHost}</span>
+      <ExternalLink className="size-3 shrink-0" aria-hidden />
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  );
+}
+
+/**
+ * Where a picture comes from, at a glance under it (v0.2 B2): a project file's one date that
+ * matters, or "Source" linking to its web page (the host is in the tooltip and the lightbox).
+ */
+function CaptionSource({ picture, className }: { picture: GalleryPicture; className?: string }) {
+  const data = useViewData();
+  if (picture.type === 'file' || (picture.image.kind === 'file' && !picture.sourceUrl)) {
+    const id = picture.type === 'file' ? picture.id : (picture.image as { fileId: string }).fileId;
+    const file = data.files?.find((f) => f.id === id);
+    return file ? (
+      <span className={clsx('inline-flex items-center gap-1.5', className)}>
+        <FileTypeIcon path={file.data.path} className="size-3.5 text-neutral-400" />
+        <GlanceDate file={file.data} />
+      </span>
+    ) : null;
+  }
+  const href = picture.sourceUrl ?? (picture.image.kind === 'url' ? picture.image.url : undefined);
+  if (!href || !/^https?:\/\//.test(href)) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer noopener"
+      referrerPolicy="no-referrer"
+      title={picture.sourceHost ?? href}
+      className={clsx(
+        'inline-flex min-w-0 items-center gap-1 text-sky-600 hover:underline dark:text-sky-400',
+        className,
+      )}
+    >
+      <span className="truncate">Source</span>
       <ExternalLink className="size-3 shrink-0" aria-hidden />
       <span className="sr-only">(opens in a new tab)</span>
     </a>
@@ -440,7 +479,7 @@ export function Gallery({ node }: { node: Node }) {
                 </p>
               )}
               <p className="flex min-w-0 text-xs text-neutral-500 dark:text-neutral-400">
-                <Source picture={p} className="min-w-0 truncate" />
+                <CaptionSource picture={p} className="min-w-0 truncate" />
               </p>
             </figcaption>
           )}

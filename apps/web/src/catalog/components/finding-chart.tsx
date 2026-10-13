@@ -132,7 +132,7 @@ function quoteSourceOf(data: ViewData, claim: Claim): Artifact | undefined {
   );
 }
 
-/** A web source opens in a new tab; a local file opens in the drawer, with its path shown. */
+/** A web source opens in a new tab; a local file opens in the drawer, where its path is. */
 function SourceLine({ source }: { source: Artifact }) {
   const { actions } = useViewData();
   if (isHttp(source.data.uri)) return <Uri uri={source.data.uri}>{source.data.title}</Uri>;
@@ -146,11 +146,6 @@ function SourceLine({ source }: { source: Artifact }) {
         <FileText className="size-3 shrink-0" aria-hidden />
         <span className="truncate">{source.data.title}</span>
       </button>
-      {source.data.uri && (
-        <code className="min-w-0 truncate text-neutral-500 dark:text-neutral-400">
-          {source.data.uri}
-        </code>
-      )}
     </span>
   );
 }

@@ -10,6 +10,7 @@ import { Clickable } from '../interactive';
 import { OptionBadge, useOptions } from '../options';
 import { Select } from '../select';
 import { Badge, Empty } from '../ui';
+import { GlanceDate } from '../../files/glance';
 
 // The project's files (docs/reframe/roadmap-2.md §3): find a named document fast and open it in
 // the file drawer (preview, details, actions). Grouped by kind, with a name search and filters
@@ -21,8 +22,6 @@ type FileEntity = Entity<'file'>;
 type Control = (typeof FILE_LIST_CONTROLS)[number];
 type Detail = NonNullable<NodeOf<'FileList'>['details']>[number];
 type ExpiryFilter = '' | Expiry | 'any' | 'none';
-
-const DEFAULT_DETAILS: Detail[] = ['issuer', 'expiryDate'];
 
 const SPREADSHEETS = new Set(['csv', 'xls', 'xlsx', 'numbers']);
 const AUDIO = new Set(['m4a', 'mp3', 'wav']);
@@ -82,7 +81,8 @@ function FileRow({
   shown,
 }: {
   file: FileEntity;
-  details: Detail[];
+  /** What follows the title; by default the glance: the one date that matters (v0.2 B2). */
+  details: Detail[] | undefined;
   showKind: boolean;
   today: string;
   /** Shows the file in a FileView on the board instead of opening the drawer. */
@@ -92,14 +92,14 @@ function FileRow({
 }) {
   const d = file.data;
   const parts: string[] = [];
-  for (const detail of details) {
+  for (const detail of details ?? []) {
     if (detail === 'issuer' && d.issuer) parts.push(d.issuer);
     if (detail === 'issuedDate' && d.issuedDate) parts.push(formatDate(d.issuedDate));
     if (detail === 'size') parts.push(formatSize(d.size));
     if (detail === 'modifiedAt') parts.push(`Changed ${formatDate(d.modifiedAt.slice(0, 10))}`);
   }
-  const showExpiry = d.expiryDate && details.includes('expiryDate');
-  const tags = details.includes('tags') ? d.tags : [];
+  const showExpiry = d.expiryDate && details?.includes('expiryDate');
+  const tags = details?.includes('tags') ? d.tags : [];
   return (
     <Clickable
       id={file.id}
@@ -128,6 +128,7 @@ function FileRow({
             </Badge>
           ))}
           {showExpiry && <ExpiryBadge date={d.expiryDate!} today={today} />}
+          {!details && <GlanceDate file={d} today={today} />}
         </span>
       </div>
     </Clickable>
@@ -157,7 +158,7 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   const options = useOptions();
   const today = localToday();
   const controls = new Set<Control>(node.controls ?? FILE_LIST_CONTROLS);
-  const details = node.details ?? DEFAULT_DETAILS;
+  const details = node.details;
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');
   const [tag, setTag] = useState('');

@@ -1,11 +1,13 @@
 import type { Entity } from '@pharos/schema';
 import clsx from 'clsx';
+import { glanceDateOf } from '../files/glance';
 import { FileTypeIcon } from './components/file-list';
 import { useViewData } from './context';
 import { useOpenItem } from './open-item';
 
 /**
- * The project files an item links with `fileIds` (R7.12), as small links: tapping one opens the
+ * The project files an item links with `fileIds` (R7.12), as small links at a glance (v0.2 B2:
+ * the type icon and title; the one date that matters in the tooltip): tapping one opens the
  * file in the board's FileView when there is one, else its preview in the drawer. Files the reader
  * can't see (not in the dataset) are left out.
  */
@@ -28,7 +30,9 @@ export function LinkedFiles({
         <button
           key={file.id}
           type="button"
-          title={`Open “${file.data.title}”`}
+          title={[`Open “${file.data.title}”`, glanceDateOf(file.data)?.text]
+            .filter(Boolean)
+            .join(' · ')}
           onClick={(e) => {
             e.stopPropagation();
             open(file.id);

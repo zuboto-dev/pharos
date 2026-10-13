@@ -189,7 +189,7 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   FileView: {
     category: 'outputs',
-    use: 'One key document shown in the view itself: its preview (image, PDF, text or Markdown), title, kind, issuer, issued and expiry dates with an expiry badge, and Open, Reveal in Finder, Copy path and Download. `file` is the id of a file in project_snapshot.files (never invented); pair it with a FileList whose `showIn` is this widget\'s id so the reader can switch documents. `size: "compact"` (details, actions, a short preview) fits beside a list at 5–6 columns; "full" (default) gives a tall preview. A file missing on disk says so and keeps its details.',
+    use: 'One key document shown in the view itself: its preview (image, PDF, text or Markdown), title and the one date that matters (expiry, else issued, else changed), and Download, Open, Reveal in Finder, Copy path and New tab as icons; kind, issuer and where it is open in its details on a tap. `file` is the id of a file in project_snapshot.files (never invented); pair it with a FileList whose `showIn` is this widget\'s id so the reader can switch documents. `size: "compact"` (a short preview) fits beside a list at 5–6 columns; "full" (default) gives a tall preview. A file missing on disk says so and keeps its details.',
     minColumns: 4,
     suggestedColumns: 6,
     example: {

@@ -122,7 +122,7 @@ const gallery = (extra: Partial<Extract<ViewNode, { component: 'Gallery' }>> = {
 });
 
 describe('Gallery', () => {
-  it('shows https pictures lazily, without a referrer, with a caption and the source host', () => {
+  it('shows https pictures lazily, without a referrer, with a caption and its source', () => {
     show(gallery({ highlight: ['art_cards'] }));
     const img = screen.getByAltText('Three cards with a picture and a title each');
     expect(img.getAttribute('src')).toBe('https://images.example.com/cards.png');
@@ -130,14 +130,19 @@ describe('Gallery', () => {
     expect(img.getAttribute('decoding')).toBe('async');
     expect(img.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(screen.getByText('Card layout')).toBeTruthy();
-    const source = screen.getByRole('link', { name: /example\.org/ });
+    // At a glance (v0.2 B2) the caption says "Source"; the host is in its tooltip.
+    const source = screen.getAllByRole('link', { name: /^Source/ })[0]!;
     expect(source.getAttribute('href')).toBe('https://www.example.org/patterns/cards');
+    expect(source.getAttribute('title')).toMatch(/example\.org/);
+    expect(screen.queryByText(/example\.org/)).toBeNull();
     expect(source.getAttribute('rel')).toContain('noreferrer');
     expect(screen.getByRole('button', { name: /Three cards .*\(highlighted\): open large/ }));
     // A project file is served by the file routes, by id.
     const shot = screen.getByAltText('Four numbered steps joined by a line');
     expect(shot.getAttribute('src')).toBe('/api/files/file_shot1/content');
-    expect(screen.getAllByText('Project file').length).toBeGreaterThan(0);
+    // A project file's caption is its glance: the one date that matters, never its path.
+    expect(screen.getAllByText('Changed Oct 1, 2026').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Shots\//)).toBeNull();
   });
 
   it('never loads a picture that is not https; it shows a quiet placeholder with the link', () => {

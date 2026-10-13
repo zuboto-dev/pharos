@@ -1,8 +1,9 @@
 import clsx from 'clsx';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 import type { ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { glanceName } from '../files/files';
 import { humanize } from '../lib/format';
 
 export type Tone = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'muted';
@@ -164,8 +165,10 @@ export function isHttp(uri: string | undefined): uri is string {
 }
 
 /**
- * An artifact's address: a link that opens in a new tab when it's http(s), plain text otherwise.
- * `children` replaces the shown address, e.g. "Source".
+ * An artifact's address at a glance (v0.2 B2): a link that opens in a new tab when it's http(s),
+ * plain text otherwise. `children` replaces the shown text, e.g. the source's title or "Source".
+ * The host and the folders aren't written out: a web page reads "Web page" (its address is in the
+ * tooltip), a local document its file name; the full address is in the artifact's details.
  */
 export function Uri({
   uri,
@@ -190,13 +193,23 @@ export function Uri({
           className,
         )}
       >
-        <span className="truncate">{children ?? uri.replace(/^https?:\/\//, '')}</span>
+        <span className="truncate">{children ?? 'Web page'}</span>
         <ExternalLink className="size-3 shrink-0" aria-hidden />
         <span className="sr-only">(opens in a new tab)</span>
       </a>
     );
   }
-  return <code className={clsx('truncate text-xs text-neutral-500', className)}>{uri}</code>;
+  return (
+    <span
+      className={clsx(
+        'inline-flex min-w-0 items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400',
+        className,
+      )}
+    >
+      <FileText className="size-3 shrink-0" aria-hidden />
+      <span className="truncate">{children ?? glanceName(uri)}</span>
+    </span>
+  );
 }
 
 const BUTTON_BASE =

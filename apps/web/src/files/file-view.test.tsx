@@ -58,7 +58,7 @@ const row = (title: string) =>
   screen.getByText(title, { selector: 'span' }).closest('[role="button"]')!;
 
 describe('FileView', () => {
-  it('shows one file inline: details, expiry, the actions and its preview', async () => {
+  it('shows one file inline: a glance, the actions as icons, and its preview', async () => {
     renderBoard([
       {
         id: 'lease',
@@ -69,11 +69,23 @@ describe('FileView', () => {
     expect(frame.hasAttribute('sandbox')).toBe(false); // Chrome frames a PDF only without it
     expect(frame.getAttribute('src')).toBe('/api/files/file_fixture2/content');
     expect(frame.className).toContain('h-80');
-    expect(screen.getByText('Sample Properties LLC')).toBeTruthy();
-    expect(screen.getByText(/^Issued /)).toBeTruthy();
+    // The glance (v0.2 B2): the one date that matters (expiry wins over issued); the issuer,
+    // the path and the folder wait in the details.
     expect(screen.getByText(/^Expire[sd] /)).toBeTruthy();
-    for (const name of ['Open', 'Reveal in Finder', 'Copy path'])
+    expect(screen.queryByText(/^Issued /)).toBeNull();
+    expect(screen.queryByText('Sample Properties LLC')).toBeNull();
+    expect(document.body.textContent).not.toContain('/');
+    const actions = screen.getByRole('group', { name: 'File actions' });
+    for (const name of ['Open in its app', 'Reveal in Finder', 'Copy path'])
       expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(false);
+    // Icons only, each with a tooltip saying what it does.
+    expect(actions.textContent).toBe(
+      ['Download', 'Open in its app', 'Reveal in Finder', 'Copy path', 'Open in a new tab'].join(
+        '',
+      ),
+    );
+    for (const tip of actions.querySelectorAll('[data-tip]'))
+      expect(tip.getAttribute('aria-hidden')).toBe('true');
     expect(screen.getByRole('link', { name: 'Download' }).getAttribute('href')).toBe(
       '/api/files/file_fixture2/download',
     );

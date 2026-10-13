@@ -138,8 +138,9 @@ export function SourceStatus({
 }
 
 /**
- * A local source's path, under its title in a source list: kept as text, with "Open file" when
- * it was matched to a project file, or what to do when it isn't in a Pharos folder.
+ * Under a local source's title in a source list: "Open file" when it was matched to a project
+ * file, or what to do when it isn't in a Pharos folder. Its path isn't written out here (v0.2
+ * B2): the title is enough at a glance, and the path is in the source's details.
  */
 export function LocalSourcePath({ source, onOpen }: { source: Artifact; onOpen?: () => void }) {
   const { entityById } = useViewData();
@@ -149,12 +150,7 @@ export function LocalSourcePath({ source, onOpen }: { source: Artifact; onOpen?:
   const linked = local ? linkedFileOf(entityById, source) : undefined;
   const match = useSourceMatch(source, local && !linked, refresh);
   if (!local) return null;
-  return (
-    <>
-      <code className="block truncate text-xs text-neutral-500 dark:text-neutral-400">{uri}</code>
-      <SourceStatus match={match} onOpen={onOpen} onApproved={() => setRefresh((n) => n + 1)} />
-    </>
-  );
+  return <SourceStatus match={match} onOpen={onOpen} onApproved={() => setRefresh((n) => n + 1)} />;
 }
 
 /**

@@ -264,8 +264,25 @@ export class AgentRunner {
     const agentName =
       this.options.agentName ?? (this.options.mode === 'custom' ? 'Your agent' : 'Claude Code');
     try {
-      for (const projectId of projectIds)
+      for (const projectId of projectIds) {
         presence?.hold(agentName, { projectId, activity: 'answering' }, source);
+        // "Ask about this block" (R10): the block shows the agent editing it while the run lasts.
+        for (const request of this.store.list('request', {
+          projectId,
+          where: { status: 'open' },
+        }))
+          if (request.data.mode === 'block' && request.data.viewId && request.data.widgetId)
+            presence?.hold(
+              agentName,
+              {
+                projectId,
+                viewId: request.data.viewId,
+                widgetId: request.data.widgetId,
+                activity: 'editing',
+              },
+              source,
+            );
+      }
     } catch (error) {
       console.error('[pharos] Could not mark the projects being answered:', error);
     }

@@ -71,7 +71,18 @@ its record types, option lists and a hand-made page. You add the owner's data; t
   sum and bucket "month"/"year" for totals over time), Stat (sum, target), Text with live values
   ({count}, {sum}), FileList and FileView (audio plays in place).
 
-## 6. Pass the checks
+## 6. Actions on the page (R10)
+- An Action block is a button and a short form the owner uses to change records from the page:
+  "create" adds a record (Log a service), "done" marks a repeating record done on a date (Mark
+  paid). Each pack page below lists its actions; keep them when you change the page.
+- Add one only for what the owner does often by hand, with a record type and fields the project
+  has (the save is refused otherwise): {op: "add", widget: {id: "log-session", w: 4, node:
+  {component: "Action", label: "Log a session", recordType: "session"}}}. A DueTracker's
+  action: "<id of a done Action>" puts its button on every due row.
+- You can submit one too, with action_run (the same form as the owner's, as one revision), but
+  for your own changes apply is usually simpler.
+
+## 7. Pass the checks
 - Query checks run on every view save: an unknown field, record type or option value, a sum over
   text, a bad relative date or a range on money refuses the save. The error names the JSON path,
   the allowed values, the closest match and a corrected example: fix exactly that and retry.
@@ -110,8 +121,19 @@ function packSection(pack: Pack): string {
     ...types,
     ...(fileKinds ? [`- File kinds: ${fileKinds.join(', ')}`] : []),
     `- Page: ${pack.views.map((v) => `"${v.name}" (widgets ${v.widgets.map((w) => w.id).join(', ')})`).join('; ')}`,
+    ...actionLines(pack),
     `- ${pack.guide}`,
   ].join('\n');
+}
+
+/** The pack's actions (R10), each as the widget that defines it, for agents to copy. */
+function actionLines(pack: Pack): string[] {
+  const actions = pack.views.flatMap((v) =>
+    v.widgets.filter((w) => w.node.component === 'Action').map((w) => ({ view: v.name, w })),
+  );
+  return actions.map(
+    ({ view, w }) => `- Action on "${view}": ${JSON.stringify({ id: w.id, w: w.w, node: w.node })}`,
+  );
 }
 
 /** The whole guide: the steps, then each pack's record types and page. */

@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import { ApplyInput, Author, EntityType, agentLabel, type HealthResponse } from '@pharos/schema';
+import {
+  ACTION_HTTP_STATUS,
+  ApplyInput,
+  Author,
+  EntityType,
+  agentLabel,
+  type HealthResponse,
+} from '@pharos/schema';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { ActionService } from './actions/service.js';
 import type { AgentRunner, AgentStatus } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
 import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
@@ -15,6 +23,7 @@ import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { createMcpServer } from './mcp.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
+import { agentViewOpsIssue } from './views/block-ask.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -293,6 +302,10 @@ export function createApp(
   api.post('/apply', async (c) => {
     const input = ApplyInput.parse(await c.req.json()) as ApplyInput;
     const author = authorOf(c);
+    // An agent answering "ask about this block" changes only that block (R10.8), here as in
+    // view_update.
+    const blockIssue = author.kind === 'agent' ? agentViewOpsIssue(store, input.operations) : null;
+    if (blockIssue) throw new PharosError('invalid', blockIssue);
     // A person moves a file only to a scanned path in an approved folder (R7.9); the store
     // refuses agents any change to where a file is.
     return c.json(
@@ -305,6 +318,30 @@ export function createApp(
   api.post('/packs/apply', async (c) =>
     c.json(applyPack(store, authorOf(c), PackApplyInput.parse(await c.req.json()))),
   );
+
+  // Record-form actions (R10): "Log a service", "Mark paid". One submission, one revision; the
+  // result says done, duplicate, invalid, stale, not_found or failed (with its HTTP status).
+  const actions = new ActionService(store);
+  api.post('/projects/:id/actions', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    const projectId = c.req.param('id');
+    const raw =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? { projectId, ...(body as Record<string, unknown>) }
+        : body;
+    if (raw && typeof raw === 'object' && (raw as Record<string, unknown>).projectId !== projectId)
+      return c.json(
+        {
+          v: 1,
+          status: 'invalid',
+          message: 'The form belongs to another project',
+          fieldErrors: { form: 'projectId does not match the address' },
+        },
+        400,
+      );
+    const result = actions.run(authorOf(c), raw);
+    return c.json(result, ACTION_HTTP_STATUS[result.status]);
+  });
 
   api.get('/projects/:id/data', (c) => {
     const dataset = store.dataset(c.req.param('id'));

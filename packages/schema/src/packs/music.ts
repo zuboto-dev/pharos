@@ -80,6 +80,7 @@ export const MUSIC_PACK: Pack = {
       widgets: [
         {
           id: 'headline',
+          w: 6,
           node: {
             component: 'Text',
             content:
@@ -102,6 +103,26 @@ export const MUSIC_PACK: Pack = {
                 },
               },
             },
+          },
+        },
+        {
+          id: 'log-mix',
+          w: 3,
+          node: {
+            component: 'Action',
+            label: 'Log a mix',
+            recordType: 'mix',
+            fields: ['song', 'date', 'version'],
+          },
+        },
+        {
+          id: 'log-session',
+          w: 3,
+          node: {
+            component: 'Action',
+            label: 'Log a session',
+            recordType: 'session',
+            fields: ['song', 'date', 'hours', 'kind'],
           },
         },
         {

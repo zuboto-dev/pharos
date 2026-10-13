@@ -8,6 +8,7 @@ import {
   decisionState,
   type EntityDataMap,
 } from '@pharos/schema';
+import { projectActions } from '../actions/service.js';
 import { isExpired, requestContext } from '../views/service.js';
 import { forAgent, savedRequests } from '../files/requests.js';
 import { AgentFiles } from './agent-files.js';
@@ -49,8 +50,12 @@ function records(store: Store, agentFiles: AgentFiles, projectId: string) {
         fields: r.data.fields,
         ...(r.data.interval ? { interval: r.data.interval } : {}),
         ...(due ? { due } : {}),
+        // An action's expectedRevision (R10).
+        revision: r.updatedRev,
       };
     }),
+    /** Action blocks on its pages (R10): run one with action_run {viewId, widgetId, …}. */
+    actions: projectActions(store, projectId),
   };
 }
 
@@ -269,6 +274,7 @@ export function projectSnapshot(store: Store, projectId: string) {
         ...(r.data.aboutId ? { aboutId: r.data.aboutId } : {}),
         ...(r.data.viewId ? { viewId: r.data.viewId } : {}),
         ...(r.data.widgetId ? { widgetId: r.data.widgetId } : {}),
+        ...(r.data.mode ? { mode: r.data.mode } : {}),
         context: requestContext(store, r),
         askedAt: r.createdAt,
       })),

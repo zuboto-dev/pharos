@@ -189,6 +189,11 @@ export const RequestData = z.strictObject({
   aboutId: Id.optional().describe('The item it was asked about (any type)'),
   status: z.enum(['open', 'answered', 'dismissed']),
   answerViewId: Id.optional().describe('The answer view that answers it'),
+  mode: z
+    .enum(['answer', 'block'])
+    .optional()
+    .describe('"block": change only widgetId in place (R10), not answer in a new view'),
+  reply: z.string().min(1).max(300).optional().describe('Your short note to the person'),
 });
 
 /** A number a claim states, drawn as one bar in a FindingChart (R4). */

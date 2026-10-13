@@ -443,6 +443,20 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
       },
     },
   },
+  Action: {
+    category: 'data',
+    use: 'Lets the reader change records from the page (R10): a button ("Log a service", "Mark paid") and a short form built from the record type\'s fields, saved as one revision with Undo. Offer it only on a page about records the reader keeps up by hand (a pack page), for the one or two things they do often; never for tasks, views or files. "create" adds a record of `recordType` (`fields` picks and orders the form; `roll` marks matching repeating records done, e.g. the oil reminder after an oil change; `raise` lifts a reading such as the car\'s odometer). "done" marks a repeating record done on a date (interval.lastDate); `log` also adds a record, e.g. a spending when a bill is paid. Put a done Action\'s id in a DueTracker\'s `action` so each due row gets the button. The form and its checks come from the record type, so only name record types and fields the project has; the save is refused otherwise. Use the pack\'s own action when it has one (pharos://guide/packs). Narrow: 3–4 columns, several side by side.',
+    minColumns: 3,
+    suggestedColumns: 4,
+    example: {
+      component: 'Action',
+      label: 'Log a service',
+      recordType: 'service',
+      fields: ['vehicle', 'date', 'kind', 'odometer', 'cost'],
+      roll: { recordType: 'reminder', match: ['vehicle', 'kind'], meter: 'odometer' },
+      raise: { via: 'vehicle', field: 'odometer', from: 'odometer' },
+    },
+  },
   Grid: {
     category: 'layout',
     use: 'Rarely needed: a board already lays widgets out in columns. Only for side-by-side components inside Tabs.',

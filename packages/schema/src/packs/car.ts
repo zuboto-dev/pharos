@@ -98,6 +98,7 @@ export const CAR_PACK: Pack = {
       widgets: [
         {
           id: 'headline',
+          w: 8,
           node: {
             component: 'Text',
             content:
@@ -125,6 +126,19 @@ export const CAR_PACK: Pack = {
                 },
               },
             },
+          },
+        },
+        {
+          id: 'log-service',
+          w: 4,
+          node: {
+            component: 'Action',
+            label: 'Log a service',
+            description: 'Marks the matching reminder done and updates the odometer',
+            recordType: 'service',
+            fields: ['vehicle', 'date', 'kind', 'odometer', 'cost', 'shop'],
+            roll: { recordType: 'reminder', match: ['vehicle', 'kind'], meter: 'odometer' },
+            raise: { via: 'vehicle', field: 'odometer', from: 'odometer' },
           },
         },
         {

@@ -230,7 +230,7 @@ function RenameInput({ value, onDone }: { value: string; onDone: (name: string |
 
 const ROW = 'group/row relative flex items-center gap-1 rounded-control pr-1 text-sm';
 const MORE =
-  'shrink-0 rounded p-0.5 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 dark:hover:bg-neutral-700';
+  'shrink-0 rounded p-0.5 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100 dark:hover:bg-neutral-700';
 
 /**
  * The project sidebar: pinned projects, folders (repositories), loose projects, and sections.

@@ -10,6 +10,7 @@ import { EditOptionsButton, OptionBadge, OptionDot, useOptions } from '../option
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
 import { firstUses, TermText, useTermMatcher } from '../terms';
 import { AskAgentButton, EmptyState } from '../empty-state';
+import { ScrollX } from '../scroll-x';
 import { Badge } from '../ui';
 
 type Task = Entity<'task'>;
@@ -271,7 +272,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
             {optionField && (
               <EditOptionsButton
                 field={optionField}
-                className="ml-auto opacity-0 group-hover/col:opacity-100 focus:opacity-100"
+                className="ml-auto opacity-0 group-hover/col:opacity-100 focus:opacity-100 pointer-coarse:opacity-100"
               />
             )}
           </div>
@@ -375,34 +376,36 @@ export function TaskTable({ node }: { node: NodeOf<'TaskTable'> }) {
     }
   };
   return (
-    <div className="-mx-4 -my-4 overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead className="text-xs text-muted">
-          <tr className="border-b border-line-soft">
-            <th className="px-4 py-2 font-medium">Task</th>
-            {columns.map((c) => (
-              <th key={c} className="px-3 py-2 font-medium whitespace-nowrap">
-                {c === 'dependsOn' ? 'Depends on' : c === 'dueDate' ? 'Due' : humanize(c)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.map((task, i) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              title={<TermText text={titles[i]!} ranges={termRanges[i]} />}
-            >
+    <div className="-mx-4 -my-4">
+      <ScrollX label="Tasks">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs text-muted">
+            <tr className="border-b border-line-soft">
+              <th className="px-4 py-2 font-medium">Task</th>
               {columns.map((c) => (
-                <td key={c} className="px-3 py-2 text-ink-soft">
-                  {cell(task, c)}
-                </td>
+                <th key={c} className="px-3 py-2 font-medium whitespace-nowrap">
+                  {c === 'dependsOn' ? 'Depends on' : c === 'dueDate' ? 'Due' : humanize(c)}
+                </th>
               ))}
-            </TaskRow>
-          ))}
-        </tbody>
-      </table>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map((task, i) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                title={<TermText text={titles[i]!} ranges={termRanges[i]} />}
+              >
+                {columns.map((c) => (
+                  <td key={c} className="px-3 py-2 text-ink-soft">
+                    {cell(task, c)}
+                  </td>
+                ))}
+              </TaskRow>
+            ))}
+          </tbody>
+        </table>
+      </ScrollX>
       <div className="px-2 py-1">{addTask()}</div>
     </div>
   );
@@ -715,7 +718,7 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
     .map((row) => ({ ...row, tasks: tasks.filter((t) => (t.data.assigneeId ?? '') === row.key) }))
     .filter((row) => row.tasks.length);
   return (
-    <div className="-mx-4 -my-4 overflow-x-auto">
+    <ScrollX label="Tasks by assignee" className="-mx-4 -my-4">
       <table className="w-full text-sm">
         <thead className="text-xs text-muted">
           <tr className="border-b border-line-soft">
@@ -759,6 +762,6 @@ export function AssigneeMatrix({ node }: { node: NodeOf<'AssigneeMatrix'> }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollX>
   );
 }

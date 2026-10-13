@@ -1,7 +1,7 @@
 // R7.13 Gallery: pictures from artifacts and files, safe image loading, and the lightbox · Opus 5.5
 // Every address, file and name here is made up; nothing is fetched.
 import type { Entity, ProjectDataset, ViewNode } from '@pharos/schema';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import dataset from './__fixtures__/dataset.json';
 import { ViewDataProvider, type ViewActions } from './context';
@@ -258,6 +258,13 @@ describe('Gallery lightbox', () => {
     const now = screen.getByRole('dialog');
     expect(now.getAttribute('aria-label')).toBe('Stepper');
     expect(await within(now).findByRole('link', { name: /Download/ })).toBeTruthy();
+  });
+
+  it('closes when swiped down on a phone (v0.2 B9)', async () => {
+    const { dialog } = openFirst();
+    fireEvent.touchStart(dialog.children[1]!, { touches: [{ clientX: 200, clientY: 200 }] });
+    fireEvent.touchEnd(dialog.children[1]!, { changedTouches: [{ clientX: 210, clientY: 340 }] });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('opens the item details from the lightbox', () => {

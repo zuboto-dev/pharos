@@ -104,7 +104,11 @@ describe('DecisionBlock', () => {
 
   it('records the choice as the person’s decision in one undoable revision', async () => {
     const { apply } = setup(proposal());
-    fireEvent.click(screen.getByRole('button', { name: 'Choose “Checklist”' }));
+    // v0.2 B10: the card says "Choose this"; the option's name is in its accessible name.
+    expect(screen.getByRole('button', { name: 'Choose Checklist' }).textContent).toBe(
+      'Choose this',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Checklist' }));
     expect(apply).toHaveBeenCalledWith(
       'Choose “Checklist”: Which empty state should pages use?',
       [
@@ -128,7 +132,7 @@ describe('DecisionBlock', () => {
 
   it('adds the person as an assignee when there is none yet', () => {
     const { apply } = setup(proposal(), undefined, { assignees: [] });
-    fireEvent.click(screen.getByRole('button', { name: 'Choose “Picture and one line”' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Picture and one line' }));
     const [, operations] = apply.mock.calls[0]!;
     expect(operations[0]).toEqual({
       op: 'create',
@@ -193,7 +197,7 @@ describe('DecisionBlock', () => {
   it('says when a decision was deferred, and when it is missing', () => {
     setup(proposal({ deferredUntil: '2026-10-20' }));
     expect(screen.getByText(/Later: Oct 20/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Choose “Checklist”' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Choose Checklist' })).toBeTruthy();
     cleanup();
     setup(proposal(), { component: 'DecisionBlock', decision: 'dec_gone' });
     expect(screen.getByText(/This decision was deleted/)).toBeTruthy();

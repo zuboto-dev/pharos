@@ -31,6 +31,7 @@ import { OptionBadge } from '../options';
 import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
 import { useOpenItem } from '../open-item';
 import { NothingMatches } from '../empty-state';
+import { ScrollX } from '../scroll-x';
 import { DOT_TONES, ProgressBar, isHttp, Markdown, StatusBadge, Uri } from '../ui';
 import { linkedFileOf } from '../source-file';
 import { FileTypeIcon } from './file-list';
@@ -177,7 +178,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   // A ledger (R8): totals under number, money and meter columns, money per currency.
   const totals = node.total ? tableTotals(data, node) : undefined;
   return (
-    <div className="-mx-4 -my-4 overflow-x-auto">
+    <ScrollX label={node.title ?? 'Table'} className="-mx-4 -my-4">
       <table className="w-full text-left text-sm">
         <thead className="text-xs text-muted">
           <tr className="border-b border-line-soft">
@@ -234,7 +235,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
           </tfoot>
         )}
       </table>
-    </div>
+    </ScrollX>
   );
 }
 

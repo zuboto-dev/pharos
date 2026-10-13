@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
 import { Loading, Skeleton, SkeletonRows } from './skeleton';
@@ -544,6 +544,9 @@ function deleteEffects(entity: Entity, data: ReturnType<typeof useViewData>): st
   return '';
 }
 
+/** How far the bottom sheet's handle is pulled down before the sheet closes. */
+const SHEET_CLOSE_PX = 96;
+
 export function DetailDrawer({
   target,
   onClose,
@@ -560,6 +563,9 @@ export function DetailDrawer({
   const { entityById } = useViewData();
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Pulling the sheet's handle down on a phone: how far, and from where.
+  const [pull, setPull] = useState(0);
+  const pullFrom = useRef<number | null>(null);
   const data = useViewData();
   useEffect(() => {
     if (leaving) return;
@@ -584,7 +590,10 @@ export function DetailDrawer({
 
   return (
     <div
-      className={clsx('fixed inset-0 z-40 flex justify-end', leaving && 'pointer-events-none')}
+      className={clsx(
+        'fixed inset-0 z-40 flex items-end justify-end sm:items-stretch',
+        leaving && 'pointer-events-none',
+      )}
       role="dialog"
       aria-modal="true"
       aria-label={kind}
@@ -597,12 +606,37 @@ export function DetailDrawer({
         )}
         onClick={onClose}
       />
+      {/* On a phone (v0.2 B9) a bottom sheet: most of the screen, rounded on top, with a handle
+          to pull it down; from sm up a drawer on the right. */}
       <aside
+        data-drawer
         className={clsx(
-          'relative flex h-full w-full flex-col bg-surface shadow-overlay sm:w-[30rem]',
-          leaving ? 'animate-drawer-out' : 'animate-drawer-in',
+          'relative flex h-[92dvh] w-full flex-col rounded-t-2xl bg-surface shadow-overlay sm:h-full sm:w-[30rem] sm:rounded-none',
+          leaving
+            ? 'animate-sheet-out sm:animate-drawer-out'
+            : 'animate-sheet-in sm:animate-drawer-in',
         )}
+        style={pull ? { transform: `translateY(${pull}px)` } : undefined}
       >
+        <div
+          aria-hidden
+          className="flex shrink-0 touch-none justify-center pt-2 pb-1 sm:hidden"
+          onTouchStart={(e) => {
+            pullFrom.current = e.touches[0]?.clientY ?? null;
+          }}
+          onTouchMove={(e) => {
+            const from = pullFrom.current;
+            const y = e.touches[0]?.clientY;
+            if (from !== null && y !== undefined) setPull(Math.max(0, y - from));
+          }}
+          onTouchEnd={() => {
+            pullFrom.current = null;
+            if (pull > SHEET_CLOSE_PX) onClose();
+            setPull(0);
+          }}
+        >
+          <span className="h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+        </div>
         <header className="flex items-center justify-between gap-2 border-b border-line px-5 py-3">
           <div className="flex items-center gap-2 text-sm text-muted">
             {onBack && (
@@ -635,7 +669,11 @@ export function DetailDrawer({
               }}
               className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-subtle"
             >
-              <LinkIcon className="size-3.5" /> {copied ? 'Copied' : 'Copy link'}
+              <LinkIcon className="size-3.5" aria-hidden />
+              {/* Icons only on a phone's sheet (v0.2 B9), so the header stays on one line. */}
+              <span className={copied ? undefined : 'sr-only sm:not-sr-only'}>
+                {copied ? 'Copied' : 'Copy link'}
+              </span>
             </button>
             {entity && data.actions.ask && (
               <button
@@ -648,7 +686,8 @@ export function DetailDrawer({
                 }}
                 className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-sky-50 hover:text-accent-strong dark:hover:bg-sky-950"
               >
-                <MessageCircleQuestion className="size-3.5" /> Ask
+                <MessageCircleQuestion className="size-3.5" aria-hidden />
+                <span className="sr-only sm:not-sr-only">Ask</span>
               </button>
             )}
             {entity && entity.type !== 'project' && (
@@ -657,7 +696,10 @@ export function DetailDrawer({
                 onClick={() => setConfirming(true)}
                 className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
               >
-                <Trash2 className="size-3.5" /> {entity.type === 'file' ? 'Remove' : 'Delete'}
+                <Trash2 className="size-3.5" aria-hidden />
+                <span className="sr-only sm:not-sr-only">
+                  {entity.type === 'file' ? 'Remove' : 'Delete'}
+                </span>
               </button>
             )}
             <button

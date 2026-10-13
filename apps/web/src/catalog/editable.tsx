@@ -38,7 +38,7 @@ function useSaveField(entity: Entity) {
 const INPUT =
   'w-full rounded-control border border-sky-300 bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900';
 const EDIT_HINT =
-  'inline-flex shrink-0 items-center rounded p-0.5 text-neutral-400 opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100';
+  'tap-area relative inline-flex shrink-0 items-center rounded p-0.5 text-neutral-400 opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100 pointer-coarse:opacity-100';
 
 function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (

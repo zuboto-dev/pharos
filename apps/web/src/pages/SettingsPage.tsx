@@ -138,7 +138,7 @@ function Switch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
-        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40',
+        'tap-area relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40',
         checked ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700',
       )}
     >

@@ -39,7 +39,12 @@ describe('motion tokens', () => {
   it('turns every movement off under prefers-reduced-motion, leaving opacity', () => {
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
     const block = reduced.slice(0, reduced.indexOf('}\n}') + 3);
-    for (const distance of ['--motion-rise: 0px', '--motion-drawer: 0px', '--motion-side: 0px'])
+    for (const distance of [
+      '--motion-rise: 0px',
+      '--motion-drawer: 0px',
+      '--motion-sheet: 0px',
+      '--motion-side: 0px',
+    ])
       expect(block).toContain(distance);
     expect(block).toContain('--motion-scale: 1');
     expect(block).toContain('--motion-presence-scale: 1');

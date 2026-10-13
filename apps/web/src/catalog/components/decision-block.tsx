@@ -128,12 +128,14 @@ function OptionCard({
             type="button"
             disabled={busy}
             onClick={onChoose}
+            // "Choose this" on the card (no quotes inside quotes); the option's name for screen readers.
+            aria-label={`Choose ${option.label}`}
             className={clsx(
               recommended ? BUTTON.primary : BUTTON.secondary,
-              'min-h-10 w-full sm:min-h-0 sm:w-auto',
+              'min-h-11 w-full sm:min-h-0 sm:w-auto',
             )}
           >
-            Choose “{option.label}”
+            Choose this
           </button>
         </div>
       )}

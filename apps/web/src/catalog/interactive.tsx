@@ -257,7 +257,7 @@ export function TaskCheck({ task, className }: { task: Entity<'task'>; className
         void setStatus(task, done ? 'todo' : 'done');
       }}
       className={clsx(
-        'flex size-5 shrink-0 items-center justify-center rounded-full border transition',
+        'tap-area relative flex size-5 shrink-0 items-center justify-center rounded-full border transition',
         done
           ? 'border-emerald-500 bg-emerald-500 text-white hover:bg-emerald-600'
           : 'border-neutral-300 text-neutral-400 hover:border-emerald-500 hover:text-emerald-500 dark:border-neutral-600',

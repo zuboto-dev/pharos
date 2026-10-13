@@ -14,6 +14,8 @@
   --motion-slow: 220ms;
   --motion-rise: 4px;
   --motion-drawer: 24px;
+  /* On phones the drawer is a bottom sheet (v0.2 B9): it rises this far as it fades in. */
+  --motion-sheet: 32px;
   --motion-side: -8px;
   --motion-scale: 0.98;
   /* The presence dot (v0.2 B5) breathes: it shrinks a little as it fades. */
@@ -24,6 +26,7 @@
   :root {
     --motion-rise: 0px;
     --motion-drawer: 0px;
+    --motion-sheet: 0px;
     --motion-side: 0px;
     --motion-scale: 1;
     --motion-presence-scale: 1;
@@ -182,6 +185,8 @@
   --animate-drawer-in: motion-drawer-in var(--motion-slow) var(--ease-calm) backwards;
   --animate-drawer-out: motion-drawer-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-sheet-in: motion-sheet-in var(--motion-slow) var(--ease-calm) backwards;
+  --animate-sheet-out: motion-sheet-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-block-changed: motion-block-changed 1600ms ease-out;
   --animate-presence: motion-presence 1800ms ease-in-out infinite;
   --animate-shimmer: motion-shimmer 1800ms ease-in-out infinite;
@@ -218,6 +223,18 @@
     to {
       opacity: 0;
       transform: translateX(var(--motion-drawer));
+    }
+  }
+  @keyframes motion-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(var(--motion-sheet));
+    }
+  }
+  @keyframes motion-sheet-out {
+    to {
+      opacity: 0;
+      transform: translateY(var(--motion-sheet));
     }
   }
   @keyframes motion-side-in {
@@ -263,6 +280,58 @@
 @layer base {
   body {
     @apply bg-canvas text-ink antialiased;
+  }
+}
+
+/*
+ * Phones (v0.2 B9): on a touch screen every control is at least 44 × 44 px to tap (WCAG 2.5.5).
+ * In the base layer, so a block's own sizes still win where it sets a minimum. Exempt: a reference
+ * inside a sentence (`data-inline-target`, WCAG 2.5.8's inline exception) and small drawn controls
+ * that reach further than they look instead (`tap-area`: a checkbox, a switch).
+ */
+@layer base {
+  @media (pointer: coarse) {
+    :where(
+      button,
+      a[href],
+      summary,
+      select,
+      textarea,
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range']),
+      [role='button'],
+      [role='tab'],
+      [role='switch'],
+      [role='menuitem'],
+      [role='option'],
+      [role='checkbox']
+    ):not(:where([data-inline-target], [data-inline-target] *, .tap-area)) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+}
+
+/* Phones: 16 px fields, so focusing one doesn't zoom the page (unlayered: wins over text-sm). */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* A small drawn control (a checkbox, a switch) whose tap area reaches 44 × 44 px on touch. */
+@utility tap-area {
+  @media (pointer: coarse) {
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      translate: -50% -50%;
+    }
   }
 }
 

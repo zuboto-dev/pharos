@@ -249,6 +249,11 @@ export class Store {
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
 
+  /** The database, for app data kept beside revisions (the file scan cache, R7.2). */
+  get database(): DatabaseSync {
+    return this.db;
+  }
+
   /** Calls `listener` after every committed revision in this process. Returns an unsubscribe. */
   onCommit(listener: () => void): () => void {
     this.commitListeners.add(listener);

@@ -75,14 +75,13 @@ export function AskDialog({
       <form
         onSubmit={(e) => void submit(e)}
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        className="relative w-full max-w-md space-y-3 rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900"
+        className="relative w-full max-w-md space-y-3 rounded-block bg-surface p-5 shadow-overlay"
       >
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <MessageCircleQuestion className="size-5 text-sky-500" /> Ask your agent
         </h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          About:{' '}
-          <span className="font-medium text-neutral-700 dark:text-neutral-200">{about.label}</span>
+        <p className="text-sm text-muted">
+          About: <span className="font-medium text-ink-soft">{about.label}</span>
         </p>
         <textarea
           aria-label="Question"
@@ -95,10 +94,10 @@ export function AskDialog({
               e.currentTarget.form?.requestSubmit();
           }}
           placeholder="e.g. Why is this behind? What should I do next?"
-          className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          className="w-full rounded-control border border-line-strong bg-surface px-2.5 py-2 text-sm"
         />
         {earlier.length > 0 && onOpenAnswer && (
-          <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2.5 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
+          <div className="space-y-1 rounded-tile border border-emerald-200 bg-emerald-50/60 p-2.5 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
             <div className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
               Answered before (answers stay up to date)
             </div>
@@ -110,7 +109,7 @@ export function AskDialog({
                   onOpenAnswer(v.id);
                   onClose();
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-white dark:hover:bg-neutral-800"
+                className="flex w-full items-center gap-2 rounded-control px-1.5 py-1 text-left hover:bg-white dark:hover:bg-neutral-800"
               >
                 <span className="min-w-0 flex-1">
                   {v.data.question ?? v.data.name}{' '}
@@ -121,7 +120,7 @@ export function AskDialog({
             ))}
           </div>
         )}
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        <p className="text-xs text-muted">
           {agent.configured && agent.enabled
             ? 'Your agent will start on it in a moment; '
             : 'Your agent sees open questions when it next checks Pharos (or ask it: “answer my questions in Pharos”). '}
@@ -209,7 +208,7 @@ export function RequestsButton({
               {open.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                  className="flex items-start gap-2 rounded-tile px-2.5 py-2 hover:bg-sunken"
                 >
                   <CircleDot className="mt-0.5 size-3.5 shrink-0 text-sky-500" />
                   <div className="min-w-0 flex-1">
@@ -259,12 +258,12 @@ export function RequestsButton({
                       : `/projects/${projectId}`
                   }
                   onClick={() => setAnchor(null)}
-                  className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                  className="flex items-start gap-2 rounded-tile px-2.5 py-2 hover:bg-sunken"
                 >
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
                   <div className="min-w-0 flex-1">
                     <div>{r.data.question}</div>
-                    <div className="text-xs text-sky-600 dark:text-sky-400">Open the answer</div>
+                    <div className="text-xs text-accent">Open the answer</div>
                   </div>
                 </Link>
               ))}

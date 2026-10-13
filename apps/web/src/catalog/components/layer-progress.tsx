@@ -7,6 +7,7 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
+import { Bar } from '../chart';
 import { ChevronDown } from 'lucide-react';
 import { useViewData, type ViewData } from '../context';
 import { OptionDot } from '../options';
@@ -63,7 +64,7 @@ export function ProgressLine({
   const { done, total } = progress;
   if (!total) {
     return (
-      <span id={id} className="block text-xs text-neutral-400 dark:text-neutral-500">
+      <span id={id} className="block text-xs text-faint">
         No tasks yet
       </span>
     );
@@ -77,15 +78,11 @@ export function ProgressLine({
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span aria-hidden className="block h-1.5 min-w-0 flex-1">
-        <span
-          className="block h-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700"
+        <Bar
+          share={done / total}
+          tone="ok"
           style={{ width: `${(total / scale) * 100}%`, minWidth: '0.75rem' }}
-        >
-          <span
-            className="block h-full rounded-full bg-emerald-500 motion-safe:transition-[width]"
-            style={{ width: `${(done / total) * 100}%` }}
-          />
-        </span>
+        />
       </span>
       {toggle ? (
         <button
@@ -94,7 +91,7 @@ export function ProgressLine({
           aria-expanded={toggle.open}
           aria-controls={toggle.controls}
           onClick={toggle.onToggle}
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-neutral-600 tabular-nums hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-300 dark:hover:text-white"
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-sm text-xs font-medium text-ink-soft tabular-nums hover:text-neutral-900 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:text-white"
         >
           {count}
           <ChevronDown
@@ -103,10 +100,7 @@ export function ProgressLine({
           />
         </button>
       ) : (
-        <span
-          id={id}
-          className="shrink-0 text-xs font-medium text-neutral-600 tabular-nums dark:text-neutral-300"
-        >
+        <span id={id} className="shrink-0 text-xs font-medium text-ink-soft tabular-nums">
           {count}
         </span>
       )}
@@ -120,23 +114,21 @@ export function OpenTasks({ progress, id }: { progress: StepProgress; id?: strin
   if (!progress.total) return null;
   if (!progress.open.length) {
     return (
-      <p id={id} className="text-sm text-neutral-500 dark:text-neutral-400">
+      <p id={id} className="text-sm text-muted">
         All done
       </p>
     );
   }
   return (
     <div id={id} className="space-y-1">
-      <p className="text-xs font-medium tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
-        Open tasks
-      </p>
+      <p className="text-xs font-medium tracking-wide text-muted uppercase">Open tasks</p>
       <ul className="space-y-0.5">
         {progress.open.map((task) => (
           <li key={task.id}>
             <button
               type="button"
               onClick={() => actions.open({ entity: task.id })}
-              className="flex w-full min-w-0 items-baseline gap-2 rounded-md px-1.5 py-1 text-left text-sm text-neutral-800 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-neutral-100 dark:hover:bg-neutral-800"
+              className="flex w-full min-w-0 items-baseline gap-2 rounded-control px-1.5 py-1 text-left text-sm text-ink hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800"
             >
               <OptionDot field="task.status" value={task.data.status} className="shrink-0" />
               <span className="min-w-0 break-words whitespace-normal">

@@ -16,6 +16,8 @@
   --motion-drawer: 24px;
   --motion-side: -8px;
   --motion-scale: 0.98;
+  /* The presence dot (v0.2 B5) breathes: it shrinks a little as it fades. */
+  --motion-presence-scale: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -24,7 +26,144 @@
     --motion-drawer: 0px;
     --motion-side: 0px;
     --motion-scale: 1;
+    --motion-presence-scale: 1;
   }
+}
+
+/*
+ * Visual system (v0.2 B6): one set of tokens for colour, type, spacing, radius and shadow, used by
+ * every block. Colours are semantic and switch with the theme here, so a block writes `text-muted`
+ * once instead of a light and a dark shade. Values are the Tailwind shades the blocks already used;
+ * dark mode was checked for WCAG AA text contrast (catalog/contrast.ts, renderer.test.tsx).
+ */
+:root {
+  --ph-canvas: var(--color-neutral-50);
+  --ph-surface: var(--color-white);
+  --ph-sunken: var(--color-neutral-50);
+  --ph-subtle: var(--color-neutral-100);
+  --ph-line: var(--color-neutral-200);
+  --ph-line-strong: var(--color-neutral-200);
+  --ph-line-soft: var(--color-neutral-100);
+  --ph-ink: var(--color-neutral-900);
+  --ph-ink-soft: var(--color-neutral-700);
+  --ph-muted: var(--color-neutral-500);
+  --ph-faint: var(--color-neutral-400);
+  --ph-accent: var(--color-sky-600);
+  --ph-accent-strong: var(--color-sky-700);
+  --ph-danger: var(--color-rose-600);
+  --ph-warn: var(--color-amber-700);
+  --ph-ok: var(--color-emerald-600);
+  --ph-inverse: var(--color-neutral-900);
+  --ph-on-inverse: var(--color-white);
+  /* Charts and pictures (v0.2 B7): the one highlight against the rest, and the frame around it. */
+  --ph-chart-highlight: var(--color-sky-500);
+  --ph-chart-rest: var(--color-neutral-300);
+  --ph-chart-track: var(--color-neutral-200);
+  --ph-chart-axis: var(--color-neutral-300);
+  --ph-chart-grid: var(--color-neutral-200);
+  --ph-chart-label: var(--color-neutral-500);
+  --ph-chart-value: var(--color-neutral-900);
+  --ph-chart-ok: var(--color-emerald-500);
+  --ph-chart-warn: var(--color-amber-500);
+  --ph-chart-bad: var(--color-rose-500);
+  /* Presence (v0.2 B5): an agent working here. */
+  --ph-presence: var(--color-violet-500);
+  --ph-presence-ink: var(--color-violet-700);
+}
+
+.dark {
+  --ph-canvas: var(--color-neutral-950);
+  --ph-surface: var(--color-neutral-900);
+  --ph-sunken: oklch(26.9% 0 none / 0.5);
+  --ph-subtle: var(--color-neutral-800);
+  --ph-line: var(--color-neutral-800);
+  --ph-line-strong: var(--color-neutral-700);
+  --ph-line-soft: var(--color-neutral-800);
+  --ph-ink: var(--color-neutral-100);
+  --ph-ink-soft: var(--color-neutral-300);
+  --ph-muted: var(--color-neutral-400);
+  /* Lighter than neutral-500, which fails AA on dark blocks; still quieter than muted. */
+  --ph-faint: oklch(65% 0 none);
+  --ph-accent: var(--color-sky-400);
+  --ph-accent-strong: var(--color-sky-300);
+  --ph-danger: var(--color-rose-400);
+  --ph-warn: var(--color-amber-400);
+  --ph-ok: var(--color-emerald-400);
+  --ph-inverse: var(--color-neutral-100);
+  --ph-on-inverse: var(--color-neutral-900);
+  --ph-chart-highlight: var(--color-sky-400);
+  --ph-chart-rest: var(--color-neutral-600);
+  --ph-chart-track: var(--color-neutral-700);
+  --ph-chart-axis: var(--color-neutral-700);
+  --ph-chart-grid: var(--color-neutral-800);
+  --ph-chart-label: var(--color-neutral-400);
+  --ph-chart-value: var(--color-neutral-100);
+  --ph-chart-ok: var(--color-emerald-400);
+  --ph-chart-warn: var(--color-amber-400);
+  --ph-chart-bad: var(--color-rose-400);
+  --ph-presence: var(--color-violet-400);
+  --ph-presence-ink: var(--color-violet-300);
+}
+
+@theme inline {
+  --color-canvas: var(--ph-canvas);
+  --color-surface: var(--ph-surface);
+  --color-sunken: var(--ph-sunken);
+  --color-subtle: var(--ph-subtle);
+  --color-line: var(--ph-line);
+  --color-line-strong: var(--ph-line-strong);
+  --color-line-soft: var(--ph-line-soft);
+  --color-ink: var(--ph-ink);
+  --color-ink-soft: var(--ph-ink-soft);
+  --color-muted: var(--ph-muted);
+  --color-faint: var(--ph-faint);
+  --color-accent: var(--ph-accent);
+  --color-accent-strong: var(--ph-accent-strong);
+  --color-danger: var(--ph-danger);
+  --color-warn: var(--ph-warn);
+  --color-ok: var(--ph-ok);
+  --color-inverse: var(--ph-inverse);
+  --color-on-inverse: var(--ph-on-inverse);
+  --color-chart-highlight: var(--ph-chart-highlight);
+  --color-chart-rest: var(--ph-chart-rest);
+  --color-chart-track: var(--ph-chart-track);
+  --color-chart-axis: var(--ph-chart-axis);
+  --color-chart-grid: var(--ph-chart-grid);
+  --color-chart-label: var(--ph-chart-label);
+  --color-chart-value: var(--ph-chart-value);
+  --color-chart-ok: var(--ph-chart-ok);
+  --color-chart-warn: var(--ph-chart-warn);
+  --color-chart-bad: var(--ph-chart-bad);
+  --color-presence: var(--ph-presence);
+  --color-presence-ink: var(--ph-presence-ink);
+}
+
+/* Type scale, spacing, radius and shadow: names for the sizes blocks share. */
+@theme {
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-title: 0.875rem;
+  --text-title--line-height: 1.25rem;
+  --text-title--font-weight: 600;
+  --text-heading: 1rem;
+  --text-heading--line-height: 1.5rem;
+  --text-figure: 1.5rem;
+  --text-figure--line-height: 2rem;
+  --text-figure--font-weight: 600;
+  --text-axis: 0.6875rem;
+  --text-axis--line-height: 1rem;
+
+  --spacing-panel: 1rem;
+  --spacing-tile: 0.75rem;
+
+  --radius-block: 0.75rem;
+  --radius-tile: 0.5rem;
+  --radius-control: 0.375rem;
+
+  --shadow-popover: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-overlay: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 @theme {
@@ -39,6 +178,7 @@
   --animate-drawer-out: motion-drawer-out var(--motion-base) var(--ease-calm-out) forwards;
   --animate-side-in: motion-side-in var(--motion-slow) var(--ease-calm) backwards;
   --animate-block-changed: motion-block-changed 1600ms ease-out;
+  --animate-presence: motion-presence 1800ms ease-in-out infinite;
 
   @keyframes motion-fade-in {
     from {
@@ -80,6 +220,18 @@
       transform: translateX(var(--motion-side));
     }
   }
+  /* An agent at work here: a slow, calm pulse (opacity only with reduced motion). */
+  @keyframes motion-presence {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.35;
+      transform: scale(var(--motion-presence-scale));
+    }
+  }
   /* A block whose content an update changed: a soft ring that fades away (not a flash). */
   @keyframes motion-block-changed {
     from {
@@ -95,14 +247,14 @@
 
 @layer base {
   body {
-    @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+    @apply bg-canvas text-ink antialiased;
   }
 }
 
 /* Compact prose styles for rendered markdown. */
 @layer components {
   .md {
-    @apply text-sm leading-relaxed text-neutral-700 dark:text-neutral-300;
+    @apply text-sm leading-relaxed text-ink-soft;
   }
   .md > * + * {
     @apply mt-2;
@@ -111,7 +263,7 @@
   .md h2,
   .md h3,
   .md h4 {
-    @apply mt-4 font-semibold text-neutral-900 first:mt-0 dark:text-neutral-100;
+    @apply mt-4 font-semibold text-ink first:mt-0;
   }
   .md h1 {
     @apply text-lg;
@@ -126,25 +278,25 @@
     @apply list-decimal pl-5;
   }
   .md a {
-    @apply text-sky-600 underline underline-offset-2 dark:text-sky-400;
+    @apply text-accent underline underline-offset-2;
   }
   .md code {
-    @apply rounded bg-neutral-100 px-1 py-0.5 font-mono text-[0.85em] dark:bg-neutral-800;
+    @apply rounded bg-subtle px-1 py-0.5 font-mono text-[0.85em];
   }
   .md pre {
-    @apply overflow-x-auto rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800;
+    @apply overflow-x-auto rounded-tile bg-subtle p-3;
   }
   .md pre code {
     @apply bg-transparent p-0;
   }
   .md blockquote {
-    @apply border-l-2 border-neutral-300 pl-3 text-neutral-500 dark:border-neutral-700;
+    @apply border-l-2 border-neutral-300 pl-3 text-muted dark:border-neutral-700;
   }
   .md table {
     @apply w-full text-left;
   }
   .md th,
   .md td {
-    @apply border-b border-neutral-200 px-2 py-1 dark:border-neutral-800;
+    @apply border-b border-line px-2 py-1;
   }
 }

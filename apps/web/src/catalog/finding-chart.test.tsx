@@ -141,8 +141,8 @@ describe('FindingChart', () => {
       `calc((100% - 14ch) * ${4800 / 10180})`,
       'calc((100% - 14ch) * 1)',
     ]);
-    expect(fills[1]!.className).toContain('bg-sky-500');
-    expect(fills[0]!.className).not.toContain('bg-sky-500');
+    expect(fills[1]!.className).toContain('bg-chart-highlight');
+    expect(fills[0]!.className).not.toContain('bg-chart-highlight');
     expect(lit(container)).toEqual(['JSON']);
     expect(screen.getByRole('button', { name: /JSON, 10,180 tokens, highlighted/ })).toBeTruthy();
   });
@@ -203,7 +203,7 @@ describe('FindingChart', () => {
     expect(tracks.map((t) => t.style.width)).toEqual(['calc(100% - 7ch)', 'calc(100% - 7ch)']);
     const fills = tracks.map((t) => t.firstElementChild as HTMLElement);
     expect(fills.map((f) => f.style.width)).toEqual([`${(2 / 7) * 100}%`, `${(6 / 7) * 100}%`]);
-    expect(fills[0]!.className).toContain('bg-sky-500');
+    expect(fills[0]!.className).toContain('bg-chart-highlight');
     // A figure over the maximum fills the track and no more.
     cleanup();
     const over = renderChart({ bars: { where: { tags: 'count' } }, max: 4 }).container;

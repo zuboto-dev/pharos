@@ -8,6 +8,7 @@ import { ViewDataProvider, type ViewActions } from './context';
 import { DetailDrawer } from './drawer';
 import { ViewRenderer } from './renderer';
 import { choose } from '../test/choose';
+import { contrastIssues } from '../test/contrast';
 
 // v0.2 A2: the decision block (R10.19), the artifact picture in the drawer and expiry reminders
 // (R7.15). Every name and file here is made up.
@@ -391,5 +392,50 @@ describe('expiry reminders (R7.15)', () => {
     expect(rows[0]).toMatch(/^Past due.*Parking permit.*Expired .*3 days late/);
     expect(rows[1]).toMatch(/^Urgent.*Driving licence.*Expires .*in 20 days/);
     expect(rows[2]).toMatch(/^Not urgent.*House deed/);
+  });
+
+  // v0.2 B6: the expiry notice and the file bands read in dark mode.
+  it('reads in dark mode (WCAG AA text)', () => {
+    window.localStorage.clear();
+    const { container } = render(
+      <ViewDataProvider
+        data={{ ...base, files }}
+        version={1}
+        actions={{ apply: async () => ({ ok: false }), open: vi.fn() }}
+      >
+        <ExpiryNotice />
+        <ViewRenderer
+          spec={{
+            component: 'Board',
+            widgets: [
+              {
+                id: 'due',
+                node: {
+                  component: 'DueTracker',
+                  query: { type: 'file', where: { expiryDate: { exists: true } } },
+                },
+              },
+            ],
+          }}
+        />
+      </ViewDataProvider>,
+    );
+    expect(container.textContent).toMatch(/Expiring|expire/);
+    expect(container.textContent).toContain('Past due');
+    expect(contrastIssues(container, 'dark')).toEqual([]);
+  });
+});
+
+// v0.2 B6: the decision block reads in dark mode, open and decided.
+describe('DecisionBlock in dark mode', () => {
+  it('has readable text before and after a choice', () => {
+    const open = setup(proposal());
+    expect(open.container.textContent).toContain('Checklist');
+    expect(contrastIssues(open.container, 'dark')).toEqual([]);
+    cleanup();
+    const chosen = setup(
+      proposal({ status: 'accepted', chosenOptionId: 'a', decidedById: ALEX.id } as never),
+    );
+    expect(contrastIssues(chosen.container, 'dark')).toEqual([]);
   });
 });

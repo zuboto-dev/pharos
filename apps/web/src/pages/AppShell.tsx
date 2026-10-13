@@ -18,10 +18,8 @@ function SettingsLink() {
       to="/settings"
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm',
-          isActive
-            ? 'bg-neutral-100 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
-            : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200',
+          'flex items-center gap-2 rounded-tile px-2.5 py-1.5 text-sm',
+          isActive ? 'bg-subtle font-medium text-ink' : 'text-muted hover:bg-subtle hover:text-ink',
         )
       }
     >
@@ -64,7 +62,7 @@ export function AppShell() {
         // The logo keeps the exact spot it has in the sidebar, so hiding the sidebar doesn't move it.
         <div
           className={clsx(
-            'hidden shrink-0 flex-col items-center gap-2 border-r border-neutral-200 bg-white md:sticky md:top-0 md:flex md:h-screen dark:border-neutral-800 dark:bg-neutral-900',
+            'hidden shrink-0 flex-col items-center gap-2 border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen',
             toggled && 'animate-fade-in',
           )}
         >
@@ -79,7 +77,7 @@ export function AppShell() {
       <aside
         id={SIDEBAR_ID}
         className={clsx(
-          'flex max-h-[60vh] shrink-0 flex-col border-b border-neutral-200 bg-white md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0 dark:border-neutral-800 dark:bg-neutral-900',
+          'flex max-h-[60vh] shrink-0 flex-col border-b border-line bg-surface md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0',
           hidden && 'md:hidden',
           // Coming back after a hide: a short slide and fade (opacity only with reduced motion).
           toggled && !hidden && 'md:animate-side-in',
@@ -100,7 +98,7 @@ export function AppShell() {
           )}
         </div>
         <Sidebar />
-        <div className="border-t border-neutral-100 p-3 dark:border-neutral-800">
+        <div className="border-t border-line-soft p-3">
           <SettingsLink />
         </div>
       </aside>

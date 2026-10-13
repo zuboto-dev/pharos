@@ -26,14 +26,14 @@ export function RevisionItem({ rev }: { rev: RevisionSummary }) {
       <button
         type="button"
         onClick={() => actions.open({ revision: rev.id })}
-        className="flex w-full gap-2.5 rounded-md px-1.5 py-1.5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+        className="flex w-full gap-2.5 rounded-control px-1.5 py-1.5 text-left hover:bg-sunken"
       >
         <Icon className="mt-0.5 size-4 shrink-0 text-neutral-400" />
         <span className="min-w-0 text-sm">
           <span className={clsx('block', rev.revertedBy && 'text-neutral-400 line-through')}>
             {rev.message}
           </span>
-          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+          <span className="text-xs text-muted">
             #{rev.id} · {rev.author.name} · {timeAgo(rev.createdAt)}
             {rev.revertOf && ` · reverts #${rev.revertOf}`}
             {rev.revertedBy && ` · reverted by #${rev.revertedBy}`}
@@ -70,9 +70,7 @@ export function ProjectHistory() {
             onClick={() => setFilter(f.key)}
             className={clsx(
               'rounded-full px-2.5 py-0.5',
-              filter === f.key
-                ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-                : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800',
+              filter === f.key ? 'bg-inverse text-on-inverse' : 'text-muted hover:bg-subtle',
             )}
           >
             {f.label}
@@ -134,7 +132,7 @@ function HistoryList({ filter }: { filter: FilterKey }) {
           type="button"
           disabled={more === 'loading'}
           onClick={() => void loadOlder()}
-          className="text-sm text-sky-600 hover:underline disabled:opacity-50 dark:text-sky-400"
+          className="text-sm text-accent hover:underline disabled:opacity-50"
         >
           {more === 'loading'
             ? 'Loading…'
@@ -155,12 +153,12 @@ export function RevertButton({ rev }: { rev: RevisionSummary }) {
   if (!actions.revert) return null;
   if (rev.revertedBy)
     return (
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-muted">
         Reverted by{' '}
         <button
           type="button"
           onClick={() => actions.open({ revision: rev.revertedBy! })}
-          className="text-sky-600 hover:underline dark:text-sky-400"
+          className="text-accent hover:underline"
         >
           #{rev.revertedBy}
         </button>
@@ -184,7 +182,7 @@ export function RevertButton({ rev }: { rev: RevisionSummary }) {
         <RotateCcw className="size-3.5" /> {busy ? 'Reverting…' : 'Revert this change'}
       </button>
       {error && (
-        <p role="alert" className="text-sm whitespace-pre-line text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-sm whitespace-pre-line text-danger">
           {error}
         </p>
       )}

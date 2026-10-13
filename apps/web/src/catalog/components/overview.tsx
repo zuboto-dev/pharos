@@ -4,6 +4,7 @@ import { FolderGit2, Info, CircleCheck, TriangleAlert, OctagonAlert, Flag } from
 import { useViewData } from '../context';
 import { EntityRef } from '../interactive';
 import { useMarkdownTerms } from '../terms';
+import { Bar, CHART } from '../chart';
 import { Empty, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
 
 export function ProjectHeader() {
@@ -13,16 +14,14 @@ export function ProjectHeader() {
     : undefined;
   const { percent: progress, done, total } = taskProgress(tasks, project);
   return (
-    <header className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 md:flex-row md:items-end md:justify-between dark:border-neutral-800 dark:bg-neutral-900">
+    <header className="flex flex-col gap-4 rounded-block border border-line bg-surface p-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{project.data.name}</h1>
           <StatusBadge value={project.data.status} />
         </div>
-        {project.data.summary && (
-          <p className="text-neutral-600 dark:text-neutral-400">{project.data.summary}</p>
-        )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-500 dark:text-neutral-400">
+        {project.data.summary && <p className="text-muted">{project.data.summary}</p>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
           {repository && (
             <span
               className="inline-flex items-center gap-1.5"
@@ -40,7 +39,7 @@ export function ProjectHeader() {
       </div>
       <div className="w-full shrink-0 space-y-1.5 md:w-56">
         <div className="flex justify-between text-sm">
-          <span className="text-neutral-500 dark:text-neutral-400">Progress</span>
+          <span className="text-muted">Progress</span>
           <span className="font-medium tabular-nums">
             {progress}%{' '}
             <span className="font-normal text-neutral-400">
@@ -62,10 +61,10 @@ const STAT_COLS: Record<number, string> = {
 };
 
 const STAT_TONES: Record<string, string> = {
-  neutral: 'text-neutral-900 dark:text-neutral-100',
-  good: 'text-emerald-600 dark:text-emerald-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  bad: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-ink',
+  good: 'text-ok',
+  warning: 'text-warn',
+  bad: 'text-danger',
 };
 
 /**
@@ -81,22 +80,8 @@ export function MiniBar({
   total: number;
   className?: string;
 }) {
-  const share = total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
-  return (
-    <span
-      aria-hidden
-      data-mini-bar=""
-      className={clsx(
-        'inline-block h-1.5 overflow-hidden rounded-full bg-neutral-200 align-middle dark:bg-neutral-700',
-        className,
-      )}
-    >
-      <span
-        className="block h-full rounded-full bg-sky-500 dark:bg-sky-400"
-        style={{ width: `${share * 100}%` }}
-      />
-    </span>
-  );
+  const share = total > 0 ? value / total : 0;
+  return <Bar data-mini-bar="" inline share={share} className={className} />;
 }
 
 export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
@@ -111,20 +96,19 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
         return (
           <div
             key={i}
-            className="flex flex-col justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+            className="flex flex-col justify-between rounded-block border border-line bg-surface px-4 py-3"
           >
-            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-              {stat.label}
-            </div>
+            <div className={CHART.figureLabel}>{stat.label}</div>
             <div
               className={clsx(
-                'mt-1 text-2xl font-semibold tabular-nums',
+                'mt-1',
+                CHART.figure,
                 STAT_TONES[zeroBad ? 'neutral' : (stat.tone ?? 'neutral')],
               )}
             >
               {value}
               {total !== undefined && (
-                <span className="text-base font-normal text-neutral-400">
+                <span className={CHART.figureOf}>
                   <span aria-hidden> / </span>
                   <span className="sr-only"> of </span>
                   {total}
@@ -152,14 +136,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
   return (
     <div className="flex items-center gap-4">
       <svg viewBox="0 0 100 100" className="size-24 shrink-0 -rotate-90">
-        <circle
-          cx="50"
-          cy="50"
-          r={r}
-          strokeWidth="10"
-          fill="none"
-          className="stroke-neutral-100 dark:stroke-neutral-800"
-        />
+        <circle cx="50" cy="50" r={r} strokeWidth="10" fill="none" className={CHART.trackStroke} />
         <circle
           cx="50"
           cy="50"
@@ -169,7 +146,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - percent / 100)}
-          className="stroke-emerald-500 transition-all"
+          className={clsx(CHART.stroke.ok, 'motion-safe:transition-all')}
         />
         <text
           x="50"
@@ -177,14 +154,14 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
           textAnchor="middle"
           dominantBaseline="central"
           transform="rotate(90 50 50)"
-          className="fill-current text-xl font-semibold"
+          className="fill-ink text-xl font-semibold tabular-nums"
         >
           {percent}%
         </text>
       </svg>
       <div className="text-sm">
         {node.label && <div className="font-medium">{node.label}</div>}
-        <div className="text-neutral-500 dark:text-neutral-400">
+        <div className="text-muted">
           {total ? `${done} of ${total} tasks done` : 'No tasks yet'}
         </div>
       </div>
@@ -223,7 +200,7 @@ export function Callout({ node }: { node: NodeOf<'Callout'> }) {
   const { icon: Icon, className } = CALLOUTS[node.tone ?? 'info']!;
   const terms = useMarkdownTerms(node.terms);
   return (
-    <div className={clsx('flex gap-3 rounded-xl border p-4', className)}>
+    <div className={clsx('flex gap-3 rounded-block border p-4', className)}>
       <Icon className="mt-0.5 size-5 shrink-0" />
       <div className="min-w-0 space-y-1">
         {node.title && <div className="font-semibold">{node.title}</div>}

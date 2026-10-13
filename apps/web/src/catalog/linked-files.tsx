@@ -37,7 +37,7 @@ export function LinkedFiles({
             e.stopPropagation();
             open(file.id);
           }}
-          className="inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-neutral-200 px-1.5 py-0.5 text-xs text-sky-700 hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:border-neutral-700 dark:text-sky-300 dark:hover:bg-sky-950"
+          className="inline-flex max-w-[14rem] items-center gap-1 rounded-control border border-line-strong px-1.5 py-0.5 text-xs text-accent-strong hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-sky-950"
         >
           <FileTypeIcon path={file.data.path ?? ''} className="size-3 shrink-0" />
           <span className="truncate">{file.data.title}</span>

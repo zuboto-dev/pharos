@@ -14,9 +14,15 @@ export const HOLD_MS = 1200;
 /** Content that loads after an update (a file's details, a history list) settles within this. */
 const SETTLE_MS = 900;
 
-/** What a block shows, cheaply: its text. Two equal signatures mean nothing visible changed. */
+/**
+ * What a block shows, cheaply: its text. Two equal signatures mean nothing visible changed. An
+ * agent's presence mark on the block (v0.2 B5) isn't the block's content, so it doesn't count.
+ */
 export function signatureOf(el: Element): string {
-  return (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  let text = el.textContent ?? '';
+  for (const mark of el.querySelectorAll('[data-presence]'))
+    text = text.replace(mark.textContent ?? '', '');
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /** Restarts a CSS animation class on an element and takes it off when it ends. */

@@ -151,11 +151,9 @@ export function TermButton({ term, children }: { term: Term; children: ReactNode
       </button>
       {anchor && (
         <Popover anchor={anchor} label={term.data.word} onClose={close}>
-          <span className="block font-semibold text-neutral-900 dark:text-neutral-100">
-            {term.data.word}
-          </span>
+          <span className="block font-semibold text-ink">{term.data.word}</span>
           <span className="block">{term.data.explanation}</span>
-          <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+          <span className="block text-xs text-muted">
             {uri ? (
               <Uri uri={uri} title={source?.data.title}>
                 Source

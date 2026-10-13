@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { localToday } from '../lib/format';
 import { ViewDataProvider, type OpenTarget } from './context';
 import { ViewRenderer } from './renderer';
+import { contrastIssues } from '../test/contrast';
 
 afterEach(cleanup);
 
@@ -65,5 +66,16 @@ describe('money page', () => {
     expect(text).toContain('€3,200.00');
     expect(text).toMatch(/of €5,000\.00 · 64%/);
     expect(text).toMatch(/Streaming.*Past due|Past due.*Streaming/);
+  });
+});
+
+// v0.2 B6: the pack pages (DueTracker, CategoryBreakdown, ledgers) read in dark mode.
+describe('pack pages in dark mode', () => {
+  it('have readable text (WCAG AA)', () => {
+    for (const pack of [CAR_PACK, MONEY_PACK]) {
+      const { container, unmount } = renderPack(pack);
+      expect(contrastIssues(container, 'dark'), pack.name).toEqual([]);
+      unmount();
+    }
   });
 });

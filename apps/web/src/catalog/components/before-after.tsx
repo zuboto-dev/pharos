@@ -6,6 +6,8 @@ import {
   type Entity,
   type NodeOf,
 } from '@pharos/schema';
+import clsx from 'clsx';
+import { CHART, Legend } from '../chart';
 import { useViewData, type ViewData } from '../context';
 import { Empty } from '../ui';
 import { CertaintyMark, ClaimBasis } from './knowledge';
@@ -49,22 +51,18 @@ export function paneParts(side: Side, before: string, after: string): DiffPart[]
 
 function Passage({ parts }: { parts: DiffPart[] }) {
   return (
-    <blockquote className="text-sm leading-relaxed break-words whitespace-pre-line text-neutral-800 dark:text-neutral-200">
+    <blockquote className="text-sm leading-relaxed break-words whitespace-pre-line text-ink">
       {parts.map((p, i) =>
         p.op === 'removed' ? (
           <span key={i}>
             <span className="sr-only">[removed: </span>
-            <del className="rounded-sm bg-rose-50 text-rose-800 decoration-rose-500/70 dark:bg-rose-950/60 dark:text-rose-200 dark:decoration-rose-400/70">
-              {p.text}
-            </del>
+            <del className={CHART.removed}>{p.text}</del>
             <span className="sr-only">] </span>
           </span>
         ) : p.op === 'added' ? (
           <span key={i}>
             <span className="sr-only">[added: </span>
-            <ins className="rounded-sm bg-emerald-50 text-emerald-900 underline decoration-emerald-600/60 decoration-2 underline-offset-2 dark:bg-emerald-950/60 dark:text-emerald-200 dark:decoration-emerald-400/70">
-              {p.text}
-            </ins>
+            <ins className={CHART.added}>{p.text}</ins>
             <span className="sr-only">] </span>
           </span>
         ) : (
@@ -95,9 +93,9 @@ function Pane({
   return (
     <section
       aria-label={label ? `${side}, ${label}` : side}
-      className="flex min-w-0 flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
+      className="flex min-w-0 flex-col gap-2 rounded-block border border-line bg-surface p-4"
     >
-      <h3 className="text-xs font-semibold tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
+      <h3 className={CHART.axis}>
         {side}
         {label && <span className="font-normal normal-case"> · {label}</span>}
       </h3>
@@ -108,12 +106,12 @@ function Pane({
       ) : parts.length > 0 ? (
         <Passage parts={parts} />
       ) : (
-        <p className="text-sm text-neutral-400 italic dark:text-neutral-500">
+        <p className="text-sm text-faint italic">
           {side === 'Before' ? 'Nothing here before' : 'Nothing in its place'}
         </p>
       )}
       {quote && hidden > 0 && (
-        <p className="text-xs text-neutral-400 dark:text-neutral-500">
+        <p className="text-xs text-faint">
           {hidden} unchanged {hidden === 1 ? 'line' : 'lines'} not shown
         </p>
       )}
@@ -121,7 +119,7 @@ function Pane({
         <div className="mt-auto flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 pt-1">
           <CertaintyMark claim={claim} />
           {locator && (
-            <span className="min-w-0 truncate text-xs text-neutral-400 dark:text-neutral-500">
+            <span className={clsx('min-w-0 truncate', CHART.note)}>
               <span className="sr-only">Where: </span>
               {locator}
             </span>
@@ -157,9 +155,7 @@ export function BeforeAfter({ node }: { node: NodeOf<'BeforeAfter'> }) {
     <div className="@container space-y-3">
       {stated && (
         <div className="space-y-1">
-          <p className="font-semibold text-neutral-900 dark:text-neutral-50">
-            {stated.data.statement}
-          </p>
+          <p className={CHART.title}>{stated.data.statement}</p>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <CertaintyMark claim={stated} />
             <ClaimBasis claim={stated} />
@@ -183,29 +179,23 @@ export function BeforeAfter({ node }: { node: NodeOf<'BeforeAfter'> }) {
         />
       </div>
       {same ? (
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          The two passages are the same.
-        </p>
+        <p className="text-xs text-muted">The two passages are the same.</p>
       ) : moved ? (
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          The same lines, in a different order.
-        </p>
+        <p className="text-xs text-muted">The same lines, in a different order.</p>
       ) : (
         both && (
-          <p aria-hidden className="flex gap-3 text-xs text-neutral-500 dark:text-neutral-400">
-            <span>
-              <span className="rounded-sm bg-rose-50 px-0.5 text-rose-800 line-through decoration-rose-500/70 dark:bg-rose-950/60 dark:text-rose-200">
-                struck
-              </span>{' '}
-              removed
-            </span>
-            <span>
-              <span className="rounded-sm bg-emerald-50 px-0.5 text-emerald-900 underline decoration-emerald-600/60 decoration-2 underline-offset-2 dark:bg-emerald-950/60 dark:text-emerald-200">
-                underlined
-              </span>{' '}
-              added
-            </span>
-          </p>
+          <Legend
+            items={[
+              {
+                swatch: <span className={clsx(CHART.removed, 'px-0.5 line-through')}>struck</span>,
+                label: 'removed',
+              },
+              {
+                swatch: <span className={clsx(CHART.added, 'px-0.5')}>underlined</span>,
+                label: 'added',
+              },
+            ]}
+          />
         )
       )}
     </div>

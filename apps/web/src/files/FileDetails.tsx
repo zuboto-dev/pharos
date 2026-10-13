@@ -41,18 +41,14 @@ import { MISSING_TEXT, extensionOf, fileActionUrl, fileName, formatSize } from '
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[6.5rem_1fr] items-start gap-3 py-1.5 text-sm">
-      <dt className="pt-0.5 text-neutral-500 dark:text-neutral-400">{label}</dt>
+      <dt className="pt-0.5 text-muted">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>
   );
 }
 
 function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="text-xs font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
-      {children}
-    </h3>
-  );
+  return <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{children}</h3>;
 }
 
 type Feedback = { kind: 'ok' | 'error'; text: string } | null;
@@ -228,12 +224,7 @@ function ActionFeedback({ feedback }: { feedback: Feedback }) {
   return (
     <p
       role="status"
-      className={clsx(
-        'min-h-4 text-xs',
-        feedback?.kind === 'error'
-          ? 'text-rose-600 dark:text-rose-400'
-          : 'text-neutral-500 dark:text-neutral-400',
-      )}
+      className={clsx('min-h-4 text-xs', feedback?.kind === 'error' ? 'text-danger' : 'text-muted')}
     >
       {feedback && (
         <>
@@ -252,7 +243,7 @@ export function MissingNotice({ file, info }: { file: Entity<'file'>; info: File
   return (
     <div
       role="note"
-      className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
+      className="flex gap-2.5 rounded-tile border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100"
     >
       <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
       <div className="min-w-0 space-y-1.5">
@@ -387,13 +378,11 @@ function LinkedFrom({ file }: { file: Entity<'file'> }) {
       <ul className="space-y-1" aria-label="Linked from">
         {items.map((e) => (
           <li key={e.id} className="flex items-baseline gap-2 text-sm">
-            <span className="w-16 shrink-0 text-xs text-neutral-500 dark:text-neutral-400">
-              {TYPE_LABELS[e.type]}
-            </span>
+            <span className="w-16 shrink-0 text-xs text-muted">{TYPE_LABELS[e.type]}</span>
             <button
               type="button"
               onClick={() => data.actions.open({ entity: e.id })}
-              className="min-w-0 truncate text-left text-sky-700 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-300"
+              className="min-w-0 truncate text-left text-accent-strong hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
             >
               {labelOf(e)}
             </button>
@@ -413,13 +402,13 @@ export function FileDetails({ file, history }: { file: Entity<'file'>; history?:
     <div className="space-y-6">
       <div className="space-y-1">
         <EditableTitle entity={file} />
-        <p className="truncate text-xs text-neutral-500 dark:text-neutral-400" title={d.path}>
+        <p className="truncate text-xs text-muted" title={d.path}>
           {fileName(d.path)} · {formatSize(d.size)}
         </p>
       </div>
       {info.data && <MissingNotice file={file} info={info.data} />}
       {info.status === 'error' && !info.data && (
-        <p role="note" className="text-sm text-neutral-500">
+        <p role="note" className="text-sm text-muted">
           Couldn’t reach the file service, so the preview and actions are off for now.
         </p>
       )}
@@ -427,7 +416,7 @@ export function FileDetails({ file, history }: { file: Entity<'file'>; history?:
       {info.data && <FilePreview file={file} available={info.data.available} />}
       <section className="space-y-1">
         <Heading>Details</Heading>
-        <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">
+        <dl className="divide-y divide-line-soft">
           <Row label="Kind">
             <KindSelect file={file} />
           </Row>
@@ -454,12 +443,12 @@ export function FileDetails({ file, history }: { file: Entity<'file'>; history?:
       <LinkedFrom file={file} />
       <section className="space-y-1">
         <Heading>On disk</Heading>
-        <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">
+        <dl className="divide-y divide-line-soft">
           <Row label="Folder">
             {folder ? (
               <span>
                 {folder.label}
-                <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="block text-xs text-muted">
                   {FOLDER_LEVELS[folder.level].agents}
                 </span>
               </span>

@@ -55,7 +55,7 @@ export function ArtifactPicture({ artifact }: { artifact: Entity<'artifact'> }) 
     <div className="space-y-2">
       {image && (
         <div className="flex items-start gap-2">
-          <div className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-control border border-line bg-neutral-50 dark:bg-neutral-900">
             {src ? (
               <img
                 src={src}
@@ -65,17 +65,17 @@ export function ArtifactPicture({ artifact }: { artifact: Entity<'artifact'> }) 
                 className="h-full w-full object-cover"
               />
             ) : (
-              <ImageOff aria-hidden className="size-5 text-neutral-300 dark:text-neutral-600" />
+              <ImageOff aria-hidden className="size-5 text-faint" />
             )}
           </div>
-          <div className="min-w-0 space-y-1 text-xs text-neutral-500">
+          <div className="min-w-0 space-y-1 text-xs text-muted">
             <p className="truncate">
               {file ? labelOf(file) : source?.kind === 'url' ? source.host : 'Not shown'}
             </p>
             <button
               type="button"
               onClick={() => save(null, `Remove the picture of “${labelOf(artifact)}”`)}
-              className="inline-flex items-center gap-1 text-neutral-500 hover:text-rose-600"
+              className="inline-flex items-center gap-1 text-muted hover:text-rose-600"
             >
               <X aria-hidden className="size-3.5" /> Remove picture
             </button>
@@ -124,14 +124,14 @@ export function ArtifactPicture({ artifact }: { artifact: Entity<'artifact'> }) 
               }
             }}
             className={clsx(
-              'w-full max-w-72 rounded-md border bg-white px-2 py-1 text-sm outline-none focus:ring-2 dark:bg-neutral-900',
+              'w-full max-w-72 rounded-control border bg-surface px-2 py-1 text-sm outline-none focus:ring-2',
               error
                 ? 'border-rose-400 focus:ring-rose-200 dark:border-rose-700'
                 : 'border-sky-300 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900',
             )}
           />
           {error && (
-            <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+            <p role="alert" className="text-xs text-danger">
               {error}
             </p>
           )}

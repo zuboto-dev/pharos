@@ -51,12 +51,7 @@ export function GlanceDate({
   if (!glance) return null;
   if (glance.kind === 'expiry') return <ExpiryBadge date={glance.date} today={today} />;
   return (
-    <span
-      className={clsx(
-        'text-xs whitespace-nowrap text-neutral-500 tabular-nums dark:text-neutral-400',
-        className,
-      )}
-    >
+    <span className={clsx('text-xs whitespace-nowrap text-muted tabular-nums', className)}>
       {glance.text}
     </span>
   );

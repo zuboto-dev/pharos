@@ -11,15 +11,14 @@ import { BUTTON } from './ui';
 type Draft = Record<string, unknown> & { component: ComponentName };
 type Where = Record<string, unknown>;
 
-const FIELD =
-  'w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900';
+const FIELD = 'w-full rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-sm';
 
 function Row({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <div className="space-y-1">
       <div className="text-sm font-medium">{label}</div>
       {children}
-      {hint && <p className="text-xs text-neutral-500">{hint}</p>}
+      {hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -108,7 +107,7 @@ function StageScope({
         ]}
       />
       {mode === 'pick' && (
-        <div className="grid gap-1 rounded-md bg-neutral-50 p-2 sm:grid-cols-2 dark:bg-neutral-800/50">
+        <div className="grid gap-1 rounded-control bg-sunken p-2 sm:grid-cols-2">
           {stages.map((stage) => (
             <Check
               key={stage.id}
@@ -120,10 +119,10 @@ function StageScope({
               }}
             />
           ))}
-          {!stages.length && <p className="text-xs text-neutral-500">No stages yet</p>}
+          {!stages.length && <p className="text-xs text-muted">No stages yet</p>}
         </div>
       )}
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-muted">
         {noun ? `Which stages’ ${noun} to show.` : 'Which stages to show.'}
       </p>
     </div>
@@ -449,7 +448,7 @@ export function WidgetSettings({
   }
   if (controls.length <= 1 && c !== 'ProjectHeader') {
     controls.push(
-      <p key="more" className="text-xs text-neutral-500">
+      <p key="more" className="text-xs text-muted">
         Other settings for this widget can be changed by your agent.
       </p>,
     );
@@ -479,7 +478,7 @@ export function WidgetSettings({
           e.preventDefault();
           save();
         }}
-        className="relative max-h-[85vh] w-full max-w-md space-y-4 overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900"
+        className="relative max-h-[85vh] w-full max-w-md space-y-4 overflow-y-auto rounded-block bg-surface p-5 shadow-overlay"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">
@@ -489,13 +488,13 @@ export function WidgetSettings({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="rounded-control p-1 text-muted hover:bg-subtle"
           >
             <X className="size-5" />
           </button>
         </div>
         {c === 'ProjectHeader' ? (
-          <p className="text-sm text-neutral-500">This widget has no settings.</p>
+          <p className="text-sm text-muted">This widget has no settings.</p>
         ) : (
           controls
         )}

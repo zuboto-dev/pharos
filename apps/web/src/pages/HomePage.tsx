@@ -53,11 +53,11 @@ export function HomePage() {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-8">
         <h1 className="text-2xl font-semibold tracking-tight">No projects yet</h1>
-        <p className="text-neutral-600 dark:text-neutral-400">
+        <p className="text-muted">
           Create one yourself, or connect your AI agent over MCP and ask it to set one up.
         </p>
         {newButton}
-        <pre className="overflow-x-auto rounded-lg bg-neutral-900 p-4 text-sm text-neutral-100 dark:bg-neutral-800">
+        <pre className="overflow-x-auto rounded-tile bg-neutral-900 p-4 text-sm text-neutral-100 dark:bg-neutral-800">
           claude mcp add --transport http pharos http://localhost:4300/mcp
         </pre>
         {dialog}
@@ -73,7 +73,7 @@ export function HomePage() {
       {dialog}
       {groups.map((group) => (
         <section key={group.key} className="space-y-3">
-          <h2 className="flex items-center gap-1.5 text-sm font-medium text-neutral-500 dark:text-neutral-400">
+          <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted">
             {group.folder && <FolderGit2 className="size-4" />}
             {group.label}
           </h2>
@@ -82,16 +82,14 @@ export function HomePage() {
               <Link
                 key={project.id}
                 to={`/projects/${project.id}`}
-                className="space-y-2 rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-300 hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
+                className="space-y-2 rounded-block border border-line bg-surface p-4 transition hover:border-neutral-300 hover:shadow-sm dark:hover:border-neutral-700"
               >
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-medium">{project.data.name}</span>
                   <StatusBadge value={project.data.status} />
                 </div>
                 {project.data.summary && (
-                  <p className="line-clamp-2 text-sm text-neutral-500 dark:text-neutral-400">
-                    {project.data.summary}
-                  </p>
+                  <p className="line-clamp-2 text-sm text-muted">{project.data.summary}</p>
                 )}
               </Link>
             ))}

@@ -150,7 +150,7 @@ describe('stage progress', () => {
     expect(within(m0).getByText('Done')).toBeTruthy();
     const fill = m0.querySelector('[style*="width"]') as HTMLElement;
     expect(fill.style.width).toBe('100%');
-    expect(fill.className).toContain('bg-emerald-500');
+    expect(fill.className).toContain('bg-chart-ok');
   });
 
   it('shows "No tasks yet" without a bar for an empty planned stage', () => {

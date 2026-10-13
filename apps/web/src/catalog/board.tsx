@@ -22,6 +22,7 @@ import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from 
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
+import { BLOCK_PRESENCE_OUTLINE, BlockPresence, ViewPresence, useViewPresence } from './presence';
 import { Node } from './renderer';
 import { WidgetSettings } from './settings';
 
@@ -105,6 +106,8 @@ export function BoardView(props: BoardProps) {
 
 function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: BoardProps) {
   const { actions, version } = useViewData();
+  // Blocks an agent is editing right now (v0.2 B5).
+  const present = useViewPresence(view?.id);
   const container = useLiveBoard<HTMLDivElement>(
     version,
     board.widgets.map((w) => w.id),
@@ -149,8 +152,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
       `Move “${widgetName(widget)}” widget ${by < 0 ? 'up' : 'down'}`,
     );
   };
-  const ICON_BUTTON =
-    'rounded-full p-0.5 hover:bg-neutral-100 disabled:opacity-30 dark:hover:bg-neutral-800';
+  const ICON_BUTTON = 'rounded-full p-0.5 hover:bg-subtle disabled:opacity-30';
 
   const update = (widget: Widget, patch: Partial<Widget>, message: string) => {
     const next = { ...widget, ...patch };
@@ -268,6 +270,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
       className={clsx('relative grid grid-cols-1 md:grid-cols-12', editing && 'pb-4')}
       style={{ gap: GAP }}
     >
+      {!editing && present.agents.length > 0 && <ViewPresence agents={present.agents} />}
       {withLeaving(board.widgets, leaving).map(({ widget, index, gone }) => {
         if (gone)
           return (
@@ -306,12 +309,14 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
               setDrop(null);
               onDrop(widget, sideOf(e, widget), e.dataTransfer.getData(DRAG_TYPE));
             }}
+            data-presence-block={(!editing && present.widgets.get(widget.id)) || undefined}
             className={clsx(
               'group/widget relative flex min-w-0 flex-col *:flex-1 md:[grid-column:var(--col)]',
+              !editing && present.widgets.has(widget.id) && BLOCK_PRESENCE_OUTLINE,
               // A saved height is a minimum: content that grows later is never cut off.
               (resizing ? preview.h : widget.h) && 'md:min-h-(--h)',
               editing &&
-                'rounded-xl outline-2 outline-offset-4 outline-transparent outline-dashed hover:outline-sky-300 dark:hover:outline-sky-800',
+                'rounded-block outline-2 outline-offset-4 outline-transparent outline-dashed hover:outline-sky-300 dark:hover:outline-sky-800',
               resizing && 'outline-sky-400!',
               dragging === widget.id && 'opacity-40',
             )}
@@ -319,6 +324,9 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
             <WidgetIdProvider id={widget.id}>
               <Node node={widget.node} />
             </WidgetIdProvider>
+            {!editing && present.widgets.has(widget.id) && (
+              <BlockPresence agent={present.widgets.get(widget.id)!} />
+            )}
             {!editing && actions.ask && (
               <button
                 type="button"
@@ -331,7 +339,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                     widgetId: widget.id,
                   })
                 }
-                className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-white/90 px-1.5 py-0.5 text-xs text-neutral-500 opacity-0 shadow-xs transition group-hover/widget:opacity-100 hover:text-sky-700 focus:opacity-100 dark:border-neutral-700 dark:bg-neutral-900/90 dark:hover:text-sky-300"
+                className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-control border border-line-strong bg-white/90 px-1.5 py-0.5 text-xs text-muted opacity-0 shadow-xs transition group-hover/widget:opacity-100 hover:text-accent-strong focus:opacity-100 dark:bg-neutral-900/90"
               >
                 <MessageCircleQuestion className="size-3.5" /> Ask
               </button>
@@ -351,7 +359,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                     )}
                   />
                 )}
-                <div className="absolute -top-3 right-3 z-20 flex items-center gap-0.5 rounded-full border border-neutral-200 bg-white px-1 py-0.5 text-neutral-500 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+                <div className="absolute -top-3 right-3 z-20 flex items-center gap-0.5 rounded-full border border-line-strong bg-surface px-1 py-0.5 text-muted shadow-sm">
                   <span
                     draggable
                     role="button"
@@ -364,7 +372,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                       setDragging(widget.id);
                     }}
                     onDragEnd={() => setDragging(null)}
-                    className="cursor-grab rounded-full p-0.5 hover:bg-neutral-100 active:cursor-grabbing dark:hover:bg-neutral-800"
+                    className="cursor-grab rounded-full p-0.5 hover:bg-subtle active:cursor-grabbing"
                   >
                     <GripVertical className="size-3.5" />
                   </span>
@@ -436,7 +444,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                   aria-hidden
                   title="Drag to resize"
                   onPointerDown={(e) => startResize(e, widget, 'wh')}
-                  className="absolute -right-2.5 -bottom-2.5 z-10 hidden size-4 cursor-nwse-resize rounded-full border-2 border-sky-400 bg-white md:block dark:bg-neutral-900"
+                  className="absolute -right-2.5 -bottom-2.5 z-10 hidden size-4 cursor-nwse-resize rounded-full border-2 border-sky-400 bg-surface md:block"
                 />
               </>
             )}

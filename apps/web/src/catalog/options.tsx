@@ -75,7 +75,7 @@ export function EditOptionsButton({
         title={`Edit ${OPTION_FIELDS[field].label.toLowerCase()} options`}
         aria-label={`Edit ${OPTION_FIELDS[field].label.toLowerCase()} options`}
         className={clsx(
-          'inline-flex items-center gap-1 rounded-md p-1 text-xs text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200',
+          'inline-flex items-center gap-1 rounded-control p-1 text-xs text-neutral-400 hover:bg-subtle hover:text-ink-soft',
           className,
         )}
       >
@@ -87,8 +87,7 @@ export function EditOptionsButton({
   );
 }
 
-const INPUT =
-  'min-w-0 rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900';
+const INPUT = 'min-w-0 rounded-control border border-line-strong bg-surface px-2 py-1 text-sm';
 
 /** How many entities use each value of an option field. */
 function useUsage(field: OptionKey): Map<string, string[]> {
@@ -207,19 +206,19 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
       onClick={(e) => e.stopPropagation()}
     >
       <div className="absolute inset-0 bg-neutral-900/30 dark:bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900">
+      <div className="relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-block bg-surface p-5 shadow-overlay">
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-base font-semibold">{def.label} options</h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="rounded-control p-1 text-muted hover:bg-subtle"
           >
             <X className="size-5" />
           </button>
         </div>
-        <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">
+        <p className="mb-4 text-xs text-muted">
           “Counts as” keeps progress and highlights working: for example, a custom “In review”
           status can count as in progress.
         </p>
@@ -227,10 +226,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
           {options.map((option, i) => {
             const used = usage.get(option.value)?.length ?? 0;
             return (
-              <li
-                key={option.value}
-                className="rounded-lg border border-neutral-200 p-2 dark:border-neutral-800"
-              >
+              <li key={option.value} className="rounded-tile border border-line p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <ColorPicker
                     value={option.color}
@@ -248,7 +244,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                   />
-                  <label className="flex items-center gap-1 text-xs text-neutral-500">
+                  <label className="flex items-center gap-1 text-xs text-muted">
                     counts as
                     <Select
                       label="Counts as"
@@ -308,7 +304,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                   </div>
                 </div>
                 {removing?.value === option.value && (
-                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-control bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                     {plural(used, 'item')} use “{option.label}”. Move them to
                     <Select
                       label="Move to"
@@ -322,7 +318,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
                     <button
                       type="button"
                       onClick={() => remove(option.value, removing.moveTo)}
-                      className="rounded-md bg-rose-600 px-2 py-1 font-medium text-white hover:bg-rose-700"
+                      className="rounded-control bg-rose-600 px-2 py-1 font-medium text-white hover:bg-rose-700"
                     >
                       Move and remove
                     </button>
@@ -340,7 +336,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
           })}
         </ul>
         <form
-          className="mt-4 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-800"
+          className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-soft pt-4"
           onSubmit={(e) => {
             e.preventDefault();
             add();
@@ -353,7 +349,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
             onChange={(e) => setNewLabel(e.target.value)}
             className={clsx(INPUT, 'flex-1')}
           />
-          <label className="flex items-center gap-1 text-xs text-neutral-500">
+          <label className="flex items-center gap-1 text-xs text-muted">
             counts as
             <Select
               label="New option counts as"
@@ -366,7 +362,7 @@ export function OptionsEditor({ field, onClose }: { field: OptionKey; onClose: (
           <button
             type="submit"
             disabled={!newLabel.trim()}
-            className="inline-flex items-center gap-1 rounded-md bg-neutral-900 px-2.5 py-1 text-sm text-white hover:bg-neutral-800 disabled:opacity-40 dark:bg-neutral-100 dark:text-neutral-900"
+            className="inline-flex items-center gap-1 rounded-control bg-inverse px-2.5 py-1 text-sm text-on-inverse hover:bg-neutral-800 disabled:opacity-40"
           >
             <Plus className="size-3.5" /> Add
           </button>
@@ -390,12 +386,12 @@ function ColorPicker({
         type="button"
         aria-label="Color"
         onClick={() => setOpen((o) => !o)}
-        className="flex size-7 items-center justify-center rounded-md border border-neutral-200 dark:border-neutral-700"
+        className="flex size-7 items-center justify-center rounded-control border border-line-strong"
       >
         <span className={clsx('size-3 rounded-full', DOT_TONES[value])} />
       </button>
       {open && (
-        <div className="absolute top-8 left-0 z-10 flex gap-1 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-md dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="absolute top-8 left-0 z-10 flex gap-1 rounded-tile border border-line-strong bg-surface p-1.5 shadow-md">
           {OPTION_COLORS.map((color) => (
             <button
               key={color}
@@ -406,7 +402,7 @@ function ColorPicker({
                 if (color !== value) onChange(color);
               }}
               className={clsx(
-                'flex size-6 items-center justify-center rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800',
+                'flex size-6 items-center justify-center rounded-control hover:bg-subtle',
                 color === value && 'ring-2 ring-sky-400',
               )}
             >

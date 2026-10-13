@@ -30,6 +30,7 @@ describe('motion tokens', () => {
     expect(animations.length).toBeGreaterThan(5);
     for (const [, name, value] of animations) {
       if (name === 'block-changed') continue; // a colour fade, not a movement
+      if (name === 'presence') continue; // a slow looping pulse (v0.2 B5), not a transition
       expect(value, name).toMatch(/var\(--motion-(quick|base|slow)\) var\(--ease-calm(-out)?\)/);
     }
   });
@@ -40,11 +41,14 @@ describe('motion tokens', () => {
     for (const distance of ['--motion-rise: 0px', '--motion-drawer: 0px', '--motion-side: 0px'])
       expect(block).toContain(distance);
     expect(block).toContain('--motion-scale: 1');
+    expect(block).toContain('--motion-presence-scale: 1');
     // Keyframes move only by those distances, so reduced motion leaves just the fade.
     const keyframes = [...css.matchAll(/@keyframes motion-[a-z-]+ \{[^@]*/g)].map((m) => m[0]);
     for (const k of keyframes) {
       for (const t of k.matchAll(/transform:\s*([^;]+);/g))
-        expect(t[1]).toMatch(/^(translate[XY]\((calc\()?var\(--motion-[a-z]+\)|translateY\(calc)/);
+        expect(t[1]).toMatch(
+          /^(translate[XY]\((calc\()?var\(--motion-[a-z]+\)|translateY\(calc|scale\((1|var\(--motion-presence-scale\))\)$)/,
+        );
     }
   });
 });

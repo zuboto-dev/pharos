@@ -110,8 +110,8 @@ export function ProjectSkeleton({ files = false }: { files?: boolean } = {}) {
         <SkeletonShape className="h-4 w-14" />
         <SkeletonShape className="hidden h-4 w-16 sm:block" />
         <span className="flex-1" />
-        <SkeletonShape className="size-7 rounded-control" />
-        <SkeletonShape className="size-7 rounded-control" />
+        <SkeletonShape className="size-7! rounded-control" />
+        <SkeletonShape className="size-7! rounded-control" />
       </div>
       {files ? (
         <>

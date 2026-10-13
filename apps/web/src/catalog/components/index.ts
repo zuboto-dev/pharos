@@ -6,6 +6,7 @@ import { FileList } from './file-list';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
 import { MilestoneList, StageTracker, Timeline } from './plan';
+import { Action } from './action';
 import { CategoryBreakdown, DueTracker } from './records';
 import { lazyBlock } from '../lazy-block';
 import { AssigneeMatrix, DependencyGraph, KanbanBoard, TaskChecklist, TaskTable } from './work';
@@ -67,4 +68,5 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   StartHere: { render: StartHere, bare: true },
   DueTracker: { render: DueTracker },
   CategoryBreakdown: { render: CategoryBreakdown },
+  Action: { render: Action },
 };

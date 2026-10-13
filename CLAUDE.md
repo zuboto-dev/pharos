@@ -97,6 +97,18 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
 - Components read data through filters evaluated by `runQuery` against the project dataset
   (`GET /api/projects/:id/data`); they never copy data into the spec.
 
+## Actions and block asks (R10)
+
+- An Action block ("Log a service", "Mark paid") is defined by its props in the page
+  (`packages/schema/src/actions.ts`); the form is generated from the record type. A submission
+  (`ActionSubmission`, versioned) goes to `POST /api/projects/:id/actions` or MCP `action_run`,
+  is run by `apps/server/src/actions/service.ts` as one revision, and answers done, duplicate
+  (idempotency key, `action_submissions` table), invalid, stale (expectedRevision), not_found or
+  failed. docs/reframe/r10-notes.md has the contract.
+- A request with `mode: "block"` asks an agent to change one block; while it is open, agents may
+  change only that block of that view (`apps/server/src/views/block-ask.ts`, checked by
+  view_update and REST apply). `view_update` takes `expectedRevision` and refuses stale writes.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

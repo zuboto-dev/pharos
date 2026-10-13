@@ -19,6 +19,7 @@ import {
 import { humanize } from '../lib/format';
 import { EXIT_MS } from '../lib/motion';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
+import { BoardActionsProvider } from './action-board';
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
@@ -99,7 +100,9 @@ export function BoardView(props: BoardProps) {
   // FileLists can show a file in a FileView on the same board (R7.11).
   return (
     <BoardFilesProvider widgets={props.board.widgets}>
-      <BoardGrid {...props} />
+      <BoardActionsProvider viewId={props.view?.id} widgets={props.board.widgets}>
+        <BoardGrid {...props} />
+      </BoardActionsProvider>
     </BoardFilesProvider>
   );
 }

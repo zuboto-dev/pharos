@@ -8,7 +8,7 @@ import {
   MessageCircleQuestion,
   X,
 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import type { AskAbout, ViewActions } from '../catalog/context';
@@ -36,6 +36,17 @@ export function AskDialog({
   onOpenAnswer?: (viewId: string) => void;
 }) {
   const [question, setQuestion] = useState('');
+  // Asked from a block (R10.6): change that block in place, or answer in a separate view.
+  const [mode, setMode] = useState<'block' | 'answer'>(about.widgetId ? 'block' : 'answer');
+  const modeName = useId();
+  // Focus goes back to whatever opened the dialog (the block's Ask button) when it closes.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+  useEffect(
+    () => () => {
+      if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+    },
+    [opener],
+  );
   const earlier = question.trim()
     ? similarAnswers(question, answers, (v) => v.data.question).slice(0, 3)
     : [];
@@ -57,6 +68,7 @@ export function AskDialog({
             ...(about.viewId ? { viewId: about.viewId } : {}),
             ...(about.widgetId ? { widgetId: about.widgetId } : {}),
             ...(about.aboutId ? { aboutId: about.aboutId } : {}),
+            ...(about.widgetId && mode === 'block' ? { mode: 'block' } : {}),
           },
         },
       ],
@@ -93,9 +105,47 @@ export function AskDialog({
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
               e.currentTarget.form?.requestSubmit();
           }}
-          placeholder="e.g. Why is this behind? What should I do next?"
+          placeholder={
+            mode === 'block'
+              ? 'e.g. Show only this month. Add the shop as a column.'
+              : 'e.g. Why is this behind? What should I do next?'
+          }
           className="w-full rounded-control border border-line-strong bg-surface px-2.5 py-2 text-sm"
         />
+        {about.widgetId && (
+          <fieldset className="space-y-1.5 text-sm">
+            <legend className="mb-1 text-xs font-medium text-muted">Your agent should</legend>
+            {(
+              [
+                [
+                  'block',
+                  'Change this block',
+                  'Only this block changes; the rest of the page stays. You can undo it.',
+                ],
+                [
+                  'answer',
+                  'Answer in a new view',
+                  'The page stays as it is; the answer opens as its own view.',
+                ],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <label key={value} className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name={modeName}
+                  value={value}
+                  checked={mode === value}
+                  onChange={() => setMode(value)}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-medium text-ink-soft">{label}</span>
+                  <span className="block text-xs text-muted">{hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         {earlier.length > 0 && onOpenAnswer && (
           <div className="space-y-1 rounded-tile border border-emerald-200 bg-emerald-50/60 p-2.5 text-sm dark:border-emerald-900 dark:bg-emerald-950/30">
             <div className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
@@ -124,7 +174,9 @@ export function AskDialog({
           {agent.configured && agent.enabled
             ? 'Your agent will start on it in a moment; '
             : 'Your agent sees open questions when it next checks Pharos (or ask it: “answer my questions in Pharos”). '}
-          Its answer appears here as an answer view.
+          {mode === 'block'
+            ? 'The block shows when it is working on it, and you can undo the change.'
+            : 'Its answer appears here as an answer view.'}
         </p>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className={BUTTON.secondary}>
@@ -214,6 +266,7 @@ export function RequestsButton({
                   <div className="min-w-0 flex-1">
                     <div>{r.data.question}</div>
                     <div className="text-xs text-neutral-400">
+                      {r.data.mode === 'block' ? 'Change ' : ''}
                       {r.data.about ? `${r.data.about} · ` : ''}
                       {timeAgo(r.createdAt)}
                     </div>
@@ -255,7 +308,9 @@ export function RequestsButton({
                   to={
                     r.data.answerViewId
                       ? `/projects/${projectId}/views/${r.data.answerViewId}`
-                      : `/projects/${projectId}`
+                      : r.data.viewId
+                        ? `/projects/${projectId}/views/${r.data.viewId}`
+                        : `/projects/${projectId}`
                   }
                   onClick={() => setAnchor(null)}
                   className="flex items-start gap-2 rounded-tile px-2.5 py-2 hover:bg-sunken"
@@ -263,7 +318,10 @@ export function RequestsButton({
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-500" />
                   <div className="min-w-0 flex-1">
                     <div>{r.data.question}</div>
-                    <div className="text-xs text-accent">Open the answer</div>
+                    {r.data.reply && <div className="text-xs text-muted">{r.data.reply}</div>}
+                    <div className="text-xs text-accent">
+                      {r.data.mode === 'block' ? 'Open the page' : 'Open the answer'}
+                    </div>
                   </div>
                 </Link>
               ))}

@@ -4,6 +4,8 @@ import {
   TEMPLATES,
   nextWidgetId,
   toBoard,
+  type ActionResult,
+  type ActionSubmission,
   type Board,
   type ComponentName,
   type Entity,
@@ -47,7 +49,7 @@ import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
 import { BUTTON } from '../catalog/ui';
-import { ApiError, postJson, useResource } from '../lib/api';
+import { ApiError, getJson, postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
 import { useExit } from '../lib/motion';
 import { humanize, timeAgo } from '../lib/format';
@@ -149,7 +151,21 @@ const OWN_CHANGE_MS = 2500;
 type Notice =
   | { kind: 'error'; text: string }
   | { kind: 'undo'; text: string; revision: number }
-  | { kind: 'answer'; text: string; viewId: string };
+  | { kind: 'answer'; text: string; viewId: string }
+  /** A plain note; `history` adds a button that opens the project's history. */
+  | { kind: 'info'; text: string; history?: boolean };
+
+/** The revision that last changed an entity (the agent's answer to a block request). */
+async function lastRevisionOf(entityId: string): Promise<number | null> {
+  try {
+    const [latest] = await getJson<{ id: number }[]>(
+      `/api/history?entityId=${encodeURIComponent(entityId)}&limit=1`,
+    );
+    return latest?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A project: its view tabs and the active view, or its Files page (`page="files"`, at
@@ -196,6 +212,31 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     }
     seenAnswers.current = new Set(answers.map((v) => v.id));
   }, [dataset.data, viewId]);
+  // "Ask about this block" (R10): when the agent changes the block (or says why it can't),
+  // say so, with Undo for the change. The first load just records what is open.
+  const seenRequests = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    if (!dataset.data) return;
+    const blocks = (dataset.data.requests ?? []).filter((r) => r.data.mode === 'block');
+    const seen = seenRequests.current;
+    seenRequests.current = new Map(blocks.map((r) => [r.id, r.data.status]));
+    if (!seen) return;
+    const settled = blocks.find((r) => seen.get(r.id) === 'open' && r.data.status !== 'open');
+    if (!settled) return;
+    const about = settled.data.about ?? 'the block';
+    const reply = settled.data.reply ? `: ${settled.data.reply}` : '';
+    if (settled.data.status === 'dismissed') {
+      setNotice({ kind: 'info', text: `Your agent didn’t change ${about}${reply}` });
+      return;
+    }
+    void lastRevisionOf(settled.id).then((revision) =>
+      setNotice(
+        revision
+          ? { kind: 'undo', text: `Your agent changed ${about}${reply}`, revision }
+          : { kind: 'info', text: `Your agent changed ${about}${reply}` },
+      ),
+    );
+  }, [dataset.data]);
   // Live updates: reload when anyone (an agent, another tab) changes this project.
   useRevisionEvents((event) => {
     if (projectId && event.projectIds.includes(projectId)) reload();
@@ -275,15 +316,45 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     },
     [reload],
   );
+  // Action blocks (R10): one submission, one revision; the toast offers Undo.
+  const act = useCallback(
+    async (submission: ActionSubmission): Promise<ActionResult> => {
+      ownChangeAt.current = Date.now();
+      try {
+        const res = await fetch(`/api/projects/${projectId}/actions`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(submission),
+        });
+        const result = (await res.json()) as ActionResult;
+        if (result.status === 'done' && result.revision)
+          setNotice({ kind: 'undo', text: result.message, revision: result.revision });
+        else if (result.status === 'done' || result.status === 'duplicate')
+          setNotice(
+            result.status === 'duplicate' && result.revision && !result.undone
+              ? {
+                  kind: 'undo',
+                  text: `Already saved: ${result.message}`,
+                  revision: result.revision,
+                }
+              : { kind: 'info', text: result.message },
+          );
+        return result;
+      } finally {
+        reload();
+      }
+    },
+    [projectId, reload],
+  );
   const [asking, setAsking] = useState<AskAbout | null>(null);
   const actions = useMemo<ViewActions>(
-    () => ({ apply, open, revert, ask: setAsking, findSourceFile }),
-    [apply, open, revert],
+    () => ({ apply, open, revert, act, ask: setAsking, findSourceFile }),
+    [apply, open, revert, act],
   );
   const close = useCallback(() => setParams({}), [setParams]);
 
   useEffect(() => {
-    if (notice?.kind !== 'undo') return;
+    if (notice?.kind !== 'undo' && notice?.kind !== 'info') return;
     const timer = setTimeout(() => setNotice((n) => (n === notice ? null : n)), 8000);
     return () => clearTimeout(timer);
   }, [notice]);
@@ -333,17 +404,25 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
       setNotice({ kind: 'undo', text: 'Reset to the default layout', revision: outcome.revision });
   };
   const undo = async (revision: number) => {
+    const what = notice?.kind === 'undo' ? notice.text : 'last change';
     setNotice(null);
     ownChangeAt.current = Date.now();
     try {
-      await postJson(`/api/revisions/${revision}/revert`, {
-        message: `Undo: ${notice?.kind === 'undo' ? notice.text : 'last change'}`,
-      });
+      await postJson(`/api/revisions/${revision}/revert`, { message: `Undo: ${what}` });
     } catch (err) {
-      setNotice({
-        kind: 'error',
-        text: err instanceof ApiError ? [err.message, ...err.issues].join('\n') : String(err),
-      });
+      // Changed again since (R10.13): say so plainly and point at what changed, never force it.
+      setNotice(
+        err instanceof ApiError && err.status === 409
+          ? {
+              kind: 'info',
+              text: `Can’t undo “${what}”: it was changed again since. Open History to see what changed and undo from there.`,
+              history: true,
+            }
+          : {
+              kind: 'error',
+              text: err instanceof ApiError ? [err.message, ...err.issues].join('\n') : String(err),
+            },
+      );
     }
     reload();
   };
@@ -530,6 +609,18 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
               className="inline-flex items-center gap-1 font-semibold"
             >
               Open
+            </button>
+          )}
+          {notice.kind === 'info' && notice.history && (
+            <button
+              type="button"
+              onClick={() => {
+                open({ history: true });
+                setNotice(null);
+              }}
+              className="inline-flex items-center gap-1 font-semibold"
+            >
+              <History className="size-3.5" aria-hidden /> History
             </button>
           )}
           {notice.kind === 'undo' && (

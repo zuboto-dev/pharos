@@ -1,15 +1,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  AGENT_FILE_FIELDS,
   ENTITY_TYPES,
   EntityType,
-  SCAN_FILE_FIELDS,
+  FILE_TEXT_TOOL,
   applyInputFor,
   type ApplyInput,
   type Author,
 } from '@pharos/schema';
 import { z } from 'zod';
 import { VERSION } from './version.js';
+import { AGENT_READONLY_FILE_FIELDS, AgentFiles, readAgentFileText } from './store/agent-files.js';
 import { PharosError } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
@@ -36,7 +38,7 @@ import {
  */
 const AgentApplyInput = applyInputFor(
   ENTITY_TYPES.filter((t) => t !== 'view'),
-  { file: SCAN_FILE_FIELDS },
+  { file: AGENT_READONLY_FILE_FIELDS },
 );
 
 const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions, claims) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.
@@ -53,7 +55,7 @@ Changing data:
 - When you start work on a task, claim it in one apply: set its assigneeId to you and its status to in progress (project_snapshot lists assignees; if none has your name, create one in the same apply with kind "agent" and use its ref). Mark it done when you finish, and leave tasks assigned to someone else alone unless the user hands them to you.
 - Findings are claims (one plain sentence, with checkedOn, sourceIds and authorId) and terms explain a word. A claim's certainty is "reading" (your analysis; the default), "verified" (From source: needs a source artifact with an http(s) uri and a checkedOn date that is not in the future) or "confirmed" (Confirmed by you: needs confirmedById, a decision the owner accepted in Pharos themselves; you can't confirm one yourself). Pharos refuses a claim that doesn't meet its certainty: without a linked source you read and a checkedOn date, keep it at "reading". For a finding the owner should confirm, create the decision with status "proposed" (the default, "accepted", records no acceptance by the owner, so it can never back a confirmed claim), ask the owner to accept it in Pharos, and only then set the claim to "confirmed" with confirmedById. Show what a claim rests on: a "verified" claim carries quote, the exact passage from the source, word for word (max 300 characters; quoteSourceId names which of its sourceIds when there are several), and a "reading" claim carries assumption, the one assumption it rests on (max 200). Add locator (max 60 characters, e.g. "§7 Completion", "line 42", "commit deb7096") so the reader finds the quote in its source; figure {value, unit, label} when the claim states a number a FindingChart draws (on "verified", the value must appear in the quote); and weakBecause ("one-source", "indirect" or "disagree") when the evidence is thin, which shows after the mark. apply warns about a claim with no source, a "verified" claim without a quote, a "reading" claim without an assumption, a "verified" figure missing from its quote, and weakBecause "one-source" on a claim without exactly one source.
 - Record meaningful choices as decisions so the reasoning stays traceable: set decidedById (the assignee who made the call, usually the person who asked, not you unless you decided) and decisionDate.
-- Files (type "file") are documents in folders the owner added in Pharos Settings; the files stay on the owner's disk. You see the details of files added to a project (title, kind, issuer, dates, tags, size), never their contents or the folders. You may fill in details (kind, issuer, issuedDate, expiryDate, tags, notes, taskIds), but only the owner adds or removes files, and where a file is on disk comes from the folder scan.
+- Files (type "file", in project_snapshot.files) are documents on the owner's disk, added to a project from folders the owner chose in Pharos Settings. You see only their details (title, kind, issuer, issuedDate, expiryDate, tags, size, taskIds): never where they are, their folders, their notes, or files from folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when its folder allows it (canReadText in the snapshot) and it is a .txt, .csv or .md file. You may fill in title, kind, issuer, dates, tags and taskIds; only the owner adds, removes or moves files. Don't look for the files on disk yourself.
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
 Generating views (what the user sees):
@@ -130,11 +132,23 @@ export function createMcpServer(store: Store): McpServer {
       annotations: { readOnlyHint: true },
     },
     ({ type, projectId, where }) =>
-      run(() =>
-        store
-          .list(type, { projectId, where })
-          .map(({ id, data, updatedAt }) => ({ id, ...data, updatedAt })),
-      ),
+      run(() => {
+        const unknown = Object.keys(where ?? {}).filter(
+          (f) => type === 'file' && !(AGENT_FILE_FIELDS as readonly string[]).includes(f),
+        );
+        if (unknown.length)
+          throw new PharosError(
+            'invalid',
+            `Unknown field "${unknown[0]}" for file. Fields: ${AGENT_FILE_FIELDS.join(', ')}`,
+          );
+        const files = new AgentFiles(store);
+        return store.list(type, { projectId, where }).flatMap((entity) => {
+          const seen = files.entity(entity);
+          // A filter on a link the agent can't see (a hidden file) matches nothing.
+          if (!seen || Object.keys(where ?? {}).some((f) => !(f in seen.data))) return [];
+          return [{ id: seen.id, ...seen.data, updatedAt: seen.updatedAt }];
+        });
+      }),
   );
 
   server.registerTool(
@@ -147,7 +161,8 @@ export function createMcpServer(store: Store): McpServer {
     },
     ({ id }) =>
       run(() => {
-        const entity = store.get(id);
+        const found = store.get(id);
+        const entity = found && new AgentFiles(store).entity(found);
         if (!entity) throw new PharosError('not_found', `${id} not found`);
         return entity;
       }),
@@ -184,7 +199,12 @@ export function createMcpServer(store: Store): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    (query) => run(() => store.history(query)),
+    (query) =>
+      run(() => {
+        const files = new AgentFiles(store);
+        if (query.entityId && !files.visible(query.entityId)) return [];
+        return files.revisions(store.history(query));
+      }),
   );
 
   server.registerTool(
@@ -217,7 +237,7 @@ export function createMcpServer(store: Store): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    (options) => run(() => store.diff(options)),
+    (options) => run(() => new AgentFiles(store).diffs(store.diff(options))),
   );
 
   server.registerTool(
@@ -233,6 +253,18 @@ export function createMcpServer(store: Store): McpServer {
       annotations: { destructiveHint: true },
     },
     ({ revision, message }) => run(() => store.revert(revision, author(), message)),
+  );
+
+  server.registerTool(
+    FILE_TEXT_TOOL,
+    {
+      title: 'Read a file’s text',
+      description:
+        'The text of a project file (.txt, .csv or .md, up to 512 KB; `truncated` says when there is more), only when the owner set its folder to allow it (canReadText in project_snapshot.files). Refuses every other file; its details are in project_snapshot.',
+      inputSchema: { fileId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ fileId }) => run(() => readAgentFileText(store, fileId)),
   );
 
   server.registerTool(

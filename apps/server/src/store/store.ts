@@ -28,6 +28,7 @@ import {
   valueFor,
   type OptionKey,
 } from '@pharos/schema';
+import { AgentFiles, agentApplyIssue } from './agent-files.js';
 import { PharosError, formatPath } from './errors.js';
 
 type Data = Record<string, unknown>;
@@ -280,6 +281,18 @@ export class Store {
     return row ? toEntity(row) : null;
   }
 
+  /** An entity's data, or its last recorded data if it was deleted (null if never seen). */
+  lastKnown(id: string): { type: EntityType; data: Data } | null {
+    const current = this.get(id);
+    if (current) return { type: current.type, data: current.data as Data };
+    const row = this.db
+      .prepare(
+        'SELECT entity_type, before FROM changes WHERE entity_id = ? AND before IS NOT NULL ORDER BY revision_id DESC, seq DESC LIMIT 1',
+      )
+      .get(id) as { entity_type: string; before: string } | undefined;
+    return row ? { type: row.entity_type as EntityType, data: JSON.parse(row.before) } : null;
+  }
+
   getOfType<T extends EntityType>(type: T, id: string): Entity<T> {
     const entity = this.get(id);
     if (!entity || entity.type !== type) {
@@ -464,8 +477,11 @@ export class Store {
         const issue = agentFileIssue(op) ?? agentArtifactFileIssue(op);
         if (issue) throw new PharosError('invalid', `operations[${index}]: ${issue}`);
       });
+      const issue = agentApplyIssue(this, input);
+      if (issue)
+        throw new PharosError(issue.includes('not found') ? 'not_found' : 'invalid', issue);
     }
-    return this.transaction(author, input.message, null, (tx) => {
+    const result = this.transaction(author, input.message, null, (tx) => {
       const created: Record<string, string> = {};
       const refs = new Map<string, string>();
       input.operations.forEach((op, index) => {
@@ -475,6 +491,13 @@ export class Store {
       });
       return created;
     });
+    return this.forAuthor(author, result);
+  }
+
+  /** What an agent sees of its own write: file details only (R7.5). */
+  private forAuthor(author: Author, result: ApplyResult): ApplyResult {
+    if (author.kind !== 'agent') return result;
+    return { ...result, changes: new AgentFiles(this).diffs(result.changes) };
   }
 
   /** Gives projects created before default views existed their default views. */
@@ -506,7 +529,12 @@ export class Store {
       );
     }
     const changes = this.changesOf(revisionId);
-    return this.transaction(
+    if (author.kind === 'agent') {
+      const issue = new AgentFiles(this).revertIssue(revisionId, changes);
+      if (issue)
+        throw new PharosError(issue.endsWith('not found') ? 'not_found' : 'invalid', issue);
+    }
+    const result = this.transaction(
       author,
       message?.trim() || `Revert revision ${revisionId}: ${original.message}`,
       revisionId,
@@ -516,6 +544,7 @@ export class Store {
         return {};
       },
     );
+    return this.forAuthor(author, result);
   }
 
   private transaction(

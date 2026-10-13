@@ -39,6 +39,7 @@ describe('MCP', () => {
       'catalog_describe',
       'catalog_list',
       'changes_since',
+      'file_read_text',
       'get',
       'history_diff',
       'history_list',

@@ -7,6 +7,7 @@ import {
   type EntityDataMap,
 } from '@pharos/schema';
 import { isExpired, requestContext } from '../views/service.js';
+import { AgentFiles } from './agent-files.js';
 import type { Store } from './store.js';
 
 /** Task counts per status value (custom statuses keep their own names). */
@@ -27,6 +28,8 @@ type GoalNode = Pick<EntityDataMap['goal'], 'title' | 'status' | 'successCriteri
  */
 export function projectSnapshot(store: Store, projectId: string) {
   const project = store.getOfType('project', projectId);
+  // Agents see file details only, and nothing of files in hidden folders (R7.5).
+  const agentFiles = new AgentFiles(store);
   const repository = project.data.repositoryId
     ? store.getOfType('repository', project.data.repositoryId)
     : null;
@@ -141,6 +144,17 @@ export function projectSnapshot(store: Store, projectId: string) {
       ...(c.data.tags.length ? { tags: c.data.tags } : {}),
     })),
     terms: store.list('term', { projectId }).map((t) => ({ id: t.id, word: t.data.word })),
+    /**
+     * Files the owner added from folders agents may see: details only, never where they are.
+     * `canReadText`: the folder lets file_read_text return the text (text files only).
+     */
+    files: store.list('file', { projectId }).flatMap((f) => {
+      const folder = agentFiles.folderOf(f);
+      if (!folder) return [];
+      const details = agentFiles.fileData(f.data);
+      delete details.projectId;
+      return [{ id: f.id, ...details, canReadText: folder.level === 'contents' }];
+    }),
     // People and agents work can be assigned to (shared across projects), with ids for assigneeId.
     assignees: store
       .list('assignee')
@@ -169,17 +183,19 @@ export function projectSnapshot(store: Store, projectId: string) {
         ...(v.data.question ? { question: v.data.question } : {}),
       })),
     /** Questions people asked from the UI that no agent has answered yet. */
-    requests: store.list('request', { projectId, where: { status: 'open' } }).map((r) => ({
-      id: r.id,
-      question: r.data.question,
-      ...(r.data.about ? { about: r.data.about } : {}),
-      ...(r.data.aboutId ? { aboutId: r.data.aboutId } : {}),
-      ...(r.data.viewId ? { viewId: r.data.viewId } : {}),
-      ...(r.data.widgetId ? { widgetId: r.data.widgetId } : {}),
-      context: requestContext(store, r),
-      askedAt: r.createdAt,
-    })),
-    recentRevisions: store.history({ projectId, limit: 5 }).map((r) => ({
+    requests: agentFiles
+      .entities(store.list('request', { projectId, where: { status: 'open' } }))
+      .map((r) => ({
+        id: r.id,
+        question: r.data.question,
+        ...(r.data.about ? { about: r.data.about } : {}),
+        ...(r.data.aboutId ? { aboutId: r.data.aboutId } : {}),
+        ...(r.data.viewId ? { viewId: r.data.viewId } : {}),
+        ...(r.data.widgetId ? { widgetId: r.data.widgetId } : {}),
+        context: requestContext(store, r),
+        askedAt: r.createdAt,
+      })),
+    recentRevisions: agentFiles.revisions(store.history({ projectId, limit: 5 })).map((r) => ({
       id: r.id,
       author: r.author.name,
       message: r.message,

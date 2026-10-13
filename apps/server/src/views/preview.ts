@@ -29,6 +29,7 @@ import {
   type ViewNode,
   type Where,
 } from '@pharos/schema';
+import { AgentFiles } from '../store/agent-files.js';
 import { claimWarnings, type Store } from '../store/store.js';
 
 /** One widget's preview: what it shows right now, and anything that looks wrong. */
@@ -1207,7 +1208,8 @@ function localToday(): string {
 /** What every widget of a board shows for a project right now, plus layout and filter warnings. */
 export function previewBoard(store: Store, projectId: string, board: Board, today = localToday()) {
   const ctx: Context = {
-    data: store.dataset(projectId),
+    // Previews are for agents: file details only, no hidden files (R7.5).
+    data: new AgentFiles(store).dataset(store.dataset(projectId)),
     store,
     today,
     widgetIds: new Set(board.widgets.map((w) => w.id)),

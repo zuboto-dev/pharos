@@ -1,6 +1,13 @@
-import { BOARD_GUIDE, COMPONENT_INFO, similarAnswers, type ComponentName } from '@pharos/schema';
+import {
+  BOARD_GUIDE,
+  COMPONENT_INFO,
+  FILE_TEXT_TOOL,
+  similarAnswers,
+  type ComponentName,
+} from '@pharos/schema';
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { AgentFiles } from './store/agent-files.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { isExpired, requestContext } from './views/service.js';
@@ -453,7 +460,11 @@ export function answerBrief(store: Store, projectIds: string[]): string {
     const answers = store
       .list('view', { projectId })
       .filter((v) => v.data.kind === 'answer' && !v.data.archived && !isExpired(v));
-    return store.list('request', { projectId, where: { status: 'open' } }).map((r) =>
+    // Agents see file details only, and nothing of hidden files (R7.5).
+    const requests = new AgentFiles(store).entities(
+      store.list('request', { projectId, where: { status: 'open' } }),
+    );
+    return requests.map((r) =>
       [
         `- requestId ${r.id} in project "${project.data.name}" (${projectId}): ${r.data.question}`,
         r.data.about ? `  Asked from: ${r.data.about}` : '',
@@ -490,6 +501,11 @@ export function answerBrief(store: Store, projectIds: string[]): string {
     'only for details the snapshot lacks, then do the above. view_answer returns a preview; fix',
     'problems with view_update if it shows any, then move on. Use catalog_describe only for a',
     "component whose props aren't shown in the examples below.",
+    '',
+    'Files: you see only the details of files the owner added to a project (project_snapshot.files:',
+    'title, kind, issuer, dates, tags, size), never where they are on disk, their notes, or files in',
+    `folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when canReadText is true;`,
+    "otherwise work from the details, and don't look for the files on disk.",
     '',
     VIEW_GUIDELINES,
     catalogMarkdown(),

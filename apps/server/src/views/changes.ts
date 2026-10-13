@@ -1,3 +1,4 @@
+import { AgentFiles } from '../store/agent-files.js';
 import type { Store } from '../store/store.js';
 
 const FIRST_LOOK = 20;
@@ -15,13 +16,16 @@ export function changesSince(
   store.getOfType('project', projectId);
   const cursor = store.agentCursor(agent, projectId);
   const latest = store.latestRevisionId();
-  const revisions = store.history({
-    projectId,
-    after: cursor,
-    excludeAuthor: agent,
-    authorKind: options.onlyPeople ? 'human' : undefined,
-    limit: cursor ? 200 : FIRST_LOOK,
-  });
+  // Agents see file details only, and nothing of hidden files (R7.5).
+  const revisions = new AgentFiles(store).revisions(
+    store.history({
+      projectId,
+      after: cursor,
+      excludeAuthor: agent,
+      authorKind: options.onlyPeople ? 'human' : undefined,
+      limit: cursor ? 200 : FIRST_LOOK,
+    }),
+  );
   if (options.mark ?? true) store.setAgentCursor(agent, projectId, latest);
   return {
     since: cursor || null,
@@ -47,10 +51,12 @@ export function changesSince(
 
 /** How many revisions by others this agent hasn't seen yet in a project. */
 export function unseenCount(store: Store, agent: string, projectId: string): number {
-  return store.history({
-    projectId,
-    after: store.agentCursor(agent, projectId),
-    excludeAuthor: agent,
-    limit: 200,
-  }).length;
+  return new AgentFiles(store).revisions(
+    store.history({
+      projectId,
+      after: store.agentCursor(agent, projectId),
+      excludeAuthor: agent,
+      limit: 200,
+    }),
+  ).length;
 }

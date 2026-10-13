@@ -8,6 +8,7 @@ import {
   type ViewSpec,
 } from '@pharos/schema';
 import { z } from 'zod';
+import { AgentFiles } from '../store/agent-files.js';
 import { PharosError, formatPath } from '../store/errors.js';
 import type { ApplyResult, Store } from '../store/store.js';
 import { WidgetOp, applyWidgetOps, summarizeBoard } from './board-ops.js';
@@ -324,7 +325,9 @@ export function requestContext(store: Store, request: Entity<'request'>): string
       lines.push(`View "${v.data.name}" (${v.id}, ${kind})`);
     }
   }
-  const item = request.data.aboutId ? store.get(request.data.aboutId) : null;
+  const found = request.data.aboutId ? store.get(request.data.aboutId) : null;
+  // Asked from a file in a hidden folder: agents don't learn it exists (R7.5).
+  const item = found && new AgentFiles(store).entity(found);
   if (item) {
     const label = ENTITIES[item.type].label;
     lines.push(

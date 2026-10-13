@@ -85,6 +85,16 @@ describe('files in the store', () => {
   });
 
   it('lets agents fill in details but never add, remove or move a file', () => {
+    // Agents only see files in folders the owner shares with them (R7.5).
+    store.setSetting(FOLDERS_SETTING, [
+      {
+        id: 'root_fixture1',
+        path: '/tmp/pharos-fixture/Company',
+        label: 'Company',
+        level: 'details',
+        addedAt: '2026-10-12T10:00:00.000Z',
+      },
+    ]);
     const id = addFile();
     run(agent, {
       op: 'update',

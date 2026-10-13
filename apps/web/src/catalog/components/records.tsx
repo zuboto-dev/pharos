@@ -42,7 +42,8 @@ export function RecordValue({ at, data }: { at: Resolved; data: ViewData }): Rea
   const { value } = at;
   if (value === undefined || value === null || value === '')
     return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
-  if (isMoney(value)) return <span className="tabular-nums">{formatMoney(value)}</span>;
+  if (isMoney(value))
+    return <span className="whitespace-nowrap tabular-nums">{formatMoney(value)}</span>;
   if (at.field === 'due.band' && typeof value === 'string')
     return <Badge tone={BAND_TONES[value as DueBand]}>{DUE_BAND_LABELS[value as DueBand]}</Badge>;
   const def = at.recordType
@@ -62,9 +63,9 @@ export function RecordValue({ at, data }: { at: Resolved; data: ViewData }): Rea
   if ((def?.kind === 'reference' || def?.kind === 'file') && typeof value === 'string')
     return data.entityById.has(value) ? <EntityRef id={value} /> : <span>—</span>;
   if (typeof value === 'number')
-    return <span className="tabular-nums">{formatNumber(value, def?.unit)}</span>;
+    return <span className="whitespace-nowrap tabular-nums">{formatNumber(value, def?.unit)}</span>;
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))
-    return <span className="tabular-nums">{formatDate(value, true)}</span>;
+    return <span className="whitespace-nowrap tabular-nums">{formatDate(value, true)}</span>;
   return String(value);
 }
 
@@ -126,7 +127,7 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
                   <span className="text-xs text-neutral-400">No schedule</span>
                 )}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              <span className="min-w-[9rem] flex-1 truncate text-sm font-medium">
                 {record.data.title}
               </span>
               {due && (

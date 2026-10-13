@@ -13,7 +13,21 @@ import {
 } from '../views/blocks.js';
 import type { NodeOf, ViewNode } from '../views/catalog.js';
 import type { ProjectDataset } from '../views/query.js';
-import { fieldReader, runQuery } from '../views/run-query.js';
+import { fieldReader, runQuery, type Resolved } from '../views/run-query.js';
+import { findOption, optionKeyOf } from '../options.js';
+import { findRecordType } from '../records.js';
+
+/** The label an option value shows with, or undefined when the field has no options. */
+function optionLabel(data: ProjectDataset, at: Resolved, value: string): string | undefined {
+  if (at.type === 'record' && at.recordType) {
+    const option = findRecordType(data.project, at.recordType)
+      ?.fields.find((f) => `fields.${f.key}` === at.field)
+      ?.options?.find((o) => o.value === value);
+    if (option) return option.label;
+  }
+  const key = optionKeyOf(at.type, at.field);
+  return key ? findOption(data.project, key, value)?.label : undefined;
+}
 
 /**
  * Fact checks (R8.3): what a pack page shows, worked out with the same functions the web app
@@ -225,10 +239,14 @@ export function cellText(
   path: string,
   today: string,
 ): string | number | null {
-  const { value } = fieldReader(data, { today })(row as never, path);
+  const at = fieldReader(data, { today })(row as never, path);
+  const { value } = at;
   if (value === undefined || value === null) return null;
   if (isMoneyValue(value)) return formatMoney(value);
   if (typeof value === 'string') {
+    // An option shows its label (v0.2 review, gap 10), as the page does.
+    const label = optionLabel(data, at, value);
+    if (label !== undefined) return label;
     const target = [...(data.records ?? []), ...data.files].find((e) => e.id === value);
     if (target) return target.data.title;
   }

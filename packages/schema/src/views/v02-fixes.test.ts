@@ -5,6 +5,62 @@ import { Board } from './board.js';
 import type { ViewNode } from './catalog.js';
 import { checkBoardQueries, findingKey } from './check-queries.js';
 import { isCalendarDate } from './dates.js';
+import { MUSIC_PACK, packDataset } from '../packs/index.js';
+import { chartBars } from './blocks.js';
+import { computeDue } from './due.js';
+import { runQuery } from './run-query.js';
+
+describe('plain count bars and calculation edges (gaps 10 and 11)', () => {
+  const today = '2026-10-13';
+  const songs = packDataset(
+    MUSIC_PACK,
+    [
+      { ref: 'a', recordType: 'song', title: 'A', fields: { stage: 'released' } },
+      { ref: 'b', recordType: 'song', title: 'B', fields: { stage: 'demo' } },
+      { ref: 'c', recordType: 'song', title: 'C', fields: { stage: 'released', bpm: 90 } },
+    ],
+    today,
+  );
+
+  it('orders plain bars by option order with their labels and colours', () => {
+    const bars = chartBars(songs, {
+      query: { type: 'record', where: { recordType: 'song' } },
+      by: 'fields.stage',
+    });
+    expect(bars).toEqual([
+      { key: 'demo', label: 'Demo', value: 1, color: 'blue' },
+      { key: 'released', label: 'Released', value: 2, color: 'green' },
+    ]);
+  });
+
+  it('keeps rows without a value last when sorting up too', () => {
+    const titles = runQuery(songs, 'record', {
+      where: { recordType: 'song' },
+      sort: [{ field: 'fields.bpm', dir: 'asc' }],
+    }).map((r) => r.data.title);
+    expect(titles[0]).toBe('C');
+  });
+
+  it('advances long monthly and weekly fixed schedules exactly', () => {
+    const monthly = computeDue(
+      {
+        mode: 'fixed',
+        every: { n: 1, unit: 'months' },
+        startDate: '1990-01-31',
+        lastDate: '2026-02-28',
+      },
+      today,
+      undefined,
+    );
+    expect(monthly?.date).toBe('2026-03-31');
+    const weekly = computeDue(
+      { mode: 'fixed', every: { n: 2, unit: 'weeks' }, startDate: '1980-01-07', lastDate: today },
+      today,
+      undefined,
+    );
+    expect(weekly?.date).toBe('2026-10-26');
+  });
+});
 
 /** v0.2 review, gaps 7–9: what the stricter query checks still allow, and where they look. */
 

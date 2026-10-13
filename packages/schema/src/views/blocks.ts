@@ -1,5 +1,5 @@
-import type { Entity } from '../entities.js';
-import { findOption, optionKeyOf } from '../options.js';
+import { ENTITIES, type Entity } from '../entities.js';
+import { findOption, optionKeyOf, optionsFor, type OptionColor } from '../options.js';
 import { DUE_BANDS, findRecordType, isMoney, type Money } from '../records.js';
 import type { NodeOf } from './catalog.js';
 import { localToday } from './dates.js';
@@ -213,34 +213,88 @@ export function tableTotals(
 
 // ------------------------------------------------------------------ CountChart with sum / bucket
 
-export type ChartBar = { key: string; label: string; value: number; currency?: string };
+export type ChartBar = {
+  key: string;
+  label: string;
+  value: number;
+  currency?: string;
+  /** An option's colour, when the bars group by an option field. */
+  color?: OptionColor;
+};
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Any item of the dataset by id (what a reference field points at). */
+function itemById(data: ProjectDataset, id: string): Entity | undefined {
+  if (data.project.id === id) return data.project;
+  for (const list of [
+    data.records ?? [],
+    data.stages,
+    data.tasks,
+    data.assignees,
+    data.goals,
+    data.scopeItems,
+    data.artifacts,
+    data.decisions,
+    data.claims,
+    data.terms,
+    data.files,
+  ] as Entity[][]) {
+    const found = list.find((e) => e.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** An item's name, as the page shows it (its type's label field). */
+function itemLabel(item: Entity): string {
+  const value = (item.data as Record<string, unknown>)[ENTITIES[item.type].label];
+  return typeof value === 'string' ? value : item.id;
+}
+
+/**
+ * What a grouped value means on the page: its option (label, colour and place in the option
+ * list), or the item it references (name and own order), or nothing special.
+ */
+function valueMeaning(
+  data: ProjectDataset,
+  at: Resolved,
+  key: string,
+): { label?: string; color?: OptionColor; rank: number } {
+  if (!key) return { rank: Infinity };
+  if (at.type === 'record' && at.recordType) {
+    const options = findRecordType(data.project, at.recordType)?.fields.find(
+      (f) => `fields.${f.key}` === at.field,
+    )?.options;
+    const index = options?.findIndex((o) => o.value === key) ?? -1;
+    if (index >= 0) {
+      const option = options![index]!;
+      return { label: option.label, ...(option.color ? { color: option.color } : {}), rank: index };
+    }
+  }
+  const optionKey = optionKeyOf(at.type, at.field);
+  const option = optionKey ? findOption(data.project, optionKey, key) : undefined;
+  if (optionKey && option)
+    return {
+      label: option.label,
+      ...(option.color ? { color: option.color } : {}),
+      rank: optionsFor(data.project, optionKey).findIndex((o) => o.value === key),
+    };
+  const target = itemById(data, key);
+  if (target)
+    return {
+      label: itemLabel(target),
+      rank: (target.data as { order?: number }).order ?? target.createdRev,
+    };
+  return { rank: Infinity };
+}
 
 /** A bar's label: an option's label, a referenced item's name, a month or year, or the value. */
 function barLabel(data: ProjectDataset, at: Resolved, key: string, bucket?: string): string {
   if (!key) return 'None';
   if (bucket === 'year') return key;
   if (bucket === 'month') return `${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
-  const optionKey = optionKeyOf(at.type, at.field);
-  if (optionKey) return findOption(data.project, optionKey, key)?.label ?? key;
-  if (at.type === 'record' && at.recordType) {
-    const def = findRecordType(data.project, at.recordType)?.fields.find(
-      (f) => `fields.${f.key}` === at.field,
-    );
-    const option = def?.options?.find((o) => o.value === key);
-    if (option) return option.label;
-  }
-  const target = [...(data.records ?? []), ...data.stages, ...data.tasks, ...data.assignees].find(
-    (e) => e.id === key,
-  );
-  if (target)
-    return String(
-      (target.data as Record<string, unknown>).title ??
-        (target.data as Record<string, unknown>).name ??
-        key,
-    );
-  return key;
+  return valueMeaning(data, at, key).label ?? key;
 }
 
 /**
@@ -254,30 +308,49 @@ export function chartBars(
 ): ChartBar[] {
   const matching = rows(data, node.query, context);
   const read = fieldReader(data, context);
+  // A plain count (v0.2 review, gap 10: the web app renders these bars too, so the fact checker
+  // sees what the page shows): a list counts once per member, bars keep option colours and the
+  // natural order (option order, a referenced item's own order).
+  const plain = !node.sum && !node.bucket;
   const bars = new Map<string, ChartBar>();
+  const ranks = new Map<string, number>();
   for (const row of matching) {
     const at = read(row, node.by);
-    let key = at.value === undefined || at.value === null ? '' : String(at.value);
-    if (key && node.bucket) key = node.bucket === 'year' ? key.slice(0, 4) : key.slice(0, 7);
-    const amount = node.sum ? read(row, node.sum).value : 1;
-    const currency = isMoney(amount) ? amount.currency : undefined;
-    const value = isMoney(amount) ? amount.amount : typeof amount === 'number' ? amount : 0;
-    const id = currency ? `${key}|${currency}` : key;
-    const bar = bars.get(id);
-    if (bar) bar.value += value;
-    else
+    const values: unknown[] =
+      plain && Array.isArray(at.value) ? (at.value.length ? at.value : [undefined]) : [at.value];
+    for (const v of values) {
+      let key = v === undefined || v === null ? '' : String(v);
+      if (key && node.bucket) key = node.bucket === 'year' ? key.slice(0, 4) : key.slice(0, 7);
+      const amount = node.sum ? read(row, node.sum).value : 1;
+      const currency = isMoney(amount) ? amount.currency : undefined;
+      const value = isMoney(amount) ? amount.amount : typeof amount === 'number' ? amount : 0;
+      const id = currency ? `${key}|${currency}` : key;
+      const bar = bars.get(id);
+      if (bar) {
+        bar.value += value;
+        continue;
+      }
+      const meaning = plain ? valueMeaning(data, at, key) : undefined;
+      if (meaning) ranks.set(id, meaning.rank);
       bars.set(id, {
         key,
         label: barLabel(data, at, key, node.bucket),
         value,
         ...(currency ? { currency } : {}),
+        ...(meaning?.color ? { color: meaning.color } : {}),
       });
+    }
   }
   let out = [...bars.values()];
+  const empty = (b: ChartBar) => (b.key === '' ? 1 : 0);
   if (node.sort === 'count') out.sort((a, b) => b.value - a.value);
-  else if (node.bucket)
+  else if (node.bucket) out.sort((a, b) => empty(a) - empty(b) || a.key.localeCompare(b.key));
+  else if (plain)
     out.sort(
-      (a, b) => (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0) || a.key.localeCompare(b.key),
+      (a, b) =>
+        empty(a) - empty(b) ||
+        (ranks.get(a.key) ?? Infinity) - (ranks.get(b.key) ?? Infinity) ||
+        a.label.localeCompare(b.label),
     );
   if (node.limit) out = out.slice(0, node.limit);
   // Money bars carry their currency in the label when there is more than one.

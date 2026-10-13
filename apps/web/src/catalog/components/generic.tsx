@@ -8,16 +8,12 @@ import {
   sumRows,
   tableTotals,
   type Resolved,
-  findOption,
-  findRecordType,
   optionKeyOf,
-  optionsFor,
   runQuery,
   stripWorkCode,
   type Entity,
   type EntityType,
   type NodeOf,
-  type OptionColor,
   type Query,
 } from '@pharos/schema';
 import clsx from 'clsx';
@@ -243,65 +239,6 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   );
 }
 
-type Bar = { key: string; label: ReactNode; count: number; color?: OptionColor; rank: number };
-
-/** Groups rows by a field: option values keep their labels and colours, references their names. */
-function groupCounts(rows: Entity[], by: string, read: Reader, data: ViewData): Bar[] {
-  const bars = new Map<string, Bar>();
-  for (const row of rows) {
-    const { value, type, field, recordType } = read(row, by);
-    // A record's own option field (R9: songs by stage) keeps its labels, colours and order.
-    const recordOptions =
-      type === 'record' && recordType
-        ? findRecordType(data.project, recordType)?.fields.find((f) => `fields.${f.key}` === field)
-            ?.options
-        : undefined;
-    const values = Array.isArray(value) ? value : [value];
-    for (const v of values.length ? values : [undefined]) {
-      const key = v === undefined || v === null || v === '' ? '' : String(v);
-      const existing = bars.get(key);
-      if (existing) {
-        existing.count++;
-        continue;
-      }
-      const optionKey = optionKeyOf(type, field);
-      const recordIndex = recordOptions ? recordOptions.findIndex((o) => o.value === key) : -1;
-      const option =
-        recordIndex >= 0
-          ? recordOptions![recordIndex]
-          : optionKey && key
-            ? findOption(data.project, optionKey, key)
-            : undefined;
-      const target = key ? data.entityById.get(key) : undefined;
-      // Natural order: the project's option order, or the referenced item's own order.
-      const rank =
-        recordIndex >= 0
-          ? recordIndex
-          : option && optionKey
-            ? optionsFor(data.project, optionKey).findIndex((o) => o.value === key)
-            : target
-              ? ((target.data as { order?: number }).order ?? target.createdRev)
-              : Infinity;
-      bars.set(key, {
-        key,
-        label: !key
-          ? 'None'
-          : option
-            ? option.label
-            : target
-              ? labelOf(target)
-              : DATE.test(key)
-                ? formatDate(key, true)
-                : key,
-        count: 1,
-        color: option?.color,
-        rank,
-      });
-    }
-  }
-  return [...bars.values()];
-}
-
 /** CountChart adding up a field (`sum`) or by month or year (`bucket`), R8. */
 function SumChart({ node }: { node: NodeOf<'CountChart'> }) {
   const data = useViewData();
@@ -334,19 +271,15 @@ function SumChart({ node }: { node: NodeOf<'CountChart'> }) {
 
 export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
   const data = useViewData();
-  const read = useReader();
-  const rows = runQuery(data, node.query.type, node.query);
   if (node.sum || node.bucket) return <SumChart node={node} />;
-  if (!rows.length) return <NothingMatches type={node.query.type} />;
-  let bars = groupCounts(rows, node.by, read, data);
-  bars.sort((a, b) =>
-    node.sort === 'count'
-      ? b.count - a.count
-      : (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0) ||
-        a.rank - b.rank ||
-        String(a.label).localeCompare(String(b.label)),
-  );
-  if (node.limit) bars = bars.slice(0, node.limit);
+  // The bars, their labels, order and limit come from the schema (chartBars), the same
+  // calculation the fact checker reads (v0.2 review, gap 10).
+  const bars = chartBars(data, node).map((bar) => ({
+    ...bar,
+    count: bar.value,
+    label: bar.label === bar.key && DATE.test(bar.key) ? formatDate(bar.key, true) : bar.label,
+  }));
+  if (!bars.length) return <NothingMatches type={node.query.type} />;
   const max = Math.max(...bars.map((b) => b.count));
   return (
     <ul className="space-y-2" aria-label={`Count by ${pathLabel(node.by)}`}>

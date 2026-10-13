@@ -84,7 +84,7 @@ describe('files in the store', () => {
     ).toThrow();
   });
 
-  it('lets agents fill in details but never add, remove or move a file', () => {
+  it("lets agents fill in details but never add a file the scan didn't find, remove or move one", () => {
     // Agents only see files in folders the owner shares with them (R7.5).
     store.setSetting(FOLDERS_SETTING, [
       {
@@ -107,7 +107,7 @@ describe('files in the store', () => {
       kind: 'deal',
     });
     expect(() => run(agent, { op: 'create', type: 'file', data: fileData() })).toThrow(
-      /agents can't add files/,
+      /to add a file give only projectId, rootId, path, title, kind, tags/,
     );
     expect(() => run(agent, { op: 'delete', type: 'file', id })).toThrow(
       /agents can't remove files/,

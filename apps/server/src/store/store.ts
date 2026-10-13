@@ -28,7 +28,7 @@ import {
   valueFor,
   type OptionKey,
 } from '@pharos/schema';
-import { AgentFiles, agentApplyIssue } from './agent-files.js';
+import { AgentFiles, agentApplyIssue, prepareAgentOperations } from './agent-files.js';
 import { PharosError, formatPath } from './errors.js';
 
 type Data = Record<string, unknown>;
@@ -471,7 +471,8 @@ export class Store {
   // ---------------------------------------------------------------- writes
 
   /** Applies operations atomically as one revision. */
-  apply(author: Author, input: ApplyInput): ApplyResult {
+  apply(author: Author, raw: ApplyInput): ApplyResult {
+    let input = raw;
     if (author.kind === 'agent') {
       input.operations.forEach((op, index) => {
         const issue = agentFileIssue(op) ?? agentArtifactFileIssue(op);
@@ -480,6 +481,8 @@ export class Store {
       const issue = agentApplyIssue(this, input);
       if (issue)
         throw new PharosError(issue.includes('not found') ? 'not_found' : 'invalid', issue);
+      // Files added from the scan (R7.12) and links to files the agent can't see kept.
+      input = prepareAgentOperations(this, input);
     }
     const result = this.transaction(author, input.message, null, (tx) => {
       const created: Record<string, string> = {};
@@ -602,14 +605,13 @@ export class Store {
 }
 
 /**
- * Files (R7) come from folders the owner adds in Settings: agents may fill in a file's details
- * (title, kind, issuer, dates, tags, notes, tasks) but never add or remove one, or change where it
- * is on disk.
+ * Files (R7) come from folders the owner approved in Settings: agents may fill in a file's details
+ * (title, kind, issuer, dates, tags, tasks) and add scanned files (checked by
+ * `prepareAgentOperations` and, on everything the revision does, `AgentFiles.changesIssue`), but
+ * never remove one or change where it is on disk.
  */
 function agentFileIssue(op: Operation): string | undefined {
-  if (op.type !== 'file') return undefined;
-  if (op.op === 'create')
-    return "agents can't add files; the owner adds them from a folder in Pharos";
+  if (op.type !== 'file' || op.op === 'create') return undefined;
   if (op.op === 'delete') return "agents can't remove files; ask the owner";
   const scanned = SCAN_FILE_FIELDS.filter((f) => f in op.data);
   return scanned.length

@@ -4,6 +4,7 @@ import { useResource } from '../../lib/api';
 import { formatDate, localToday, plural, timeAgo } from '../../lib/format';
 import { useViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
+import { LinkedFiles } from '../linked-files';
 import { defaultsFrom, QuickAdd, useCreate } from '../quickadd';
 import { OptionBadge, useOptions } from '../options';
 import { Empty, Uri } from '../ui';
@@ -144,6 +145,7 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
                     {excerpt}
                   </span>
                 )}
+                <LinkedFiles ids={decision.data.fileIds} className="mt-1" />
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-right text-xs text-neutral-400">

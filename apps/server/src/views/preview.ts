@@ -392,7 +392,7 @@ function describeLeaf(
       const file = ctx.data.files.find((x) => x.id === v.file);
       if (!file) {
         warnings.push(
-          `file ${v.file} not found in this project; use the id of a file in project_snapshot.files (only the owner adds files)`,
+          `file ${v.file} not found in this project; use the id of a file in project_snapshot.files (add it from files_unadded first)`,
         );
         return { shows: 'A note that the file isn’t in the project', empty: true, warnings };
       }

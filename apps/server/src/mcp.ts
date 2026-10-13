@@ -1,16 +1,27 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  AGENT_FILE_CREATE_FIELDS,
   ENTITY_TYPES,
   EntityType,
+  FILES_UNADDED_TOOL,
   FILE_TEXT_TOOL,
+  FOLDER_REQUEST_STATUS_TOOL,
+  FOLDER_REQUEST_TOOL,
+  FolderRequestInput,
   applyInputFor,
   type ApplyInput,
   type Author,
 } from '@pharos/schema';
 import { z } from 'zod';
 import { VERSION } from './version.js';
-import { AGENT_READONLY_FILE_FIELDS, AgentFiles, readAgentFileText } from './store/agent-files.js';
+import { forAgent, requestFolder, savedRequests } from './files/requests.js';
+import {
+  AGENT_READONLY_FILE_FIELDS,
+  AgentFiles,
+  readAgentFileText,
+  unaddedFiles,
+} from './store/agent-files.js';
 import { PharosError } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
@@ -38,6 +49,7 @@ import {
 const AgentApplyInput = applyInputFor(
   ENTITY_TYPES.filter((t) => t !== 'view'),
   { file: AGENT_READONLY_FILE_FIELDS },
+  { file: AGENT_FILE_CREATE_FIELDS },
 );
 
 const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions, claims) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.
@@ -54,7 +66,7 @@ Changing data:
 - When you start work on a task, claim it in one apply: set its assigneeId to you and its status to in progress (project_snapshot lists assignees; if none has your name, create one in the same apply with kind "agent" and use its ref). Mark it done when you finish, and leave tasks assigned to someone else alone unless the user hands them to you.
 - Findings are claims (one plain sentence, with checkedOn, sourceIds and authorId) and terms explain a word. A claim's certainty is "reading" (your analysis; the default), "verified" (From source: needs a source artifact with an http(s) uri and a checkedOn date that is not in the future) or "confirmed" (Confirmed by you: needs confirmedById, a decision the owner accepted in Pharos themselves; you can't confirm one yourself). Pharos refuses a claim that doesn't meet its certainty: without a linked source you read and a checkedOn date, keep it at "reading". For a finding the owner should confirm, create the decision with status "proposed" (the default, "accepted", records no acceptance by the owner, so it can never back a confirmed claim), ask the owner to accept it in Pharos, and only then set the claim to "confirmed" with confirmedById. Show what a claim rests on: a "verified" claim carries quote, the exact passage from the source, word for word (max 300 characters; quoteSourceId names which of its sourceIds when there are several), and a "reading" claim carries assumption, the one assumption it rests on (max 200). Add locator (max 60 characters, e.g. "§7 Completion", "line 42", "commit deb7096") so the reader finds the quote in its source; figure {value, unit, label} when the claim states a number a FindingChart draws (on "verified", the value must appear in the quote); and weakBecause ("one-source", "indirect" or "disagree") when the evidence is thin, which shows after the mark. apply warns about a claim with no source, a "verified" claim without a quote, a "reading" claim without an assumption, a "verified" figure missing from its quote, and weakBecause "one-source" on a claim without exactly one source.
 - Record meaningful choices as decisions so the reasoning stays traceable: set decidedById (the assignee who made the call, usually the person who asked, not you unless you decided) and decisionDate.
-- Files (type "file", in project_snapshot.files) are documents on the owner's disk, added to a project from folders the owner chose in Pharos Settings. You see only their details (title, kind, issuer, issuedDate, expiryDate, tags, size, taskIds): never where they are, their folders, their notes, or files from folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when its folder allows it (canReadText in the snapshot) and it is a .txt, .csv or .md file. You may fill in title, kind, issuer, dates, tags and taskIds; only the owner adds, removes or moves files. Sources (artifacts) never show a local path in uri, sources and findings taken only from hidden files aren't shown, and a quote taken from a file whose folder allows details only is left out. Don't look for the files on disk yourself. To manage a set of documents (e.g. business registration papers): give them one tag, their kind, issuer, issuedDate and expiryDate in one apply, then build one view with a StartHere, a FileList filtered to the tag (showIn: the FileView's id) and a FileView of the key document; "Document sets" in pharos://guide/views has the recipe.
+- Files (type "file", in project_snapshot.files) are documents on the owner's disk, in folders the owner shares with Pharos. You see only their details (title, kind, issuer, issuedDate, expiryDate, tags, size, taskIds): never their notes, or anything from folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when its folder allows it (canReadText in the snapshot) and it is a .txt, .csv or .md file. To bring documents in: if no folder holds them, ask with ${FOLDER_REQUEST_TOOL} {path, level, reason, projectId} and tell the owner in one line to click Approve in Pharos; check with ${FOLDER_REQUEST_STATUS_TOOL}. Once approved, ${FILES_UNADDED_TOOL} lists the files you can add; add them with apply (create type "file" with only ${AGENT_FILE_CREATE_FIELDS.join(', ')}; rootId is the folderId) and set kind, tags, issuer and dates with updates in the same apply ("$ref"). You can't remove or move files. Link files to the tasks, decisions, goals, stages and claims they belong to with fileIds (ids of files you can see). Don't look for the files on disk yourself. Sources (artifacts) never show an absolute local path in uri; a uri relative to the project's approved folder (e.g. "records/2024/certificate.pdf") is fine, and Pharos links it to the file once the file is added. Sources and findings taken only from hidden files aren't shown, and a quote taken from a file whose folder allows details only is left out. To manage a set of documents (e.g. business registration papers): add and tag them, link the related tasks and decisions, then build one view with a StartHere, a FileList filtered to the tag (showIn: the FileView's id), a FileView of the key document and the linked tasks and decisions; "Document sets" in pharos://guide/views has the recipe.
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
 Generating views (what the user sees):
@@ -95,7 +107,12 @@ const FILE_UNREADABLE =
 
 const Scalar = z.union([z.string(), z.number(), z.boolean()]);
 
-export function createMcpServer(store: Store): McpServer {
+export type McpOptions = {
+  /** The owner's home folder, for checking requested folders (tests pass a temp dir). */
+  home?: string;
+};
+
+export function createMcpServer(store: Store, options: McpOptions = {}): McpServer {
   const server = new McpServer(
     { name: 'pharos', version: VERSION },
     { instructions: INSTRUCTIONS },
@@ -269,6 +286,54 @@ export function createMcpServer(store: Store): McpServer {
         });
       }
     },
+  );
+
+  server.registerTool(
+    FOLDER_REQUEST_TOOL,
+    {
+      title: 'Ask the owner for a folder',
+      description:
+        'Ask the owner to share a folder of documents with Pharos (they approve or decline with one click in Pharos). Returns the request: pending, approved (with folderId) or declined. Asking again for the same folder returns the same request; a declined folder stays declined. A folder inside one the owner already shares is approved at once. Name the project (projectId) so its relative artifact uris resolve inside the folder. You can never approve it yourself.',
+      inputSchema: FolderRequestInput.shape,
+    },
+    (input) => run(() => forAgent(requestFolder(store, input, author().name, options.home))),
+  );
+
+  server.registerTool(
+    FOLDER_REQUEST_STATUS_TOOL,
+    {
+      title: 'Folder requests',
+      description:
+        'Whether the owner approved your folder requests: one by requestId, or all (newest first), each with what to do next.',
+      inputSchema: { requestId: z.string().optional() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ requestId }) =>
+      run(() => {
+        const all = savedRequests(store)
+          .filter((r) => !requestId || r.id === requestId)
+          .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+        if (requestId && !all.length)
+          throw new PharosError('not_found', `Folder request ${requestId} not found`);
+        return all.map(forAgent);
+      }),
+  );
+
+  server.registerTool(
+    FILES_UNADDED_TOOL,
+    {
+      title: 'Files you can add',
+      description:
+        'Files in folders the owner shares with agents that are not in the project yet: folderId, path, name, size, modifiedAt and type (never their contents). Add one with apply: {op: "create", type: "file", ref: "f1", data: {projectId, rootId: folderId, path, title, kind, tags}}; the scan fills in the rest. Empty when no folder is shared: ask with folder_request.',
+      inputSchema: {
+        projectId: z.string(),
+        folderId: z.string().optional().describe('Only this folder'),
+        query: z.string().optional().describe('Part of the path, e.g. "registration"'),
+        limit: z.number().int().min(1).max(500).optional().describe('Default 200'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ projectId, ...rest }) => run(() => unaddedFiles(store, projectId, rest)),
   );
 
   server.registerTool(

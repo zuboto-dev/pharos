@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { Settings } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router';
+import { Link, NavLink, Outlet, useMatch } from 'react-router';
+import { FolderRequestNotice } from '../files/FolderRequests';
 import { useAgentStatus } from '../lib/events';
 import { useTheme } from '../lib/theme';
 import { PharosLogo } from './Logo';
@@ -33,6 +34,21 @@ function SettingsLink() {
         />
       )}
     </NavLink>
+  );
+}
+
+/**
+ * Agents waiting for a folder (R7.12), on every page; a project's page shows its own requests,
+ * so they aren't shown twice there. Settings lists them all.
+ */
+function ShellFolderRequests() {
+  const project = useMatch('/projects/:projectId/*');
+  const settings = useMatch('/settings');
+  if (settings) return null;
+  return (
+    <div className="mx-auto max-w-7xl px-4 pt-4 empty:hidden md:px-8">
+      <FolderRequestNotice exceptProjectId={project?.params.projectId} />
+    </div>
   );
 }
 
@@ -82,6 +98,7 @@ export function AppShell() {
         </div>
       </aside>
       <main className="min-w-0 flex-1">
+        <ShellFolderRequests />
         <Outlet />
       </main>
       <UpdateNotice />

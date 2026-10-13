@@ -11,6 +11,8 @@ import { ArrowDown } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData } from '../context';
+import { fileIdsOf, LinkedFiles } from '../linked-files';
+import { useOpenItem } from '../open-item';
 import { firstUses, TermText, useTermMatcher } from '../terms';
 import { Badge, isHttp, Uri, type Tone } from '../ui';
 import { CertaintyMark } from './knowledge';
@@ -85,7 +87,8 @@ export function scrollToWidget(from: HTMLElement, id: string): boolean {
  * the tooltip and in the accessible name.
  */
 function Evidence({ items }: { items: readonly EvidenceItem[] }) {
-  const { entityById, actions } = useViewData();
+  const { entityById } = useViewData();
+  const openItem = useOpenItem();
   const shown = items.flatMap((item) => {
     const entity = entityById.get(evidenceId(item));
     if (!entity) return [];
@@ -114,13 +117,15 @@ function Evidence({ items }: { items: readonly EvidenceItem[] }) {
             key={e.id}
             type="button"
             title={label ? title : undefined}
-            onClick={() => actions.open({ entity: e.id })}
+            onClick={() => openItem(e.id)}
             className="max-w-full truncate rounded-sm text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
           >
             {text}
           </button>
         );
       })}
+      {/* The papers the evidence links (R7.12), one tap from the opening. */}
+      <LinkedFiles ids={[...new Set(shown.flatMap(({ entity }) => fileIdsOf(entity) ?? []))]} />
     </p>
   );
 }

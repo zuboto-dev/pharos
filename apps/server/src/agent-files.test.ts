@@ -498,7 +498,7 @@ describe('agent writes to files', () => {
       operations: [{ op: 'delete', type: 'file', id: ids.scan }],
     });
     const recreate = await raw(client, 'history_revert', { revision: removed.revision!.id });
-    expect(recreate.text).toMatch(/adds or removes a file/);
+    expect(recreate.text).toMatch(/removed a file that can't come back/);
     expect(store.get(ids.scan)).toBeNull();
 
     const remove = await raw(client, 'history_revert', { revision: ids.addRevision });

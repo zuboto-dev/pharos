@@ -147,29 +147,44 @@ unless \`terms: true\`. Every item opens to its claim's mark, quote and source.
   "W3.8 · Measure the baseline" reads "Measure the baseline".
 
 ## Document sets
-When the owner asks you to manage a set of documents (business registration papers, a lease, a
-year's tax papers), keep the set in the file details and give it one view.
+When the owner asks you to manage a set of documents ("make a view to manage the company's
+documents and link everything related"), bring the files into Pharos, link what they belong to,
+and give the set one view.
 
-1. **Find the files**: only the owner adds files, from folders in Pharos Settings. Work from
-   project_snapshot.files; if a document is missing, ask the owner to add it (never invent an id).
-2. **Fill in their details** with one apply: \`kind\` (a file.kind value: certificate, contract,
-   statement, …), a shared tag for the set (e.g. "business-registration"), \`issuer\`,
-   \`issuedDate\` and \`expiryDate\` (YYYY-MM-DD) when the document states them, and a plain
-   \`title\`. You may change these and \`taskIds\`; you can't add, remove or move files, and you
-   see their text only where the folder allows it (\`canReadText\`). Without the text, fill what
-   the owner told you and leave the rest empty rather than guess.
-3. **Compose the view** (view_create): a StartHere (purpose "done", or "needs-you" with \`due\`
+1. **Get the folder**: project_snapshot.files lists the files already in the project. If the
+   documents aren't there and no shared folder holds them (files_unadded is empty), ask for their
+   folder once with folder_request {path, level: "details" (or "contents" when you must read
+   .txt/.csv/.md text), reason: one plain sentence, projectId}. Tell the owner in one line to
+   click Approve in Pharos, then wait: check with folder_request_status. Never approve it
+   yourself, never ask again for a declined folder, and don't read the folder on disk yourself.
+2. **Add the files**: files_unadded lists what you can add (folderId, path, name, size, type).
+   In one apply, create each one ({op: "create", type: "file", ref: "f1", data: {projectId,
+   rootId: <folderId>, path, title, kind, tags}}; the scan fills in the rest) and update it in
+   the same apply ("$f1") with \`issuer\`, \`issuedDate\` and \`expiryDate\` (YYYY-MM-DD) when the
+   document or the owner states them, a shared tag for the set (e.g. "business-registration") and
+   its \`kind\` (certificate, contract, statement, …). Leave a date empty rather than guess. You
+   can't remove or move files.
+3. **Link what is related**: set \`fileIds\` on the tasks, decisions, goals, stages and claims a
+   file belongs to (a renewal task → the letter it renews; a decision → the notice that records
+   it). Create the task or decision if it doesn't exist yet. Sources (artifacts) may keep a path
+   relative to the approved folder in \`uri\` ("business-registration/company-seal.png"); Pharos
+   links them to the file once it is added. Queries find linked items: {"fileIds": "<file id>"}.
+4. **Compose the view** (view_create): a StartHere (purpose "done", or "needs-you" with \`due\`
    when a paper expires soon), a FileList filtered to the tag with \`showIn\` set to the FileView's
-   id, and a FileView of the key document (\`file\`: its id; \`size: "compact"\` at 5–6 columns
-   beside a 6–7 column list, or full width below it). When a paper has an expiry date, add a
-   FileList filtered to {"tags": "<tag>", "expiryDate": {"exists": true}} with
-   \`details: ["expiryDate"]\` so the dates show as badges. The preview warns when a FileView's
-   file isn't in the project or \`showIn\` names no FileView.
+   id, a FileView of the key document (\`file\`: its id; \`size: "compact"\` at 5–6 columns
+   beside a 6–7 column list, or full width below it), and the linked work: a TaskTable and a
+   DecisionLog (or a DataList) filtered to the linked items, which show their files as small
+   links that open in the FileView. When a paper has an expiry date, add a FileList filtered to
+   {"tags": "<tag>", "expiryDate": {"exists": true}} with \`details: ["expiryDate"]\` so the
+   dates show as badges. The preview warns when a FileView's file isn't in the project or
+   \`showIn\` names no FileView.
 
 Example board (ids from project_snapshot.files):
 [{"id": "start", "node": {"component": "StartHere", "purpose": "done", "why": "Keep the company's registration papers in one place", "headline": "The four registration papers are tagged and one tap away.", "yourPart": "Nothing now. Renew the tax registration before it expires.", "evidence": ["<certificate file id>"], "date": "<YYYY-MM-DD>", "path": [{"label": "The papers", "says": "Every registration document", "target": "papers"}, {"label": "The certificate", "says": "Preview and actions", "target": "certificate"}]}},
  {"id": "papers", "w": 6, "node": {"component": "FileList", "title": "Registration papers", "filter": {"where": {"tags": "business-registration"}}, "details": ["issuer", "issuedDate", "expiryDate"], "showIn": "certificate"}},
- {"id": "certificate", "w": 6, "node": {"component": "FileView", "title": "Certificate", "file": "<certificate file id>", "size": "compact"}}]
+ {"id": "certificate", "w": 6, "node": {"component": "FileView", "title": "Certificate", "file": "<certificate file id>", "size": "compact"}},
+ {"id": "work", "w": 6, "node": {"component": "TaskTable", "title": "Linked tasks", "filter": {"where": {"fileIds": ["<file ids of the set>"]}}, "columns": ["status", "dueDate"]}},
+ {"id": "decisions", "w": 6, "node": {"component": "DecisionLog", "title": "Linked decisions", "filter": {"where": {"fileIds": ["<file ids of the set>"]}}}}]
 
 ## Queries that answer common questions
 - Overdue: {dueDate: {lt: "$today"}, status: {not: ["done", "cancelled"]}}
@@ -537,12 +552,14 @@ export function answerBrief(store: Store, projectIds: string[]): string {
     'problems with view_update if it shows any, then move on. Use catalog_describe only for a',
     "component whose props aren't shown in the examples below.",
     '',
-    'Files: you see only the details of files the owner added to a project (project_snapshot.files:',
-    'title, kind, issuer, dates, tags, size), never where they are on disk, their notes, or files in',
-    `folders the owner hid. ${FILE_TEXT_TOOL} returns a file's text only when canReadText is true;`,
-    "otherwise work from the details, and don't look for the files on disk. Asked to manage a set",
-    'of documents? Tag them and fill kind, issuer and dates, then build one view (see "Document',
-    'sets" below): a StartHere, a FileList filtered to the tag and a FileView of the key document.',
+    'Files: you see only the details of files in a project (project_snapshot.files: title, kind,',
+    'issuer, dates, tags, size), never their notes or files in folders the owner hid.',
+    `${FILE_TEXT_TOOL} returns a file's text only when canReadText is true; otherwise work from the`,
+    "details, and don't look for the files on disk. Asked to manage a set of documents? Ask for",
+    'their folder with folder_request if no shared folder has them (the owner approves it in',
+    'Pharos), add them from files_unadded, tag them and fill kind, issuer and dates, link the',
+    'related tasks and decisions with fileIds, then build one view (see "Document sets" below):',
+    'a StartHere, a FileList filtered to the tag, a FileView of the key document and the linked work.',
     '',
     VIEW_GUIDELINES,
     catalogMarkdown(),

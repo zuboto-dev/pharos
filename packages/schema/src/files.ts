@@ -79,11 +79,11 @@ export const FOLDER_LEVELS: Record<FolderLevel, { label: string; agents: string 
   hidden: { label: 'Hidden', agents: 'Agents see nothing from this folder.' },
   details: {
     label: 'Details',
-    agents: 'Agents see the details of files you add to a project, never their contents.',
+    agents: 'Agents see the details of files added to a project, never their contents.',
   },
   contents: {
     label: 'Contents',
-    agents: 'Agents see details and can read the text of files you add to a project.',
+    agents: 'Agents see details and can read the text of files added to a project.',
   },
 };
 
@@ -156,6 +156,74 @@ export type FolderStatus = FileFolder & {
   /** Claude Code permission deny rules for this folder; empty for `contents` (R7.3). */
   denyRules: string[];
 };
+
+// ------------------------------------------------------------------ folder requests (R7.12)
+
+/**
+ * Agents ask for a folder (MCP `folder_request`); the owner approves or declines it with one click
+ * in Pharos. Requests are app settings next to the folders (`FOLDER_REQUESTS_SETTING`), never
+ * project data or revisions. Agents can't approve, decline or change levels. Approving adds the
+ * folder exactly as "Add folder" does; a declined path stays declined.
+ */
+export const FOLDER_REQUESTS_SETTING = 'files.folderRequests';
+
+export const FolderRequestId = z
+  .string()
+  .regex(/^freq_[a-z0-9]{6,32}$/, 'A folder request id, e.g. "freq_k3j9x2"');
+
+/** Levels an agent may ask for; hidden is the owner's alone. */
+export const RequestLevel = z.enum(['details', 'contents']);
+export type RequestLevel = z.infer<typeof RequestLevel>;
+
+export const FolderRequestStatus = z.enum(['pending', 'approved', 'declined']);
+export type FolderRequestStatus = z.infer<typeof FolderRequestStatus>;
+
+export const FolderRequest = z.strictObject({
+  id: FolderRequestId,
+  /** The folder's real path, checked like "Add folder". */
+  path: FolderPath,
+  level: RequestLevel,
+  reason: z.string().trim().min(1).max(300),
+  /** The project it is for: once approved, the base of that project's relative artifact uris. */
+  projectId: z.string().min(1).optional(),
+  /** The agent that asked (its MCP client name). */
+  requestedBy: z.string().min(1).max(120),
+  requestedAt: z.iso.datetime(),
+  status: FolderRequestStatus,
+  decidedAt: z.iso.datetime().optional(),
+  /** The folder (root) it became, or the folder already holding it. */
+  folderId: FolderId.optional(),
+});
+export type FolderRequest = z.infer<typeof FolderRequest>;
+export const FolderRequests = z.array(FolderRequest);
+
+/** MCP `folder_request` input. */
+export const FolderRequestInput = z.strictObject({
+  path: z
+    .string()
+    .min(1)
+    .max(1024)
+    .describe('Absolute path of the folder, e.g. "/Users/me/Company"'),
+  level: RequestLevel.optional().describe(
+    'details (default): agents see the details of files added from it; contents: also the text of .txt, .csv and .md files',
+  ),
+  reason: z
+    .string()
+    .trim()
+    .min(1)
+    .max(300)
+    .describe('One plain sentence the owner reads, e.g. "To keep the company registration papers"'),
+  projectId: z
+    .string()
+    .optional()
+    .describe("The project it is for; that project's relative artifact uris resolve inside it"),
+});
+export type FolderRequestInput = z.infer<typeof FolderRequestInput>;
+
+/** MCP tool names (R7.12). */
+export const FOLDER_REQUEST_TOOL = 'folder_request';
+export const FOLDER_REQUEST_STATUS_TOOL = 'folder_request_status';
+export const FILES_UNADDED_TOOL = 'files_unadded';
 
 // ------------------------------------------------------------------ file types (allowlist)
 
@@ -234,7 +302,8 @@ export const TEXT_PREVIEW_MAX_BYTES = 512 * 1024;
 
 /**
  * Fields only the scan sets (R7.2): what's on disk. People and agents edit the rest (title, kind,
- * issuer, dates, tags, notes, taskIds). Agents never create or delete file entities (R7.5).
+ * issuer, dates, tags, notes, taskIds). Agents add files only from folders the owner approved,
+ * and never remove or move one (R7.12).
  */
 export const SCAN_FILE_FIELDS = [
   'rootId',
@@ -260,6 +329,24 @@ export const AGENT_FILE_FIELDS = [
   'size',
   'taskIds',
 ] as const;
+
+/**
+ * What an agent supplies to add a file (R7.12), the same as the owner's "Add files": a scanned
+ * file of a folder it may see, by folder id and path; the scan fills in the rest. Issuer, dates
+ * and links are set with updates (a `$ref` in the same apply works).
+ */
+export const AGENT_FILE_CREATE_FIELDS = [
+  'projectId',
+  'rootId',
+  'path',
+  'title',
+  'kind',
+  'tags',
+] as const;
+
+/** Types whose items link project files with `fileIds` (R7.12). */
+export const FILE_LINK_TYPES = ['task', 'decision', 'goal', 'stage', 'claim'] as const;
+export type FileLinkType = (typeof FILE_LINK_TYPES)[number];
 
 // ------------------------------------------------------------------ routes (all under /api)
 
@@ -291,6 +378,14 @@ export const FILE_ROUTES = {
   action: '/api/files/:fileId/actions/:action',
   /** GET → ArtifactFileMatch: where an artifact's local source is (R7.6). */
   artifactFile: '/api/artifacts/:artifactId/file',
+  /** GET → MentionedFile[]: the project's local sources not in Pharos yet (R7.12). */
+  mentioned: '/api/projects/:projectId/mentioned-files',
+  /** GET → FolderRequest[] (R7.12): agents' folder requests, newest first. */
+  folderRequests: '/api/settings/folder-requests',
+  /** POST → FolderRequest (R7.12): the owner approves; adds the folder and starts a scan. */
+  approveFolderRequest: '/api/settings/folder-requests/:requestId/approve',
+  /** POST → FolderRequest (R7.12): the owner declines; that path stays declined. */
+  declineFolderRequest: '/api/settings/folder-requests/:requestId/decline',
 } as const;
 
 /** URL of one file route, from ids only. */
@@ -376,16 +471,47 @@ export const AddFilesInput = z.strictObject({
 });
 export type AddFilesInput = z.infer<typeof AddFilesInput>;
 
-/** `GET /api/artifacts/:artifactId/file` (R7.6): where a claim's local source is. */
+/** A folder request as the owner's pages show it beside a source that needs it (R7.12). */
+export type FolderRequestSummary = Pick<
+  FolderRequest,
+  'id' | 'path' | 'level' | 'reason' | 'status' | 'requestedBy'
+>;
+
+/**
+ * `GET /api/artifacts/:artifactId/file` (R7.6, R7.12): where an artifact's local source is. A
+ * `uri` may be absolute, or relative to a folder approved for its project (R7.12).
+ */
 export type ArtifactFileMatch =
   /** `artifact.fileId` is set (or was just matched by path, then hash). */
   | { state: 'linked'; fileId: string }
   /** Inside a folder but not added to the project yet; the drawer offers to add it. */
   | { state: 'in-folder'; rootId: string; path: string }
-  /** Not a local path inside any Pharos folder: say so and how to add the folder. */
-  | { state: 'not-in-folder' }
-  /** The artifact has no local path. */
+  /**
+   * Not inside any Pharos folder. `path` is where it is (absolute) or the uri as written
+   * (relative, when no folder is approved for the project); `folder` is the folder that would
+   * need approving (an agent's request when one covers it, else the file's own folder); `request`
+   * is that agent's request while it is pending.
+   */
+  | {
+      state: 'not-in-folder';
+      path: string;
+      folder: string | null;
+      request: FolderRequestSummary | null;
+    }
+  /** Its folder is in Pharos, but no file is at that path. */
+  | { state: 'missing'; rootId: string; path: string }
+  /** A file is there, but Pharos never reads it (a secret or backup name, a dotfile, a link out). */
+  | { state: 'refused'; rootId: string; path: string }
+  /** The artifact has no local path (none, or a web address). */
   | { state: 'none' };
+
+/** A document the project mentions that isn't in Pharos yet, for the Files page (R7.12). */
+export type MentionedFile = {
+  artifactId: string;
+  title: string;
+  uri: string;
+  match: Exclude<ArtifactFileMatch, { state: 'linked' } | { state: 'none' }>;
+};
 
 // ------------------------------------------------------------------ MCP (R7.5)
 

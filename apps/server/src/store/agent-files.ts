@@ -1,12 +1,16 @@
 import { realpathSync } from 'node:fs';
 import {
+  AGENT_FILE_CREATE_FIELDS,
   AGENT_FILE_FIELDS,
   ENTITIES,
+  FILES_UNADDED_TOOL,
   FILE_TEXT_REFUSAL,
   FOLDERS_SETTING,
+  FOLDER_REQUEST_TOOL,
   FileFolders,
   SCAN_FILE_FIELDS,
   TEXT_PREVIEW_MAX_BYTES,
+  UNKNOWN_FILE_TYPE,
   fileTypeOf,
   folderContains,
   type ApplyInput,
@@ -20,8 +24,15 @@ import {
   type ProjectDataset,
   type RevisionSummary,
 } from '@pharos/schema';
-import { localPathOf } from '../files/artifact-file.js';
-import { openInside, type OpenedFile } from '../files/safety.js';
+import { localPathOf, relativePathOf } from '../files/artifact-file.js';
+import { projectBases } from '../files/requests.js';
+import {
+  isAllowedPath,
+  openInside,
+  plainFileInsideSync,
+  type OpenedFile,
+} from '../files/safety.js';
+import { FileScanner } from '../files/scan.js';
 import { PharosError } from './errors.js';
 import type { Store } from './store.js';
 
@@ -90,8 +101,69 @@ export class AgentFiles {
   private readonly seen = new Map<string, boolean>();
   private readonly pathLevels = new Map<string, FolderLevel | null>();
 
+  private readonly bases = new Map<string, { base: string; folder: FileFolder }[]>();
+
   constructor(private readonly store: Store) {
     this.roots = folders(store);
+  }
+
+  /** The folders approved for a project through folder requests (R7.12). */
+  private basesOf(projectId: string): { base: string; folder: FileFolder }[] {
+    let found = this.bases.get(projectId);
+    if (!found) {
+      found = projectBases(this.store, projectId, [...this.roots.values()]);
+      this.bases.set(projectId, found);
+    }
+    return found;
+  }
+
+  /** A folder agents may see (details or contents), by id; null for a hidden or unknown one. */
+  visibleFolder(rootId: unknown): FileFolder | null {
+    const folder = typeof rootId === 'string' ? this.roots.get(rootId) : undefined;
+    return folder && folder.level !== 'hidden' ? folder : null;
+  }
+
+  /** Folders agents may see. */
+  visibleFolders(): FileFolder[] {
+    return [...this.roots.values()].filter((f) => f.level !== 'hidden');
+  }
+
+  /**
+   * Why an agent may not add (or, by an undo, bring back) this file record, or undefined (R7.12):
+   * its folder must be one agents may see, its path a file in the folder's last scan of a type
+   * Pharos knows, still a plain allowed file inside the folder (no secret or backup name, no link
+   * out), not already in the project, and every scan field as the scan found it.
+   */
+  addIssue(id: string | null, data: Data): string | undefined {
+    const folder = this.visibleFolder(data.rootId);
+    if (!folder)
+      return `folder ${String(data.rootId)} not found; ask the owner for a folder with ${FOLDER_REQUEST_TOOL}`;
+    const path = typeof data.path === 'string' ? data.path : '';
+    const entry = new FileScanner(this.store.database).entry(folder.id, path);
+    if (
+      !entry ||
+      !isAllowedPath(entry.path, entry.size) ||
+      fileTypeOf(entry.path) === UNKNOWN_FILE_TYPE
+    )
+      return `"${path}" isn't a file Pharos found in that folder; use a path from ${FILES_UNADDED_TOOL}`;
+    const onDisk = plainFileInsideSync(folder, path);
+    if (onDisk !== 'ok')
+      return onDisk === 'missing'
+        ? `"${path}" isn't in that folder any more; ask the owner to scan it again in Settings`
+        : `Pharos doesn't read "${path}" (a link or a protected name), so it can't be added`;
+    const taken = this.store
+      .list('file', { projectId: String(data.projectId) })
+      .some((f) => f.id !== id && f.data.rootId === folder.id && f.data.path === path);
+    if (taken) return `"${path}" is already in this project`;
+    const scanned: Record<string, unknown> = {
+      size: entry.size,
+      modifiedAt: entry.modifiedAt,
+      mimeType: fileTypeOf(entry.path).mime,
+    };
+    const stale = Object.entries(scanned).some(([k, v]) => data[k] !== undefined && data[k] !== v);
+    if (stale || (entry.sha256 && data.sha256 && data.sha256 !== entry.sha256))
+      return `"${path}" changed on disk since it was recorded; add it again from ${FILES_UNADDED_TOOL}`;
+    return undefined;
   }
 
   /** The level of the folder a file (by id, current or deleted) sits in; `hidden` if unknown. */
@@ -130,9 +202,17 @@ export class AgentFiles {
   private artifactLevel(data: Data): FolderLevel | null {
     const levels: FolderLevel[] = [];
     if (typeof data.fileId === 'string') levels.push(this.levelOf(data.fileId));
-    const local = localPathOf(typeof data.uri === 'string' ? data.uri : undefined);
+    const uri = typeof data.uri === 'string' ? data.uri : undefined;
+    const local = localPathOf(uri);
     const pathLevel = local ? this.levelOfPath(local) : null;
     if (pathLevel) levels.push(pathLevel);
+    // A relative path (R7.12) is inside each folder approved for its project.
+    const relative = relativePathOf(uri);
+    if (relative && typeof data.projectId === 'string')
+      for (const { base } of this.basesOf(data.projectId)) {
+        const level = this.levelOfPath(`${base}/${relative}`);
+        if (level) levels.push(level);
+      }
     if (!levels.length) return null;
     return levels.reduce((a, b) => (LEVEL_RANK[b] > LEVEL_RANK[a] ? b : a));
   }
@@ -267,6 +347,11 @@ export class AgentFiles {
   dataset(dataset: ProjectDataset): ProjectDataset {
     return {
       ...dataset,
+      // Goals, stages, tasks and decisions link files (R7.12): links to hidden ones are dropped.
+      goals: this.entities(dataset.goals),
+      stages: this.entities(dataset.stages),
+      tasks: this.entities(dataset.tasks),
+      decisions: this.entities(dataset.decisions),
       artifacts: this.entities(dataset.artifacts),
       requests: this.entities(dataset.requests),
       claims: this.entities(dataset.claims),
@@ -389,13 +474,17 @@ export class AgentFiles {
 
   /**
    * Why an agent may not make these changes (checked inside the transaction, so it covers what
-   * cascades from a delete and what an undo does), or undefined: agents never add or remove a
-   * file record, nor remove an item they can't see.
+   * cascades from a delete and what an undo does), or undefined: agents never remove a file
+   * record, add one only as `addIssue` allows (R7.12), and never remove an item they can't see.
    */
   changesIssue(changes: Change[]): string | undefined {
-    const files = changes.filter((c) => c.type === 'file' && (!c.before || !c.after));
-    if (files.length)
-      return `This would ${files.some((c) => !c.after) ? 'remove' : 'add'} files the owner added in Pharos; only the owner adds or removes files, so ask them`;
+    if (changes.some((c) => c.type === 'file' && c.before && !c.after))
+      return 'This would remove files from the project; only the owner removes files, so ask them';
+    for (const c of changes) {
+      if (c.type !== 'file' || c.before || !c.after) continue;
+      const issue = this.addIssue(c.id, c.after);
+      if (issue) return issue;
+    }
     if (changes.some((c) => !c.after && !this.visible(c.id))) return HIDDEN_ISSUE;
     return undefined;
   }
@@ -420,12 +509,23 @@ export class AgentFiles {
       return `Revision ${revisionId} changes which file a source is linked to; only Pharos links them, so ask the owner`;
     const files = changes.filter((c) => c.type === 'file');
     if (!files.length) return undefined;
-    if (files.some((c) => !c.before || !c.after))
-      return `Revision ${revisionId} adds or removes a file; only the owner adds or removes files, so ask them`;
-    const scanned = files.some((c) =>
-      AGENT_READONLY_FILE_FIELDS.some(
-        (f) => JSON.stringify(c.before?.[f]) !== JSON.stringify(c.after?.[f]),
-      ),
+    // Undoing an add removes the file: refused, like a delete.
+    if (files.some((c) => !c.before && c.after))
+      return `Revision ${revisionId} adds a file, so undoing it would remove one; only the owner removes files, so ask them`;
+    // Undoing a removal brings the file back: only where an agent could add it now (R7.12).
+    for (const c of files) {
+      if (!c.before || c.after) continue;
+      const issue = this.addIssue(c.id, c.before);
+      if (issue)
+        return `Revision ${revisionId} removed a file that can't come back this way (${issue}); ask the owner`;
+    }
+    const scanned = files.some(
+      (c) =>
+        c.before &&
+        c.after &&
+        AGENT_READONLY_FILE_FIELDS.some(
+          (f) => JSON.stringify(c.before?.[f]) !== JSON.stringify(c.after?.[f]),
+        ),
     );
     return scanned
       ? `Revision ${revisionId} changes where a file is on disk or the owner's notes; agents can't, so ask the owner`
@@ -441,6 +541,127 @@ export function agentApplyIssue(store: Store, input: ApplyInput): string | undef
     if (issue) return `operations[${index}]: ${issue}`;
   }
   return undefined;
+}
+
+const AGENT_CREATE = new Set<string>(AGENT_FILE_CREATE_FIELDS);
+
+/**
+ * An agent's operations made ready for the store (R7.12), or a refusal:
+ * - adding a file: only AGENT_FILE_CREATE_FIELDS, from a folder it may see and its last scan
+ *   (`addIssue`); the scan fields are filled in from the scan, never from the agent;
+ * - `fileIds` on an update keeps the links to files the agent can't see (it was shown the list
+ *   without them, so replacing the list must not drop them).
+ */
+export function prepareAgentOperations(store: Store, input: ApplyInput): ApplyInput {
+  const files = new AgentFiles(store);
+  const scanner = new FileScanner(store.database);
+  const adding = new Set<string>();
+  const operations = input.operations.map((op, index): Operation => {
+    const at = `operations[${index}]`;
+    if (op.type === 'file' && op.op === 'create') {
+      const extra = Object.keys(op.data).filter((k) => !AGENT_CREATE.has(k));
+      if (extra.length)
+        throw new PharosError(
+          'invalid',
+          `${at}: ${extra.join(', ')}: to add a file give only ${AGENT_FILE_CREATE_FIELDS.join(', ')}; the scan fills in the rest, and an update in the same apply ("$ref") sets issuer, dates and links`,
+        );
+      const issue = files.addIssue(null, op.data);
+      if (issue) throw new PharosError('invalid', `${at}: ${issue}`);
+      const { rootId, path, projectId } = op.data as {
+        rootId: string;
+        path: string;
+        projectId: string;
+      };
+      const key = `${projectId}\u0000${rootId}\u0000${path}`;
+      if (adding.has(key)) throw new PharosError('invalid', `${at}: "${path}" is added twice`);
+      adding.add(key);
+      const entry = scanner.entry(rootId, path)!;
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      const dot = name.lastIndexOf('.');
+      return {
+        ...op,
+        data: {
+          ...op.data,
+          title: String(op.data.title ?? (dot > 0 ? name.slice(0, dot) : name)).slice(0, 200),
+          size: entry.size,
+          modifiedAt: entry.modifiedAt,
+          mimeType: fileTypeOf(entry.path).mime,
+          ...(entry.sha256 ? { sha256: entry.sha256 } : {}),
+        },
+      };
+    }
+    if (op.op === 'update' && Array.isArray(op.data.fileIds) && !op.id.startsWith('$')) {
+      const current = store.get(op.id)?.data as Data | undefined;
+      const kept = Array.isArray(current?.fileIds)
+        ? (current.fileIds as unknown[]).filter(
+            (id): id is string => typeof id === 'string' && !files.visible(id),
+          )
+        : [];
+      if (kept.length)
+        return {
+          ...op,
+          data: { ...op.data, fileIds: [...new Set([...op.data.fileIds, ...kept])] },
+        };
+    }
+    return op;
+  });
+  return { ...input, operations };
+}
+
+/** One scanned file an agent may add (R7.12): no contents, nothing from hidden folders. */
+export type UnaddedFile = {
+  folderId: string;
+  folder: string;
+  path: string;
+  name: string;
+  size: number;
+  modifiedAt: string;
+  type: string;
+};
+
+/**
+ * `files_unadded`: files in the last scan of folders agents may see (details or contents) that
+ * aren't in the project yet, of a type Pharos knows, never secrets or backups.
+ */
+export function unaddedFiles(
+  store: Store,
+  projectId: string,
+  options: { folderId?: string; query?: string; limit?: number } = {},
+): UnaddedFile[] {
+  store.getOfType('project', projectId);
+  const seen = new AgentFiles(store);
+  const visible = seen
+    .visibleFolders()
+    .filter((f) => !options.folderId || f.id === options.folderId);
+  if (options.folderId && !visible.length)
+    throw new PharosError('not_found', `folder ${options.folderId} not found`);
+  const added = new Set(
+    store.list('file', { projectId }).map((f) => `${f.data.rootId}\u0000${f.data.path}`),
+  );
+  const limit = Math.min(Math.max(options.limit ?? 200, 1), 500);
+  const byId = new Map(visible.map((f) => [f.id, f]));
+  return new FileScanner(store.database)
+    .search(
+      visible.map((f) => f.id),
+      options.query ?? '',
+      limit + added.size,
+    )
+    .filter(
+      (e) =>
+        isAllowedPath(e.path, e.size) &&
+        fileTypeOf(e.path) !== UNKNOWN_FILE_TYPE &&
+        !added.has(`${e.rootId}\u0000${e.path}`),
+    )
+    .slice(0, limit)
+    .map((e) => ({
+      folderId: e.rootId,
+      folder: byId.get(e.rootId)!.label,
+      path: e.path,
+      name: e.path.slice(e.path.lastIndexOf('/') + 1),
+      size: e.size,
+      modifiedAt: e.modifiedAt,
+      type: fileTypeOf(e.path).mime.split(';')[0]!,
+    }));
 }
 
 /**

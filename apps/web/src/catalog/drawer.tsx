@@ -32,6 +32,7 @@ import {
 } from './editable';
 import { AUTHOR_ICONS, ProjectHistory, RevertButton, RevisionItem } from './history';
 import { QuickAdd, useCreate } from './quickadd';
+import { ArtifactSourcePanel } from './source-file';
 import { Select, type SelectOption } from './select';
 import { Badge, Empty, toneOf } from './ui';
 
@@ -43,6 +44,7 @@ const SHORT_TEXT = new Set(['summary', 'estimate', 'uri', 'path', 'url', 'questi
 
 /** Human-readable field name, e.g. assigneeId → "Assignee", dependsOn → "Depends on". */
 function fieldLabel(field: string): string {
+  if (field === 'fileIds') return 'Files';
   return field === 'dependsOn'
     ? 'Depends on'
     : humanize(
@@ -360,6 +362,10 @@ function EntityDetails({ entity }: { entity: Entity }) {
           ) : undefined
         }
       />
+      {/* Where its document is and why it can't open yet, with Approve when asked (R7.12). */}
+      {entity.type === 'artifact' && (
+        <ArtifactSourcePanel artifact={entity as Entity<'artifact'>} />
+      )}
       {longText.map((field) => (
         <EditableMarkdown key={field} entity={entity} field={field} />
       ))}

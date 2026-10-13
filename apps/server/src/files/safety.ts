@@ -1,4 +1,4 @@
-import { constants, type Stats } from 'node:fs';
+import { constants, lstatSync, realpathSync, type Stats } from 'node:fs';
 import { lstat, open, realpath, type FileHandle } from 'node:fs/promises';
 import { sep } from 'node:path';
 import type { FileFolder, FolderLevel } from '@pharos/schema';
@@ -285,6 +285,45 @@ export async function resolveInside(folder: ReadableFolder, relPath: string): Pr
   if (leaf.isSymbolicLink()) throw new PathRefused('outside');
   if (!leaf.isFile()) throw new PathRefused('not-allowed');
   return { root, real, resolvedPath, chain };
+}
+
+/**
+ * A synchronous check for writes (R7.12: an agent adding a file runs inside `Store.apply`, which
+ * is synchronous): whether `relPath` is now a plain, allowed file inside the folder the owner
+ * approved (not replaced since), with no link anywhere on the way and no secret or backup name.
+ * Reading still goes through `openInside`; this only decides whether a file record may be made.
+ */
+export function plainFileInsideSync(
+  folder: ReadableFolder,
+  relPath: string,
+): 'ok' | 'missing' | 'refused' {
+  if (!isAllowedPath(relPath)) return 'refused';
+  let root: string;
+  try {
+    if (lstatSync(folder.path).isSymbolicLink()) return 'refused';
+    root = realpathSync(folder.path);
+    const stats = lstatSync(root, { bigint: true });
+    if (!stats.isDirectory()) return 'missing';
+    if (folder.identity && identityOf(stats) !== folder.identity) return 'refused';
+  } catch {
+    return 'missing';
+  }
+  try {
+    // Every folder on the way is a real folder, and the file a plain file: nothing is followed.
+    let at = root;
+    for (const part of relPath.split('/').slice(0, -1)) {
+      at = `${at}/${part}`;
+      const dir = lstatSync(at);
+      if (dir.isSymbolicLink() || !dir.isDirectory()) return 'refused';
+    }
+    const full = `${root}/${relPath}`;
+    const leaf = lstatSync(full);
+    if (leaf.isSymbolicLink() || !leaf.isFile()) return 'refused';
+    if (!isInside(root, realpathSync(full))) return 'refused';
+    return isAllowedPath(relPath, leaf.size) ? 'ok' : 'refused';
+  } catch {
+    return 'missing';
+  }
 }
 
 export type OpenedFile = Resolved & { handle: FileHandle; stats: Stats };

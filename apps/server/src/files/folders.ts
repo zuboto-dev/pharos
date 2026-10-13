@@ -120,7 +120,7 @@ export function denyRulesFor(folder: Pick<FileFolder, 'path' | 'level'>): string
 }
 
 /** Accepts what people paste: surrounding quotes and spaces, `~/…`, a trailing "/". */
-function cleanPath(raw: unknown, home: string): unknown {
+export function cleanPath(raw: unknown, home: string): unknown {
   if (typeof raw !== 'string') return raw;
   let p = raw.trim().replace(/^(['"])(.*)\1$/, '$2');
   if (p === '~') p = home;
@@ -129,8 +129,11 @@ function cleanPath(raw: unknown, home: string): unknown {
   return p;
 }
 
-/** Where the folder really is (symlinks resolved), or a plain-words reason it can't be added. */
-function checkFolder(path: string, home: string, existing: FileFolder[]): string {
+/**
+ * Where the folder really is (symlinks resolved), or a plain-words reason it can't be added:
+ * it must exist and not be a system, home-root, Library or dot folder (overlaps are the caller's).
+ */
+export function checkFolderPath(path: string, home: string): string {
   let real: string;
   try {
     real = realpathSync(path);
@@ -167,6 +170,12 @@ function checkFolder(path: string, home: string, existing: FileFolder[]): string
       'invalid',
       'Folders starting with "." (like .ssh) hold settings and keys, and are never shared',
     );
+  return FolderPath.parse(real);
+}
+
+/** `checkFolderPath`, and the folder may not be, sit inside or contain one already added. */
+function checkFolder(path: string, home: string, existing: FileFolder[]): string {
+  const real = checkFolderPath(path, home);
   for (const other of existing) {
     if (other.path === real) throw new PharosError('conflict', `${path} is already added`);
     if (folderContains(other.path, real))
@@ -177,7 +186,33 @@ function checkFolder(path: string, home: string, existing: FileFolder[]): string
   return FolderPath.parse(real);
 }
 
-function newFolderId(): string {
+/**
+ * Adds a folder to Settings and starts its scan: "Add folder" on the Settings page, and the
+ * owner approving an agent's folder request (R7.12). Callers check who is asking first.
+ */
+export function addFolder(
+  store: Store,
+  input: FolderCreateInput,
+  home: string,
+  scanner?: Pick<FileScanner, 'scan'>,
+): FileFolder {
+  const folders = savedFolders(store);
+  const path = checkFolder(input.path, home, folders);
+  const folder: FileFolder = {
+    id: newFolderId(),
+    path,
+    label: input.label ?? basename(path),
+    level: input.level ?? DEFAULT_FOLDER_LEVEL,
+    addedAt: new Date().toISOString(),
+    // Pinned: a folder later replaced at this path (moved, or a link put there) is refused.
+    identity: identityOf(lstatSync(path, { bigint: true })),
+  };
+  store.setSetting(FOLDERS_SETTING, FileFolders.parse([...folders, folder]));
+  scanner?.scan(folder); // in the background; it logs its own errors
+  return folder;
+}
+
+export function newFolderId(): string {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   return `root_${[...randomBytes(10)].map((b) => alphabet[b % alphabet.length]).join('')}`;
 }
@@ -187,14 +222,14 @@ function newFolderId(): string {
  * no agent author, and the headers a browser sends with a same-origin `fetch`. MCP never reaches
  * these routes at all.
  */
-function notAPerson(c: Context): string | null {
+export function notAPerson(c: Context): string | null {
   if (isAgent(c))
     return 'Only a person can add folders or give agents more access, on the Settings page';
   return notThePage(c);
 }
 
 /** Whether the request declares an author other than a person. */
-const isAgent = (c: Context) => {
+export const isAgent = (c: Context) => {
   const author = c.req.header('x-pharos-author');
   return author !== undefined && !author.startsWith('human:');
 };
@@ -209,7 +244,7 @@ function notThePage(c: Context): string | null {
   return null;
 }
 
-const forbidden = (c: Context, message: string) =>
+export const forbidden = (c: Context, message: string) =>
   c.json({ error: { code: 'forbidden', message } }, 403);
 
 export function folderRoutes(store: Store, options: FolderRouteOptions = {}) {
@@ -263,19 +298,7 @@ export function folderRoutes(store: Store, options: FolderRouteOptions = {}) {
     const input = FolderCreateInput.parse(
       body && typeof body === 'object' ? { ...body, path: cleanPath(body.path, home) } : body,
     );
-    const folders = savedFolders(store);
-    const path = checkFolder(input.path, home, folders);
-    const folder: FileFolder = {
-      id: newFolderId(),
-      path,
-      label: input.label ?? basename(path),
-      level: input.level ?? DEFAULT_FOLDER_LEVEL,
-      addedAt: new Date().toISOString(),
-      // Pinned: a folder later replaced at this path (moved, or a link put there) is refused.
-      identity: identityOf(lstatSync(path, { bigint: true })),
-    };
-    save([...folders, folder]);
-    options.scanner?.scan(folder); // in the background; it logs its own errors
+    const folder = addFolder(store, input, home, options.scanner);
     return c.json(status(folder), 201);
   });
 

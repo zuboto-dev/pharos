@@ -124,7 +124,7 @@ describe('generic data components', () => {
     expect(filled).toBe('6 open in M2 Catalog + renderer (33% done), ${typo}');
   });
 
-  it("DataList and DataTable show an artifact's http(s) uri as a link and a path as text", () => {
+  it("DataList and DataTable show an artifact's http(s) uri as a link and a path as a button that opens it", () => {
     const withLink: ProjectDataset = {
       ...data,
       artifacts: data.artifacts.map((a) =>
@@ -150,7 +150,8 @@ describe('generic data components', () => {
       const link = screen.getByRole('link', { name: /example\.com\/mcp-server/ });
       expect(link.getAttribute('href')).toBe('https://example.com/mcp-server');
       expect(link.getAttribute('target')).toBe('_blank');
-      expect(screen.getByText('docs/SCOPE.md', { selector: 'code' })).toBeTruthy();
+      // A local path opens like its artifact (R7.12).
+      expect(screen.getByRole('button', { name: 'docs/SCOPE.md' })).toBeTruthy();
       expect(screen.getAllByRole('link')).toHaveLength(1);
       cleanup();
     }

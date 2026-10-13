@@ -13,6 +13,7 @@ import {
   type Query,
 } from '@pharos/schema';
 import clsx from 'clsx';
+import { FileText } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
 import type { Components } from 'react-markdown';
 import { formatDate, humanize } from '../../lib/format';
@@ -20,7 +21,8 @@ import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef, labelOf } from '../interactive';
 import { OptionBadge } from '../options';
 import { firstUses, TermText, useMarkdownTerms, useTermMatcher } from '../terms';
-import { DOT_TONES, Empty, Markdown, StatusBadge, Uri } from '../ui';
+import { useOpenItem } from '../open-item';
+import { DOT_TONES, Empty, isHttp, Markdown, StatusBadge, Uri } from '../ui';
 import { MiniBar } from './overview';
 
 type Reader = ReturnType<typeof fieldReader>;
@@ -40,6 +42,7 @@ export function pathLabel(path: string): string {
     .split('.')
     .map((p) =>
       p
+        .replace(/Ids$/, 's')
         .replace(/Id$/, '')
         .replace(/([a-z])([A-Z])/g, '$1 $2')
         .toLowerCase(),
@@ -53,10 +56,13 @@ function FieldValue({
   value,
   type,
   field,
+  ownerId,
 }: {
   value: unknown;
   type: EntityType;
   field: string;
+  /** The item the value belongs to, when it is the row itself (an artifact's `uri` opens it). */
+  ownerId?: string;
 }): ReactNode {
   if (
     value === undefined ||
@@ -71,9 +77,14 @@ function FieldValue({
     return <OptionBadge field={optionKey} value={value} />;
   if (type === 'project' && field === 'status' && typeof value === 'string')
     return <StatusBadge value={value} />;
-  // An artifact's address opens as a link when it's http(s); a path stays plain text.
+  // An artifact's address opens like the artifact (R7.12): a web page in a new tab, a document
+  // in the FileView or drawer, or the panel saying which folder it needs.
   if (type === 'artifact' && field === 'uri' && typeof value === 'string')
-    return <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />;
+    return ownerId && !isHttp(value) ? (
+      <UriButton id={ownerId} uri={value} />
+    ) : (
+      <Uri uri={value} className="max-w-[9rem] sm:max-w-[18rem]" />
+    );
   const ref = (ENTITIES[type].refs as Record<string, { many?: boolean } | undefined>)[field];
   if (ref) {
     const ids = Array.isArray(value) ? (value as string[]) : [value as string];
@@ -102,9 +113,29 @@ function FieldValue({
   return String(value);
 }
 
+/** A local document path that opens like its artifact. */
+function UriButton({ id, uri }: { id: string; uri: string }) {
+  const open = useOpenItem();
+  return (
+    <button
+      type="button"
+      title={uri}
+      onClick={(e) => {
+        e.stopPropagation();
+        open(id);
+      }}
+      className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 text-left text-xs text-sky-700 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 sm:max-w-[18rem] dark:text-sky-300"
+    >
+      <FileText className="size-3 shrink-0" aria-hidden />
+      <span className="truncate">{uri}</span>
+    </button>
+  );
+}
+
 export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   const data = useViewData();
   const read = useReader();
+  const openItem = useOpenItem();
   const rows = runQuery(data, node.query.type, node.query);
   if (!rows.length) return <Empty>Nothing matches</Empty>;
   const labelField = ENTITIES[node.query.type].label;
@@ -125,8 +156,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
             <tr
               key={row.id}
               onClick={(e) => {
-                if (!(e.target as HTMLElement).closest('a, button'))
-                  data.actions.open({ entity: row.id });
+                if (!(e.target as HTMLElement).closest('a, button')) openItem(row.id);
               }}
               className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/40"
             >
@@ -140,7 +170,12 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
                     {/* The name keeps room to read; other columns (links to other items, long
                         text) shorten instead of squeezing it, so narrow tables stay balanced. */}
                     <div className={field === labelField ? 'min-w-40' : 'max-w-56'}>
-                      <FieldValue value={value} type={type} field={field} />
+                      <FieldValue
+                        value={value}
+                        type={type}
+                        field={field}
+                        ownerId={c.field.includes('.') ? undefined : row.id}
+                      />
                     </div>
                   </td>
                 );
@@ -297,7 +332,12 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
                   key={path}
                   className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
                 >
-                  <FieldValue value={value} type={type} field={field} />
+                  <FieldValue
+                    value={value}
+                    type={type}
+                    field={field}
+                    ownerId={path.includes('.') ? undefined : row.id}
+                  />
                 </span>
               );
             })}

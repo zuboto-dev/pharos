@@ -126,11 +126,16 @@ describe('a claim source on disk', () => {
   });
 
   it('keeps the path as text and says how to make it open when unmatched', async () => {
-    const { open } = renderCard(lease(), [], { state: 'not-in-folder' });
+    const { open } = renderCard(lease(), [], {
+      state: 'not-in-folder',
+      path: LEASE_PATH,
+      folder: '/Users/owner/Documents',
+      request: null,
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     const popover = screen.getByRole('dialog');
     expect(within(popover).getByText(LEASE_PATH).tagName).toBe('CODE');
-    expect(await within(popover).findByText(/Not in a Pharos folder/)).toBeTruthy();
+    expect(await within(popover).findByText(/Not in a folder you share with Pharos/)).toBeTruthy();
     expect(within(popover).getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe(
       '/settings',
     );

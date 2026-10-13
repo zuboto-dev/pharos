@@ -160,12 +160,24 @@ describe('matching a claim source to a project file', () => {
     } satisfies ArtifactFileMatch);
     expect(
       await matchArtifactFile(store, addSource(join(outside, 'receipt from email.pdf'))),
-    ).toEqual({ state: 'not-in-folder' });
+    ).toEqual({
+      state: 'not-in-folder',
+      path: join(outside, 'receipt from email.pdf'),
+      folder: outside,
+      request: null,
+    });
     expect(await matchArtifactFile(store, addSource('/nowhere/made-up.pdf'))).toEqual({
       state: 'not-in-folder',
+      path: '/nowhere/made-up.pdf',
+      folder: '/nowhere',
+      request: null,
     });
+    // A relative path, with no folder approved for the project (R7.12).
     expect(await matchArtifactFile(store, addSource('notes/made-up.md'))).toEqual({
       state: 'not-in-folder',
+      path: 'notes/made-up.md',
+      folder: null,
+      request: null,
     });
     expect(await matchArtifactFile(store, addSource('https://example.com/a'))).toEqual({
       state: 'none',
@@ -175,8 +187,11 @@ describe('matching a claim source to a project file', () => {
 
   it('never matches a dotfile, and only files of the same project', async () => {
     write(join(folderPath, '.secret/key.txt'), LEASE);
+    // Inside the folder, but at a path Pharos never reads (R7.12 says why).
     expect(await matchArtifactFile(store, addSource(join(folderPath, '.secret/key.txt')))).toEqual({
-      state: 'not-in-folder',
+      state: 'refused',
+      rootId: 'root_fixture1',
+      path: join(folderPath, '.secret/key.txt'),
     });
     addFile('Leases/office-lease.pdf', LEASE);
     const { created } = store.apply(human, {

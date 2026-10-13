@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom';
 import { formatDate, humanize, plural } from '../lib/format';
 import { toDay } from './timeline';
 import { useViewData } from './context';
+import { useOpenItem } from './open-item';
 import { OptionBadge } from './options';
 import { StatusBadge } from './ui';
 
@@ -78,8 +79,9 @@ export function Clickable({
   /** Marks the item shown elsewhere on the board right now. */
   pressed?: boolean;
 }) {
-  const { actions } = useViewData();
-  const open = () => (onOpen ? onOpen() : actions.open({ entity: id }));
+  // An artifact opens its document; anything else its drawer (R7.12, `useOpenItem`).
+  const openItem = useOpenItem({ fileInDrawer: true });
+  const open = () => (onOpen ? onOpen() : openItem(id));
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const nested = (e.target as HTMLElement).closest('button, a, select, input, [data-no-open]');
     if (nested && nested !== e.currentTarget) return;
@@ -193,7 +195,8 @@ export function useGlance(id: string | undefined) {
 
 /** An inline reference to another entity: hover to glance, click to open. */
 export function EntityRef({ id, className }: { id: string; className?: string }) {
-  const { entityById, actions } = useViewData();
+  const { entityById } = useViewData();
+  const openItem = useOpenItem();
   const { handlers, card } = useGlance(id);
   const entity = entityById.get(id);
   if (!entity) return <span className="text-xs text-neutral-400">{id}</span>;
@@ -206,7 +209,7 @@ export function EntityRef({ id, className }: { id: string; className?: string })
           if (!isPlainClick(e)) return;
           e.preventDefault();
           e.stopPropagation();
-          actions.open({ entity: id });
+          openItem(id);
         }}
         className={clsx(
           'inline-flex max-w-full items-center truncate rounded-md bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700 hover:bg-sky-100 hover:text-sky-800 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-sky-950 dark:hover:text-sky-300',

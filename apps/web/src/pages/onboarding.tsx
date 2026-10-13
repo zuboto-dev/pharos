@@ -25,7 +25,7 @@ function readDismissed(projectId: string): boolean {
 function CopyLine({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-start gap-2 rounded-lg bg-neutral-900 p-3 text-sm text-neutral-100 dark:bg-neutral-800">
+    <div className="flex items-start gap-2 rounded-tile bg-neutral-900 p-3 text-sm text-neutral-100 dark:bg-neutral-800">
       <code className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</code>
       <button
         type="button"
@@ -49,7 +49,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
   return (
     <section
       aria-label="Get started"
-      className="relative space-y-4 rounded-xl border border-sky-200 bg-sky-50/60 p-5 dark:border-sky-900 dark:bg-sky-950/30"
+      className="relative space-y-4 rounded-block border border-sky-200 bg-sky-50/60 p-5 dark:border-sky-900 dark:bg-sky-950/30"
     >
       <button
         type="button"
@@ -62,7 +62,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
           }
           setDismissed(true);
         }}
-        className="absolute top-3 right-3 rounded p-1 text-neutral-400 hover:bg-white hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+        className="absolute top-3 right-3 rounded p-1 text-neutral-400 hover:bg-white hover:text-ink-soft dark:hover:bg-neutral-800"
       >
         <X className="size-4" />
       </button>
@@ -70,7 +70,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <Sparkles className="size-4 text-sky-500" /> Get {name} planned
         </h2>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-muted">
           This project is empty. Your agent can plan it in one go, and the views below fill in as it
           works.
         </p>
@@ -85,7 +85,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
           <CopyLine label="prompt" text={prompt} />
         </li>
       </ol>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      <p className="text-sm text-muted">
         Prefer to do it yourself? Use <strong>Add</strong> in the widgets below to add stages,
         tasks, and goals.
       </p>
@@ -95,14 +95,14 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
 
 /** Placeholder while a project loads: tabs and a few widget-shaped blocks. */
 export function ProjectSkeleton() {
-  const block = 'rounded-xl bg-neutral-100 dark:bg-neutral-800/60';
+  const block = 'rounded-block bg-neutral-100 dark:bg-neutral-800/60';
   return (
     <div
       role="status"
       aria-label="Loading project"
       className="mx-auto max-w-7xl animate-pulse space-y-5 p-4 md:p-8"
     >
-      <div className="flex gap-3 border-b border-neutral-200 pb-3 dark:border-neutral-800">
+      <div className="flex gap-3 border-b border-line pb-3">
         <div className={`h-6 w-24 ${block}`} />
         <div className={`h-6 w-16 ${block}`} />
       </div>
@@ -129,10 +129,10 @@ export function HomeSkeleton() {
       aria-label="Loading projects"
       className="mx-auto max-w-5xl animate-pulse space-y-6 p-6 md:p-8"
     >
-      <div className="h-8 w-40 rounded-lg bg-neutral-100 dark:bg-neutral-800/60" />
+      <div className="h-8 w-40 rounded-tile bg-neutral-100 dark:bg-neutral-800/60" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-28 rounded-xl bg-neutral-100 dark:bg-neutral-800/60" />
+          <div key={i} className="h-28 rounded-block bg-neutral-100 dark:bg-neutral-800/60" />
         ))}
       </div>
     </div>
@@ -146,7 +146,7 @@ export function LoadError({ notFound, what }: { notFound: boolean; what: string 
       <h1 className="text-lg font-semibold">
         {notFound ? `${what} not found` : 'Can’t reach the Pharos server'}
       </h1>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      <p className="text-sm text-muted">
         {notFound
           ? 'It may have been deleted. Pick another one from the sidebar.'
           : 'Start it with `pnpm dev` (or check that it is running on port 4300). This page reconnects when you come back to it.'}

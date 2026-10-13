@@ -47,7 +47,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
           <Clickable
             key={artifact.id}
             id={artifact.id}
-            className="flex min-w-0 flex-col gap-2 rounded-lg border border-neutral-200 p-3 transition hover:border-neutral-300 hover:shadow-sm dark:border-neutral-800 dark:hover:border-neutral-700"
+            className="flex min-w-0 flex-col gap-2 rounded-tile border border-line p-3 transition hover:border-neutral-300 hover:shadow-sm dark:hover:border-neutral-700"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
@@ -59,9 +59,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
               <OptionBadge field="artifact.status" value={artifact.data.status} />
             </div>
             {artifact.data.description && (
-              <p className="line-clamp-2 text-xs text-neutral-500 dark:text-neutral-400">
-                {artifact.data.description}
-              </p>
+              <p className="line-clamp-2 text-xs text-muted">{artifact.data.description}</p>
             )}
             {artifact.data.uri && <Uri uri={artifact.data.uri} />}
             {(stageId || taskId) && (
@@ -73,7 +71,7 @@ export function ArtifactGallery({ node }: { node: NodeOf<'ArtifactGallery'> }) {
           </Clickable>
         );
       })}
-      <div className="flex items-center rounded-lg border border-dashed border-neutral-200 p-1 dark:border-neutral-800">
+      <div className="flex items-center rounded-tile border border-dashed border-line p-1">
         {addArtifact}
       </div>
     </div>
@@ -136,22 +134,16 @@ export function DecisionLog({ node }: { node: NodeOf<'DecisionLog'> }) {
           <li key={decision.id}>
             <Clickable
               id={decision.id}
-              className="flex items-start justify-between gap-3 rounded-md px-2 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+              className="flex items-start justify-between gap-3 rounded-control px-2 py-2 hover:bg-sunken"
             >
               <span className="min-w-0">
                 <span className="block text-sm font-medium">{decision.data.title}</span>
-                {excerpt && (
-                  <span className="line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">
-                    {excerpt}
-                  </span>
-                )}
+                {excerpt && <span className="line-clamp-1 text-xs text-muted">{excerpt}</span>}
                 <LinkedFiles ids={decision.data.fileIds} className="mt-1" />
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="text-right text-xs text-neutral-400">
-                  {decider && (
-                    <span className="text-neutral-600 dark:text-neutral-300">{decider} · </span>
-                  )}
+                  {decider && <span className="text-ink-soft">{decider} · </span>}
                   {formatDate(decision.data.decisionDate ?? decision.createdAt.slice(0, 10), true)}
                 </span>
                 <OptionBadge field="decision.status" value={decision.data.status} />
@@ -201,16 +193,14 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
               <button
                 type="button"
                 onClick={() => actions.open({ revision: rev.id })}
-                className="flex w-full gap-3 rounded-md px-2 py-1.5 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+                className="flex w-full gap-3 rounded-control px-2 py-1.5 text-left hover:bg-sunken"
               >
-                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
-                  <Icon className="size-3.5 text-neutral-500" />
+                <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-subtle">
+                  <Icon className="size-3.5 text-muted" />
                 </span>
                 <span className="min-w-0 text-sm">
-                  <span className="block text-neutral-800 dark:text-neutral-200">
-                    {rev.message}
-                  </span>
-                  <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                  <span className="block text-ink">{rev.message}</span>
+                  <span className="block text-xs text-muted">
                     {rev.author.name} · {timeAgo(rev.createdAt)} ·{' '}
                     {summarize(rev.changes) || plural(0, 'change')}
                     {rev.revertOf && ` · reverts #${rev.revertOf}`}
@@ -229,7 +219,7 @@ export function ActivityFeed({ node }: { node: NodeOf<'ActivityFeed'> }) {
       <button
         type="button"
         onClick={() => actions.open({ history: true })}
-        className="mt-2 text-xs text-sky-600 hover:underline dark:text-sky-400"
+        className="mt-2 text-xs text-accent hover:underline"
       >
         All changes
       </button>

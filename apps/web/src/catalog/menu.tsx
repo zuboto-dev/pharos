@@ -115,9 +115,9 @@ export function MenuItem({
       aria-current={current ? 'page' : undefined}
       onClick={onClick}
       className={clsx(
-        'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left outline-none hover:bg-neutral-100 focus-visible:bg-neutral-100 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-neutral-800 dark:focus-visible:bg-neutral-800',
+        'flex w-full items-center gap-2 rounded-tile px-2.5 py-1.5 text-left outline-none hover:bg-subtle focus-visible:bg-subtle disabled:opacity-40 disabled:hover:bg-transparent',
         current && 'font-medium',
-        danger && 'text-rose-600 dark:text-rose-400',
+        danger && 'text-danger',
       )}
     >
       {Icon ? <Icon className="size-3.5 shrink-0" /> : <span className="size-3.5 shrink-0" />}
@@ -131,5 +131,5 @@ export function MenuLabel({ children }: { children: ReactNode }) {
 }
 
 export function MenuSeparator() {
-  return <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />;
+  return <div className="my-1 border-t border-line-soft" />;
 }

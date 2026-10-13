@@ -33,7 +33,7 @@ function StageProgressLine({ progress, current }: { progress: StageProgress; cur
   const { basis, done, total, open, percent } = progress;
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+      <div className="flex items-center justify-between gap-2 text-xs text-muted">
         <span>
           {basis === 'done'
             ? 'Done'
@@ -45,7 +45,7 @@ function StageProgressLine({ progress, current }: { progress: StageProgress; cur
         </span>
         {basis === 'done' && open > 0 && (
           <span
-            className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"
+            className="inline-flex items-center gap-1 text-warn"
             title="Stage is done but has open tasks"
           >
             <TriangleAlert className="size-3" /> {open} open
@@ -90,10 +90,10 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
             <Clickable
               id={stage.id}
               className={clsx(
-                'h-full space-y-2 rounded-lg border p-3 transition hover:shadow-sm',
+                'h-full space-y-2 rounded-tile border p-3 transition hover:shadow-sm',
                 current
                   ? 'border-sky-300 bg-sky-50/60 ring-1 ring-sky-300 dark:border-sky-800 dark:bg-sky-950/40 dark:ring-sky-800'
-                  : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
+                  : 'border-line hover:border-neutral-300 dark:hover:border-neutral-700',
                 status === 'skipped' && 'opacity-50',
               )}
             >
@@ -104,8 +104,8 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                     finished
                       ? 'bg-emerald-500 text-white'
                       : current
-                        ? 'bg-sky-500 text-white'
-                        : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300',
+                        ? 'bg-sky-700 text-white dark:bg-sky-400 dark:text-sky-950'
+                        : 'bg-subtle text-ink-soft',
                   )}
                 >
                   {finished ? <Check className="size-3.5" /> : i + 1}
@@ -117,7 +117,7 @@ export function StageTracker({ node }: { node: NodeOf<'StageTracker'> }) {
                   {stage.data.name}
                 </span>
                 {current && (
-                  <span className="ml-auto shrink-0 text-xs leading-6 font-medium text-sky-600 dark:text-sky-400">
+                  <span className="ml-auto shrink-0 text-xs leading-6 font-medium text-accent">
                     Current
                   </span>
                 )}
@@ -167,7 +167,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
           {ticks.map((t) => (
             <div
               key={t.day}
-              className="absolute inset-y-0 w-px bg-neutral-100 dark:bg-neutral-800"
+              className="absolute inset-y-0 w-px bg-subtle"
               style={{ left: `${pos(t.day)}%` }}
             />
           ))}
@@ -210,7 +210,7 @@ export function Timeline({ node }: { node: NodeOf<'Timeline'> }) {
         </div>
       </div>
       {undated.length > 0 && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-muted">
           Not scheduled: {undated.map((s) => s.data.name).join(', ')}
         </p>
       )}
@@ -260,7 +260,7 @@ function TimelineRow({
             id={stage.id}
             className={
               range
-                ? clsx('h-full rounded-md hover:brightness-110', tone)
+                ? clsx('h-full rounded-control hover:brightness-110', tone)
                 : 'flex h-full items-center justify-center'
             }
           >
@@ -288,7 +288,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
     );
   }
   return (
-    <ol className="relative space-y-2 border-l border-neutral-200 pl-4 dark:border-neutral-800">
+    <ol className="relative space-y-2 border-l border-line pl-4">
       {stages.map((stage) => {
         const progress = stageProgress(stage, data.tasks, data.project);
         const current = stage.id === data.project.data.currentStageId;
@@ -302,7 +302,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
             />
             <Clickable
               id={stage.id}
-              className="space-y-1 rounded-md px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+              className="space-y-1 rounded-control px-2 py-1.5 hover:bg-sunken"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{stage.data.name}</span>
@@ -316,9 +316,7 @@ export function MilestoneList({ node }: { node: NodeOf<'MilestoneList'> }) {
                 )}
               </div>
               {stage.data.description && (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  {stage.data.description}
-                </p>
+                <p className="text-sm text-muted">{stage.data.description}</p>
               )}
               <div className="max-w-64">
                 <StageProgressLine progress={progress} current={current} />

@@ -72,7 +72,7 @@ export function useSidebarHidden() {
 }
 
 const BUTTON =
-  'hidden size-8 shrink-0 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 focus-visible:outline-2 focus-visible:outline-sky-400 md:inline-flex dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200';
+  'hidden size-8 shrink-0 items-center justify-center rounded-control text-muted hover:bg-subtle hover:text-ink focus-visible:outline-2 focus-visible:outline-sky-400 md:inline-flex';
 
 /** The button that hides or shows the sidebar (wide screens only; phones don't need it). */
 export function SidebarToggle({

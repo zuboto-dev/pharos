@@ -107,14 +107,14 @@ export function AddFilesDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-files-title"
-        className="relative flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-xl sm:rounded-2xl dark:bg-neutral-900"
+        className="relative flex max-h-[90vh] w-full flex-col rounded-t-2xl bg-surface shadow-overlay sm:max-w-xl sm:rounded-2xl"
       >
-        <header className="flex items-start justify-between gap-3 border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
+        <header className="flex items-start justify-between gap-3 border-b border-line px-5 py-4">
           <div>
             <h2 id="add-files-title" className="text-base font-semibold">
               Add files from your folders
             </h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted">
               Files stay where they are. Pharos only remembers which ones belong to this project.
             </p>
           </div>
@@ -122,14 +122,14 @@ export function AddFilesDialog({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="rounded-control p-1 text-muted hover:bg-subtle"
           >
             <X className="size-5" />
           </button>
         </header>
         {noFolders ? (
-          <div className="space-y-3 px-5 py-8 text-center text-sm text-neutral-600 dark:text-neutral-300">
-            <FolderSearch className="mx-auto size-8 text-neutral-300 dark:text-neutral-600" />
+          <div className="space-y-3 px-5 py-8 text-center text-sm text-ink-soft">
+            <FolderSearch className="mx-auto size-8 text-faint" />
             <p>No folders yet. Add a folder in Settings, and Pharos will list its files here.</p>
             <Link to="/settings" className={BUTTON.secondary}>
               Open Settings
@@ -150,7 +150,7 @@ export function AddFilesDialog({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search by file or folder name"
-                  className="w-full rounded-md border border-neutral-200 bg-white py-1.5 pr-2.5 pl-8 text-sm placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:focus-visible:ring-sky-800"
+                  className="w-full rounded-control border border-line-strong bg-surface py-1.5 pr-2.5 pl-8 text-sm placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:focus-visible:ring-sky-800"
                 />
               </label>
             </div>
@@ -178,8 +178,8 @@ export function AddFilesDialog({
                         <label
                           className={
                             added
-                              ? 'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-neutral-400'
-                              : 'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
+                              ? 'flex items-center gap-2.5 rounded-control px-2 py-1.5 text-neutral-400'
+                              : 'flex cursor-pointer items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken'
                           }
                         >
                           <input
@@ -192,11 +192,11 @@ export function AddFilesDialog({
                           <FileTypeIcon path={file.path} className="size-4 text-neutral-400" />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm">{fileName(file.path)}</span>
-                            <span className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
+                            <span className="block truncate text-xs text-muted">
                               {[labelOf(file.rootId), folder].filter(Boolean).join(' / ')}
                             </span>
                           </span>
-                          <span className="shrink-0 text-right text-xs text-neutral-500 tabular-nums dark:text-neutral-400">
+                          <span className="shrink-0 text-right text-xs text-muted tabular-nums">
                             {added ? (
                               'Added'
                             ) : (
@@ -216,7 +216,7 @@ export function AddFilesDialog({
                 </ul>
               )}
             </div>
-            <footer className="space-y-2 border-t border-neutral-200 px-5 py-3 dark:border-neutral-800">
+            <footer className="space-y-2 border-t border-line px-5 py-3">
               {error && (
                 <p role="alert" className="text-sm whitespace-pre-line text-rose-600">
                   Couldn’t add them: {error}
@@ -224,7 +224,7 @@ export function AddFilesDialog({
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-neutral-500 dark:text-neutral-400">Kind</span>
+                  <span className="text-muted">Kind</span>
                   <Select
                     label="Kind for the added files"
                     value={kind}

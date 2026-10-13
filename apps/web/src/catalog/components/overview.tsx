@@ -13,16 +13,14 @@ export function ProjectHeader() {
     : undefined;
   const { percent: progress, done, total } = taskProgress(tasks, project);
   return (
-    <header className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 md:flex-row md:items-end md:justify-between dark:border-neutral-800 dark:bg-neutral-900">
+    <header className="flex flex-col gap-4 rounded-block border border-line bg-surface p-5 md:flex-row md:items-end md:justify-between">
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{project.data.name}</h1>
           <StatusBadge value={project.data.status} />
         </div>
-        {project.data.summary && (
-          <p className="text-neutral-600 dark:text-neutral-400">{project.data.summary}</p>
-        )}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-500 dark:text-neutral-400">
+        {project.data.summary && <p className="text-muted">{project.data.summary}</p>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
           {repository && (
             <span
               className="inline-flex items-center gap-1.5"
@@ -40,7 +38,7 @@ export function ProjectHeader() {
       </div>
       <div className="w-full shrink-0 space-y-1.5 md:w-56">
         <div className="flex justify-between text-sm">
-          <span className="text-neutral-500 dark:text-neutral-400">Progress</span>
+          <span className="text-muted">Progress</span>
           <span className="font-medium tabular-nums">
             {progress}%{' '}
             <span className="font-normal text-neutral-400">
@@ -62,10 +60,10 @@ const STAT_COLS: Record<number, string> = {
 };
 
 const STAT_TONES: Record<string, string> = {
-  neutral: 'text-neutral-900 dark:text-neutral-100',
-  good: 'text-emerald-600 dark:text-emerald-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  bad: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-ink',
+  good: 'text-ok',
+  warning: 'text-warn',
+  bad: 'text-danger',
 };
 
 /**
@@ -111,11 +109,9 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
         return (
           <div
             key={i}
-            className="flex flex-col justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900"
+            className="flex flex-col justify-between rounded-block border border-line bg-surface px-4 py-3"
           >
-            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-              {stat.label}
-            </div>
+            <div className="text-xs font-medium text-muted">{stat.label}</div>
             <div
               className={clsx(
                 'mt-1 text-2xl font-semibold tabular-nums',
@@ -184,7 +180,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
       </svg>
       <div className="text-sm">
         {node.label && <div className="font-medium">{node.label}</div>}
-        <div className="text-neutral-500 dark:text-neutral-400">
+        <div className="text-muted">
           {total ? `${done} of ${total} tasks done` : 'No tasks yet'}
         </div>
       </div>
@@ -223,7 +219,7 @@ export function Callout({ node }: { node: NodeOf<'Callout'> }) {
   const { icon: Icon, className } = CALLOUTS[node.tone ?? 'info']!;
   const terms = useMarkdownTerms(node.terms);
   return (
-    <div className={clsx('flex gap-3 rounded-xl border p-4', className)}>
+    <div className={clsx('flex gap-3 rounded-block border p-4', className)}>
       <Icon className="mt-0.5 size-5 shrink-0" />
       <div className="min-w-0 space-y-1">
         {node.title && <div className="font-semibold">{node.title}</div>}

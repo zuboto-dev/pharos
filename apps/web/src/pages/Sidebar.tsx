@@ -77,8 +77,7 @@ function useCollapsed(): [Set<string>, (id: string) => void] {
   return [collapsed, toggle];
 }
 
-const FIELD =
-  'w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900';
+const FIELD = 'w-full rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-sm';
 
 /** A small dialog asking for a few text values (new folder, new section). */
 function PromptDialog({
@@ -112,7 +111,7 @@ function PromptDialog({
       <form
         onSubmit={submit}
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
-        className="relative w-full max-w-sm space-y-4 rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900"
+        className="relative w-full max-w-sm space-y-4 rounded-block bg-surface p-5 shadow-overlay"
       >
         <h2 className="text-base font-semibold">{title}</h2>
         {fields.map((f, i) => (
@@ -181,11 +180,11 @@ function DeleteProjectDialog({
     >
       <div className="absolute inset-0 bg-neutral-900/30 dark:bg-black/50" onClick={onClose} />
       <div
-        className="relative w-full max-w-sm space-y-4 rounded-xl bg-white p-5 shadow-xl dark:bg-neutral-900"
+        className="relative w-full max-w-sm space-y-4 rounded-block bg-surface p-5 shadow-overlay"
         onKeyDown={(e) => e.key === 'Escape' && onClose()}
       >
         <h2 className="text-base font-semibold">Delete “{project.data.name}”?</h2>
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">
+        <p className="text-sm text-ink-soft">
           This deletes the project and everything in it{counts ? `: ${counts}` : ''}. You can undo
           it right after, and it stays in the history.
         </p>
@@ -220,15 +219,15 @@ function RenameInput({ value, onDone }: { value: string; onDone: (name: string |
         onFocus={(e) => e.currentTarget.select()}
         onBlur={(e) => e.currentTarget.form?.requestSubmit()}
         onKeyDown={(e) => e.key === 'Escape' && onDone(null)}
-        className="w-full rounded border border-sky-300 bg-white px-1.5 py-0.5 text-sm dark:border-sky-800 dark:bg-neutral-900"
+        className="w-full rounded border border-sky-300 bg-surface px-1.5 py-0.5 text-sm dark:border-sky-800"
       />
     </form>
   );
 }
 
-const ROW = 'group/row relative flex items-center gap-1 rounded-md pr-1 text-sm';
+const ROW = 'group/row relative flex items-center gap-1 rounded-control pr-1 text-sm';
 const MORE =
-  'shrink-0 rounded p-0.5 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-neutral-700 focus:opacity-100 group-hover/row:opacity-100 dark:hover:bg-neutral-700 dark:hover:text-neutral-200';
+  'shrink-0 rounded p-0.5 text-neutral-400 opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 dark:hover:bg-neutral-700';
 
 /**
  * The project sidebar: pinned projects, folders (repositories), loose projects, and sections.
@@ -469,10 +468,8 @@ export function Sidebar() {
               onDoubleClick={() => setRenaming(project.id)}
               className={({ isActive }) =>
                 clsx(
-                  'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5',
-                  isActive
-                    ? 'bg-neutral-100 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
-                    : 'text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800/60',
+                  'flex min-w-0 flex-1 items-center gap-2 rounded-control px-2 py-1.5',
+                  isActive ? 'bg-subtle font-medium text-ink' : 'text-ink-soft hover:bg-sunken',
                 )
               }
             >
@@ -506,11 +503,7 @@ export function Sidebar() {
     return (
       <li key={repository.id}>
         <div
-          className={clsx(
-            ROW,
-            'text-xs font-medium text-neutral-500 dark:text-neutral-400',
-            dropHighlight(repository.id),
-          )}
+          className={clsx(ROW, 'text-xs font-medium text-muted', dropHighlight(repository.id))}
           style={{ paddingLeft: depth * 12 }}
           {...dragProps({ type: 'repository', id: repository.id })}
           {...dropProps(
@@ -545,7 +538,7 @@ export function Sidebar() {
               onDoubleClick={() => setRenaming(repository.id)}
               title={repository.data.path ?? repository.data.url}
               aria-expanded={open}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-left hover:text-neutral-800 dark:hover:text-neutral-200"
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 py-1 text-left hover:text-ink"
             >
               <ChevronRight className={clsx('size-3 shrink-0 transition', open && 'rotate-90')} />
               <FolderGit2 className="size-3.5 shrink-0" />
@@ -803,7 +796,7 @@ export function Sidebar() {
             onClick={() => toggleCollapsed(section.id)}
             onDoubleClick={() => setRenaming(section.id)}
             aria-expanded={open}
-            className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-left hover:text-neutral-600 dark:hover:text-neutral-300"
+            className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-left hover:text-ink-soft"
           >
             <ChevronRight className={clsx('size-3 shrink-0 transition', open && 'rotate-90')} />
             <span className="truncate">{section.data.name}</span>
@@ -827,7 +820,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={(e) => openMenu('add', e)}
-          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-sm text-muted hover:bg-subtle hover:text-ink"
         >
           <Plus className="size-3.5" /> New…
         </button>
@@ -860,7 +853,7 @@ export function Sidebar() {
         {drag && (w.tree.sections.length > 0 || drag.type === 'project') && (
           <div
             className={clsx(
-              'mt-2 rounded-md border border-dashed border-neutral-300 px-2 py-2 text-center text-xs text-neutral-400 dark:border-neutral-700',
+              'mt-2 rounded-control border border-dashed border-neutral-300 px-2 py-2 text-center text-xs text-neutral-400 dark:border-neutral-700',
               dropHighlight('top'),
             )}
             {...dropProps(
@@ -941,10 +934,8 @@ export function Sidebar() {
             <div
               role={notice.kind === 'error' ? 'alert' : 'status'}
               className={clsx(
-                'fixed bottom-4 left-4 z-50 flex max-w-sm items-start gap-3 rounded-lg px-4 py-3 text-sm whitespace-pre-line shadow-lg',
-                notice.kind === 'error'
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900',
+                'fixed bottom-4 left-4 z-50 flex max-w-sm items-start gap-3 rounded-tile px-4 py-3 text-sm whitespace-pre-line shadow-popover',
+                notice.kind === 'error' ? 'bg-rose-600 text-white' : 'bg-inverse text-on-inverse',
               )}
             >
               <span className="min-w-0 flex-1">

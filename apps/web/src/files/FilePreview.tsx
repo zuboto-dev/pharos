@@ -35,9 +35,7 @@ export function NewTabLink({ fileId, children }: { fileId: string; children?: Re
 
 function Frame({ children }: { children: ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
-      {children}
-    </div>
+    <div className="overflow-hidden rounded-tile border border-line bg-canvas">{children}</div>
   );
 }
 
@@ -45,8 +43,8 @@ function Frame({ children }: { children: ReactNode }) {
 function NoPreview({ path, children }: { path: string; children: ReactNode }) {
   return (
     <Frame>
-      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-neutral-500 dark:text-neutral-400">
-        <FileTypeIcon path={path} className="size-8 text-neutral-300 dark:text-neutral-600" />
+      <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted">
+        <FileTypeIcon path={path} className="size-8 text-faint" />
         {children}
       </div>
     </Frame>
@@ -55,7 +53,7 @@ function NoPreview({ path, children }: { path: string; children: ReactNode }) {
 
 /** Markdown images would fetch from the web; show their text instead. */
 const NO_IMAGES = {
-  img: ({ alt }: { alt?: string }) => <span className="text-neutral-500">[image: {alt}]</span>,
+  img: ({ alt }: { alt?: string }) => <span className="text-muted">[image: {alt}]</span>,
 };
 
 function TextPreview({
@@ -89,7 +87,7 @@ function TextPreview({
   return (
     <div className="space-y-1">
       <Frame>
-        <div className={clsx(HEIGHT[size].max, 'overflow-auto bg-white p-4 dark:bg-neutral-900')}>
+        <div className={clsx(HEIGHT[size].max, 'overflow-auto bg-surface p-4')}>
           {markdown ? (
             <Markdown components={NO_IMAGES}>{state.text}</Markdown>
           ) : (
@@ -100,7 +98,7 @@ function TextPreview({
         </div>
       </Frame>
       {state.truncated && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-muted">
           Showing the first {formatSize(TEXT_PREVIEW_MAX_BYTES)}. Download it to read the rest.
         </p>
       )}
@@ -152,7 +150,7 @@ export function FilePreview({
               className={clsx('w-full bg-white', HEIGHT[size].box)}
             />
           </Frame>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="text-xs text-muted">
             Blank preview? <NewTabLinkInline fileId={file.id} />
           </p>
         </div>

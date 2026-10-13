@@ -28,21 +28,16 @@ function FileCard({ file, size }: { file: Entity<'file'>; size: 'compact' | 'ful
         <Clickable
           id={file.id}
           title={`${fileName(d.path)}: open the details`}
-          className="-mx-1 flex min-w-0 items-start gap-2 rounded-md px-1 py-0.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+          className="-mx-1 flex min-w-0 items-start gap-2 rounded-control px-1 py-0.5 hover:bg-sunken"
         >
-          <FileTypeIcon
-            path={d.path}
-            className="mt-0.5 size-4 text-neutral-400 dark:text-neutral-500"
-          />
-          <span className="min-w-0 text-sm leading-snug font-semibold text-neutral-900 dark:text-neutral-100">
-            {d.title}
-          </span>
+          <FileTypeIcon path={d.path} className="mt-0.5 size-4 text-faint" />
+          <span className="min-w-0 text-sm leading-snug font-semibold text-ink">{d.title}</span>
         </Clickable>
         <GlanceDate file={d} />
       </div>
       {known && <MissingNotice file={file} info={known} />}
       {info.status === 'error' && !known && (
-        <p role="note" className="text-sm text-neutral-500">
+        <p role="note" className="text-sm text-muted">
           Couldn’t reach the file service, so the preview and actions are off for now.
         </p>
       )}
@@ -63,9 +58,9 @@ export function FileView({ node }: { node: NodeOf<'FileView'> }) {
     return (
       <div
         role="note"
-        className="flex flex-col items-center gap-2 px-4 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400"
+        className="flex flex-col items-center gap-2 px-4 py-6 text-center text-sm text-muted"
       >
-        <FileQuestion className="size-8 text-neutral-300 dark:text-neutral-600" aria-hidden />
+        <FileQuestion className="size-8 text-faint" aria-hidden />
         <p>
           This file isn’t in the project. It may have been removed; add it again from the Files
           page, or ask your agent to point this widget at another file.

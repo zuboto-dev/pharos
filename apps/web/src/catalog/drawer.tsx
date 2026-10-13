@@ -64,7 +64,7 @@ function fieldSchema(type: EntityType, field: string): z.ZodType | undefined {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[7rem_1fr] items-start gap-3 py-1.5 text-sm">
-      <dt className="pt-0.5 text-neutral-500 dark:text-neutral-400">{label}</dt>
+      <dt className="pt-0.5 text-muted">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>
   );
@@ -110,7 +110,7 @@ function Value({ value }: { value: unknown }) {
         href={value}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 break-all text-sky-600 hover:underline dark:text-sky-400"
+        className="inline-flex items-center gap-1 break-all text-accent hover:underline"
       >
         {value} <ExternalLink className="size-3 shrink-0" />
       </a>
@@ -228,15 +228,13 @@ function Fields({ entity }: { entity: Entity }) {
       </Row>,
     );
   }
-  return <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">{rows}</dl>;
+  return <dl className="divide-y divide-line-soft">{rows}</dl>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
-        {title}
-      </h3>
+      <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">{title}</h3>
       {children}
     </section>
   );
@@ -250,7 +248,7 @@ function TaskList({ tasks }: { tasks: Entity<'task'>[] }) {
         <li key={task.id}>
           <Clickable
             id={task.id}
-            className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+            className="flex items-center gap-2 rounded-control px-1.5 py-1 hover:bg-sunken"
           >
             <TaskCheck task={task} />
             <span
@@ -411,12 +409,12 @@ function RevisionDetails({ id }: { id: number }) {
         <button
           type="button"
           onClick={() => actions.open({ history: true })}
-          className="mb-2 inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+          className="mb-2 inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
         >
           <ArrowLeft className="size-3.5" /> All changes
         </button>
         <h2 className="text-lg leading-snug font-semibold">{rev.message}</h2>
-        <p className="flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-400">
+        <p className="flex items-center gap-1.5 text-sm text-muted">
           <Icon className="size-4" /> {rev.author.name} · {timeAgo(rev.createdAt)} · revision #
           {rev.id}
           {rev.revertOf && ` · reverts #${rev.revertOf}`}
@@ -426,10 +424,7 @@ function RevisionDetails({ id }: { id: number }) {
       <Section title={`Changes (${rev.changes.length})`}>
         <ul className="space-y-3">
           {rev.changes.map((change) => (
-            <li
-              key={change.id}
-              className="space-y-1.5 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
-            >
+            <li key={change.id} className="space-y-1.5 rounded-tile border border-line p-3">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Badge
                   tone={change.op === 'create' ? 'green' : change.op === 'delete' ? 'red' : 'blue'}
@@ -442,7 +437,7 @@ function RevisionDetails({ id }: { id: number }) {
                         : 'updated',
                   )}
                 </Badge>
-                <span className="text-neutral-500">{TYPE_LABELS[change.type]}</span>
+                <span className="text-muted">{TYPE_LABELS[change.type]}</span>
                 {entityById.has(change.id) ? (
                   <EntityRef id={change.id} />
                 ) : (
@@ -454,9 +449,9 @@ function RevisionDetails({ id }: { id: number }) {
                   <tbody>
                     {Object.entries(change.fields).map(([field, diff]) => (
                       <tr key={field} className="align-top">
-                        <td className="w-24 py-0.5 pr-2 text-neutral-500">{fieldLabel(field)}</td>
+                        <td className="w-24 py-0.5 pr-2 text-muted">{fieldLabel(field)}</td>
                         <td className="py-0.5 break-all">
-                          <span className="text-rose-600 line-through dark:text-rose-400">
+                          <span className="text-danger line-through">
                             {formatValue(change.type, field, diff.before)}
                           </span>{' '}
                           →{' '}
@@ -555,19 +550,19 @@ export function DetailDrawer({
       />
       <aside
         className={clsx(
-          'relative flex h-full w-full flex-col bg-white shadow-xl sm:w-[30rem] dark:bg-neutral-900',
+          'relative flex h-full w-full flex-col bg-surface shadow-overlay sm:w-[30rem]',
           leaving ? 'animate-drawer-out' : 'animate-drawer-in',
         )}
       >
-        <header className="flex items-center justify-between gap-2 border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
+        <header className="flex items-center justify-between gap-2 border-b border-line px-5 py-3">
+          <div className="flex items-center gap-2 text-sm text-muted">
             {onBack && (
               <button
                 type="button"
                 aria-label="Back"
                 title="Back to the previous details"
                 onClick={onBack}
-                className="-ml-1.5 rounded-md p-1 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                className="-ml-1.5 rounded-control p-1 hover:bg-subtle hover:text-ink"
               >
                 <ArrowLeft className="size-4" />
               </button>
@@ -589,7 +584,7 @@ export function DetailDrawer({
                   ?.writeText(window.location.href)
                   .then(() => setCopied(true));
               }}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-subtle"
             >
               <LinkIcon className="size-3.5" /> {copied ? 'Copied' : 'Copy link'}
             </button>
@@ -602,7 +597,7 @@ export function DetailDrawer({
                     aboutId: entity.id,
                   });
                 }}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-950 dark:hover:text-sky-300"
+                className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-sky-50 hover:text-accent-strong dark:hover:bg-sky-950"
               >
                 <MessageCircleQuestion className="size-3.5" /> Ask
               </button>
@@ -611,7 +606,7 @@ export function DetailDrawer({
               <button
                 type="button"
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
+                className="inline-flex items-center gap-1 rounded-control px-2 py-1 text-xs text-muted hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
               >
                 <Trash2 className="size-3.5" /> {entity.type === 'file' ? 'Remove' : 'Delete'}
               </button>
@@ -620,7 +615,7 @@ export function DetailDrawer({
               type="button"
               aria-label="Close"
               onClick={onClose}
-              className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="rounded-control p-1 text-muted hover:bg-subtle"
             >
               <X className="size-5" />
             </button>
@@ -650,7 +645,7 @@ export function DetailDrawer({
                   );
                   onClose();
                 }}
-                className="rounded-md bg-rose-600 px-2.5 py-1 font-medium text-white hover:bg-rose-700"
+                className="rounded-control bg-rose-600 px-2.5 py-1 font-medium text-white hover:bg-rose-700"
               >
                 {entity.type === 'file' ? 'Remove' : 'Delete'}
               </button>

@@ -14,24 +14,22 @@ export function UpdateNotice({ reload = () => window.location.reload() }: { relo
   return (
     <div
       role="status"
-      className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-3 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+      className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-3 rounded-tile border border-line-strong bg-surface px-4 py-3 text-sm shadow-popover"
     >
       <RefreshCw className="size-4 shrink-0 text-amber-500" aria-hidden />
-      <p className="text-neutral-700 dark:text-neutral-300">
-        Pharos has been updated. Reload to use the new version.
-      </p>
+      <p className="text-ink-soft">Pharos has been updated. Reload to use the new version.</p>
       <div className="flex shrink-0 gap-1">
         <button
           type="button"
           onClick={() => setDismissed(build)}
-          className="rounded-md px-2 py-1 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          className="rounded-control px-2 py-1 text-muted hover:bg-subtle hover:text-ink"
         >
           Later
         </button>
         <button
           type="button"
           onClick={reload}
-          className="rounded-md bg-neutral-900 px-2.5 py-1 font-medium text-white hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+          className="rounded-control bg-inverse px-2.5 py-1 font-medium text-on-inverse hover:bg-neutral-700 dark:hover:bg-neutral-300"
         >
           Reload
         </button>

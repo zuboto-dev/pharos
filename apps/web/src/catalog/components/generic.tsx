@@ -73,7 +73,7 @@ function FieldValue({
     value === '' ||
     (Array.isArray(value) && !value.length)
   ) {
-    return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
+    return <span className="text-faint">—</span>;
   }
   const optionKey = optionKeyOf(type, field);
   if (optionKey && typeof value === 'string')
@@ -116,11 +116,7 @@ function FieldValue({
     return <span className="tabular-nums">{formatDate(value.slice(0, 10), true)}</span>;
   if (Array.isArray(value)) return value.map(String).join(', ');
   if (typeof value === 'string' && LONG_TEXT.has(field)) {
-    return (
-      <span className="line-clamp-2 text-neutral-500 dark:text-neutral-400">
-        {value.replace(/[*_`#>]/g, '')}
-      </span>
-    );
+    return <span className="line-clamp-2 text-muted">{value.replace(/[*_`#>]/g, '')}</span>;
   }
   return String(value);
 }
@@ -144,7 +140,7 @@ function UriButton({ id, uri }: { id: string; uri: string }) {
         e.stopPropagation();
         open(id);
       }}
-      className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 text-left text-xs text-sky-700 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 sm:max-w-[18rem] dark:text-sky-300"
+      className="inline-flex max-w-[9rem] min-w-0 items-center gap-1 text-left text-xs text-accent-strong hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 sm:max-w-[18rem]"
     >
       {file ? (
         <FileTypeIcon path={file.data.path} className="size-3" />
@@ -166,8 +162,8 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
   return (
     <div className="-mx-4 -my-4 overflow-x-auto">
       <table className="w-full text-left text-sm">
-        <thead className="text-xs text-neutral-500 dark:text-neutral-400">
-          <tr className="border-b border-neutral-100 dark:border-neutral-800">
+        <thead className="text-xs text-muted">
+          <tr className="border-b border-line-soft">
             {node.columns.map((c) => (
               <th key={c.field} className="px-3 py-2 font-medium whitespace-nowrap first:pl-4">
                 {c.label ?? pathLabel(c.field)}
@@ -182,7 +178,7 @@ export function DataTable({ node }: { node: NodeOf<'DataTable'> }) {
               onClick={(e) => {
                 if (!(e.target as HTMLElement).closest('a, button')) openItem(row.id);
               }}
-              className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-800/40"
+              className="cursor-pointer border-b border-line-soft last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-800/40"
             >
               {node.columns.map((c) => {
                 const { value, type, field } = read(row, c.field);
@@ -281,7 +277,7 @@ export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
           title={`${bar.count}`}
         >
           <span className={clsx('truncate', !bar.key && 'text-neutral-400')}>{bar.label}</span>
-          <span className="h-3 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+          <span className="h-3 overflow-hidden rounded-full bg-subtle">
             <span
               className={clsx(
                 'block h-full rounded-full',
@@ -298,10 +294,10 @@ export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
 }
 
 const STAT_TONES: Record<string, string> = {
-  neutral: 'text-neutral-900 dark:text-neutral-100',
-  good: 'text-emerald-600 dark:text-emerald-400',
-  warning: 'text-amber-600 dark:text-amber-400',
-  bad: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-ink',
+  good: 'text-ok',
+  warning: 'text-warn',
+  bad: 'text-danger',
 };
 
 function count(data: ViewData, query: Query): number {
@@ -320,8 +316,8 @@ export function Stat({ node }: { node: NodeOf<'Stat'> }) {
   // A "bad" number that is zero is good news; don't paint it red.
   const tone = node.tone === 'bad' && n === 0 ? 'neutral' : (node.tone ?? 'neutral');
   return (
-    <div className="flex h-full flex-col justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{node.label}</div>
+    <div className="flex h-full flex-col justify-between rounded-block border border-line bg-surface px-4 py-3">
+      <div className="text-xs font-medium text-muted">{node.label}</div>
       <div className={clsx('mt-1 text-2xl font-semibold tabular-nums', STAT_TONES[tone])}>
         {value}
       </div>
@@ -344,7 +340,7 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
         <li key={row.id}>
           <Clickable
             id={row.id}
-            className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+            className="flex items-center gap-3 rounded-control px-2 py-1.5 hover:bg-sunken"
           >
             <span className="min-w-0 flex-1 truncate text-sm">
               <TermText text={labels[i]!} ranges={termRanges[i]} />
@@ -352,10 +348,7 @@ export function DataList({ node }: { node: NodeOf<'DataList'> }) {
             {node.secondary?.map((path) => {
               const { value, type, field } = read(row, path);
               return (
-                <span
-                  key={path}
-                  className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400"
-                >
+                <span key={path} className="shrink-0 text-xs text-muted">
                   <FieldValue
                     value={value}
                     type={type}

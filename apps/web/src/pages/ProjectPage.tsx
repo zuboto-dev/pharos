@@ -60,11 +60,11 @@ function AnswerHeader({ view }: { view: Entity<'view'> }) {
   const run = (change: { message: string; operations: Operation[] }) =>
     actions.apply(change.message, change.operations, { undoable: true });
   return (
-    <div className="flex flex-wrap items-start gap-3 rounded-xl border border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
-      <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-400" />
+    <div className="flex flex-wrap items-start gap-3 rounded-block border border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
+      <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-accent" />
       <div className="min-w-0 flex-1">
         <div className="font-medium">{view.data.question}</div>
-        <div className="text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="text-xs text-muted">
           Answer ·{' '}
           {expired ? 'expired' : view.data.archived ? 'dismissed' : `hidden ${expires} unless kept`}
         </div>
@@ -125,18 +125,16 @@ function WidgetPicker({
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute top-full right-0 z-40 mt-2 max-h-[min(24rem,70vh)] w-80 animate-pop-in max-w-[calc(100vw-2rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="absolute top-full right-0 z-40 mt-2 max-h-[min(24rem,70vh)] w-80 animate-pop-in max-w-[calc(100vw-2rem)] overflow-y-auto rounded-block border border-line-strong bg-surface p-1 shadow-popover">
         {PICKABLE.map((name) => (
           <button
             key={name}
             type="button"
             onClick={() => onPick(name)}
-            className="block w-full rounded-lg px-3 py-2 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            className="block w-full rounded-tile px-3 py-2 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800"
           >
             <div className="text-sm font-medium">{componentLabel(name)}</div>
-            <div className="text-xs text-neutral-500 dark:text-neutral-400">
-              {CATALOG[name].description}
-            </div>
+            <div className="text-xs text-muted">{CATALOG[name].description}</div>
           </button>
         ))}
       </div>
@@ -355,7 +353,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     <ViewDataProvider data={dataset.data} version={dataset.version} actions={actions}>
       <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
         {/* One line at every width (v0.2 B1): the tabs give way (into More), never the icons. */}
-        <div className="flex flex-nowrap items-end gap-2 border-b border-neutral-200 dark:border-neutral-800">
+        <div className="flex flex-nowrap items-end gap-2 border-b border-line">
           <ViewTabs
             projectId={projectId!}
             views={dataset.data.views}
@@ -446,7 +444,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         {filesPage && <FilesPage onAdded={reload} />}
         {active && !editing && <ViewUpdated view={active} />}
         {editing && (
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted">
             <span className="hidden md:inline">
               Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
               (double-click the bottom edge to fit content), use ⚙ for its settings, or remove it
@@ -466,7 +464,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
           )}
         {!filesPage && board.widgets.length === 0 && !editing && (
-          <div className="rounded-xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-neutral-700">
+          <div className="rounded-block border border-dashed border-neutral-300 p-10 text-center text-sm text-muted dark:border-neutral-700">
             This view is empty. Use <strong>Customize</strong> → Add widget, or ask your agent to
             build it (for example, “make this a view of what’s left in the current stage”).
           </div>
@@ -508,10 +506,8 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         <div
           role={notice.kind === 'error' ? 'alert' : 'status'}
           className={clsx(
-            'fixed right-4 bottom-4 z-50 flex max-w-md items-start gap-3 rounded-lg px-4 py-3 text-sm whitespace-pre-line shadow-lg',
-            notice.kind === 'error'
-              ? 'bg-rose-600 text-white'
-              : 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900',
+            'fixed right-4 bottom-4 z-50 flex max-w-md items-start gap-3 rounded-tile px-4 py-3 text-sm whitespace-pre-line shadow-popover',
+            notice.kind === 'error' ? 'bg-rose-600 text-white' : 'bg-inverse text-on-inverse',
           )}
         >
           <span className="min-w-0 flex-1">

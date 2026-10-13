@@ -48,13 +48,11 @@ function Section({
   return (
     <section
       aria-label={title}
-      className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
+      className="space-y-4 rounded-block border border-line bg-surface p-5"
     >
       <div className="space-y-1">
         <h2 className="text-base font-semibold">{title}</h2>
-        {description && (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
-        )}
+        {description && <p className="text-sm text-muted">{description}</p>}
       </div>
       {children}
     </section>
@@ -64,7 +62,7 @@ function Section({
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid gap-1 py-2 text-sm sm:grid-cols-[10rem_1fr] sm:gap-4">
-      <dt className="text-neutral-500 dark:text-neutral-400">{label}</dt>
+      <dt className="text-muted">{label}</dt>
       <dd className="min-w-0">{children}</dd>
     </div>
   );
@@ -77,7 +75,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
       type="button"
       aria-label={`Copy ${label}`}
       onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
-      className="shrink-0 rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+      className="shrink-0 rounded p-1 text-neutral-400 hover:bg-subtle hover:text-ink-soft"
     >
       {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
     </button>
@@ -88,9 +86,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
 function Copyable({ label, text }: { label: string; text: string }) {
   return (
     <span className="inline-flex max-w-full items-start gap-1.5">
-      <code className="min-w-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[13px] break-all dark:bg-neutral-800">
-        {text}
-      </code>
+      <code className="min-w-0 rounded bg-subtle px-1.5 py-0.5 text-[13px] break-all">{text}</code>
       <CopyButton label={label} text={text} />
     </span>
   );
@@ -108,10 +104,10 @@ function ThemeChoice() {
           aria-checked={theme === value}
           onClick={() => setTheme(value)}
           className={clsx(
-            'flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm',
+            'flex flex-col items-center gap-1.5 rounded-tile border px-3 py-3 text-sm',
             theme === value
               ? 'border-sky-500 bg-sky-50 font-medium text-sky-900 dark:border-sky-500 dark:bg-sky-950/50 dark:text-sky-100'
-              : 'border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800',
+              : 'border-line-strong text-ink-soft hover:bg-neutral-50 dark:hover:bg-neutral-800',
           )}
         >
           <Icon className="size-4" /> {label}
@@ -228,20 +224,20 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
         />
       </div>
       {agent.configured && agent.enabled && waiting > 0 && !agent.running && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+        <div className="flex flex-wrap items-center gap-3 rounded-tile bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
           {plural(waiting, 'question')} {waiting === 1 ? 'is' : 'are'} waiting for an answer.
           <button type="button" onClick={() => void answerWaiting()} className={BUTTON.accent}>
             Answer now
           </button>
         </div>
       )}
-      {notice && <p className="text-sm text-neutral-500">{notice}</p>}
+      {notice && <p className="text-sm text-muted">{notice}</p>}
       {error && (
-        <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
-      <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">
+      <dl className="divide-y divide-line-soft">
         <Row label="Agent">
           {agent.mode === 'default' ? (
             'Claude Code (found on this computer), connected only to Pharos'
@@ -267,7 +263,7 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
           </Row>
         )}
         <Row label="Change the agent">
-          <span className="text-neutral-600 dark:text-neutral-400">
+          <span className="text-muted">
             Set <code>PHAROS_AGENT_COMMAND</code> to your own command (or <code>off</code>) and
             restart the server. For safety, the command can only be set on the server, not from this
             page.
@@ -304,7 +300,7 @@ async function sendFolder<T>(method: string, url: string, body?: unknown): Promi
 const folderUrl = (id: string) => FILE_ROUTES.folder.replace(':folderId', id);
 
 const INPUT =
-  'w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm placeholder:text-neutral-400 focus:border-sky-500 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900';
+  'w-full rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-sm placeholder:text-neutral-400 focus:border-sky-500 focus:outline-none';
 
 function LevelSelect({
   value,
@@ -320,7 +316,7 @@ function LevelSelect({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as FolderLevel)}
-      className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm focus:border-sky-500 focus:outline-none dark:border-neutral-700 dark:bg-neutral-900"
+      className="rounded-control border border-line-strong bg-surface px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
     >
       {LEVEL_ORDER.map((level) => (
         <option key={level} value={level}>
@@ -403,13 +399,11 @@ function FolderRow({
               {folder.label}
             </p>
           )}
-          <p className="text-xs break-all text-neutral-500 dark:text-neutral-400">{folder.path}</p>
+          <p className="text-xs break-all text-muted">{folder.path}</p>
           <p
             className={clsx(
               'text-xs',
-              folder.available && !folder.error
-                ? 'text-neutral-500 dark:text-neutral-400'
-                : 'text-amber-700 dark:text-amber-400',
+              folder.available && !folder.error ? 'text-muted' : 'text-warn',
             )}
           >
             {scanLine(folder)}
@@ -433,11 +427,9 @@ function FolderRow({
           )}
         </div>
       </div>
-      <p className="text-xs text-neutral-600 dark:text-neutral-300">
-        {FOLDER_LEVELS[folder.level].agents}
-      </p>
+      <p className="text-xs text-ink-soft">{FOLDER_LEVELS[folder.level].agents}</p>
       {confirming && (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-neutral-50 px-3 py-2 text-sm dark:bg-neutral-800/60">
+        <div className="flex flex-wrap items-center gap-3 rounded-tile bg-sunken px-3 py-2 text-sm">
           <span className="min-w-0 flex-1">
             Remove {folder.label}? Files you added from it stay in their projects and show as
             missing. Nothing on disk changes.
@@ -483,7 +475,7 @@ function AddFolder({ onAdded, onError }: { onAdded: () => void; onError: (err: u
     <form
       onSubmit={(e) => void submit(e)}
       aria-label="Add a folder"
-      className="space-y-2 rounded-lg border border-dashed border-neutral-200 p-3 dark:border-neutral-700"
+      className="space-y-2 rounded-tile border border-dashed border-line-strong p-3"
     >
       <div className="grid gap-2 sm:grid-cols-[1fr_12rem]">
         <input
@@ -507,7 +499,7 @@ function AddFolder({ onAdded, onError }: { onAdded: () => void; onError: (err: u
         <button type="submit" disabled={busy || !path.trim()} className={BUTTON.primary}>
           Add folder
         </button>
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+        <span className="text-xs text-muted">
           Type or paste the full path. In Finder, Option-right-click a folder and choose Copy as
           Pathname.
         </span>
@@ -522,11 +514,11 @@ function DenyRules({ folders }: { folders: FolderStatus[] }) {
   const rules = folders.flatMap((f) => f.denyRules);
   const snippet = JSON.stringify({ permissions: { deny: rules } }, null, 2);
   return (
-    <div className="space-y-2 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+    <div className="space-y-2 border-t border-line-soft pt-4">
       <h3 className="text-sm font-semibold">Keep Claude Code out of these folders</h3>
       {rules.length ? (
         <>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          <p className="text-sm text-muted">
             Claude Code can read your disk directly, without going through Pharos. Add these rules
             to the <code>permissions.deny</code> list in <code>~/.claude/settings.json</code>, and
             it won’t open files in folders set to Hidden or Details. They stop its file tools and
@@ -537,7 +529,7 @@ function DenyRules({ folders }: { folders: FolderStatus[] }) {
           <div className="relative">
             <pre
               aria-label="Claude Code deny rules"
-              className="overflow-x-auto rounded-lg bg-neutral-100 p-3 pr-10 text-[13px] dark:bg-neutral-800"
+              className="overflow-x-auto rounded-tile bg-subtle p-3 pr-10 text-[13px]"
             >
               {snippet}
             </pre>
@@ -547,7 +539,7 @@ function DenyRules({ folders }: { folders: FolderStatus[] }) {
           </div>
         </>
       ) : (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-muted">
           Every folder is set to Contents, so there’s no Claude Code rule to add.
         </p>
       )}
@@ -587,28 +579,28 @@ function Folders() {
         </div>
       )}
       {folders.status === 'error' && !folders.data ? (
-        <p className="text-sm text-rose-600 dark:text-rose-400">Couldn’t load folders.</p>
+        <p className="text-sm text-danger">Couldn’t load folders.</p>
       ) : list.length ? (
-        <ul className="divide-y divide-neutral-100 dark:divide-neutral-800">
+        <ul className="divide-y divide-line-soft">
           {list.map((f) => (
             <FolderRow key={`${f.id}:${f.label}`} folder={f} onChanged={changed} onError={report} />
           ))}
         </ul>
       ) : folders.data ? (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">No folders yet.</p>
+        <p className="text-sm text-muted">No folders yet.</p>
       ) : (
         <p className="text-sm text-neutral-400">Loading…</p>
       )}
       <AddFolder onAdded={changed} onError={report} />
       {error && (
-        <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
-      <dl aria-label="Levels" className="divide-y divide-neutral-100 dark:divide-neutral-800">
+      <dl aria-label="Levels" className="divide-y divide-line-soft">
         {LEVEL_ORDER.map((level) => (
           <Row key={level} label={FOLDER_LEVELS[level].label}>
-            <span className="text-neutral-600 dark:text-neutral-400">
+            <span className="text-muted">
               {FOLDER_LEVELS[level].agents}
               {level === 'details' && ' The default.'}
             </span>
@@ -619,7 +611,7 @@ function Folders() {
       <div
         role="note"
         aria-label="What Pharos can and can’t enforce"
-        className="space-y-1.5 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+        className="space-y-1.5 rounded-tile bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
       >
         <p className="font-medium">What Pharos can and can’t enforce</p>
         <ul className="list-disc space-y-1 pl-5">
@@ -664,17 +656,17 @@ export function SettingsPage() {
         description="Pharos keeps everything in one file on this computer. Agents connect over MCP."
       >
         {s ? (
-          <dl className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <dl className="divide-y divide-line-soft">
             <Row label="Database">
               {s.dataPath ? <Copyable label="database path" text={s.dataPath} /> : 'In memory'}
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="mt-1 text-xs text-muted">
                 {plural(s.projects, 'project')} · {plural(s.revisions, 'revision')}. Move it with{' '}
                 <code>PHAROS_DB</code>; back it up by copying the file while the server is stopped.
               </p>
             </Row>
             <Row label="Server">
               <span className="tabular-nums">Port {s.port}</span>
-              <span className="text-neutral-500"> · change it with </span>
+              <span className="text-muted"> · change it with </span>
               <code>PORT</code>
             </Row>
             <Row label="MCP endpoint">

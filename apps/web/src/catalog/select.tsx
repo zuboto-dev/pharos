@@ -23,10 +23,10 @@ export type SelectOption = {
 
 /** The look shared by every dropdown panel (this and the Add widget list). */
 export const MENU_PANEL =
-  'animate-pop-in rounded-xl border border-neutral-200 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900';
+  'animate-pop-in rounded-block border border-line-strong bg-surface p-1 shadow-popover';
 
 const TRIGGER =
-  'inline-flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-left text-sm hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-sky-800';
+  'inline-flex w-full min-w-0 items-center justify-between gap-2 rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-left text-sm hover:border-neutral-300 focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:outline-none dark:hover:border-neutral-600 dark:focus-visible:ring-sky-800';
 
 type Position = { left: number; width: number; top?: number; bottom?: number; maxHeight: number };
 
@@ -157,8 +157,8 @@ export function Select({
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(option)}
               className={clsx(
-                'flex cursor-pointer items-start gap-2 rounded-lg px-3 py-2',
-                i === active && 'bg-neutral-100 dark:bg-neutral-800',
+                'flex cursor-pointer items-start gap-2 rounded-tile px-3 py-2',
+                i === active && 'bg-subtle',
               )}
             >
               {option.color && (
@@ -169,14 +169,10 @@ export function Select({
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-medium">{option.label}</span>
                 {option.description && (
-                  <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-                    {option.description}
-                  </span>
+                  <span className="block text-xs text-muted">{option.description}</span>
                 )}
               </span>
-              {option.value === value && (
-                <Check className="mt-0.5 size-4 shrink-0 text-sky-600 dark:text-sky-400" />
-              )}
+              {option.value === value && <Check className="mt-0.5 size-4 shrink-0 text-accent" />}
             </div>
           ))}
         </div>

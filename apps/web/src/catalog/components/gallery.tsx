@@ -94,12 +94,12 @@ function Picture({
         aria-label={`${picture.alt} (picture not shown)`}
         data-placeholder
         className={clsx(
-          'flex flex-col items-center justify-center gap-1.5 bg-neutral-50 p-3 text-center text-xs text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400',
-          large ? 'min-h-48 w-full max-w-lg rounded-lg' : 'aspect-[4/3] w-full',
+          'flex flex-col items-center justify-center gap-1.5 bg-neutral-50 p-3 text-center text-xs text-muted dark:bg-neutral-900',
+          large ? 'min-h-48 w-full max-w-lg rounded-tile' : 'aspect-[4/3] w-full',
           frame,
         )}
       >
-        <ImageOff className="size-6 text-neutral-300 dark:text-neutral-600" aria-hidden />
+        <ImageOff className="size-6 text-faint" aria-hidden />
         <span>{resolved.src === null ? resolved.reason : 'Couldn’t load the picture.'}</span>
         {href && (
           <a
@@ -107,7 +107,7 @@ function Picture({
             target="_blank"
             rel="noreferrer noopener"
             referrerPolicy="no-referrer"
-            className="inline-flex max-w-full items-center gap-1 text-sky-600 hover:underline dark:text-sky-400"
+            className="inline-flex max-w-full items-center gap-1 text-accent hover:underline"
           >
             <span className="truncate">
               {external ? href.replace(/^https?:\/\//, '') : 'Open the file'}
@@ -130,7 +130,7 @@ function Picture({
       onError={() => setBroken(true)}
       className={clsx(
         'block bg-neutral-50 object-contain dark:bg-neutral-900',
-        large ? 'max-h-[70vh] w-auto max-w-full rounded-md' : 'aspect-[4/3] w-full',
+        large ? 'max-h-[70vh] w-auto max-w-full rounded-control' : 'aspect-[4/3] w-full',
       )}
     />
   );
@@ -167,7 +167,7 @@ function Source({ picture, className }: { picture: GalleryPicture; className?: s
       referrerPolicy="no-referrer"
       title={href}
       className={clsx(
-        'inline-flex min-w-0 items-center gap-1 text-sky-600 hover:underline dark:text-sky-400',
+        'inline-flex min-w-0 items-center gap-1 text-accent hover:underline',
         className,
       )}
     >
@@ -204,7 +204,7 @@ function CaptionSource({ picture, className }: { picture: GalleryPicture; classN
       referrerPolicy="no-referrer"
       title={picture.sourceHost ?? href}
       className={clsx(
-        'inline-flex min-w-0 items-center gap-1 text-sky-600 hover:underline dark:text-sky-400',
+        'inline-flex min-w-0 items-center gap-1 text-accent hover:underline',
         className,
       )}
     >
@@ -389,7 +389,7 @@ export function Lightbox({
           </button>
         </div>
         {file && (
-          <div className="rounded-lg bg-white p-2 text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+          <div className="rounded-tile bg-surface p-2 text-ink">
             <LightboxFileActions file={file} />
           </div>
         )}
@@ -458,10 +458,10 @@ export function Gallery({ node }: { node: Node }) {
               setOpen(i);
             }}
             frame={clsx(
-              'overflow-hidden rounded-lg border transition hover:shadow-sm',
+              'overflow-hidden rounded-tile border transition hover:shadow-sm',
               highlighted
                 ? 'border-sky-500 ring-2 ring-sky-500/60'
-                : 'border-neutral-200 hover:border-neutral-300 dark:border-neutral-800 dark:hover:border-neutral-700',
+                : 'border-line hover:border-neutral-300 dark:hover:border-neutral-700',
             )}
           />
           {(p.caption || p.sourceHost || p.type === 'file' || p.image.kind === 'file') && (
@@ -470,15 +470,13 @@ export function Gallery({ node }: { node: Node }) {
                 <p
                   className={clsx(
                     'line-clamp-2 text-sm break-words',
-                    highlighted
-                      ? 'font-semibold text-neutral-900 dark:text-neutral-50'
-                      : 'text-neutral-800 dark:text-neutral-200',
+                    highlighted ? 'font-semibold text-ink' : 'text-ink',
                   )}
                 >
                   {p.caption}
                 </p>
               )}
-              <p className="flex min-w-0 text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="flex min-w-0 text-xs text-muted">
                 <CaptionSource picture={p} className="min-w-0 truncate" />
               </p>
             </figcaption>
@@ -492,9 +490,7 @@ export function Gallery({ node }: { node: Node }) {
     <figure className="min-w-0 space-y-3">
       {claim && (
         <figcaption className="space-y-1">
-          <p className="font-semibold break-words text-neutral-900 dark:text-neutral-50">
-            {claim.data.statement}
-          </p>
+          <p className="font-semibold break-words text-ink">{claim.data.statement}</p>
           <CertaintyMark claim={claim} />
         </figcaption>
       )}

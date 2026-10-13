@@ -60,7 +60,7 @@ export function FolderRequestCard({
     <div
       role="group"
       aria-label={`Folder request for ${name}`}
-      className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+      className="space-y-2 rounded-tile border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
     >
       <p className="flex items-start gap-2">
         <FolderPlus className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -138,9 +138,9 @@ export function FolderRequestNotice({
         />
       ))}
       {shown.length > 3 && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-muted">
           {shown.length - 3} more in{' '}
-          <a href="/settings" className="text-sky-600 hover:underline dark:text-sky-400">
+          <a href="/settings" className="text-accent hover:underline">
             Settings
           </a>
           .

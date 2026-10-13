@@ -122,8 +122,12 @@ describe('buttons', () => {
   it('gives each variant exactly one text colour per mode', () => {
     for (const classes of Object.values(BUTTON)) {
       const tokens = classes.split(/\s+/);
-      expect(tokens.filter((t) => /^text-([a-z]+-\d+|white)$/.test(t))).toHaveLength(1);
-      expect(tokens.filter((t) => /^dark:text-([a-z]+-\d+|white)$/.test(t))).toHaveLength(1);
+      // A visual-system token (text-ink-soft, text-on-inverse) carries both modes by itself.
+      const token = tokens.filter((t) => /^text-(ink|ink-soft|muted|on-inverse|accent)$/.test(t));
+      const light = tokens.filter((t) => /^text-([a-z]+-\d+|white)$/.test(t));
+      const dark = tokens.filter((t) => /^dark:text-([a-z]+-\d+|white)$/.test(t));
+      if (token.length) expect([token.length, light.length, dark.length]).toEqual([1, 0, 0]);
+      else expect([light.length, dark.length]).toEqual([1, 1]);
     }
   });
 });

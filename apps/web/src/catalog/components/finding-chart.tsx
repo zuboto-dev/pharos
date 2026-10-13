@@ -141,7 +141,7 @@ function SourceLine({ source }: { source: Artifact }) {
       <button
         type="button"
         onClick={() => actions.open({ entity: source.id })}
-        className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-sky-600 hover:underline focus-visible:outline-2 focus-visible:outline-sky-400 dark:text-sky-400"
+        className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
       >
         <FileText className="size-3 shrink-0" aria-hidden />
         <span className="truncate">{source.data.title}</span>
@@ -166,16 +166,16 @@ function BarDetail({ id, claim }: { id: string; claim: Claim }) {
       id={id}
       role="region"
       aria-label={claim.data.statement}
-      className="mt-1.5 space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-800 dark:bg-neutral-900"
+      className="mt-1.5 space-y-1.5 rounded-tile border border-line bg-neutral-50 p-3 text-sm dark:bg-neutral-900"
     >
-      <p className="break-words text-neutral-900 dark:text-neutral-100">{claim.data.statement}</p>
+      <p className="break-words text-ink">{claim.data.statement}</p>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <CertaintyMark claim={claim} />
         <ClaimBasis claim={claim} defaultOpen caption={false} />
       </div>
       {sources.length > 0 && (
-        <div className="space-y-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-          <p className="font-medium text-neutral-700 dark:text-neutral-300">
+        <div className="space-y-0.5 text-xs text-muted">
+          <p className="font-medium text-ink-soft">
             {sources.length > 1 ? `Sources (${sources.length})` : 'Source'}
           </p>
           <ul className="space-y-0.5">
@@ -230,9 +230,7 @@ export function FindingChart({ node }: { node: Node }) {
     <figure className="min-w-0 space-y-3">
       {claim && (
         <figcaption className="space-y-1">
-          <p className="font-semibold break-words text-neutral-900 dark:text-neutral-50">
-            {claim.data.statement}
-          </p>
+          <p className="font-semibold break-words text-ink">{claim.data.statement}</p>
           <CertaintyMark claim={claim} />
         </figcaption>
       )}
@@ -253,9 +251,7 @@ export function FindingChart({ node }: { node: Node }) {
                 <span
                   className={clsx(
                     'block truncate text-sm',
-                    highlighted
-                      ? 'font-semibold text-neutral-900 dark:text-neutral-50'
-                      : 'text-neutral-600 dark:text-neutral-400',
+                    highlighted ? 'font-semibold text-ink' : 'text-muted',
                   )}
                 >
                   {b.label}
@@ -276,7 +272,7 @@ export function FindingChart({ node }: { node: Node }) {
                     <span
                       aria-hidden
                       data-track
-                      className="block h-full shrink-0 overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-800"
+                      className="block h-full shrink-0 overflow-hidden rounded-sm bg-subtle"
                       style={{ width: `calc(100% - ${reserve}ch)` }}
                     >
                       <span
@@ -292,9 +288,7 @@ export function FindingChart({ node }: { node: Node }) {
                   <span
                     className={clsx(
                       'ml-1.5 text-sm whitespace-nowrap tabular-nums',
-                      highlighted
-                        ? 'font-semibold text-sky-700 dark:text-sky-300'
-                        : 'text-neutral-600 dark:text-neutral-400',
+                      highlighted ? 'font-semibold text-accent-strong' : 'text-muted',
                     )}
                   >
                     {value}
@@ -325,7 +319,7 @@ export function FindingChart({ node }: { node: Node }) {
                       setOpen(undefined);
                     }
                   }}
-                  className="-mx-1 block w-[calc(100%+0.5rem)] min-w-0 rounded-md px-1 py-0.5 text-left hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800/60"
+                  className="-mx-1 block w-[calc(100%+0.5rem)] min-w-0 rounded-control px-1 py-0.5 text-left hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-neutral-800/60"
                 >
                   {body}
                 </button>

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { glanceName } from '../files/files';
+import { Bar } from './chart';
 import { humanize } from '../lib/format';
 
 export type Tone = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'muted';
@@ -119,12 +120,12 @@ export function ProgressBar({
   className?: string;
 }) {
   return (
-    <div className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-subtle', className)}>
-      <div
-        className={clsx('h-full rounded-full transition-all', DOT_TONES[tone])}
-        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
-      />
-    </div>
+    <Bar
+      share={value / 100}
+      tone="ok"
+      fill={tone === 'green' ? undefined : DOT_TONES[tone]}
+      className={clsx('w-full', className)}
+    />
   );
 }
 

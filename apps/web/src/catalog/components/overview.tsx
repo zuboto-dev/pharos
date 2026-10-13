@@ -4,6 +4,7 @@ import { FolderGit2, Info, CircleCheck, TriangleAlert, OctagonAlert, Flag } from
 import { useViewData } from '../context';
 import { EntityRef } from '../interactive';
 import { useMarkdownTerms } from '../terms';
+import { Bar, CHART } from '../chart';
 import { Empty, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
 
 export function ProjectHeader() {
@@ -79,22 +80,8 @@ export function MiniBar({
   total: number;
   className?: string;
 }) {
-  const share = total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
-  return (
-    <span
-      aria-hidden
-      data-mini-bar=""
-      className={clsx(
-        'inline-block h-1.5 overflow-hidden rounded-full bg-neutral-200 align-middle dark:bg-neutral-700',
-        className,
-      )}
-    >
-      <span
-        className="block h-full rounded-full bg-sky-500 dark:bg-sky-400"
-        style={{ width: `${share * 100}%` }}
-      />
-    </span>
-  );
+  const share = total > 0 ? value / total : 0;
+  return <Bar data-mini-bar="" inline share={share} className={className} />;
 }
 
 export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
@@ -111,16 +98,17 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
             key={i}
             className="flex flex-col justify-between rounded-block border border-line bg-surface px-4 py-3"
           >
-            <div className="text-xs font-medium text-muted">{stat.label}</div>
+            <div className={CHART.figureLabel}>{stat.label}</div>
             <div
               className={clsx(
-                'mt-1 text-2xl font-semibold tabular-nums',
+                'mt-1',
+                CHART.figure,
                 STAT_TONES[zeroBad ? 'neutral' : (stat.tone ?? 'neutral')],
               )}
             >
               {value}
               {total !== undefined && (
-                <span className="text-base font-normal text-neutral-400">
+                <span className={CHART.figureOf}>
                   <span aria-hidden> / </span>
                   <span className="sr-only"> of </span>
                   {total}
@@ -148,14 +136,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
   return (
     <div className="flex items-center gap-4">
       <svg viewBox="0 0 100 100" className="size-24 shrink-0 -rotate-90">
-        <circle
-          cx="50"
-          cy="50"
-          r={r}
-          strokeWidth="10"
-          fill="none"
-          className="stroke-neutral-100 dark:stroke-neutral-800"
-        />
+        <circle cx="50" cy="50" r={r} strokeWidth="10" fill="none" className={CHART.trackStroke} />
         <circle
           cx="50"
           cy="50"
@@ -165,7 +146,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={c * (1 - percent / 100)}
-          className="stroke-emerald-500 transition-all"
+          className={clsx(CHART.stroke.ok, 'motion-safe:transition-all')}
         />
         <text
           x="50"
@@ -173,7 +154,7 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
           textAnchor="middle"
           dominantBaseline="central"
           transform="rotate(90 50 50)"
-          className="fill-current text-xl font-semibold"
+          className="fill-ink text-xl font-semibold tabular-nums"
         >
           {percent}%
         </text>

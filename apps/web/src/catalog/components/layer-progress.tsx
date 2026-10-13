@@ -7,6 +7,7 @@ import {
   type NodeOf,
 } from '@pharos/schema';
 import clsx from 'clsx';
+import { Bar } from '../chart';
 import { ChevronDown } from 'lucide-react';
 import { useViewData, type ViewData } from '../context';
 import { OptionDot } from '../options';
@@ -77,15 +78,11 @@ export function ProgressLine({
   return (
     <span className="flex min-w-0 items-center gap-2">
       <span aria-hidden className="block h-1.5 min-w-0 flex-1">
-        <span
-          className="block h-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700"
+        <Bar
+          share={done / total}
+          tone="ok"
           style={{ width: `${(total / scale) * 100}%`, minWidth: '0.75rem' }}
-        >
-          <span
-            className="block h-full rounded-full bg-emerald-500 motion-safe:transition-[width]"
-            style={{ width: `${(done / total) * 100}%` }}
-          />
-        </span>
+        />
       </span>
       {toggle ? (
         <button

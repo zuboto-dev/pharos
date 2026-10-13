@@ -55,7 +55,7 @@
   /* Charts and pictures (v0.2 B7): the one highlight against the rest, and the frame around it. */
   --ph-chart-highlight: var(--color-sky-500);
   --ph-chart-rest: var(--color-neutral-300);
-  --ph-chart-track: var(--color-neutral-100);
+  --ph-chart-track: var(--color-neutral-200);
   --ph-chart-axis: var(--color-neutral-300);
   --ph-chart-grid: var(--color-neutral-200);
   --ph-chart-label: var(--color-neutral-500);
@@ -90,7 +90,7 @@
   --ph-on-inverse: var(--color-neutral-900);
   --ph-chart-highlight: var(--color-sky-400);
   --ph-chart-rest: var(--color-neutral-600);
-  --ph-chart-track: var(--color-neutral-800);
+  --ph-chart-track: var(--color-neutral-700);
   --ph-chart-axis: var(--color-neutral-700);
   --ph-chart-grid: var(--color-neutral-800);
   --ph-chart-label: var(--color-neutral-400);

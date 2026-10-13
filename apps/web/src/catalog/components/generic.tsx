@@ -26,6 +26,7 @@ import { useOpenItem } from '../open-item';
 import { DOT_TONES, Empty, isHttp, Markdown, StatusBadge, Uri } from '../ui';
 import { linkedFileOf } from '../source-file';
 import { FileTypeIcon } from './file-list';
+import { Bar, CHART } from '../chart';
 import { MiniBar } from './overview';
 
 type Reader = ReturnType<typeof fieldReader>;
@@ -276,17 +277,15 @@ export function CountChart({ node }: { node: NodeOf<'CountChart'> }) {
           className="grid grid-cols-[minmax(4rem,9rem)_1fr_2rem] items-center gap-3 text-sm"
           title={`${bar.count}`}
         >
-          <span className={clsx('truncate', !bar.key && 'text-neutral-400')}>{bar.label}</span>
-          <span className="h-3 overflow-hidden rounded-full bg-subtle">
-            <span
-              className={clsx(
-                'block h-full rounded-full',
-                bar.color ? DOT_TONES[bar.color] : 'bg-sky-500',
-              )}
-              style={{ width: `${(bar.count / max) * 100}%` }}
-            />
+          <span className={clsx('truncate', bar.key ? CHART.label.plain : 'text-sm text-faint')}>
+            {bar.label}
           </span>
-          <span className="text-right tabular-nums">{bar.count}</span>
+          <Bar
+            size="count"
+            share={bar.count / max}
+            fill={bar.color ? DOT_TONES[bar.color] : undefined}
+          />
+          <span className={clsx('text-right', CHART.value.plain)}>{bar.count}</span>
         </li>
       ))}
     </ul>
@@ -317,11 +316,9 @@ export function Stat({ node }: { node: NodeOf<'Stat'> }) {
   const tone = node.tone === 'bad' && n === 0 ? 'neutral' : (node.tone ?? 'neutral');
   return (
     <div className="flex h-full flex-col justify-between rounded-block border border-line bg-surface px-4 py-3">
-      <div className="text-xs font-medium text-muted">{node.label}</div>
-      <div className={clsx('mt-1 text-2xl font-semibold tabular-nums', STAT_TONES[tone])}>
-        {value}
-      </div>
-      {node.caption && <div className="mt-0.5 text-xs text-neutral-400">{node.caption}</div>}
+      <div className={CHART.figureLabel}>{node.label}</div>
+      <div className={clsx('mt-1', CHART.figure, STAT_TONES[tone])}>{value}</div>
+      {node.caption && <div className="mt-0.5 text-xs text-faint">{node.caption}</div>}
     </div>
   );
 }

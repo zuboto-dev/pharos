@@ -11,6 +11,7 @@ import clsx from 'clsx';
 import { FileText } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
 import { formatDate } from '../../lib/format';
+import { Bar as ChartBar, CHART, emphasisOf } from '../chart';
 import { useViewData, type ViewData } from '../context';
 import { labelOf } from '../interactive';
 import { Empty, isHttp, Uri } from '../ui';
@@ -230,7 +231,7 @@ export function FindingChart({ node }: { node: Node }) {
     <figure className="min-w-0 space-y-3">
       {claim && (
         <figcaption className="space-y-1">
-          <p className="font-semibold break-words text-ink">{claim.data.statement}</p>
+          <p className={CHART.title}>{claim.data.statement}</p>
           <CertaintyMark claim={claim} />
         </figcaption>
       )}
@@ -242,20 +243,14 @@ export function FindingChart({ node }: { node: Node }) {
         >
           {bars.map((b, i) => {
             const highlighted = b.key === lit;
+            const emphasis = emphasisOf(highlighted, lit !== undefined);
             const value = values[i]!;
             const share = Math.min(1, Math.max(0, b.value) / max);
             const width = `calc((100% - ${reserve}ch) * ${share})`;
             const name = `${b.label}, ${value}${highlighted ? ', highlighted' : ''}`;
             const body = (
               <>
-                <span
-                  className={clsx(
-                    'block truncate text-sm',
-                    highlighted ? 'font-semibold text-ink' : 'text-muted',
-                  )}
-                >
-                  {b.label}
-                </span>
+                <span className={clsx('block truncate', CHART.label[emphasis])}>{b.label}</span>
                 <span className="flex h-5 items-center">
                   {whole === undefined ? (
                     <span
@@ -263,34 +258,22 @@ export function FindingChart({ node }: { node: Node }) {
                       data-highlighted={highlighted || undefined}
                       className={clsx(
                         'block h-full min-w-0.5 shrink-0 rounded-sm motion-safe:transition-[width]',
-                        highlighted ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600',
+                        CHART.fill[highlighted || lit === undefined ? 'highlight' : 'rest'],
                       )}
                       style={{ width }}
                     />
                   ) : (
                     // A faint track for the whole, so the bar reads as a share of it.
-                    <span
-                      aria-hidden
-                      data-track
-                      className="block h-full shrink-0 overflow-hidden rounded-sm bg-subtle"
+                    <ChartBar
+                      size="bar"
+                      share={share}
+                      tone={highlighted || lit === undefined ? 'highlight' : 'rest'}
+                      highlighted={highlighted}
+                      className="shrink-0"
                       style={{ width: `calc(100% - ${reserve}ch)` }}
-                    >
-                      <span
-                        data-highlighted={highlighted || undefined}
-                        className={clsx(
-                          'block h-full min-w-0.5 rounded-sm motion-safe:transition-[width]',
-                          highlighted ? 'bg-sky-500' : 'bg-neutral-300 dark:bg-neutral-600',
-                        )}
-                        style={{ width: `${share * 100}%` }}
-                      />
-                    </span>
+                    />
                   )}
-                  <span
-                    className={clsx(
-                      'ml-1.5 text-sm whitespace-nowrap tabular-nums',
-                      highlighted ? 'font-semibold text-accent-strong' : 'text-muted',
-                    )}
-                  >
+                  <span className={clsx('ml-1.5 whitespace-nowrap', CHART.value[emphasis])}>
                     {value}
                   </span>
                 </span>

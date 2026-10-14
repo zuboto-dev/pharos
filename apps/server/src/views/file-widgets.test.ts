@@ -1,7 +1,16 @@
 // R7.11 files as widgets: FileView and FileList's showIn in previews and agent guidance · Opus 5.5
 // Every folder, file and name here is made up; nothing touches the disk.
-import { Board, FOLDERS_SETTING, type Author, type FileFolder } from '@pharos/schema';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import {
+  Board,
+  COMPONENT_INFO,
+  FOLDERS_SETTING,
+  type Author,
+  type FileFolder,
+} from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
+import { createApp } from '../app.js';
 import { VIEW_GUIDELINES, answerBrief } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
@@ -149,6 +158,40 @@ describe('document sets guidance', () => {
       expect(section).toContain(words);
     const { store, ids } = setup();
     expect(answerBrief(store, [ids.p])).toContain('Document sets');
+  });
+
+  it('says a FileList alone is enough, and a FileView only for one key document (v0.2 A6)', async () => {
+    const section = VIEW_GUIDELINES.slice(
+      VIEW_GUIDELINES.indexOf('## Document sets'),
+      VIEW_GUIDELINES.indexOf('## Queries that answer'),
+    );
+    expect(section).toContain('A FileList alone is enough');
+    expect(section).toContain('file viewer');
+    expect(section).toMatch(
+      /Add a FileView only when one key document should always be on\s+the page/,
+    );
+    // The example board has no FileView and no showIn.
+    const json = section.slice(section.indexOf('[{'), section.indexOf('}}]') + 3);
+    expect(json).not.toContain('FileView');
+    expect(json).not.toContain('showIn');
+    // The MCP instructions agents read first, in memory (no port is opened).
+    const { store } = setup();
+    const app = createApp(store);
+    const client = new Client({ name: 'test', version: '1' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://localhost/mcp'), {
+        fetch: async (url, init) => app.fetch(new Request(url, init)),
+      }),
+    );
+    const instructions = client.getInstructions() ?? '';
+    await client.close();
+    expect(instructions).toContain('A FileList alone is enough');
+    expect(instructions).not.toContain("showIn: the FileView's id");
+    expect(COMPONENT_INFO.FileList.use).toContain('file viewer');
+    expect(COMPONENT_INFO.FileList.use).toMatch(
+      /Only when one key document should always be on the page/,
+    );
+    expect(COMPONENT_INFO.FileView.use).toMatch(/only when the page needs one in view/);
   });
 
   it('its example board passes its own checks once the ids are real', () => {

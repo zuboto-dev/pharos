@@ -187,11 +187,14 @@ and give the set one view.
    relative to the approved folder in \`uri\` ("business-registration/company-seal.png"); Pharos
    links them to the file once it is added. Queries find linked items: {"fileIds": "<file id>"}.
 4. **Compose the view** (view_create): a StartHere (purpose "done", or "needs-you" with \`due\`
-   when a paper expires soon), a FileList filtered to the tag with \`showIn\` set to the FileView's
-   id, a FileView of the key document (\`file\`: its id; \`size: "compact"\` at 5–6 columns
-   beside a 6–7 column list, or full width below it), and the linked work: a TaskTable and a
-   DecisionLog (or a DataList) filtered to the linked items, which show their files as small
-   links that open in the FileView. When a paper has an expiry date, add a FileList filtered to
+   when a paper expires soon), a FileList filtered to the tag, and the linked work: a TaskTable
+   and a DecisionLog (or a DataList) filtered to the linked items, which show their files as
+   small links. A FileList alone is enough: it shows each file at a glance (icon, name, the one
+   date that matters), and tapping one opens it in the file viewer (preview, actions, details on
+   request, ← → through the list). Add a FileView only when one key document should always be on
+   the page (\`file\`: its id; \`size: "compact"\` at 5–6 columns beside a 6–7 column list, or
+   full width below it); then give the FileList \`showIn\` set to the FileView's id so a tapped
+   row shows there instead, and linked files open there too. When a paper has an expiry date, add a FileList filtered to
    {"tags": "<tag>", "expiryDate": {"exists": true}} with \`details: ["expiryDate"]\` so the
    dates show as badges, or a DueTracker over {"type": "file", "where": {"tags": "<tag>",
    "expiryDate": {"exists": true}}} to sort them by urgency (60 days counts as urgent; the
@@ -199,9 +202,8 @@ and give the set one view.
    \`showIn\` names no FileView.
 
 Example board (ids from project_snapshot.files):
-[{"id": "start", "node": {"component": "StartHere", "purpose": "done", "why": "Keep the company's registration papers in one place", "headline": "The four registration papers are tagged and one tap away.", "yourPart": "Nothing now. Renew the tax registration before it expires.", "evidence": ["<certificate file id>"], "date": "<YYYY-MM-DD>", "path": [{"label": "The papers", "says": "Every registration document", "target": "papers"}, {"label": "The certificate", "says": "Preview and actions", "target": "certificate"}]}},
- {"id": "papers", "w": 6, "node": {"component": "FileList", "title": "Registration papers", "filter": {"where": {"tags": "business-registration"}}, "details": ["issuer", "issuedDate", "expiryDate"], "showIn": "certificate"}},
- {"id": "certificate", "w": 6, "node": {"component": "FileView", "title": "Certificate", "file": "<certificate file id>", "size": "compact"}},
+[{"id": "start", "node": {"component": "StartHere", "purpose": "done", "why": "Keep the company's registration papers in one place", "headline": "The four registration papers are tagged and one tap away.", "yourPart": "Nothing now. Renew the tax registration before it expires.", "evidence": ["<certificate file id>"], "date": "<YYYY-MM-DD>", "path": [{"label": "The papers", "says": "Tap one to read it", "target": "papers"}, {"label": "Linked work", "says": "The tasks and decisions they belong to", "target": "work"}]}},
+ {"id": "papers", "node": {"component": "FileList", "title": "Registration papers", "filter": {"where": {"tags": "business-registration"}}}},
  {"id": "work", "w": 6, "node": {"component": "TaskTable", "title": "Linked tasks", "filter": {"where": {"fileIds": ["<file ids of the set>"]}}, "columns": ["status", "dueDate"]}},
  {"id": "decisions", "w": 6, "node": {"component": "DecisionLog", "title": "Linked decisions", "filter": {"where": {"fileIds": ["<file ids of the set>"]}}}}]
 
@@ -642,7 +644,8 @@ export function answerBrief(
     'their folder with folder_request if no shared folder has them (the owner approves it in',
     'Pharos), add them from files_unadded, tag them and fill kind, issuer and dates, link the',
     'related tasks and decisions with fileIds, then build one view (see "Document sets" below):',
-    'a StartHere, a FileList filtered to the tag, a FileView of the key document and the linked work.',
+    'a StartHere, a FileList filtered to the tag (tapping a file opens it in the file viewer) and',
+    'the linked work; a FileView only when one key document should always be on the page.',
     '',
     VIEW_GUIDELINES,
     catalogMarkdown(),

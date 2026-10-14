@@ -22,3 +22,6 @@ dist/
 .DS_Store
 coverage/
 eval/results/
+
+# Written by samples/install/install-samples.mjs
+samples/install/samples.json

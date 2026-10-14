@@ -74,12 +74,22 @@ The server must be running (`pnpm dev`) for the HTTP connection.
 claude mcp add --transport http pharos http://localhost:4300/mcp
 ```
 
-**Codex** (`~/.codex/config.toml`)
+**Codex**
+
+```sh
+codex mcp add pharos --url http://localhost:4300/mcp
+```
+
+or in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.pharos]
 url = "http://localhost:4300/mcp"
 ```
+
+For non-interactive runs (`codex exec`), which can't ask you to approve a tool call, the tested
+runs approved Pharos's tools per run with
+`-c 'mcp_servers.pharos.default_tools_approval_mode="approve"'`.
 
 **Cursor** (`~/.cursor/mcp.json`) and other clients that support streamable HTTP
 
@@ -114,6 +124,31 @@ Then try asking your agent:
 - “Set up a project in Pharos for this repo from its docs: goals, scope, stages, and tasks.”
 - “What's blocking the current stage? Answer with a Pharos view.”
 - “Mark the README task done in Pharos.”
+
+## Works with
+
+Each agent below passed all five compatibility scenarios in [`eval/compat`](eval/compat)
+(set up a project from a brief, mark a task done, answer a question with a checked view, start
+from a pack and add a record, ask for a folder and wait for the owner), connected over MCP only
+to an isolated Pharos server:
+
+| Agent       | Tested version                  | Date       | Result     |
+| ----------- | ------------------------------- | ---------- | ---------- |
+| Claude Code | 2.1.300 (claude-opus-5-5)       | 2026-10-14 | 5/5 passed |
+| Codex       | codex-cli 0.162.1 (gpt-6.1-sol) | 2026-10-14 | 5/5 passed |
+| OpenCode    | —                               | —          | planned    |
+
+To run them yourself, start a separate server on its own port and database with answering off,
+then point the runner at it (it refuses port 4300, so your own data is never touched; each
+scenario is one agent run and uses that agent's usage):
+
+```sh
+PORT=4391 PHAROS_DB=/tmp/pharos-compat.db PHAROS_AGENT_COMMAND=off \
+  PHAROS_AGENT_LOG=/tmp/pharos-compat-agent.log pnpm --filter @pharos/server dev
+node eval/compat/run.mjs --agent claude --url http://127.0.0.1:4391   # or --agent codex
+```
+
+It prints a pass/fail table and writes the results (with each run's output) under `eval/results/compat`.
 
 ## Answering questions from the web app
 

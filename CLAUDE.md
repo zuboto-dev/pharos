@@ -48,6 +48,9 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
 - `pnpm dev` — server (tsx watch) + web (Vite)
 - `pnpm build` / `pnpm typecheck` / `pnpm lint` / `pnpm format` / `pnpm test`
 - `pnpm --filter @pharos/server mcp:stdio` — MCP over stdio
+- `node eval/compat/run.mjs --agent claude|codex --url http://127.0.0.1:<port>` — agent
+  compatibility scenarios (`eval/compat/`) with a real agent CLI against an isolated server you
+  start (never 4300; answering off); checkers are unit-tested in `apps/server/src/compat.test.ts`
 - `pnpm service install|status|start|stop|restart|log|uninstall` — run the built server as a
   launchd user agent on macOS (`scripts/pharos-service.sh`): starts at login, restarts on exit,
   logs to `~/.pharos/server.log`. The built server also serves `apps/web/dist`. It shares port

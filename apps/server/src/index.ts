@@ -12,6 +12,7 @@ import { answerBrief } from './guidance.js';
 import { Presence } from './presence.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
+import { seenMarks } from './views/freshness.js';
 import { webBuildId } from './version.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
@@ -28,6 +29,9 @@ const port = Number(process.env.PORT ?? 4300);
 const dbPath = defaultDatabasePath();
 const store = new Store(openDatabase(dbPath));
 store.ensureDefaultViews();
+// R11: Pharos starts keeping track of what the reader has seen when it first runs with it, so
+// what agents change from then on is marked even before the owner opens the app.
+seenMarks(store);
 const feed = new RevisionFeed(store);
 // Who is working where (v0.2 B5): shared by the MCP tools, the answering run and the feed.
 const presence = new Presence();

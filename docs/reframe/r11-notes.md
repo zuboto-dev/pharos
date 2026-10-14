@@ -8,7 +8,8 @@ in W5.8 and W7.8).
 - **Seen mark.** Per view and per reader, the latest revision the reader had when they last opened
   the view. Stored as one app setting (`views.seen`: `{ baseline, views }`), never a revision, never
   over MCP. A local install has one reader, the owner (`human:me`). The first read sets `baseline`
-  to the latest revision, so an existing install starts calm; views never opened count from there.
+  to the latest revision (the server does it when it starts), so an existing install starts calm;
+  views never opened count from there.
   Marks only move forward. Opening a view marks it seen, and so does each change that arrives while
   it is open.
 - **What counts as a change.** A revision after the mark, by anyone but the reader and not by Pharos

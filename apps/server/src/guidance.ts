@@ -5,12 +5,14 @@ import {
   PACK_GUIDE,
   similarAnswers,
   type ComponentName,
+  type Entity,
 } from '@pharos/schema';
 import { ResourceTemplate, type McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { AgentFiles } from './store/agent-files.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
+import { evidenceState, projectFreshness } from './views/freshness.js';
 import { isExpired, requestContext } from './views/service.js';
 
 /**
@@ -520,12 +522,36 @@ function text(uri: string, body: string, mimeType = 'text/markdown') {
   return { contents: [{ uri, mimeType, text: body }] };
 }
 
+/** For a refresh request (R11): what changed in the data since the answer was written. */
+function refreshContext(store: Store, request: Entity<'request'>): string[] {
+  const view = request.data.viewId ? store.get(request.data.viewId) : null;
+  if (view?.type !== 'view') return [];
+  const evidence = projectFreshness(store, request.data.projectId, { view: view.id }).views[view.id]
+    ?.evidence;
+  if (!evidence || !('stale' in evidence))
+    return ['  Its evidence is unknown: rebuild it from the data now.'];
+  const files = new AgentFiles(store);
+  const items = (evidence.stale?.recent ?? [])
+    .flatMap((c) => c.items)
+    .filter((i) => files.visible(i.id))
+    .slice(0, 8)
+    .map((i) => `${i.type} ${i.label ? `"${i.label}" ` : ''}(${i.id}, ${i.op}d)`);
+  return [
+    `  Written from the data at revision ${evidence.revision}; changed since: ${items.length ? items.join(', ') : 'see history_diff from that revision'}.`,
+  ];
+}
+
 /**
  * Everything an agent needs to answer the open questions in some projects in one go: the
  * questions, the guidelines, the catalog, and worked examples. Given to the question-answering
  * agent up front, so it doesn't spend calls discovering them.
  */
-export function answerBrief(store: Store, projectIds: string[]): string {
+export function answerBrief(
+  store: Store,
+  projectIds: string[],
+  /** Where to note each reuse choice (R11.6): the runner writes it to the agent log. */
+  log?: (line: string) => void,
+): string {
   const questions = projectIds.flatMap((projectId) => {
     const project = store.getOfType('project', projectId);
     const answers = store
@@ -540,13 +566,22 @@ export function answerBrief(store: Store, projectIds: string[]): string {
         `- requestId ${r.id} in project "${project.data.name}" (${projectId}): ${r.data.question}`,
         r.data.about ? `  Asked from: ${r.data.about}` : '',
         r.data.mode === 'block' ? '  Change this block (mode "block")' : '',
+        r.data.mode === 'refresh' ? '  Refresh this answer (mode "refresh")' : '',
         ...requestContext(store, r).map((line) => `  ${line}`),
+        ...(r.data.mode === 'refresh' ? refreshContext(store, r) : []),
         ...similarAnswers(r.data.question, answers, (v) => v.data.question)
+          .filter((v) => v.id !== r.data.viewId || r.data.mode !== 'refresh')
           .slice(0, 2)
-          .map(
-            (v) =>
-              `  Answered before: view ${v.id} ("${v.data.question}"). Its data is live; if it still answers this, link it instead of building a new view: apply an update to request ${r.id} with {status: "answered", answerViewId: "${v.id}"}.`,
-          ),
+          .map((v) => {
+            // R11.6: an answer whose data changed since it was written is never reused.
+            const state = evidenceState(store, v);
+            log?.(
+              `[pharos] request ${r.id}: earlier answer ${v.id} is ${state}; ${state === 'stale' ? 'not offered for reuse' : 'offered for reuse'}`,
+            );
+            if (state === 'stale')
+              return `  Answered before: view ${v.id} ("${v.data.question}"), but data it was written from changed since, so its text may be wrong. Don't link it: answer again.`;
+            return `  Answered before: view ${v.id} ("${v.data.question}"). Its blocks are live and ${state === 'fresh' ? 'nothing it was written from changed' : 'it was written before Pharos tracked its data, so check its text against the data first'}; if it still answers this, link it instead of building a new view: apply an update to request ${r.id} with {status: "answered", answerViewId: "${v.id}"}.`;
+          }),
       ]
         .filter(Boolean)
         .join('\n'),
@@ -566,6 +601,12 @@ export function answerBrief(store: Store, projectIds: string[]): string {
     "change is refused otherwise). If the block can't do what was asked, change nothing: dismiss",
     'the request with a reply saying why and what would work instead (apply, request status',
     '"dismissed", reply).',
+    '',
+    'A request marked "Refresh this answer" (mode "refresh") says the data behind an earlier',
+    'answer view changed since it was written. Answer the question again in that same view: read it',
+    'with view_get, then view_update with its revision as expectedRevision, the requestId and the',
+    'new widgets (check every number and sentence against the data now), and a one-sentence reply',
+    'saying what changed. Never link an answer that is marked stale.',
     '',
     'People use Ask for three things. Work out which one each request is:',
     '- A question about the project: answer it with view_answer (pass the requestId).',

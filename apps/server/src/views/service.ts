@@ -104,23 +104,27 @@ export const ViewCreateInput = z.object({
 
 export function createView(store: Store, author: Author, input: z.infer<typeof ViewCreateInput>) {
   const board = parseWidgets(input.widgets);
-  const result = store.apply(author, {
-    message: input.message,
-    operations: [
-      {
-        op: 'create',
-        type: 'view',
-        ref: 'view',
-        data: {
-          projectId: input.projectId,
-          name: input.name,
-          ...(input.description ? { description: input.description } : {}),
-          ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
-          spec: board,
+  const result = store.apply(
+    author,
+    {
+      message: input.message,
+      operations: [
+        {
+          op: 'create',
+          type: 'view',
+          ref: 'view',
+          data: {
+            projectId: input.projectId,
+            name: input.name,
+            ...(input.description ? { description: input.description } : {}),
+            ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
+            spec: board,
+          },
         },
-      },
-    ],
-  });
+      ],
+    },
+    { evidence: author.kind === 'agent' },
+  );
   return withView(store, result, result.created.view!);
 }
 
@@ -156,36 +160,40 @@ export function answerView(
   const name =
     input.name ??
     (input.question.length > 40 ? `${input.question.slice(0, 39).trimEnd()}…` : input.question);
-  const result = store.apply(author, {
-    message: `Answer: ${input.question}`,
-    operations: [
-      {
-        op: 'create',
-        type: 'view',
-        ref: 'view',
-        data: {
-          projectId: input.projectId,
-          name,
-          kind: 'answer',
-          question: input.question,
-          expiresAt: new Date(
-            now + (input.expiresInDays ?? ANSWER_DAYS) * 86_400_000,
-          ).toISOString(),
-          spec: board,
+  const result = store.apply(
+    author,
+    {
+      message: `Answer: ${input.question}`,
+      operations: [
+        {
+          op: 'create',
+          type: 'view',
+          ref: 'view',
+          data: {
+            projectId: input.projectId,
+            name,
+            kind: 'answer',
+            question: input.question,
+            expiresAt: new Date(
+              now + (input.expiresInDays ?? ANSWER_DAYS) * 86_400_000,
+            ).toISOString(),
+            spec: board,
+          },
         },
-      },
-      ...(input.requestId
-        ? [
-            {
-              op: 'update' as const,
-              type: 'request' as const,
-              id: input.requestId,
-              data: { status: 'answered', answerViewId: '$view' },
-            },
-          ]
-        : []),
-    ],
-  });
+        ...(input.requestId
+          ? [
+              {
+                op: 'update' as const,
+                type: 'request' as const,
+                id: input.requestId,
+                data: { status: 'answered', answerViewId: '$view' },
+              },
+            ]
+          : []),
+      ],
+    },
+    { evidence: author.kind === 'agent' },
+  );
   const answer = withView(store, result, result.created.view!);
   // Agents in evaluations restated whole views in chat; the reply belongs in the view.
   return {
@@ -255,6 +263,11 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
         'invalid',
         `Request ${request.id} asks about block "${request.data.widgetId}" in view ${request.data.viewId}; change that view`,
       );
+    if (request.data.mode === 'refresh' && request.data.viewId !== view.id)
+      throw new PharosError(
+        'invalid',
+        `Request ${request.id} asks to refresh view ${request.data.viewId}; answer again in that view`,
+      );
   }
   if (input.reply && !request) throw new PharosError('invalid', 'reply needs a requestId');
   const data: Record<string, unknown> = {};
@@ -323,22 +336,32 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
         `View "${view.data.name}" was last changed by ${last.kind === 'human' ? 'a person' : 'someone else'} (it is at revision ${view.updatedRev}). Read it with view_get, redo your change on what it shows now, and pass that revision as expectedRevision (or change single blocks with ops)`,
       );
   }
-  const result = store.apply(author, {
-    message: input.message,
-    operations: [
-      { op: 'update', type: 'view', id: view.id, data },
-      ...(request
-        ? [
-            {
-              op: 'update' as const,
-              type: 'request' as const,
-              id: request.id,
-              data: { status: 'answered', ...(input.reply ? { reply: input.reply } : {}) },
-            },
-          ]
-        : []),
-    ],
-  });
+  const result = store.apply(
+    author,
+    {
+      message: input.message,
+      operations: [
+        { op: 'update', type: 'view', id: view.id, data },
+        ...(request
+          ? [
+              {
+                op: 'update' as const,
+                type: 'request' as const,
+                id: request.id,
+                data: { status: 'answered', ...(input.reply ? { reply: input.reply } : {}) },
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      // R11: an agent that answers again (a refresh) or rewrites the whole page built it from the
+      // data as it is now; changing one block leaves the rest as old as it was.
+      evidence:
+        author.kind === 'agent' &&
+        (request?.data.mode === 'refresh' || input.widgets !== undefined),
+    },
+  );
   return withView(store, result, view.id);
 }
 

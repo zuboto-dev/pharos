@@ -75,6 +75,19 @@ export function changesSentence(changes: PageChanges): string {
 }
 
 /**
+ * What changed since an answer was written: the changes, and when the date moved on far enough
+ * that its date-based blocks ("due today") show other items (R11 review, gap 4).
+ */
+export function staleSentence(stale: PageChanges): string {
+  const parts = stale.recent.length ? [changesSentence(stale)] : [];
+  if (stale.calendar)
+    parts.push(
+      `the date moved on from ${formatDate(stale.calendar.from)}, so its date-based blocks show other items`,
+    );
+  return parts.join('; ') || 'its data changed';
+}
+
+/**
  * The open view's freshness: what changed since the reader last looked (kept while the page is
  * open, so it doesn't vanish once the view counts as seen) and its evidence. Opening the view
  * marks it seen; so does every change that arrives while it is open.
@@ -89,13 +102,24 @@ export function usePageFreshness(
     value: ViewFreshness;
   } | null>(null);
   const since = useRef<{ viewId: string; since: number } | null>(null);
+  // Requests may finish out of order (R11 review, gap 7): an answer is taken only when it is
+  // newer than the one shown, by request order and by the latest revision it saw.
+  const order = useRef({ started: 0, applied: 0, latest: 0 });
+  const take = (request: number, latest: number) => {
+    const o = order.current;
+    if (request < o.applied || latest < o.latest) return false;
+    order.current = { ...o, applied: request, latest };
+    return true;
+  };
   useEffect(() => {
     if (!projectId || !viewId) return;
     let live = true;
     since.current = null;
+    order.current = { started: order.current.started, applied: 0, latest: 0 };
+    const request = ++order.current.started;
     void viewFreshness(projectId, viewId).then((f) => {
       const value = f?.views[viewId];
-      if (!live || !f || !value) return;
+      if (!live || !f || !value || !take(request, f.latest)) return;
       since.current = { viewId, since: value.seen };
       setState({ viewId, since: value.seen, value });
       void markViewSeen(viewId, f.latest);
@@ -107,9 +131,10 @@ export function usePageFreshness(
   useRevisionEvents((event) => {
     if (!projectId || !viewId || !event.projectIds.includes(projectId)) return;
     const from = since.current?.viewId === viewId ? since.current.since : undefined;
+    const request = ++order.current.started;
     void viewFreshness(projectId, viewId, from).then((f) => {
       const value = f?.views[viewId];
-      if (!f || !value || since.current?.viewId !== viewId) return;
+      if (!f || !value || since.current?.viewId !== viewId || !take(request, f.latest)) return;
       setState({ viewId, since: from ?? value.seen, value });
       if (typeof document === 'undefined' || document.visibilityState !== 'hidden')
         void markViewSeen(viewId, f.latest);
@@ -224,8 +249,9 @@ export function EvidenceNote({
         className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted"
       >
         <span className="min-w-0 flex-1">
-          Evidence unknown: written before Pharos kept track of the data behind it. Its blocks show
-          today’s data; check the written parts against them.
+          {evidence.reason === 'no_data'
+            ? 'Evidence unknown: nothing on this page reads the project’s data, so Pharos can’t tell whether what it says still holds.'
+            : 'Evidence unknown: written before Pharos kept track of the data behind it. Its blocks show today’s data; check the written parts against them.'}
         </span>
         {button}
       </div>
@@ -251,8 +277,8 @@ export function EvidenceNote({
         className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted"
       >
         <span className="min-w-0 flex-1">
-          Written as of {asOf}; since then {changesSentence(evidence.stale)}. Its blocks show
-          today’s data; its text may be out of date.
+          Written as of {asOf}; since then {staleSentence(evidence.stale)}. Its blocks show today’s
+          data; its text may be out of date.
         </span>
         {button}
       </div>
@@ -265,7 +291,7 @@ export function EvidenceNote({
     >
       <p className="min-w-0 flex-1">
         <span className="font-medium">May be out of date. </span>
-        Written as of {asOf}; since then {changesSentence(evidence.stale)}. Its blocks show today’s
+        Written as of {asOf}; since then {staleSentence(evidence.stale)}. Its blocks show today’s
         data; the written parts are from {asOf}.
       </p>
       {button}

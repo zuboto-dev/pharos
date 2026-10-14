@@ -10,6 +10,9 @@ const EMPTY: ChangedViews = { latest: 0, projects: {} };
 let changed: ChangedViews = EMPTY;
 const listeners = new Set<(value: ChangedViews) => void>();
 let pending: ReturnType<typeof setTimeout> | undefined;
+/** Loads started, and the latest one announced: an older answer never replaces a newer one. */
+let started = 0;
+let applied = 0;
 
 function announce(value: ChangedViews) {
   changed = value;
@@ -17,12 +20,16 @@ function announce(value: ChangedViews) {
 }
 
 async function load(): Promise<void> {
+  const ticket = ++started;
   try {
     const res = await fetch('/api/freshness');
     if (!res.ok) return;
     const body = (await res.json()) as ChangedViews;
-    if (body && typeof body === 'object' && body.projects && typeof body.projects === 'object')
+    if (ticket < applied) return;
+    if (body && typeof body === 'object' && body.projects && typeof body.projects === 'object') {
+      applied = ticket;
       announce(body);
+    }
   } catch {
     // No server (or a test without one): no dots, nothing breaks.
   }

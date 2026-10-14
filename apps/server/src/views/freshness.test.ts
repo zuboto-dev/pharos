@@ -275,12 +275,28 @@ describe('evidence and stale answers (R11.3, R11.5, R11.6)', () => {
       /Refresh this answer[\s\S]*changed since: task "Fix login"/,
     );
     const view = store.getOfType('view', id);
+    // A rename or ops don't answer a refresh (R11 review, gap 2): the whole page does.
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        expectedRevision: view.updatedRev,
+        requestId: req,
+        message: 'Answer again',
+        ops: [{ op: 'update', id: 'lead', set: { content: 'Nothing is blocked.' } }],
+      }),
+    ).toThrow(/whole page as widgets/);
     updateView(store, agent, {
       viewId: id,
       expectedRevision: view.updatedRev,
       requestId: req,
       message: 'Answer again',
-      ops: [{ op: 'update', id: 'lead', set: { content: 'Nothing is blocked.' } }],
+      widgets: [
+        { id: 'lead', node: { component: 'Text', content: 'Nothing is blocked.' } },
+        {
+          id: 'list',
+          node: { component: 'TaskTable', filter: { where: { status: 'blocked' } } },
+        },
+      ],
     });
     expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');
     expect(store.getOfType('request', req).data.status).toBe('answered');

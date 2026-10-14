@@ -325,7 +325,11 @@ describe('true run states (W7.5)', () => {
         run: { projectIds: ['p'], requestIds: ['r1'], startedAt: now },
       }),
     ).toMatchObject({ kind: 'running' });
-    expect(requestRunState('r2', base)).toMatchObject({ kind: 'queued' });
+    // Queued only when the agent really queued its project (R11 review, gap 8).
+    expect(requestRunState('r2', { ...base, state: 'queued', queued: ['p'] }, 'p')).toMatchObject({
+      kind: 'queued',
+    });
+    expect(requestRunState('r2', base, 'p')).toMatchObject({ kind: 'waiting', retry: true });
     expect(
       requestRunState('r1', {
         ...base,

@@ -50,7 +50,19 @@ export type PageChanges = {
   total: number;
   /** The latest ones first (at most 5). */
   recent: PageChange[];
+  /**
+   * Evidence only: the date moved on since the page was written (from that day to today) and a
+   * date-relative block ("due today", what is due next) now selects other items, with or without
+   * any revision.
+   */
+  calendar?: { from: string; to: string };
 };
+
+/**
+ * Why a page's evidence is unknown: it was made before Pharos tracked evidence (or by a person),
+ * or nothing on it reads the project's data, so nothing can say whether its words still hold.
+ */
+export type UnknownEvidence = { unknown: true; reason?: 'untracked' | 'no_data' };
 
 export type ViewFreshness = {
   viewId: string;
@@ -60,7 +72,7 @@ export type ViewFreshness = {
   changed: PageChanges | null;
   /** For views built by an agent: what its written parts were based on, and what changed since. */
   evidence:
-    { revision: number; at: string | null; stale: PageChanges | null } | { unknown: true } | null;
+    { revision: number; at: string | null; stale: PageChanges | null } | UnknownEvidence | null;
 };
 
 export type ProjectFreshness = {

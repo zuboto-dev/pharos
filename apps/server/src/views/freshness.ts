@@ -1,9 +1,15 @@
+import { isDeepStrictEqual } from 'node:util';
 import {
   ENTITIES,
   SEEN_SETTING,
   boardReads,
   changeTouches,
+  dueOf,
   filterMatcher,
+  localToday,
+  mergeReads,
+  readsNothing,
+  runQuery,
   type Author,
   type BoardReads,
   type ChangeLike,
@@ -12,12 +18,15 @@ import {
   type ChangedViews,
   type Entity,
   type EntityType,
+  type FilterMatcher,
   type PageChange,
   type PageChanges,
+  type ProjectDataset,
   type ProjectFreshness,
   type SeenMarks,
   type ViewFreshness,
 } from '@pharos/schema';
+import { AgentFiles } from '../store/agent-files.js';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
 import { effectiveBoard, isExpired } from './service.js';
@@ -34,13 +43,35 @@ export const READER: Author = { kind: 'human', name: 'me' };
 const RECENT = 5;
 const ITEMS = 5;
 
-/** The reader's seen marks; the first call starts keeping track from the latest revision. */
+const isMark = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+/**
+ * The reader's seen marks; the first call starts keeping track from the latest revision. A
+ * damaged setting is repaired, not trusted: a bad baseline starts again from the latest revision
+ * and bad view marks are dropped (those views count from the baseline).
+ */
 export function seenMarks(store: Store): SeenMarks {
-  const marks = store.setting<SeenMarks>(SEEN_SETTING);
-  if (marks && typeof marks.baseline === 'number' && marks.views) return marks;
-  const started: SeenMarks = { baseline: store.latestRevisionId(), views: {} };
-  store.setSetting(SEEN_SETTING, started);
-  return started;
+  const latest = store.latestRevisionId();
+  const stored = store.setting<unknown>(SEEN_SETTING);
+  const raw =
+    stored && typeof stored === 'object' && !Array.isArray(stored)
+      ? (stored as Record<string, unknown>)
+      : undefined;
+  const views =
+    raw?.views && typeof raw.views === 'object' && !Array.isArray(raw.views)
+      ? (raw.views as Record<string, unknown>)
+      : {};
+  const marks: SeenMarks = {
+    baseline: isMark(raw?.baseline) ? Math.min(raw.baseline, latest) : latest,
+    views: Object.fromEntries(
+      Object.entries(views).flatMap(([id, mark]) =>
+        isMark(mark) ? [[id, Math.min(mark, latest)]] : [],
+      ),
+    ),
+  };
+  if (!isDeepStrictEqual(stored, marks)) store.setSetting(SEEN_SETTING, marks);
+  return marks;
 }
 
 /**
@@ -113,9 +144,28 @@ function revisionsAfter(store: Store, projectId: string, after: number): LoggedR
       id: row.entity_id,
       before: row.before ? (JSON.parse(row.before) as Record<string, unknown>) : null,
       after: row.after ? (JSON.parse(row.after) as Record<string, unknown>) : null,
+      at: row.created_at,
     });
   }
   return out;
+}
+
+/**
+ * The change log as agents may see it (R11 review, gap 1): nothing of items hidden from them, and
+ * only the fields they can read of the rest (a change to a file's notes alone is no change). The
+ * same rules as every agent read, applied to past changes.
+ */
+function asAgentSees(files: AgentFiles, revisions: LoggedRevision[]): LoggedRevision[] {
+  return revisions.map((revision) => ({
+    ...revision,
+    changes: revision.changes.flatMap((change) => {
+      if (!files.visible(change.id)) return [];
+      const seen = (data: Record<string, unknown> | null) =>
+        data ? files.data(change.type, change.id, data) : null;
+      const [before, after] = [seen(change.before), seen(change.after)];
+      return isDeepStrictEqual(before, after) ? [] : [{ ...change, before, after }];
+    }),
+  }));
 }
 
 function labelOf(change: ChangeLike): string | null {
@@ -126,15 +176,26 @@ function labelOf(change: ChangeLike): string | null {
 
 const isReader = (author: Author) => author.kind === READER.kind && author.name === READER.name;
 
+/** Filter matchers over one dataset, one per calendar day ("$today" as that day). */
+function matchersFor(dataset: ProjectDataset) {
+  const byDay = new Map<string, FilterMatcher>();
+  return (day: string) => {
+    let found = byDay.get(day);
+    if (!found) byDay.set(day, (found = filterMatcher(dataset, { today: day })));
+    return found;
+  };
+}
+
 /**
  * The revisions after `since` that touched a page: changed the view itself (when `page` is on)
- * or data its blocks read. `everything` lets an activity feed count every change.
+ * or data its blocks read. `everything` lets an activity feed count every change. Each revision
+ * is judged on its own day: a task moved to "due today" counts on the day it was moved.
  */
 function pageChanges(
   revisions: LoggedRevision[],
   view: Entity<'view'>,
   reads: BoardReads,
-  matches: Parameters<typeof changeTouches>[2],
+  matcherOn: (day: string) => FilterMatcher,
   options: { since: number; page: boolean; everything: boolean; skip: (a: Author) => boolean },
 ): PageChanges | null {
   const touched: PageChange[] = [];
@@ -142,6 +203,7 @@ function pageChanges(
     if (revision.id <= options.since || options.skip(revision.author)) continue;
     const page = options.page && revision.changes.some((c) => c.id === view.id);
     const items: ChangedItem[] = [];
+    const matches = matcherOn(localToday(revision.at));
     for (const change of revision.changes) {
       if (!changeTouches(reads, change, matches, { everything: options.everything })) continue;
       if (items.length < ITEMS)
@@ -163,6 +225,53 @@ function pageChanges(
 }
 
 /**
+ * The view as an agent built it: its data in the revision that set its current evidence
+ * revision (the first change to it after that revision), or null when the log has none.
+ */
+function builtVersion(
+  store: Store,
+  view: Entity<'view'>,
+  evidenceRevision: number,
+): { view: Entity<'view'>; at: string } | null {
+  const row = store.database
+    .prepare(
+      `SELECT c.after, r.created_at FROM changes c JOIN revisions r ON r.id = c.revision_id
+       WHERE c.entity_id = ? AND c.revision_id > ? ORDER BY c.revision_id, c.seq LIMIT 1`,
+    )
+    .get(view.id, evidenceRevision) as { after: string | null; created_at: string } | undefined;
+  if (!row?.after) return null;
+  const data = JSON.parse(row.after) as Entity<'view'>['data'];
+  return data.evidenceRevision === evidenceRevision
+    ? { view: { ...view, data }, at: row.created_at }
+    : null;
+}
+
+/** What the page's queries select on one day (and when each repeating record is due). */
+function selectionOn(dataset: ProjectDataset, reads: BoardReads, day: string): string {
+  return JSON.stringify(
+    reads.queries.map((q) =>
+      runQuery(dataset, q.type, q.filter ?? {}, { today: day }).map((row) =>
+        row.type === 'record'
+          ? `${row.id}:${dueOf(dataset, row as Entity<'record'>, { today: day })?.band ?? ''}`
+          : row.id,
+      ),
+    ),
+  );
+}
+
+export type FreshnessOptions = {
+  /** Only this view (shown or not). */
+  view?: string;
+  /** Replaces the reader's mark for that view. */
+  since?: number;
+  /**
+   * Work out evidence as an agent may see it (hidden files and withheld fields left out), for
+   * the snapshot and the answer brief. Seen marks are the reader's own and stay out of it.
+   */
+  files?: AgentFiles;
+};
+
+/**
  * Freshness of a project's views (the ones shown: not archived or expired, unless `view` names
  * one). `since` replaces the reader's mark for that view, so a page can keep listing what changed
  * since it was opened after it marked itself seen.
@@ -170,7 +279,7 @@ function pageChanges(
 export function projectFreshness(
   store: Store,
   projectId: string,
-  options: { view?: string; since?: number } = {},
+  options: FreshnessOptions = {},
 ): ProjectFreshness {
   store.getOfType('project', projectId);
   const marks = seenMarks(store);
@@ -190,39 +299,81 @@ export function projectFreshness(
     ...views.map(seenOf),
     ...views.map((v) => v.data.evidenceRevision ?? latest),
   );
-  const revisions = revisionsAfter(store, projectId, from);
-  const matches = filterMatcher(store.dataset(projectId));
+  const logged = revisionsAfter(store, projectId, from);
+  const revisions = options.files ? asAgentSees(options.files, logged) : logged;
+  const dataset = options.files
+    ? options.files.dataset(store.dataset(projectId))
+    : store.dataset(projectId);
+  const matcherOn = matchersFor(dataset);
+  const today = localToday();
   const out: Record<string, ViewFreshness> = {};
   for (const view of views) {
     const seen = seenOf(view);
     const reads = boardReads(effectiveBoard(view));
-    const changed = pageChanges(revisions, view, reads, matches, {
-      since: seen,
-      page: true,
-      everything: true,
-      // The reader knows what they changed; Pharos's own housekeeping isn't news.
-      skip: (a) => isReader(a) || a.kind === 'system',
-    });
-    const evidenceRevision = view.data.evidenceRevision;
-    let evidence: ViewFreshness['evidence'] = null;
-    if (evidenceRevision !== undefined) {
-      evidence = {
-        revision: evidenceRevision,
-        at: store.revision(evidenceRevision)?.createdAt ?? null,
-        // Anyone's change to the data makes the written parts stale, the owner's included.
-        stale: pageChanges(revisions, view, reads, matches, {
-          since: evidenceRevision,
-          page: false,
-          everything: false,
-          skip: (a) => a.kind === 'system',
-        }),
-      };
-    } else if (view.data.kind === 'answer') {
-      evidence = { unknown: true };
-    }
-    out[view.id] = { viewId: view.id, seen, changed, evidence };
+    const changed = options.files
+      ? null
+      : pageChanges(revisions, view, reads, matcherOn, {
+          since: seen,
+          page: true,
+          everything: true,
+          // The reader knows what they changed; Pharos's own housekeeping isn't news.
+          skip: (a) => isReader(a) || a.kind === 'system',
+        });
+    out[view.id] = {
+      viewId: view.id,
+      seen,
+      changed,
+      evidence: evidenceOf(store, view, reads, revisions, dataset, matcherOn, today),
+    };
   }
   return { projectId, latest, views: out };
+}
+
+/**
+ * Whether what an agent wrote on a page still matches the data it was written from. The page's
+ * dependencies are what it read when it was built together with what it reads now, so removing
+ * a block (or renaming the page) never makes old words fresh. A page that reads nothing has no
+ * evidence anyone can check; a date-relative page written on an earlier day is stale once its
+ * blocks select other items today, with or without a revision.
+ */
+function evidenceOf(
+  store: Store,
+  view: Entity<'view'>,
+  current: BoardReads,
+  revisions: LoggedRevision[],
+  dataset: ProjectDataset,
+  matcherOn: (day: string) => FilterMatcher,
+  today: string,
+): ViewFreshness['evidence'] {
+  const evidenceRevision = view.data.evidenceRevision;
+  if (evidenceRevision === undefined) return view.data.kind === 'answer' ? { unknown: true } : null;
+  const built = builtVersion(store, view, evidenceRevision);
+  const reads = built ? mergeReads(boardReads(effectiveBoard(built.view)), current) : current;
+  if (readsNothing(reads))
+    return view.data.kind === 'answer' ? { unknown: true, reason: 'no_data' } : null;
+  let stale = pageChanges(revisions, view, reads, matcherOn, {
+    since: evidenceRevision,
+    page: false,
+    everything: false,
+    // Anyone's change to the data makes the written parts stale, the owner's included.
+    skip: (a) => a.kind === 'system',
+  });
+  const day = built ? localToday(built.at) : undefined;
+  if (
+    reads.dates &&
+    day &&
+    day < today &&
+    selectionOn(dataset, reads, day) !== selectionOn(dataset, reads, today)
+  )
+    stale = {
+      ...(stale ?? { since: evidenceRevision, total: 0, recent: [] }),
+      calendar: { from: day, to: today },
+    };
+  return {
+    revision: evidenceRevision,
+    at: store.revision(evidenceRevision)?.createdAt ?? null,
+    stale,
+  };
 }
 
 /** Every project's views that changed since the reader looked (for the sidebar and tabs). */
@@ -241,12 +392,16 @@ export function changedViews(store: Store): ChangedViews {
 
 /**
  * Whether an agent-built view's written parts still match their data, for agents deciding whether
- * to reuse it (R11.6): fresh, stale, or unknown (no evidence revision: made before R11 or by a
- * person).
+ * to reuse it (R11.6): fresh, stale, or unknown (no evidence revision, made before R11 or by a
+ * person, or nothing on it reads the data). Worked out as an agent may see the data (R11 review,
+ * gap 1), so it never varies with hidden files or fields agents can't read.
  */
 export function evidenceState(store: Store, view: Entity<'view'>): 'fresh' | 'stale' | 'unknown' {
   if (view.data.evidenceRevision === undefined) return 'unknown';
-  const evidence = projectFreshness(store, view.data.projectId, { view: view.id }).views[view.id]
-    ?.evidence;
-  return evidence && 'stale' in evidence && evidence.stale ? 'stale' : 'fresh';
+  const evidence = projectFreshness(store, view.data.projectId, {
+    view: view.id,
+    files: new AgentFiles(store),
+  }).views[view.id]?.evidence;
+  if (!evidence || 'unknown' in evidence) return 'unknown';
+  return evidence.stale ? 'stale' : 'fresh';
 }

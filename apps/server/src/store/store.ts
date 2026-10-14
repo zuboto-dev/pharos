@@ -506,6 +506,23 @@ export class Store {
           'invalid',
           `operations[${index}]: evidenceRevision is set by Pharos when an agent builds a view; leave it out`,
         );
+      // R11 review, gap 5: a Refresh is answered only by rebuilding its own page in the same
+      // write (view_update with widgets); linking an answer, stale or not, doesn't do it.
+      if (op.type !== 'request' || op.op === 'delete' || op.data.status !== 'answered') return;
+      const current = op.op === 'update' ? this.get(op.id) : null;
+      const data: Record<string, unknown> = {
+        ...(current?.type === 'request' ? current.data : {}),
+        ...op.data,
+      };
+      if (data.mode !== 'refresh') return;
+      const rebuilt =
+        options.evidence &&
+        raw.operations.some((o) => o.type === 'view' && o.op === 'update' && o.id === data.viewId);
+      if (!rebuilt)
+        throw new PharosError(
+          'invalid',
+          `operations[${index}]: a Refresh request is answered by writing view ${String(data.viewId)} again (view_update with its requestId and the whole page as widgets); to leave it, dismiss it with a reply saying why`,
+        );
     });
     if (author.kind === 'agent') {
       input.operations.forEach((op, index) => {

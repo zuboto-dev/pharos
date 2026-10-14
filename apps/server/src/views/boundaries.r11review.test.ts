@@ -278,13 +278,17 @@ describe('Refresh and evidence', () => {
   it('keeps a stale answer stale when Refresh only renames the tab', () => {
     const id = staleAnswer();
     const requestId = askRefresh(id);
-    updateView(store, agent, {
-      viewId: id,
-      requestId,
-      expectedRevision: store.getOfType('view', id).updatedRev,
-      message: 'Rename only',
-      name: 'Renamed fixture',
-    });
+    // Fix round F2: a Refresh is answered with the whole page as widgets; a rename is refused.
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        requestId,
+        expectedRevision: store.getOfType('view', id).updatedRev,
+        message: 'Rename only',
+        name: 'Renamed fixture',
+      }),
+    ).toThrow(/whole page as widgets/);
+    expect(store.getOfType('request', requestId).data.status).toBe('open');
     expect(JSON.stringify(store.getOfType('view', id).data.spec)).toContain('One task is blocked.');
     expect(evidenceState(store, store.getOfType('view', id))).toBe('stale');
     expect(answerBrief(store, [projectId])).not.toContain(`answerViewId: "${id}"`);
@@ -346,12 +350,15 @@ describe('Refresh and evidence', () => {
     const requestId = askRefresh(id);
     const marks = store.setting(SEEN_SETTING);
     const before = store.latestRevisionId();
+    // Fix round F2: a Refresh is answered with the whole page as widgets, not ops (gap 2).
+    const next = widgets();
+    next[0]!.node.content = 'Nothing is blocked.';
     updateView(store, agent, {
       viewId: id,
       requestId,
       expectedRevision: store.getOfType('view', id).updatedRev,
       message: 'Answer again',
-      ops: [{ op: 'update', id: 'lead', set: { content: 'Nothing is blocked.' } }],
+      widgets: next,
     });
     expect(store.getOfType('view', id).data.evidenceRevision).toBe(before);
     expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');

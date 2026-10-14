@@ -375,9 +375,16 @@ export function createApp(
   });
   api.put('/views/:id/seen', async (c) => {
     if (declaresAgent(c)) return forbidden(c, readerOnly);
-    const body = z
-      .object({ revision: z.number().int().nonnegative().optional() })
-      .parse(await c.req.json().catch(() => ({})));
+    // An empty body marks the latest revision; a body that isn't JSON is refused, never read as
+    // "seen everything" (R11 review, gap 10).
+    const text = await c.req.text();
+    let json: unknown = {};
+    try {
+      if (text.trim()) json = JSON.parse(text);
+    } catch {
+      throw new PharosError('invalid', 'The body must be JSON: {"revision"?: number}');
+    }
+    const body = z.object({ revision: z.number().int().nonnegative().optional() }).parse(json);
     const viewId = c.req.param('id');
     return c.json({ viewId, seen: markSeen(store, viewId, body.revision) });
   });

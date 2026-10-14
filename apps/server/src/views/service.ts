@@ -156,6 +156,13 @@ export function answerView(
   input: z.infer<typeof ViewAnswerInput>,
   now = Date.now(),
 ) {
+  const found = input.requestId ? store.get(input.requestId) : null;
+  const request = found?.type === 'request' ? (found as Entity<'request'>) : null;
+  if (request?.data.mode === 'refresh')
+    throw new PharosError(
+      'invalid',
+      `Request ${request.id} asks to refresh view ${request.data.viewId}: answer again in that same view with view_update (its revision as expectedRevision, the requestId and the whole page as widgets), not in a new one`,
+    );
   const board = parseWidgets(input.widgets);
   const name =
     input.name ??
@@ -268,6 +275,13 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
         'invalid',
         `Request ${request.id} asks to refresh view ${request.data.viewId}; answer again in that view`,
       );
+    // R11 review, gap 2: a refresh is answered by writing the page again from the data now, not
+    // by a rename or a few ops (they would leave old words looking fresh).
+    if (request.data.mode === 'refresh' && input.widgets === undefined)
+      throw new PharosError(
+        'invalid',
+        `Request ${request.id} asks to refresh this view: answer it again with the whole page as widgets (check every number and sentence against the data now), or dismiss the request with a reply saying why`,
+      );
   }
   if (input.reply && !request) throw new PharosError('invalid', 'reply needs a requestId');
   const data: Record<string, unknown> = {};
@@ -355,11 +369,11 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
       ],
     },
     {
-      // R11: an agent that answers again (a refresh) or rewrites the whole page built it from the
-      // data as it is now; changing one block leaves the rest as old as it was.
+      // R11: an agent that rewrites the whole page (a refresh answers that way) built it from the
+      // data as it is now; changing one block, even as a whole board under a block request,
+      // leaves the rest as old as it was.
       evidence:
-        author.kind === 'agent' &&
-        (request?.data.mode === 'refresh' || input.widgets !== undefined),
+        author.kind === 'agent' && input.widgets !== undefined && request?.data.mode !== 'block',
     },
   );
   return withView(store, result, view.id);

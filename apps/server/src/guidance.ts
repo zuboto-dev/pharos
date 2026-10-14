@@ -526,19 +526,25 @@ function text(uri: string, body: string, mimeType = 'text/markdown') {
 function refreshContext(store: Store, request: Entity<'request'>): string[] {
   const view = request.data.viewId ? store.get(request.data.viewId) : null;
   if (view?.type !== 'view') return [];
-  const evidence = projectFreshness(store, request.data.projectId, { view: view.id }).views[view.id]
-    ?.evidence;
+  // Worked out as agents see the data: nothing of hidden files, no withheld fields (R7.5).
+  const files = new AgentFiles(store);
+  const evidence = projectFreshness(store, request.data.projectId, { view: view.id, files }).views[
+    view.id
+  ]?.evidence;
   if (!evidence || !('stale' in evidence))
     return ['  Its evidence is unknown: rebuild it from the data now.'];
-  const files = new AgentFiles(store);
   const items = (evidence.stale?.recent ?? [])
     .flatMap((c) => c.items)
     .filter((i) => files.visible(i.id))
     .slice(0, 8)
     .map((i) => `${i.type} ${i.label ? `"${i.label}" ` : ''}(${i.id}, ${i.op}d)`);
+  const calendar = evidence.stale?.calendar;
   return [
     `  Written from the data at revision ${evidence.revision}; changed since: ${items.length ? items.join(', ') : 'see history_diff from that revision'}.`,
-  ];
+    calendar
+      ? `  It was written on ${calendar.from}; today (${calendar.to}) its date-based blocks show other items.`
+      : '',
+  ].filter(Boolean);
 }
 
 /**
@@ -576,11 +582,14 @@ export function answerBrief(
             // R11.6: an answer whose data changed since it was written is never reused.
             const state = evidenceState(store, v);
             log?.(
-              `[pharos] request ${r.id}: earlier answer ${v.id} is ${state}; ${state === 'stale' ? 'not offered for reuse' : 'offered for reuse'}`,
+              `[pharos] request ${r.id}: earlier answer ${v.id} is ${state}; ${state === 'fresh' ? 'offered for reuse' : 'not offered for reuse'}`,
             );
             if (state === 'stale')
               return `  Answered before: view ${v.id} ("${v.data.question}"), but data it was written from changed since, so its text may be wrong. Don't link it: answer again.`;
-            return `  Answered before: view ${v.id} ("${v.data.question}"). Its blocks are live and ${state === 'fresh' ? 'nothing it was written from changed' : 'it was written before Pharos tracked its data, so check its text against the data first'}; if it still answers this, link it instead of building a new view: apply an update to request ${r.id} with {status: "answered", answerViewId: "${v.id}"}.`;
+            // Nothing says whether its words still hold (R11 review, gap 2): no confident reuse.
+            if (state === 'unknown')
+              return `  Answered before: view ${v.id} ("${v.data.question}"), but Pharos can't tell whether what it says still holds (its evidence is unknown). Don't link it: read it with view_get if it helps, check it against the data now, and answer again.`;
+            return `  Answered before: view ${v.id} ("${v.data.question}"). Its blocks are live and nothing it was written from changed; if it still answers this, link it instead of building a new view: apply an update to request ${r.id} with {status: "answered", answerViewId: "${v.id}"}.`;
           }),
       ]
         .filter(Boolean)
@@ -605,8 +614,9 @@ export function answerBrief(
     'A request marked "Refresh this answer" (mode "refresh") says the data behind an earlier',
     'answer view changed since it was written. Answer the question again in that same view: read it',
     'with view_get, then view_update with its revision as expectedRevision, the requestId and the',
-    'new widgets (check every number and sentence against the data now), and a one-sentence reply',
-    'saying what changed. Never link an answer that is marked stale.',
+    'whole page as new widgets (check every number and sentence against the data now; ops or a',
+    'rename are refused), and a one-sentence reply saying what changed. Never link an answer that',
+    'is marked stale or unknown.',
     '',
     'People use Ask for three things. Work out which one each request is:',
     '- A question about the project: answer it with view_answer (pass the requestId).',

@@ -123,6 +123,21 @@ describe('changed since you looked (R11.4)', () => {
     });
   });
 
+  it('a page made later counts from its own start', () => {
+    const { store, projectId, tasks, setTask } = setup();
+    changedViews(store);
+    setTask(agent, tasks.blocked, { status: 'todo' });
+    const made = createView(store, agent, {
+      projectId,
+      name: 'New',
+      message: 'New page',
+      widgets: [{ id: 'all', node: { component: 'TaskTable' } }],
+    }).view.id;
+    const changed = projectFreshness(store, projectId).views[made]!.changed!;
+    expect(changed.total).toBe(1);
+    expect(changed.recent[0]).toMatchObject({ page: true, items: [] });
+  });
+
   it('opening a view marks it seen; marks only move forward', () => {
     const { store, projectId, blocked, tasks, setTask } = setup();
     changedViews(store);

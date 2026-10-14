@@ -183,7 +183,8 @@ export function projectFreshness(
   const seenOf = (view: Entity<'view'>) =>
     view.id === options.view && options.since !== undefined
       ? options.since
-      : (marks.views[view.id] ?? marks.baseline);
+      : // A view made later counts from its own start: what happened before it existed is no news.
+        Math.max(marks.views[view.id] ?? marks.baseline, view.createdRev - 1);
   const from = Math.min(
     latest,
     ...views.map(seenOf),

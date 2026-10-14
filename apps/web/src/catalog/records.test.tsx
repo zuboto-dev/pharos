@@ -61,8 +61,14 @@ describe('money page', () => {
     expect(text).not.toMatch(/failed to render|Unknown component/);
     // Groceries: three shops this month against a €400 plan.
     expect(text).toContain('€237.75 of €400.00');
-    // A game paid in dollars is never converted.
-    expect(text).toContain('$25.00 of €100.00');
+    // A game paid in dollars is never converted, and never looks counted against a euro plan
+    // (v0.2 A6): it is shown apart.
+    expect(text).not.toContain('$25.00 of €100.00');
+    expect(text).toContain('Fun€0.00 of €100.00€100.00 left · $25.00 in USD not counted');
+    expect(text).toContain('Total€440.04 of €850.00$25.00 in USD not counted');
+    expect(screen.getByRole('meter', { name: /^Fun:/ }).getAttribute('aria-label')).toBe(
+      'Fun: €0.00 of €100.00, $25.00 in USD not counted',
+    );
     expect(text).toContain('€3,200.00');
     expect(text).toMatch(/of €5,000\.00 · 64%/);
     expect(text).toMatch(/Streaming.*Past due|Past due.*Streaming/);

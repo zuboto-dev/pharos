@@ -30,9 +30,10 @@ import { AddFilesActions, EmptyState, FILES_HINT } from '../empty-state';
 import { Badge, BUTTON } from '../ui';
 import { GlanceDate } from '../../files/glance';
 import { PlayButton, isAudio } from '../../files/audio';
+import { useOpenFile } from '../../files/viewer-context';
 
 // The project's files (docs/reframe/roadmap-2.md §3): find a named document fast and open it in
-// the file drawer (preview, details, actions). Grouped by kind, with a name search and filters
+// the file viewer (preview, actions, details on request; v0.2 A6). Grouped by kind, with a name search and filters
 // for kind, tag, issuer and expiry. Keyboard: ↓ from the search moves into the list, ↑ ↓ move
 // between files, Enter opens one (Enter in the search opens the first match). With `showIn`
 // naming a FileView on the same board, a row shows its file there instead (R7.11).
@@ -106,6 +107,7 @@ function FileRow({
   today,
   onOpen,
   shown,
+  list,
 }: {
   file: FileEntity;
   /** What follows the title; by default the glance: the one date that matters (v0.2 B2). */
@@ -116,6 +118,8 @@ function FileRow({
   onOpen?: () => void;
   /** The file is the one that FileView shows now. */
   shown?: boolean;
+  /** The files shown in the list, in order: the viewer's ← → step through them (v0.2 A6). */
+  list: readonly string[];
 }) {
   const d = file.data;
   const { entityById } = useViewData();
@@ -133,6 +137,7 @@ function FileRow({
       id={file.id}
       title={fileName(d.path)}
       onOpen={onOpen}
+      list={list}
       pressed={onOpen ? !!shown : undefined}
       className={clsx(
         'flex items-start gap-2.5 rounded-control px-1.5 py-2',
@@ -210,10 +215,12 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
   const [expiry, setExpiry] = useState<ExpiryFilter>('');
   const [list, setList] = useState<HTMLDivElement | null>(null);
   const boardFiles = useBoardFiles();
-  // A FileView on the same board to show tapped files in; else rows open the drawer.
+  const viewFile = useOpenFile();
+  // A FileView on the same board to show tapped files in; else rows open the file viewer, which
+  // steps through the files shown (v0.2 A6).
   const target = node.showIn && boardFiles?.has(node.showIn) ? node.showIn : undefined;
   const openFile = (fileId: string) => {
-    if (!target) return data.actions.open({ entity: fileId });
+    if (!target) return viewFile(fileId, listed);
     boardFiles!.show(target, fileId);
     const widget = document.querySelector<HTMLElement>(`[data-widget="${CSS.escape(target)}"]`);
     // On a phone the FileView sits below the list: bring it into view.
@@ -283,6 +290,9 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
     const rest = shown.filter((f) => !values.has(f.data.kind));
     if (rest.length) groups.push({ label: 'Other', files: rest });
   }
+
+  // The files as listed, group by group: the order the viewer's ← → follow.
+  const listed = groups.flatMap((g) => g.files.map((f) => f.id));
 
   const filters = [
     controls.has('kind') && kinds.length > 1 && (
@@ -408,6 +418,7 @@ export function FileList({ node }: { node: NodeOf<'FileList'> }) {
                     today={today}
                     onOpen={target ? () => openFile(file.id) : undefined}
                     shown={shownId === file.id}
+                    list={listed}
                   />
                   {/* Audio plays in place (R9), beside the row rather than inside its button. */}
                   {isAudio(file.data.path) && (

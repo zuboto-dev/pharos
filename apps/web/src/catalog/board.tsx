@@ -21,6 +21,7 @@ import { EXIT_MS } from '../lib/motion';
 import { GAP, minColumnsOf, snapHeight, snapWidth, startColumn, type Box } from './layout';
 import { BoardActionsProvider } from './action-board';
 import { BoardFilesProvider, WidgetIdProvider } from './board-files';
+import { FileViewerProvider } from '../files/FileViewer';
 import { AskHereProvider } from './empty-state';
 import { useViewData } from './context';
 import { useLiveBoard } from './live';
@@ -101,13 +102,16 @@ const NEVER_QUIET = () => false;
  * edges), and removed. Every change is reported through `onChange` as a whole new board.
  */
 export function BoardView(props: BoardProps) {
-  // FileLists can show a file in a FileView on the same board (R7.11).
+  // FileLists can show a file in a FileView on the same board (R7.11); otherwise files open in
+  // the file viewer, the page's own when there is one (v0.2 A6).
   return (
-    <BoardFilesProvider widgets={props.board.widgets}>
-      <BoardActionsProvider viewId={props.view?.id} widgets={props.board.widgets}>
-        <BoardGrid {...props} />
-      </BoardActionsProvider>
-    </BoardFilesProvider>
+    <FileViewerProvider>
+      <BoardFilesProvider widgets={props.board.widgets}>
+        <BoardActionsProvider viewId={props.view?.id} widgets={props.board.widgets}>
+          <BoardGrid {...props} />
+        </BoardActionsProvider>
+      </BoardFilesProvider>
+    </FileViewerProvider>
   );
 }
 

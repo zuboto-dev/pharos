@@ -267,7 +267,7 @@ export const FILE_LIST_DETAILS = [
 
 export const FileListNode = component(
   'FileList',
-  "Files from the owner's folders added to this project, grouped by kind; a row opens the file drawer (preview, details, actions).",
+  "Files from the owner's folders added to this project, grouped by kind; a row opens the file viewer (preview, actions, details).",
   {
     filter: Filter.optional().describe(
       'Which files, e.g. {"where": {"tags": "tax-2025"}} or expiring soon {"where": {"expiryDate": {"lte": "$today+60d"}}}',
@@ -290,7 +290,7 @@ export const FileListNode = component(
       .min(1)
       .optional()
       .describe(
-        'Id of a FileView widget on the same board: tapping a row shows that file there instead of opening the drawer',
+        'Id of a FileView widget on the same board: tapping a row shows that file there instead of opening the viewer',
       ),
   },
 );

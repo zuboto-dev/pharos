@@ -205,7 +205,7 @@
   "cases": [
     {
       "id": "money-planned-vs-spent",
-      "version": 1,
+      "version": 2,
       "pack": "money",
       "description": "Planned against spent per category this month, with an overspent category, spending without a category and the totals",
       "tags": ["categories", "sum", "month"],
@@ -226,7 +226,19 @@
           "kind": "category",
           "category": "Eating out",
           "planned": [{ "amount": 12000, "currency": "EUR" }],
-          "spent": [{ "amount": 13480, "currency": "EUR" }]
+          "spent": [{ "amount": 13480, "currency": "EUR" }],
+          "left": { "amount": -1480, "currency": "EUR" },
+          "notCounted": []
+        },
+        {
+          "id": "fun-other-currency",
+          "widget": "categories",
+          "kind": "category",
+          "category": "Fun",
+          "planned": [{ "amount": 10000, "currency": "EUR" }],
+          "spent": [{ "amount": 2500, "currency": "USD" }],
+          "left": { "amount": 10000, "currency": "EUR" },
+          "notCounted": [{ "amount": 2500, "currency": "USD" }]
         },
         {
           "id": "other",
@@ -245,7 +257,8 @@
           "spent": [
             { "amount": 50004, "currency": "EUR" },
             { "amount": 2500, "currency": "USD" }
-          ]
+          ],
+          "notCounted": [{ "amount": 2500, "currency": "USD" }]
         },
         {
           "id": "headline-spent",

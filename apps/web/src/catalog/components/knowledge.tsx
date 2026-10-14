@@ -21,6 +21,7 @@ import { useViewData, type ViewData } from '../context';
 import { useOptions } from '../options';
 import { Popover, usePopover } from '../popover';
 import { LinkedFiles } from '../linked-files';
+import { useOpenFile } from '../../files/viewer-context';
 import { LocalSourcePath, linkedFileOf } from '../source-file';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
 import { AskAgentButton, EmptyState } from '../empty-state';
@@ -123,6 +124,7 @@ function quoteSourceOf(byId: ViewData['entityById'], claim: Claim): Artifact | u
  */
 function SourceTitle({ source, onOpen }: { source: Artifact; onOpen?: () => void }) {
   const { actions, entityById } = useViewData();
+  const openFile = useOpenFile();
   if (isHttp(source.data.uri)) return <Uri uri={source.data.uri}>{source.data.title}</Uri>;
   const fileId = linkedFileOf(entityById, source);
   return (
@@ -131,7 +133,8 @@ function SourceTitle({ source, onOpen }: { source: Artifact; onOpen?: () => void
       onClick={(e) => {
         e.stopPropagation();
         onOpen?.();
-        actions.open({ entity: fileId ?? source.id });
+        if (fileId) openFile(fileId);
+        else actions.open({ entity: source.id });
       }}
       className="inline-flex min-w-0 items-center gap-1 rounded-sm text-left text-xs text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
     >

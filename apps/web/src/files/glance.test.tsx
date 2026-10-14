@@ -79,7 +79,7 @@ describe('FileList at a glance', () => {
     return open;
   }
 
-  it('shows each file’s icon, name and one date by default, and opens its details', () => {
+  it('shows each file’s icon, name and one date by default, and opens it in the viewer', () => {
     const open = renderList({});
     const row = screen.getByText(cert!.data.title).closest<HTMLElement>('[role="button"]')!;
     const expected = glanceDateOf(cert!.data)!.text;
@@ -89,7 +89,8 @@ describe('FileList at a glance', () => {
     if (cert!.data.issuer) expect(row.textContent).not.toContain(cert!.data.issuer);
     expect(row.querySelector('svg')).toBeTruthy();
     fireEvent.click(row);
-    expect(open).toHaveBeenCalledWith({ entity: cert!.id });
+    expect(screen.getByRole('dialog', { name: cert!.data.title })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('still shows the details an agent asked for', () => {

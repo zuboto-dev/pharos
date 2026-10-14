@@ -210,7 +210,10 @@ describe('Gallery', () => {
   });
 });
 
-describe('Gallery lightbox', () => {
+/** The viewer's picture area, where swipes land. */
+const stage = (dialog: HTMLElement) => dialog.querySelector<HTMLElement>('[data-viewer-stage]')!;
+
+describe('Gallery lightbox (the file viewer, v0.2 A6)', () => {
   const openFirst = () => {
     show(gallery({ artifacts: { where: { id: ['art_cards', 'art_stepper'] } } }));
     const opener = screen.getByRole('button', { name: /Three cards .*open large/ });
@@ -269,8 +272,8 @@ describe('Gallery lightbox', () => {
 
   it('shows the file actions for a picture that is a project file, and swipes on phones', async () => {
     const { dialog } = openFirst();
-    fireEvent.touchStart(dialog.children[1]!, { touches: [{ clientX: 300 }] });
-    fireEvent.touchEnd(dialog.children[1]!, { changedTouches: [{ clientX: 100 }] });
+    fireEvent.touchStart(stage(dialog), { touches: [{ clientX: 300 }] });
+    fireEvent.touchEnd(stage(dialog), { changedTouches: [{ clientX: 100 }] });
     const now = screen.getByRole('dialog');
     expect(now.getAttribute('aria-label')).toBe('Stepper');
     expect(await within(now).findByRole('link', { name: /Download/ })).toBeTruthy();
@@ -278,8 +281,8 @@ describe('Gallery lightbox', () => {
 
   it('closes when swiped down on a phone (v0.2 B9)', async () => {
     const { dialog } = openFirst();
-    fireEvent.touchStart(dialog.children[1]!, { touches: [{ clientX: 200, clientY: 200 }] });
-    fireEvent.touchEnd(dialog.children[1]!, { changedTouches: [{ clientX: 210, clientY: 340 }] });
+    fireEvent.touchStart(stage(dialog), { touches: [{ clientX: 200, clientY: 200 }] });
+    fireEvent.touchEnd(stage(dialog), { changedTouches: [{ clientX: 210, clientY: 340 }] });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
@@ -287,7 +290,9 @@ describe('Gallery lightbox', () => {
     const open = vi.fn();
     show(gallery({ artifacts: { where: { id: ['art_cards'] } } }), { open });
     fireEvent.click(screen.getByRole('button', { name: /open large/ }));
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Details' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Item details' }),
+    );
     expect(open).toHaveBeenCalledWith({ entity: 'art_cards' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });

@@ -89,8 +89,10 @@ describe('FileView', () => {
     expect(screen.getByRole('link', { name: 'Download' }).getAttribute('href')).toBe(
       '/api/files/file_fixture2/download',
     );
+    // Its title opens the file viewer (v0.2 A6), not the drawer.
     fireEvent.click(row('Office lease'));
-    expect(open).toHaveBeenCalledWith({ entity: 'file_fixture2' });
+    expect(screen.getByRole('dialog', { name: 'Office lease' })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('gives a full FileView a taller preview', async () => {
@@ -148,10 +150,11 @@ describe('FileList with showIn', () => {
     expect(listRow('Office lease').getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('keeps opening the drawer when showIn names no FileView', () => {
+  it('opens the file viewer when showIn names no FileView (v0.2 A6)', () => {
     renderBoard([{ id: 'papers', node: { component: 'FileList', showIn: 'nowhere' } }]);
     fireEvent.click(row('Office lease'));
-    expect(open).toHaveBeenCalledWith({ entity: 'file_fixture2' });
+    expect(screen.getByRole('dialog', { name: 'Office lease' })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
     expect(row('Office lease').hasAttribute('aria-pressed')).toBe(false);
   });
 });

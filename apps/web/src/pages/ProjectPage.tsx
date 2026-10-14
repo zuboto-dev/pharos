@@ -45,6 +45,7 @@ import { FolderRequestNotice } from '../files/FolderRequests';
 import { ExpiryNotice } from '../files/expiry-notice';
 import { dismissAnswer, keepAnswer } from './answers';
 import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboarding';
+import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ViewRenderer } from '../catalog/renderer';
@@ -191,6 +192,15 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     reveal.current = null;
   }, [dataset.version]);
   const { reload } = dataset;
+  // Freshness (R11): what changed since the reader last looked at the open view, and whether an
+  // agent's page is stale. Opening the view marks it seen.
+  const shownViewId = filesPage
+    ? undefined
+    : (viewId ??
+      (dataset.data
+        ? sortViews(dataset.data.views.filter((v) => !v.data.archived && !isExpired(v)))[0]?.id
+        : undefined));
+  const freshness = usePageFreshness(projectId, shownViewId);
   // When the owner last changed something from this page: the reload that follows isn't a live
   // update, so the blocks it changes aren't marked (v0.2 B4).
   const ownChangeAt = useRef(0);
@@ -527,6 +537,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         {!editing && <ExpiryNotice />}
         {filesPage && <FilesPage onAdded={reload} />}
         {active && !editing && <ViewUpdated view={active} />}
+        {active && !editing && <WhatChanged freshness={freshness} />}
         {editing && (
           <p className="text-xs text-muted">
             <span className="hidden md:inline">
@@ -541,6 +552,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           </p>
         )}
         {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
+        {active && !editing && <EvidenceNote view={active} freshness={freshness} />}
         {!filesPage &&
           active?.data.kind !== 'answer' &&
           !editing &&

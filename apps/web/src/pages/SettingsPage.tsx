@@ -29,6 +29,8 @@ type ServerSettings = {
   mcpUrl: string;
   projects: number;
   revisions: number;
+  /** Running as the launchd background service (pnpm service). */
+  service?: boolean;
 };
 
 const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
@@ -122,11 +124,13 @@ function Switch({
   checked,
   disabled,
   label,
+  describedBy,
   onChange,
 }: {
   checked: boolean;
   disabled?: boolean;
   label: string;
+  describedBy?: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -135,6 +139,7 @@ function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={describedBy}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={clsx(
@@ -152,8 +157,14 @@ function Switch({
   );
 }
 
-/** One line on what the answering agent is doing, or why it isn't. */
-function agentSummary(agent: AgentStatus): { text: string; tone: 'green' | 'amber' | 'muted' } {
+/**
+ * One line on what the answering agent is really doing, or why it isn't (R11, W7): a pause stops
+ * the run in progress, so "Paused" is only shown once nothing runs.
+ */
+export function agentSummary(agent: AgentStatus): {
+  text: string;
+  tone: 'green' | 'amber' | 'muted';
+} {
   if (agent.mode === 'off')
     return { text: 'Off: PHAROS_AGENT_COMMAND=off is set on the server', tone: 'muted' };
   if (!agent.configured)
@@ -161,10 +172,60 @@ function agentSummary(agent: AgentStatus): { text: string; tone: 'green' | 'ambe
       text: 'Not set up: install Claude Code, or set PHAROS_AGENT_COMMAND, then restart the server',
       tone: 'muted',
     };
-  if (!agent.enabled)
-    return { text: 'Paused: questions wait for you or your agent', tone: 'amber' };
-  if (agent.running) return { text: 'Answering now…', tone: 'green' };
+  const asked = agent.run?.requestIds.length;
+  if (agent.state === 'stopping' || (agent.running && agent.paused))
+    return {
+      text: `Pausing: the run answering ${asked ? plural(asked, 'question') : 'questions'} was told to stop and is ending; its questions stay open`,
+      tone: 'amber',
+    };
+  if (!agent.enabled || agent.paused) {
+    const stopped = agent.lastRun?.stopped;
+    return {
+      text: stopped
+        ? 'Paused: the last run was stopped and nothing is running. Questions wait for you or your agent'
+        : 'Paused: nothing is running. Questions wait for you or your agent',
+      tone: 'amber',
+    };
+  }
+  if (agent.running)
+    return {
+      text: `Answering ${asked ? plural(asked, 'question') : 'questions'} now${agent.run ? `, started ${timeAgo(agent.run.startedAt)}` : ''}…`,
+      tone: 'green',
+    };
+  if (agent.state === 'queued' || agent.queued.length)
+    return { text: 'On: new questions are queued for the next run', tone: 'green' };
   return { text: 'On: new questions are answered automatically', tone: 'green' };
+}
+
+/** How the last run ended, in words. */
+export function lastRunText(run: NonNullable<AgentStatus['lastRun']>): string {
+  const outcome =
+    run.outcome ??
+    (run.stopped
+      ? 'stopped'
+      : run.timedOut
+        ? 'timed_out'
+        : run.exitCode === 0
+          ? 'finished'
+          : 'failed');
+  const questions = run.requestIds?.length ? ` (${plural(run.requestIds.length, 'question')})` : '';
+  switch (outcome) {
+    case 'stopped':
+      return `stopped when answering was paused${questions}; its questions stay open`;
+    case 'timed_out':
+      return `timed out${questions}; unanswered questions stay open`;
+    case 'finished':
+      return `finished${questions}`;
+    default:
+      return `failed${run.exitCode !== null ? ` (exit ${run.exitCode})` : ''}${questions}; unanswered questions stay open, see the log`;
+  }
+}
+
+/** Why the switch can't be turned on, beside it (W7.10). */
+function switchHint(agent: AgentStatus): string | null {
+  if (agent.mode === 'off') return 'Turned off on the server';
+  if (!agent.configured) return 'No agent is set up on this server';
+  return null;
 }
 
 const TONES = {
@@ -178,6 +239,7 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const summary = agentSummary(agent);
+  const hint = switchHint(agent);
   const report = (err: unknown) =>
     setError(err instanceof ApiError ? err.message : 'Couldn’t reach the server');
 
@@ -213,16 +275,24 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
       description="When someone uses Ask in a view, an agent on this computer answers with a view. Each answer uses that agent's model and counts toward its usage; the cost depends on the agent and model."
     >
       <div className="flex items-start justify-between gap-4">
-        <p className="flex items-center gap-2 text-sm">
+        <p className="flex items-center gap-2 text-sm" role="status" aria-live="polite">
           <span className={clsx('size-2 shrink-0 rounded-full', TONES[summary.tone])} />
           {summary.text}
         </p>
-        <Switch
-          label="Answer questions automatically"
-          checked={agent.configured && agent.enabled}
-          disabled={!agent.configured}
-          onChange={(on) => void setEnabled(on)}
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          {hint && (
+            <span id="agent-switch-hint" className="text-xs text-muted">
+              {hint}
+            </span>
+          )}
+          <Switch
+            label="Answer questions automatically"
+            checked={agent.configured && agent.enabled}
+            disabled={!agent.configured}
+            describedBy={hint ? 'agent-switch-hint' : undefined}
+            onChange={(on) => void setEnabled(on)}
+          />
+        </div>
       </div>
       {agent.configured && agent.enabled && waiting > 0 && !agent.running && (
         <div className="flex flex-wrap items-center gap-3 rounded-tile bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
@@ -251,13 +321,7 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
         {agent.lastRun && (
           <Row label="Last run">
             {timeAgo(agent.lastRun.startedAt)} · {Math.round(agent.lastRun.durationMs / 1000)}s ·{' '}
-            {agent.lastRun.stopped
-              ? 'stopped when answering was paused'
-              : agent.lastRun.timedOut
-                ? 'timed out'
-                : agent.lastRun.exitCode === 0
-                  ? 'finished'
-                  : `failed (exit ${agent.lastRun.exitCode})`}
+            {lastRunText(agent.lastRun)}
           </Row>
         )}
         {agent.logPath && (
@@ -673,8 +737,19 @@ export function SettingsPage() {
             </Row>
             <Row label="Server">
               <span className="tabular-nums">Port {s.port}</span>
-              <span className="text-muted"> · change it with </span>
-              <code>PORT</code>
+              {s.service ? (
+                <span className="text-muted">
+                  {' '}
+                  · running as the background service: change it with <code>PORT</code> and run{' '}
+                  <code>pnpm service install</code> again
+                </span>
+              ) : (
+                <>
+                  <span className="text-muted"> · change it with </span>
+                  <code>PORT</code>
+                  <span className="text-muted"> when starting the server</span>
+                </>
+              )}
             </Row>
             <Row label="MCP endpoint">
               <Copyable label="MCP endpoint" text={s.mcpUrl} />

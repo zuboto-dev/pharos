@@ -26,6 +26,8 @@ import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
 import { usePresence } from '../lib/events';
+import { useChangedViews } from '../lib/freshness';
+import { CHANGED_TEXT, ChangedDot } from './freshness';
 import { ApiError, getJson, postJson } from '../lib/api';
 import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
@@ -241,6 +243,8 @@ const MORE =
 export function Sidebar() {
   // Projects an agent is working in right now (v0.2 B5): a pulsing halo on the status dot.
   const presence = usePresence();
+  // Projects with views changed since the reader last looked (R11).
+  const changedViews = useChangedViews().projects;
   const ws = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
@@ -486,6 +490,15 @@ export function Sidebar() {
               </span>
               <span className="truncate">{project.data.name}</span>
               {agents.length > 0 && <span className="sr-only"> ({workingLine(agents, 'it')})</span>}
+              {changedViews[project.id]?.length ? (
+                <>
+                  <ChangedDot className="shrink-0" />
+                  <span className="sr-only">
+                    {' '}
+                    ({plural(changedViews[project.id]!.length, 'view')} {CHANGED_TEXT})
+                  </span>
+                </>
+              ) : null}
               {inPinned && project.data.repositoryId && (
                 <span className="ml-auto truncate text-xs text-faint">
                   {repositoryById.get(project.data.repositoryId)?.data.name}

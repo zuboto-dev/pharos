@@ -262,14 +262,73 @@ export function fieldReader(data: ProjectDataset, context: QueryContext = {}) {
   return (entity: Entity, path: string) => resolveField(entity, path, run);
 }
 
+type FilterPart = Pick<Filter, 'where' | 'anyOf'>;
+
 /**
  * Whether one entity passes a filter's `where` and `anyOf` (not its sort or limit), following
  * references through `data` (R11: which changes touch what a block shows). The entity may be an
- * earlier version of one in `data`.
+ * earlier version of one in `data`. The matcher also answers what read tracking asks about the
+ * dataset it was made from: who links to an item, and what a whole query selects.
  */
-export function filterMatcher(data: ProjectDataset, context: QueryContext = {}) {
+export type FilterMatcher = ((entity: Entity, filter?: FilterPart) => boolean) & {
+  readonly data: ProjectDataset;
+  /** The day "$today" means for this matcher. */
+  readonly today: string;
+  /** Any item of the dataset by id (views and requests aside). */
+  lookup(id: string): Entity | undefined;
+  /** The items (views, requests and the project aside) whose data links to `id`. */
+  referrers(id: string): Entity[];
+  /** Runs `fn` with `version` standing in for item `id` (null: as if it didn't exist). */
+  withVersion<T>(id: string, version: Entity | null, fn: () => T): T;
+  /**
+   * Whether the whole query (sort, onePer and limit included) selects item `id`, with
+   * `replace` standing in for one item of the dataset.
+   */
+  selects(
+    type: QueryableType,
+    filter: Filter,
+    id: string,
+    replace?: { type: EntityType; id: string; version: Entity | null },
+  ): boolean;
+};
+
+/** Every string an item's data holds, a few levels deep: the ids it links to among them. */
+function linksOf(value: unknown, out: Set<string>, depth = 0): void {
+  if (typeof value === 'string') out.add(value);
+  else if (depth >= 4 || !value || typeof value !== 'object') return;
+  else
+    for (const v of Array.isArray(value) ? value : Object.values(value)) linksOf(v, out, depth + 1);
+}
+
+/** The dataset with one item replaced (or removed, or added). */
+function replacedIn(
+  data: ProjectDataset,
+  type: EntityType,
+  id: string,
+  version: Entity | null,
+): ProjectDataset {
+  if (type === 'project')
+    return version ? { ...data, project: version as Entity<'project'> } : data;
+  const key: keyof ProjectDataset | undefined =
+    type === 'assignee' ? 'assignees' : DATASET_KEYS[type as QueryableType];
+  if (!key) return data;
+  const list = ((data[key] ?? []) as Entity[]).filter((e) => e.id !== id);
+  return { ...data, [key]: version ? [...list, version] : list };
+}
+
+export function filterMatcher(data: ProjectDataset, context: QueryContext = {}): FilterMatcher {
   const run = newRun(data, context);
-  return (entity: Entity, filter: Pick<Filter, 'where' | 'anyOf'> = {}): boolean => {
+  let all: Map<string, Entity> | undefined;
+  let back: Map<string, Entity[]> | undefined;
+  const everything = () => {
+    if (!all) {
+      all = new Map(run.byId);
+      for (const key of [...Object.values(DATASET_KEYS), 'assignees'] as const)
+        for (const e of (data[key] ?? []) as Entity[]) all.set(e.id, e);
+    }
+    return all;
+  };
+  const match = (entity: Entity, filter: FilterPart = {}): boolean => {
     // An earlier version of a record may be due on another date: work it out again.
     run.due.clear();
     return (
@@ -277,6 +336,46 @@ export function filterMatcher(data: ProjectDataset, context: QueryContext = {}) 
       (!filter.anyOf?.length || filter.anyOf.some((w) => matches(entity, w, run)))
     );
   };
+  return Object.assign(match, {
+    data,
+    today: run.today,
+    lookup: (id: string) => everything().get(id),
+    referrers(id: string): Entity[] {
+      if (!back) {
+        back = new Map();
+        for (const e of everything().values()) {
+          if (e.type === 'project') continue;
+          const links = new Set<string>();
+          linksOf(e.data, links);
+          links.delete(e.id);
+          for (const link of links) back.set(link, [...(back.get(link) ?? []), e]);
+        }
+      }
+      return back.get(id) ?? [];
+    },
+    withVersion<T>(id: string, version: Entity | null, fn: () => T): T {
+      const had = run.byId.get(id);
+      if (version) run.byId.set(id, version);
+      else run.byId.delete(id);
+      run.due.clear();
+      try {
+        return fn();
+      } finally {
+        if (had) run.byId.set(id, had);
+        else run.byId.delete(id);
+        run.due.clear();
+      }
+    },
+    selects(
+      type: QueryableType,
+      filter: Filter,
+      id: string,
+      replace?: { type: EntityType; id: string; version: Entity | null },
+    ): boolean {
+      const set = replace ? replacedIn(data, replace.type, replace.id, replace.version) : data;
+      return runQuery(set, type, filter, { today: run.today }).some((e) => e.id === id);
+    },
+  });
 }
 
 /** When a repeating record is due next, as DueTracker and the "due.*" paths see it. */

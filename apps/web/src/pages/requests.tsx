@@ -204,6 +204,8 @@ export function AskDialog({
 export function requestRunState(
   requestId: string,
   agent: AgentStatus,
+  /** The question's project: "queued" only when the agent really queued it (R11 review, gap 8). */
+  projectId?: string,
 ): { kind: 'running' | 'queued' | 'failed' | 'waiting'; text: string; retry?: boolean } {
   if (agent.run?.requestIds.includes(requestId))
     return agent.state === 'stopping' || agent.paused
@@ -225,7 +227,12 @@ export function requestRunState(
       text: 'The last run ended without answering it',
       retry: agent.configured && agent.enabled,
     };
-  if (agent.configured && agent.enabled) return { kind: 'queued', text: 'Queued for the next run' };
+  if (agent.configured && agent.enabled) {
+    const queued = projectId ? agent.queued.includes(projectId) : agent.state === 'queued';
+    if (queued) return { kind: 'queued', text: 'Queued for the next run' };
+    // Answering is on but no run is set for it (e.g. it was asked before the server restarted).
+    return { kind: 'waiting', text: 'Waiting: no run is set for it yet', retry: true };
+  }
   if (agent.configured && agent.paused)
     return { kind: 'waiting', text: 'Answering is paused: waits for you or your agent' };
   return { kind: 'waiting', text: 'Waits for your agent' };
@@ -258,7 +265,8 @@ export function RequestsButton({
   if (!requests.some((r) => r.data.status !== 'dismissed')) return null;
   // The server's agent picks up open questions on its own when one is configured.
   const working = agent.answering.includes(projectId) && open.length > 0;
-  const waiting = open.length > 0 && agent.configured && agent.enabled && !working;
+  // "Shortly" only when the agent really queued this project (R11 review, gap 8).
+  const waiting = open.length > 0 && agent.enabled && agent.queued.includes(projectId) && !working;
   return (
     <>
       <Tip label="Questions" align="end">
@@ -318,7 +326,7 @@ export function RequestsButton({
                       {timeAgo(r.createdAt)}
                     </div>
                     <RunState
-                      state={requestRunState(r.id, agent)}
+                      state={requestRunState(r.id, agent, projectId)}
                       busy={retrying === r.id}
                       onRetry={() => retry(r.id)}
                     />

@@ -275,12 +275,28 @@ describe('evidence and stale answers (R11.3, R11.5, R11.6)', () => {
       /Refresh this answer[\s\S]*changed since: task "Fix login"/,
     );
     const view = store.getOfType('view', id);
+    // A rename or ops don't answer a refresh (R11 review, gap 2): the whole page does.
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        expectedRevision: view.updatedRev,
+        requestId: req,
+        message: 'Answer again',
+        ops: [{ op: 'update', id: 'lead', set: { content: 'Nothing is blocked.' } }],
+      }),
+    ).toThrow(/whole page as widgets/);
     updateView(store, agent, {
       viewId: id,
       expectedRevision: view.updatedRev,
       requestId: req,
       message: 'Answer again',
-      ops: [{ op: 'update', id: 'lead', set: { content: 'Nothing is blocked.' } }],
+      widgets: [
+        { id: 'lead', node: { component: 'Text', content: 'Nothing is blocked.' } },
+        {
+          id: 'list',
+          node: { component: 'TaskTable', filter: { where: { status: 'blocked' } } },
+        },
+      ],
     });
     expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');
     expect(store.getOfType('request', req).data.status).toBe('answered');
@@ -314,5 +330,125 @@ describe('evidence and stale answers (R11.3, R11.5, R11.6)', () => {
       views: { id: string; evidence?: string }[];
     };
     expect(snapshot.views.find((v) => v.id === id)?.evidence).toBe('stale');
+  });
+});
+
+describe('R11 fix round (F2)', () => {
+  it('an answer that reads no data has unknown evidence and is not offered for linking', () => {
+    const { store, projectId } = setup();
+    const id = answerView(store, agent, {
+      projectId,
+      question: 'What is blocked?',
+      widgets: [{ id: 'lead', node: { component: 'Text', content: 'Fix login is blocked.' } }],
+    }).view.id;
+    expect(projectFreshness(store, projectId).views[id]!.evidence).toEqual({
+      unknown: true,
+      reason: 'no_data',
+    });
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('unknown');
+    store.apply(me, {
+      message: 'Ask',
+      operations: [
+        { op: 'create', type: 'request', data: { projectId, question: 'What is blocked?' } },
+      ],
+    });
+    const brief = answerBrief(store, [projectId]);
+    expect(brief).toContain(`view ${id}`);
+    expect(brief).toContain("can't tell whether what it says still holds");
+    expect(brief).not.toContain(`answerViewId: "${id}"`);
+  });
+
+  it('a Refresh is answered only by rebuilding its page; it can still be dismissed', () => {
+    const { store, projectId, tasks, setTask } = setup();
+    const id = answerView(store, agent, {
+      projectId,
+      question: 'What is blocked?',
+      widgets: [
+        { id: 'list', node: { component: 'TaskTable', filter: { where: { status: 'blocked' } } } },
+      ],
+    }).view.id;
+    setTask(me, tasks.blocked, { status: 'done' });
+    const req = store.apply(me, {
+      message: 'Refresh',
+      operations: [
+        {
+          op: 'create',
+          type: 'request',
+          data: { projectId, question: 'What is blocked?', viewId: id, mode: 'refresh' },
+        },
+      ],
+    }).created['0']!;
+    for (const author of [agent, me])
+      expect(() =>
+        store.apply(author, {
+          message: 'Link it',
+          operations: [
+            {
+              op: 'update',
+              type: 'request',
+              id: req,
+              data: { status: 'answered', answerViewId: id },
+            },
+          ],
+        }),
+      ).toThrow(/answered by writing view/);
+    store.apply(agent, {
+      message: 'Dismiss',
+      operations: [
+        {
+          op: 'update',
+          type: 'request',
+          id: req,
+          data: { status: 'dismissed', reply: 'Nothing to refresh.' },
+        },
+      ],
+    });
+    expect(store.getOfType('request', req).data.status).toBe('dismissed');
+  });
+
+  it('a dated page written yesterday stays fresh while today selects the same items', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-10-12T12:00:00'));
+      const { store, projectId } = setup();
+      const id = answerView(store, agent, {
+        projectId,
+        question: 'What is due today?',
+        widgets: [
+          {
+            id: 'due',
+            node: { component: 'TaskTable', filter: { where: { dueDate: '$today' } } },
+          },
+        ],
+      }).view.id;
+      vi.setSystemTime(new Date('2026-10-13T12:00:00'));
+      expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');
+      // A task due today, added today: by itself it matched on its own day, and the page now
+      // selects other items than on the day it was written.
+      store.apply(me, {
+        message: 'Due now',
+        operations: [
+          {
+            op: 'create',
+            type: 'task',
+            data: { projectId, title: 'Renew', dueDate: '2026-10-13' },
+          },
+        ],
+      });
+      expect(projectFreshness(store, projectId).views[id]!.evidence).toMatchObject({
+        stale: { total: 1, calendar: { from: '2026-10-12', to: '2026-10-13' } },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('repairs a damaged seen setting and accepts an empty seen body', async () => {
+    const { store, projectId, blocked } = setup();
+    store.setSetting(SEEN_SETTING, { baseline: -3, views: { [blocked]: 1.5, other: 'x' } });
+    expect(projectFreshness(store, projectId).views[blocked]!.seen).toBeGreaterThanOrEqual(0);
+    expect(store.setting(SEEN_SETTING)).toEqual({ baseline: store.latestRevisionId(), views: {} });
+    const res = await createApp(store).request(`/api/views/${blocked}/seen`, { method: 'PUT' });
+    expect(res.status).toBe(200);
   });
 });

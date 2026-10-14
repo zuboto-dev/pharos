@@ -1,11 +1,11 @@
 import type { Entity, ProjectDataset, ViewFreshness } from '@pharos/schema';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, type ViewActions } from '../catalog/context';
 import type { AgentStatus } from '../lib/events';
-import { announceChangedViews } from '../lib/freshness';
+import { announceChangedViews, reloadChangedViews, useChangedViews } from '../lib/freshness';
 import { EvidenceNote, WhatChanged, changesSentence, refreshRequest } from './freshness';
 import { requestRunState } from './requests';
 import { agentSummary, lastRunText } from './SettingsPage';
@@ -222,6 +222,50 @@ describe('stale answers (R11.5)', () => {
     );
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeTruthy();
   });
+
+  it('unknown: nothing on the page reads data (R11 fix round)', () => {
+    renderWith(
+      <EvidenceNote
+        view={answer}
+        freshness={{
+          viewId: answer.id,
+          seen: 1,
+          changed: null,
+          evidence: { unknown: true, reason: 'no_data' },
+        }}
+      />,
+    );
+    expect(document.querySelector('[data-evidence="unknown"]')?.textContent).toContain(
+      'nothing on this page reads the project’s data',
+    );
+  });
+
+  it('stale because the date moved on, with no revision (R11 fix round)', () => {
+    renderWith(
+      <EvidenceNote
+        view={answer}
+        freshness={{
+          viewId: answer.id,
+          seen: 1,
+          changed: null,
+          evidence: {
+            revision: 1,
+            at: '2026-10-12T12:00:00Z',
+            stale: {
+              since: 1,
+              total: 0,
+              recent: [],
+              calendar: { from: '2026-10-12', to: '2026-10-13' },
+            },
+          },
+        }}
+      />,
+    );
+    const note = document.querySelector('[data-evidence="stale"]')?.textContent ?? '';
+    expect(note).toContain('May be out of date');
+    expect(note).toContain('the date moved on from');
+    expect(note).toContain('its date-based blocks show other items');
+  });
 });
 
 describe('the changed dot (R11.5)', () => {
@@ -325,7 +369,11 @@ describe('true run states (W7.5)', () => {
         run: { projectIds: ['p'], requestIds: ['r1'], startedAt: now },
       }),
     ).toMatchObject({ kind: 'running' });
-    expect(requestRunState('r2', base)).toMatchObject({ kind: 'queued' });
+    // Queued only when the agent really queued its project (R11 review, gap 8).
+    expect(requestRunState('r2', { ...base, state: 'queued', queued: ['p'] }, 'p')).toMatchObject({
+      kind: 'queued',
+    });
+    expect(requestRunState('r2', base, 'p')).toMatchObject({ kind: 'waiting', retry: true });
     expect(
       requestRunState('r1', {
         ...base,
@@ -343,5 +391,36 @@ describe('true run states (W7.5)', () => {
     expect(
       requestRunState('r1', { ...base, state: 'paused', enabled: false, paused: true }),
     ).toMatchObject({ kind: 'waiting', text: 'Answering is paused: waits for you or your agent' });
+  });
+});
+
+describe('shared changed-dot loads (R11 fix round, gap 7)', () => {
+  it('an older load finishing last never replaces a newer one', async () => {
+    vi.useFakeTimers();
+    try {
+      const pending: ((body: unknown) => void)[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          () =>
+            new Promise<Response>((resolve) =>
+              pending.push((body) => resolve(new Response(JSON.stringify(body)))),
+            ),
+        ),
+      );
+      const seen: string[][] = [];
+      const { result } = renderHook(() => useChangedViews());
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+      act(() => reloadChangedViews(0));
+      await act(async () => vi.advanceTimersByTimeAsync(0));
+      expect(pending).toHaveLength(2);
+      await act(async () => pending[1]!({ latest: 12, projects: { p: ['new'] } }));
+      seen.push(result.current.projects.p ?? []);
+      await act(async () => pending[0]!({ latest: 11, projects: { p: ['old'] } }));
+      seen.push(result.current.projects.p ?? []);
+      expect(seen).toEqual([['new'], ['new']]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

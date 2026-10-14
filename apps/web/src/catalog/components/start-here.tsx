@@ -99,6 +99,8 @@ function Evidence({ items }: { items: readonly EvidenceItem[] }) {
     return [{ entity, title, label: label === title ? undefined : label }];
   });
   if (!shown.length) return null;
+  // Evidence that is a file opens the viewer, whose ← → step through the evidence files (v0.2 A6).
+  const files = shown.filter(({ entity }) => entity.type === 'file').map(({ entity }) => entity.id);
   return (
     <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted">
       <span>Evidence</span>
@@ -119,7 +121,7 @@ function Evidence({ items }: { items: readonly EvidenceItem[] }) {
             key={e.id}
             type="button"
             title={label ? title : undefined}
-            onClick={() => openItem(e.id)}
+            onClick={() => openItem(e.id, files)}
             className="max-w-full truncate rounded-sm text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
           >
             {text}

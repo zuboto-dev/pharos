@@ -3,6 +3,7 @@ import { CalendarClock, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useViewData } from '../catalog/context';
+import { useOpenFile } from './viewer-context';
 import { formatDate, localToday, plural } from '../lib/format';
 
 /**
@@ -42,7 +43,9 @@ function readDismissed(projectId: string): string | null {
 }
 
 export function ExpiryNotice() {
-  const { project, files, actions } = useViewData();
+  const { project, files } = useViewData();
+  // Each opens the file viewer; ← → step through the files listed (v0.2 A6).
+  const openFile = useOpenFile();
   const list = expiringFiles(files ?? [], localToday());
   const signature = list.map((e) => `${e.file.id}:${e.file.data.expiryDate}`).join(',');
   const [dismissed, setDismissed] = useState(() => readDismissed(project.id));
@@ -75,7 +78,12 @@ export function ExpiryNotice() {
             <li key={file.id} className="flex flex-wrap items-baseline gap-x-1.5">
               <button
                 type="button"
-                onClick={() => actions.open({ entity: file.id })}
+                onClick={() =>
+                  openFile(
+                    file.id,
+                    list.slice(0, 3).map((x) => x.file.id),
+                  )
+                }
                 className="min-w-0 truncate text-left font-medium underline decoration-amber-400 underline-offset-2 hover:decoration-amber-700 dark:decoration-amber-700"
               >
                 {file.data.title}

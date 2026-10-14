@@ -39,6 +39,7 @@ import {
   type ViewActions,
 } from '../catalog/context';
 import { DetailDrawer } from '../catalog/drawer';
+import { FileViewerProvider } from '../files/FileViewer';
 import { EmptyState } from '../catalog/empty-state';
 import { FilesPage } from '../files/FilesPage';
 import { FolderRequestNotice } from '../files/FolderRequests';
@@ -444,246 +445,251 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
 
   return (
     <ViewDataProvider data={dataset.data} version={dataset.version} actions={actions}>
-      <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
-        {/* One line at every width (v0.2 B1): the tabs give way (into More), never the icons. */}
-        <div className="flex flex-nowrap items-end gap-2 border-b border-line">
-          <ViewTabs
-            projectId={projectId!}
-            views={dataset.data.views}
-            active={active}
-            onCreated={() => setEditing(true)}
-          />
-          {(active || filesPage) && (
-            <div className="relative mb-1.5 flex shrink-0 items-center gap-1.5">
-              {editing ? (
-                <>
-                  {canReset && (
-                    <Tip label="Reset layout" align="end">
-                      <button
-                        type="button"
-                        onClick={() => void resetToTemplate()}
-                        aria-label="Reset layout"
-                        className={ICON_BUTTON.secondary}
-                      >
-                        <RotateCcw className="size-4" aria-hidden />
-                      </button>
-                    </Tip>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setPicking((p) => !p)}
-                    aria-expanded={picking}
-                    className={BUTTON.secondary}
-                  >
-                    <Plus className="size-3.5" aria-hidden />
-                    <span className="hidden sm:inline">Add widget</span>
-                    <span className="sr-only sm:hidden">Add widget</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(false)}
-                    className={BUTTON.primary}
-                  >
-                    <Check className="size-3.5" aria-hidden /> Done
-                  </button>
-                  {picking && <WidgetPicker onPick={addWidget} onClose={() => setPicking(false)} />}
-                </>
-              ) : (
-                <>
-                  <Tip label={filesPage ? 'Files (open now)' : 'Files'} align="end">
-                    <Link
-                      to={`/projects/${projectId}/files`}
-                      aria-current={filesPage ? 'page' : undefined}
-                      aria-label="Files"
-                      className={filesPage ? ICON_BUTTON.pressed : ICON_BUTTON.secondary}
-                    >
-                      <FolderOpen className="size-4" aria-hidden />
-                    </Link>
-                  </Tip>
-                  <RequestsButton
-                    projectId={projectId!}
-                    requests={dataset.data.requests ?? []}
-                    apply={apply}
-                  />
-                  <Tip label="History" align="end">
+      {/* One file viewer for the page, its Files page and the drawer (v0.2 A6). */}
+      <FileViewerProvider>
+        <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
+          {/* One line at every width (v0.2 B1): the tabs give way (into More), never the icons. */}
+          <div className="flex flex-nowrap items-end gap-2 border-b border-line">
+            <ViewTabs
+              projectId={projectId!}
+              views={dataset.data.views}
+              active={active}
+              onCreated={() => setEditing(true)}
+            />
+            {(active || filesPage) && (
+              <div className="relative mb-1.5 flex shrink-0 items-center gap-1.5">
+                {editing ? (
+                  <>
+                    {canReset && (
+                      <Tip label="Reset layout" align="end">
+                        <button
+                          type="button"
+                          onClick={() => void resetToTemplate()}
+                          aria-label="Reset layout"
+                          className={ICON_BUTTON.secondary}
+                        >
+                          <RotateCcw className="size-4" aria-hidden />
+                        </button>
+                      </Tip>
+                    )}
                     <button
                       type="button"
-                      onClick={() => open({ history: true })}
-                      className={ICON_BUTTON.secondary}
-                      aria-label="History"
+                      onClick={() => setPicking((p) => !p)}
+                      aria-expanded={picking}
+                      className={BUTTON.secondary}
                     >
-                      <History className="size-4" aria-hidden />
+                      <Plus className="size-3.5" aria-hidden />
+                      <span className="hidden sm:inline">Add widget</span>
+                      <span className="sr-only sm:hidden">Add widget</span>
                     </button>
-                  </Tip>
-                  {!filesPage && (
-                    <Tip label="Customize" align="end">
+                    <button
+                      type="button"
+                      onClick={() => setEditing(false)}
+                      className={BUTTON.primary}
+                    >
+                      <Check className="size-3.5" aria-hidden /> Done
+                    </button>
+                    {picking && (
+                      <WidgetPicker onPick={addWidget} onClose={() => setPicking(false)} />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Tip label={filesPage ? 'Files (open now)' : 'Files'} align="end">
+                      <Link
+                        to={`/projects/${projectId}/files`}
+                        aria-current={filesPage ? 'page' : undefined}
+                        aria-label="Files"
+                        className={filesPage ? ICON_BUTTON.pressed : ICON_BUTTON.secondary}
+                      >
+                        <FolderOpen className="size-4" aria-hidden />
+                      </Link>
+                    </Tip>
+                    <RequestsButton
+                      projectId={projectId!}
+                      requests={dataset.data.requests ?? []}
+                      apply={apply}
+                    />
+                    <Tip label="History" align="end">
                       <button
                         type="button"
-                        onClick={() => setEditing(true)}
+                        onClick={() => open({ history: true })}
                         className={ICON_BUTTON.secondary}
-                        aria-label="Customize"
+                        aria-label="History"
                       >
-                        <LayoutGrid className="size-4" aria-hidden />
+                        <History className="size-4" aria-hidden />
                       </button>
                     </Tip>
-                  )}
-                </>
-              )}
+                    {!filesPage && (
+                      <Tip label="Customize" align="end">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(true)}
+                          className={ICON_BUTTON.secondary}
+                          aria-label="Customize"
+                        >
+                          <LayoutGrid className="size-4" aria-hidden />
+                        </button>
+                      </Tip>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          {/* An agent waiting for a folder for this project (R7.12): approve it here. */}
+          <FolderRequestNotice projectId={projectId!} onAnswered={reload} />
+          {/* Files that expired or expire within 60 days (R7.15). */}
+          {!editing && <ExpiryNotice />}
+          {filesPage && <FilesPage onAdded={reload} />}
+          {active && !editing && <ViewUpdated view={active} />}
+          {active && !editing && <WhatChanged freshness={freshness} />}
+          {editing && (
+            <p className="text-xs text-muted">
+              <span className="hidden md:inline">
+                Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
+                (double-click the bottom edge to fit content), use the gear for its settings, or
+                remove it with the cross.
+              </span>
+              <span className="md:hidden">
+                Use ↑ ↓ to move widgets, the gear for settings, and the cross to remove them.
+              </span>{' '}
+              Changes are saved as revisions.
+            </p>
+          )}
+          {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
+          {active && !editing && <EvidenceNote view={active} freshness={freshness} />}
+          {!filesPage &&
+            active?.data.kind !== 'answer' &&
+            !editing &&
+            isEmptyProject(dataset.data) && (
+              <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
+            )}
+          {!filesPage && board.widgets.length === 0 && !editing && (
+            <div className="rounded-block border border-dashed border-line-strong">
+              <EmptyState
+                icon={LayoutGrid}
+                title="This view is empty"
+                hint="Add blocks yourself, or ask your agent to build it (for example, “make this a view of what’s left in the current stage”)."
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(true);
+                    setPicking(true);
+                  }}
+                  className={BUTTON.accent}
+                >
+                  <Plus className="size-3.5" aria-hidden /> Add a block
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAsking({
+                      label: active ? `View “${active.data.name}”` : 'This view',
+                      viewId: active?.id,
+                      question: 'Build this view: ',
+                    })
+                  }
+                  className={BUTTON.secondary}
+                >
+                  <MessageCircleQuestion className="size-3.5" aria-hidden /> Ask an agent
+                </button>
+              </EmptyState>
+            </div>
+          )}
+          {!filesPage && (
+            // A tab switch fades the new view in (opacity only, so nothing shifts).
+            <div key={active?.id} className="animate-fade-in">
+              <ViewRenderer
+                view={active ? { id: active.id, name: active.data.name } : undefined}
+                spec={board}
+                editing={editing}
+                onChange={(next, message) => void saveBoard(next, message)}
+                quiet={quiet}
+              />
             </div>
           )}
         </div>
-        {/* An agent waiting for a folder for this project (R7.12): approve it here. */}
-        <FolderRequestNotice projectId={projectId!} onAnswered={reload} />
-        {/* Files that expired or expire within 60 days (R7.15). */}
-        {!editing && <ExpiryNotice />}
-        {filesPage && <FilesPage onAdded={reload} />}
-        {active && !editing && <ViewUpdated view={active} />}
-        {active && !editing && <WhatChanged freshness={freshness} />}
-        {editing && (
-          <p className="text-xs text-muted">
-            <span className="hidden md:inline">
-              Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
-              (double-click the bottom edge to fit content), use the gear for its settings, or
-              remove it with the cross.
-            </span>
-            <span className="md:hidden">
-              Use ↑ ↓ to move widgets, the gear for settings, and the cross to remove them.
-            </span>{' '}
-            Changes are saved as revisions.
-          </p>
+        {drawer.shown && (
+          <DetailDrawer
+            target={drawer.shown}
+            onClose={close}
+            onBack={drawerDepth > 0 && !drawer.leaving ? () => navigate(-1) : undefined}
+            leaving={drawer.leaving}
+          />
         )}
-        {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
-        {active && !editing && <EvidenceNote view={active} freshness={freshness} />}
-        {!filesPage &&
-          active?.data.kind !== 'answer' &&
-          !editing &&
-          isEmptyProject(dataset.data) && (
-            <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
-          )}
-        {!filesPage && board.widgets.length === 0 && !editing && (
-          <div className="rounded-block border border-dashed border-line-strong">
-            <EmptyState
-              icon={LayoutGrid}
-              title="This view is empty"
-              hint="Add blocks yourself, or ask your agent to build it (for example, “make this a view of what’s left in the current stage”)."
-            >
+        {asking && (
+          <AskDialog
+            projectId={projectId!}
+            about={asking}
+            apply={apply}
+            onClose={() => setAsking(null)}
+            answers={dataset.data.views.filter(
+              (v) => v.data.kind === 'answer' && !v.data.archived && !isExpired(v),
+            )}
+            onOpenAnswer={(id) => navigate(`/projects/${projectId}/views/${id}`)}
+          />
+        )}
+        {notice && (
+          <div
+            role={notice.kind === 'error' ? 'alert' : 'status'}
+            className={clsx(
+              'fixed right-4 bottom-4 z-50 flex max-w-md items-start gap-3 rounded-tile px-4 py-3 text-sm whitespace-pre-line shadow-popover',
+              notice.kind === 'error' ? 'bg-rose-600 text-white' : 'bg-inverse text-on-inverse',
+            )}
+          >
+            <span className="min-w-0 flex-1">
+              {notice.kind === 'error'
+                ? `Couldn’t save: ${notice.text}`
+                : notice.kind === 'answer'
+                  ? `New answer: ${notice.text}`
+                  : notice.text}
+            </span>
+            {notice.kind === 'answer' && (
               <button
                 type="button"
                 onClick={() => {
-                  setEditing(true);
-                  setPicking(true);
+                  navigate(`/projects/${projectId}/views/${notice.viewId}`);
+                  setNotice(null);
                 }}
-                className={BUTTON.accent}
+                className="inline-flex items-center gap-1 font-semibold"
               >
-                <Plus className="size-3.5" aria-hidden /> Add a block
+                Open
               </button>
+            )}
+            {notice.kind === 'info' && notice.history && (
               <button
                 type="button"
-                onClick={() =>
-                  setAsking({
-                    label: active ? `View “${active.data.name}”` : 'This view',
-                    viewId: active?.id,
-                    question: 'Build this view: ',
-                  })
-                }
-                className={BUTTON.secondary}
+                onClick={() => {
+                  open({ history: true });
+                  setNotice(null);
+                }}
+                className="inline-flex items-center gap-1 font-semibold"
               >
-                <MessageCircleQuestion className="size-3.5" aria-hidden /> Ask an agent
+                <History className="size-3.5" aria-hidden /> History
               </button>
-            </EmptyState>
+            )}
+            {notice.kind === 'undo' && (
+              <button
+                type="button"
+                onClick={() => void undo(notice.revision)}
+                className="inline-flex items-center gap-1 font-semibold"
+              >
+                <Undo2 className="size-3.5" /> Undo
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setNotice(null)}
+              className="-m-0.5 rounded-control p-0.5 opacity-80 hover:opacity-100"
+              aria-label="Dismiss"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
           </div>
         )}
-        {!filesPage && (
-          // A tab switch fades the new view in (opacity only, so nothing shifts).
-          <div key={active?.id} className="animate-fade-in">
-            <ViewRenderer
-              view={active ? { id: active.id, name: active.data.name } : undefined}
-              spec={board}
-              editing={editing}
-              onChange={(next, message) => void saveBoard(next, message)}
-              quiet={quiet}
-            />
-          </div>
-        )}
-      </div>
-      {drawer.shown && (
-        <DetailDrawer
-          target={drawer.shown}
-          onClose={close}
-          onBack={drawerDepth > 0 && !drawer.leaving ? () => navigate(-1) : undefined}
-          leaving={drawer.leaving}
-        />
-      )}
-      {asking && (
-        <AskDialog
-          projectId={projectId!}
-          about={asking}
-          apply={apply}
-          onClose={() => setAsking(null)}
-          answers={dataset.data.views.filter(
-            (v) => v.data.kind === 'answer' && !v.data.archived && !isExpired(v),
-          )}
-          onOpenAnswer={(id) => navigate(`/projects/${projectId}/views/${id}`)}
-        />
-      )}
-      {notice && (
-        <div
-          role={notice.kind === 'error' ? 'alert' : 'status'}
-          className={clsx(
-            'fixed right-4 bottom-4 z-50 flex max-w-md items-start gap-3 rounded-tile px-4 py-3 text-sm whitespace-pre-line shadow-popover',
-            notice.kind === 'error' ? 'bg-rose-600 text-white' : 'bg-inverse text-on-inverse',
-          )}
-        >
-          <span className="min-w-0 flex-1">
-            {notice.kind === 'error'
-              ? `Couldn’t save: ${notice.text}`
-              : notice.kind === 'answer'
-                ? `New answer: ${notice.text}`
-                : notice.text}
-          </span>
-          {notice.kind === 'answer' && (
-            <button
-              type="button"
-              onClick={() => {
-                navigate(`/projects/${projectId}/views/${notice.viewId}`);
-                setNotice(null);
-              }}
-              className="inline-flex items-center gap-1 font-semibold"
-            >
-              Open
-            </button>
-          )}
-          {notice.kind === 'info' && notice.history && (
-            <button
-              type="button"
-              onClick={() => {
-                open({ history: true });
-                setNotice(null);
-              }}
-              className="inline-flex items-center gap-1 font-semibold"
-            >
-              <History className="size-3.5" aria-hidden /> History
-            </button>
-          )}
-          {notice.kind === 'undo' && (
-            <button
-              type="button"
-              onClick={() => void undo(notice.revision)}
-              className="inline-flex items-center gap-1 font-semibold"
-            >
-              <Undo2 className="size-3.5" /> Undo
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            className="-m-0.5 rounded-control p-0.5 opacity-80 hover:opacity-100"
-            aria-label="Dismiss"
-          >
-            <X className="size-4" aria-hidden />
-          </button>
-        </div>
-      )}
+      </FileViewerProvider>
     </ViewDataProvider>
   );
 }

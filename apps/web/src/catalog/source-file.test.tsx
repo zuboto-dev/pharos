@@ -1,7 +1,7 @@
 // R7.6 claim sources on disk open · Opus 5.5 (made-up paths and documents)
 import type { ArtifactFileMatch, Entity, ProjectDataset } from '@pharos/schema';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import dataset from './__fixtures__/dataset.json';
 import { ViewDataProvider } from './context';
 import { ViewRenderer } from './renderer';
@@ -98,6 +98,8 @@ function renderCard(
 }
 
 describe('a claim source on disk', () => {
+  // The file viewer asks for the file's info: it isn't there (nothing leaves the test).
+  beforeEach(() => vi.stubGlobal('fetch', async () => Response.json({ available: false })));
   it('opens the linked file from the certainty popover and the quote caption', () => {
     const { open, findSourceFile } = renderCard(lease('file_lease'), [file]);
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
@@ -105,11 +107,9 @@ describe('a claim source on disk', () => {
     // At a glance (v0.2 B2): the title, not the path; the path is in the file's details.
     expect(popover.textContent).not.toContain(LEASE_PATH);
     fireEvent.click(within(popover).getByRole('button', { name: 'Office lease' }));
-    expect(open).toHaveBeenCalledWith({ entity: 'file_lease' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Quote' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Office lease' }));
-    expect(open).toHaveBeenLastCalledWith({ entity: 'file_lease' });
+    // The file viewer (v0.2 A6), not the drawer.
+    expect(screen.getByRole('dialog', { name: 'Office lease' })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
     // Linked already: nothing to ask the server.
     expect(findSourceFile).not.toHaveBeenCalled();
   });
@@ -122,7 +122,8 @@ describe('a claim source on disk', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Source' }));
     const popover = screen.getByRole('dialog');
     fireEvent.click(await within(popover).findByRole('button', { name: 'Open file' }));
-    expect(open).toHaveBeenCalledWith({ entity: 'file_lease' });
+    expect(screen.getByRole('dialog', { name: 'Office lease' })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
     expect(findSourceFile).toHaveBeenCalledWith('art_lease');
   });
 

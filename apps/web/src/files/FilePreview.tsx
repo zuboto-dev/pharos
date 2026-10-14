@@ -12,9 +12,11 @@ import { extensionOf, formatSize, pdfFrame, readTextLimited, type PdfFrame } fro
  * How tall a preview is: in the file drawer, in a compact FileView next to a list, or a full
  * FileView (R7.11). The preview itself is the same everywhere.
  */
-export type PreviewSize = 'drawer' | 'compact' | 'full';
+export type PreviewSize = 'drawer' | 'compact' | 'full' | 'viewer';
 
 const HEIGHT: Record<PreviewSize, { box: string; max: string }> = {
+  // The file viewer (v0.2 A6): as tall as its window allows, under its header and Details.
+  viewer: { box: 'h-[62dvh] sm:h-[64vh]', max: 'max-h-[62dvh] sm:max-h-[64vh]' },
   drawer: { box: 'h-[60vh]', max: 'max-h-[60vh]' },
   compact: { box: 'h-80', max: 'max-h-80' },
   full: { box: 'h-[75vh] min-h-96', max: 'max-h-[75vh]' },

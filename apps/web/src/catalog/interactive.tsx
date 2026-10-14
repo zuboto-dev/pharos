@@ -70,6 +70,7 @@ export function Clickable({
   title,
   onOpen,
   pressed,
+  list,
 }: {
   id: string;
   children: ReactNode;
@@ -79,10 +80,13 @@ export function Clickable({
   onOpen?: () => void;
   /** Marks the item shown elsewhere on the board right now. */
   pressed?: boolean;
+  /** The ids of the list this item is in, for the file viewer's ← → (v0.2 A6). */
+  list?: readonly string[];
 }) {
-  // An artifact opens its document; anything else its drawer (R7.12, `useOpenItem`).
-  const openItem = useOpenItem({ fileInDrawer: true });
-  const open = () => (onOpen ? onOpen() : openItem(id));
+  // A file opens the file viewer, an artifact its document, anything else its drawer (R7.12,
+  // v0.2 A6, `useOpenItem`).
+  const openItem = useOpenItem({ fileItself: true });
+  const open = () => (onOpen ? onOpen() : openItem(id, list));
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const nested = (e.target as HTMLElement).closest('button, a, select, input, [data-no-open]');
     if (nested && nested !== e.currentTarget) return;

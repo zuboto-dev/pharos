@@ -122,10 +122,11 @@ describe('linked files', () => {
     const taskFiles = screen.getAllByLabelText('Linked files');
     expect(taskFiles).toHaveLength(2);
     fireEvent.click(within(taskFiles[0]!).getByRole('button', { name: /Office lease/ }));
-    // No FileView on this board: the file's drawer (its preview) opens.
-    expect(open).toHaveBeenCalledWith({ entity: lease!.id });
+    // No FileView on this board: the file viewer opens (v0.2 A6), not the drawer.
+    expect(screen.getByRole('dialog', { name: lease!.data.title })).toBeTruthy();
     fireEvent.click(within(taskFiles[1]!).getByRole('button', { name: /certificate/ }));
-    expect(open).toHaveBeenLastCalledWith({ entity: cert!.id });
+    expect(screen.getByRole('dialog', { name: cert!.data.title })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('opens a linked file in the board’s FileView when there is one', async () => {
@@ -177,7 +178,9 @@ describe('every artifact opens', () => {
       'noopener,noreferrer',
     );
     fireEvent.click(screen.getByText('Lease source'));
-    expect(open).toHaveBeenCalledWith({ entity: lease!.id });
+    // An artifact that is a project file opens the file viewer (v0.2 A6).
+    expect(screen.getByRole('dialog', { name: lease!.data.title })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Company seal'));
     expect(open).toHaveBeenLastCalledWith({ entity: 'art_local0000001' });
     // The uri column opens the same way.
@@ -201,7 +204,7 @@ describe('every artifact opens', () => {
       },
     ]);
     fireEvent.click(screen.getByText('Lease source'));
-    expect(open).toHaveBeenCalledWith({ entity: lease!.id });
+    expect(screen.getByRole('dialog', { name: lease!.data.title })).toBeTruthy();
   });
 });
 

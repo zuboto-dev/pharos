@@ -9,7 +9,8 @@ import { useOpenItem } from './open-item';
 /**
  * The project files an item links with `fileIds` (R7.12), as small links at a glance (v0.2 B2:
  * the type icon and title; the one date that matters in the tooltip): tapping one opens the
- * file in the board's FileView when there is one, else its preview in the drawer. Files the reader
+ * file in the board's FileView when there is one, else the file viewer (v0.2 A6), whose ← →
+ * step through these files. Files the reader
  * can't see (not in the dataset) are left out.
  */
 export function LinkedFiles({
@@ -36,7 +37,10 @@ export function LinkedFiles({
             title={[`Open “${title}”`, glanceDateOf(file.data)?.text].filter(Boolean).join(' · ')}
             onClick={(e) => {
               e.stopPropagation();
-              open(file.id);
+              open(
+                file.id,
+                files.map((f) => f.id),
+              );
             }}
             className="inline-flex max-w-[14rem] items-center gap-1 rounded-control border border-line-strong px-1.5 py-0.5 text-xs text-accent-strong hover:bg-sky-50 focus-visible:outline-2 focus-visible:outline-sky-400 dark:hover:bg-sky-950"
           >

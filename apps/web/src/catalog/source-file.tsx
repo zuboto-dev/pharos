@@ -2,6 +2,7 @@ import { FILE_ROUTES, type ArtifactFileMatch, type Entity } from '@pharos/schema
 import { FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { FolderRequestCard } from '../files/FolderRequests';
+import { useOpenFile } from '../files/viewer-context';
 import { getJson } from '../lib/api';
 import { useViewData, type ViewData } from './context';
 import { isHttp } from './ui';
@@ -67,7 +68,7 @@ export function SourceStatus({
   onOpen?: () => void;
   onApproved?: () => void;
 }) {
-  const { actions } = useViewData();
+  const openFile = useOpenFile();
   if (!match) return null;
   switch (match.state) {
     case 'linked':
@@ -77,7 +78,7 @@ export function SourceStatus({
           onClick={(e) => {
             e.stopPropagation();
             onOpen?.();
-            actions.open({ entity: match.fileId });
+            openFile(match.fileId);
           }}
           className="inline-flex items-center gap-1 rounded-sm text-xs text-accent hover:underline focus-visible:outline-2 focus-visible:outline-sky-400"
         >

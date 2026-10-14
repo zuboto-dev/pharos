@@ -146,7 +146,9 @@ describe('FileList', () => {
     fireEvent.change(search, { target: { value: 'travel' } });
     expect(rowTitles()).toEqual(['Passport scan']);
     fireEvent.keyDown(search, { key: 'Enter' });
-    expect(open).toHaveBeenCalledWith({ entity: 'file_passport' });
+    // The file viewer (v0.2 A6), over the list.
+    expect(screen.getByRole('dialog', { name: 'Passport scan' })).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
     fireEvent.change(search, { target: { value: 'nothing like this' } });
     expect(screen.getByText(/No files match/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
@@ -191,7 +193,8 @@ describe('FileList', () => {
     fireEvent.keyDown(rows[1]!, { key: 'End' });
     expect(document.activeElement).toBe(rows.at(-1));
     fireEvent.keyDown(rows.at(-1)!, { key: 'Enter' });
-    expect(open).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('hides the controls when asked, shows the chosen details, and lists without groups', () => {

@@ -1,6 +1,5 @@
 import {
   DUE_BAND_LABELS,
-  amountIn,
   categoryBreakdown,
   dueOf,
   dueRows,
@@ -11,11 +10,15 @@ import {
   formatNumber,
   formatTotal,
   isMoney,
+  leftText,
+  notCountedText,
+  planBalance,
   share,
   type Due,
   type DueBand,
   type Entity,
   type NodeOf,
+  type PlanBalance,
   type Resolved,
   type Total,
 } from '@pharos/schema';
@@ -117,6 +120,8 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
   const data = useViewData();
   const rows = useMemo(() => dueRows(data, node), [data, node]);
   const read = useMemo(() => fieldReader(data), [data]);
+  // Expiring files open the file viewer, whose ← → step through the files listed (v0.2 A6).
+  const files = rows.filter((r) => r.record.type === 'file').map((r) => r.record.id);
   if (!rows.length)
     return (
       <EmptyState
@@ -135,6 +140,7 @@ export function DueTracker({ node }: { node: NodeOf<'DueTracker'> }) {
           <li key={record.id} className="flex items-center gap-2">
             <Clickable
               id={record.id}
+              list={file ? files : undefined}
               className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 hover:bg-sunken"
             >
               <span className="w-24 shrink-0">
@@ -238,9 +244,24 @@ export function RecordDetails({
   );
 }
 
-/** "€237.75 of €400.00", currencies apart: "$25.00 of €100.00". */
+/** "€237.75"; amounts in several currencies are kept apart, never converted. */
 function amounts(total: Total): string {
   return formatTotal(total);
+}
+
+/**
+ * What a row or the total says (v0.2 A6): spent "of" planned, counting only the plan's currency.
+ * Spending in another currency is shown apart as not counted, so "$25.00 of €100.00" never reads
+ * as part of the plan: "€0.00 of €100.00", then "€100.00 left · $25.00 in USD not counted".
+ * Without a money plan in one currency, both totals as they are.
+ */
+function spentOf(
+  spent: Total,
+  planned: Total,
+): { spent: string; planned: string; balance?: PlanBalance } {
+  const balance = planBalance(planned, spent);
+  if (!balance) return { spent: amounts(spent), planned: amounts(planned) };
+  return { spent: formatMoney(balance.spent), planned: formatMoney(balance.planned), balance };
 }
 
 export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> }) {
@@ -256,25 +277,25 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
         <AskAgentButton question="Set up the categories and plan for this breakdown." />
       </EmptyState>
     );
+  // A target (R9, e.g. study hours) is reached, not overspent: past it is good news.
+  const target = node.aim === 'target';
+  const total = spentOf(b.spent, b.planned);
   return (
     <div className="space-y-3">
       <ul className="space-y-2.5">
         {b.rows.map((row) => {
           const pct = share(row.spent, row.planned);
-          // A target (R9, e.g. study hours) is reached, not overspent: past it is good news.
-          const target = node.aim === 'target';
           const over = !target && pct !== undefined && pct > 100;
           const reached = target && pct !== undefined && pct >= 100;
           const togo =
             target && row.id && row.planned.kind === 'number' && row.spent.kind === 'number'
               ? row.planned.value - row.spent.value
               : undefined;
-          const currency =
-            row.planned.kind === 'money' ? row.planned.amounts[0]?.currency : undefined;
-          const left =
-            currency && row.planned.kind === 'money'
-              ? row.planned.amounts[0]!.amount - amountIn(row.spent, currency)
-              : undefined;
+          // "Other" has no plan: its spending as it is.
+          const shown = row.id
+            ? spentOf(row.spent, row.planned)
+            : { spent: amounts(row.spent), planned: amounts(row.planned), balance: undefined };
+          const notCounted = shown.balance ? notCountedText(shown.balance.notCounted) : '';
           const label = row.id ? (
             <Clickable id={row.id} className="truncate rounded-sm hover:underline">
               {row.label}
@@ -287,14 +308,16 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
               <div className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 font-medium">{label}</span>
                 <span className="shrink-0 text-xs text-ink-soft tabular-nums">
-                  {amounts(row.spent)}
-                  {row.id ? <span className="text-faint"> of {amounts(row.planned)}</span> : null}
+                  {shown.spent}
+                  {row.id ? <span className="text-faint"> of {shown.planned}</span> : null}
                 </span>
               </div>
               <div
                 className={clsx('mt-1 h-2 overflow-hidden rounded-full', CHART.track)}
                 role="meter"
-                aria-label={`${row.label}: ${amounts(row.spent)} of ${amounts(row.planned)}`}
+                aria-label={[`${row.label}: ${shown.spent} of ${shown.planned}`, notCounted]
+                  .filter(Boolean)
+                  .join(', ')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.min(100, pct ?? 0)}
@@ -317,27 +340,30 @@ export function CategoryBreakdown({ node }: { node: NodeOf<'CategoryBreakdown'> 
                   {togo <= 0 ? 'Target reached' : `${formatNumber(togo, row.planned.unit)} to go`}
                 </div>
               )}
-              {!target && left !== undefined && currency && (
-                <div
-                  className={clsx(
-                    'mt-0.5 text-xs tabular-nums',
-                    left < 0 ? 'text-danger' : 'text-faint',
-                  )}
-                >
-                  {left < 0
-                    ? `${formatMoney({ amount: -left, currency })} over`
-                    : `${formatMoney({ amount: left, currency })} left`}
+              {!target && shown.balance && (
+                <div className="mt-0.5 text-xs text-faint tabular-nums">
+                  <span className={clsx(shown.balance.left.amount < 0 && 'text-danger')}>
+                    {leftText(shown.balance.left)}
+                  </span>
+                  {notCounted && <span data-not-counted> · {notCounted}</span>}
                 </div>
               )}
             </li>
           );
         })}
       </ul>
-      <div className="flex items-baseline justify-between border-t border-line-soft pt-2 text-sm">
-        <span className="font-medium">Total</span>
-        <span className="tabular-nums">
-          {amounts(b.spent)} <span className="text-faint">of {amounts(b.planned)}</span>
-        </span>
+      <div className="border-t border-line-soft pt-2 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="font-medium">Total</span>
+          <span className="tabular-nums">
+            {total.spent} <span className="text-faint">of {total.planned}</span>
+          </span>
+        </div>
+        {!target && total.balance && total.balance.notCounted.length > 0 && (
+          <div data-not-counted className="mt-0.5 text-right text-xs text-faint tabular-nums">
+            {notCountedText(total.balance.notCounted)}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -158,6 +158,23 @@ describe('fact checks', () => {
     return checkFacts(Board.parse({ component: 'Board', widgets }), data, c.facts, c.today);
   }
 
+  it('check what a category has left, never counting another currency (v0.2 A6)', () => {
+    const c = caseOf(money, 'money-planned-vs-spent');
+    const widgets = findPack('money')!.views[0]!.widgets;
+    const fun = c.facts.find((f) => f.id === 'fun-other-currency')!;
+    expect(run(money, { ...c, facts: [fun] }, widgets).passed).toBe(true);
+    // As if the $25.00 were counted against the €100.00 plan: €75.00 left.
+    const counted = { ...fun, left: { amount: 7500, currency: 'EUR' } } as typeof fun;
+    const report = run(money, { ...c, facts: [counted] }, widgets);
+    expect(report.passed).toBe(false);
+    expect(report.results[0]!.actual).toMatchObject({
+      left: { amount: 10000, currency: 'EUR' },
+      notCounted: [{ amount: 2500, currency: 'USD' }],
+    });
+    const hidden = { ...fun, notCounted: [] } as typeof fun;
+    expect(run(money, { ...c, facts: [hidden] }, widgets).passed).toBe(false);
+  });
+
   it('fail a car page that adds up the wrong field or misses a band', () => {
     const c = caseOf(car, 'car-cost-per-year');
     const widgets = structuredClone(findPack('car')!.views[0]!.widgets);

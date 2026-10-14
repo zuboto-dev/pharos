@@ -3,6 +3,7 @@ import { DUE_BANDS, Money, isMoney as isMoneyValue } from '../records.js';
 import type { Board } from '../views/board.js';
 import {
   categoryBreakdown,
+  planBalance,
   chartBars,
   formatMoney,
   dueRows,
@@ -89,6 +90,13 @@ export const Fact = z.discriminatedUnion('kind', [
     category: z.string().describe('Its title, "Other" for spending with no category, or "Total"'),
     planned: Amount,
     spent: Amount,
+    left: Money.optional().describe(
+      'What "… left" (or "… over", below zero) says: the plan minus spending in its own currency (v0.2 A6)',
+    ),
+    notCounted: z
+      .array(Money)
+      .optional()
+      .describe('Spending in other currencies than the plan, shown apart as not counted'),
   }),
 ]);
 export type Fact = z.infer<typeof Fact>;
@@ -223,11 +231,23 @@ function evaluate(fact: Fact, node: ViewNode | undefined, data: ProjectDataset, 
           ? { planned: b.planned, spent: b.spent }
           : b.rows.find((r) => r.label === fact.category);
       if (!row) return miss(`no category "${fact.category}"`);
-      const actual = { planned: asAmount(row.planned), spent: asAmount(row.spent) };
-      return {
-        actual,
-        pass: sameAmount(actual.planned, fact.planned) && sameAmount(actual.spent, fact.spent),
+      // "Left" and "not counted" as the row shows them (v0.2 A6): only the plan's currency counts.
+      const balance = planBalance(row.planned, row.spent);
+      const actual = {
+        planned: asAmount(row.planned),
+        spent: asAmount(row.spent),
+        ...(fact.left !== undefined ? { left: balance?.left ?? null } : {}),
+        ...(fact.notCounted !== undefined ? { notCounted: balance?.notCounted ?? [] } : {}),
       };
+      const pass =
+        sameAmount(actual.planned, fact.planned) &&
+        sameAmount(actual.spent, fact.spent) &&
+        (fact.left === undefined ||
+          (!!balance &&
+            balance.left.amount === fact.left.amount &&
+            balance.left.currency === fact.left.currency)) &&
+        (fact.notCounted === undefined || sameAmount(balance?.notCounted ?? [], fact.notCounted));
+      return { actual, pass };
     }
   }
 }

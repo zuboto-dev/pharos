@@ -486,3 +486,50 @@ export function categoryBreakdown(
     spent: sumRows(data, spending, node.spent.sum, context, node.spent.query),
   };
 }
+
+/**
+ * A money plan against what was spent in the plan's currency (v0.2 A6). Pharos never converts
+ * currencies, so spending in another currency isn't counted against the plan: it is listed apart
+ * ("$25.00 in USD not counted"), never folded into "left" or "of". Undefined unless the plan is
+ * money in one currency.
+ */
+export type PlanBalance = {
+  planned: Money;
+  /** What was spent in the plan's currency. */
+  spent: Money;
+  /** Planned minus spent, in the plan's currency; below zero when over. */
+  left: Money;
+  /** Spending in other currencies, one amount per currency (never zero). */
+  notCounted: Money[];
+};
+
+export function planBalance(planned: Total, spent: Total): PlanBalance | undefined {
+  if (planned.kind !== 'money' || planned.amounts.length !== 1) return undefined;
+  const plan = planned.amounts[0]!;
+  const { currency } = plan;
+  const inPlan = amountIn(spent, currency);
+  const notCounted =
+    spent.kind === 'money'
+      ? spent.amounts
+          .filter((a) => a.currency !== currency && a.amount !== 0)
+          .map((a) => ({ ...a }))
+      : [];
+  return {
+    planned: { ...plan },
+    spent: { amount: inPlan, currency },
+    left: { amount: plan.amount - inPlan, currency },
+    notCounted,
+  };
+}
+
+/** "$25.00 in USD not counted", one part per currency; "" when there are none. */
+export function notCountedText(notCounted: Money[]): string {
+  return notCounted.map((m) => `${formatMoney(m)} in ${m.currency} not counted`).join(' · ');
+}
+
+/** "€100.00 left" or "€14.80 over". */
+export function leftText(left: Money): string {
+  return left.amount < 0
+    ? `${formatMoney({ amount: -left.amount, currency: left.currency })} over`
+    : `${formatMoney(left)} left`;
+}

@@ -109,6 +109,17 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
   change only that block of that view (`apps/server/src/views/block-ask.ts`, checked by
   view_update and REST apply). `view_update` takes `expectedRevision` and refuses stale writes.
 
+## Freshness and run states (R11)
+
+- `apps/server/src/views/freshness.ts` works out, from the change log, what changed on each view
+  since the reader last looked (seen marks: the `views.seen` app setting, never revisions) and
+  whether an agent-built view is stale (`view.evidenceRevision`, set only by Pharos: `Store.apply`
+  refuses it, the view service passes `{ evidence: true }`). What a page reads comes from
+  `boardReads` in `packages/schema/src/views/reads.ts`; a new component that reads data by a prop
+  other than a query or filter needs a case there. docs/reframe/r11-notes.md has the model.
+- The answering agent's `state` (off, unavailable, paused, idle, queued, running, stopping) and
+  `lastRun.outcome` are what Settings and the questions list show; pausing stops the run.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

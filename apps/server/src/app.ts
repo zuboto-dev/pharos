@@ -24,6 +24,7 @@ import { createMcpServer } from './mcp.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
+import { changedViews, markSeen, projectFreshness } from './views/freshness.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -130,6 +131,8 @@ export type ServerInfo = {
   folders?: Pick<FolderRouteOptions, 'home'>;
   /** Project files on disk (R7.2); tests pass one with a fake `open`. */
   files?: FileService;
+  /** Running as the launchd background service (`pnpm service`), for Settings (W7.10). */
+  service?: boolean;
   /** Who is working where (v0.2 B5); shared with the answering agent. Made here when absent. */
   presence?: Presence;
 };
@@ -242,7 +245,9 @@ export function createApp(
   const agentStatus = (): AgentStatus =>
     agent?.status() ?? {
       configured: false,
-      enabled: true,
+      enabled: false,
+      paused: false,
+      state: 'unavailable',
       mode: 'unavailable',
       running: false,
       answering: [],
@@ -261,6 +266,7 @@ export function createApp(
       mcpUrl: `http://localhost:${port}/mcp`,
       projects: store.list('project').length,
       revisions: store.latestRevisionId(),
+      service: info.service ?? false,
       agent: agentStatus(),
     });
   });
@@ -349,6 +355,32 @@ export function createApp(
   });
 
   api.get('/projects/:id/snapshot', (c) => c.json(projectSnapshot(store, c.req.param('id'))));
+
+  // Freshness (R11): what changed on each page since the reader last looked, and which agent-built
+  // pages are stale. The reader's own marks (app settings, never revisions): not for agents.
+  const readerOnly = 'Seen marks and what changed since are the reader’s own; agents use history';
+  api.get('/projects/:id/freshness', (c) => {
+    if (declaresAgent(c)) return forbidden(c, readerOnly);
+    const q = c.req.query();
+    return c.json(
+      projectFreshness(store, c.req.param('id'), {
+        view: q.view,
+        since: q.since !== undefined ? IntParam.parse(q.since) : undefined,
+      }),
+    );
+  });
+  api.get('/freshness', (c) => {
+    if (declaresAgent(c)) return forbidden(c, readerOnly);
+    return c.json(changedViews(store));
+  });
+  api.put('/views/:id/seen', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, readerOnly);
+    const body = z
+      .object({ revision: z.number().int().nonnegative().optional() })
+      .parse(await c.req.json().catch(() => ({})));
+    const viewId = c.req.param('id');
+    return c.json({ viewId, seen: markSeen(store, viewId, body.revision) });
+  });
 
   api.get('/history', (c) => {
     const q = c.req.query();

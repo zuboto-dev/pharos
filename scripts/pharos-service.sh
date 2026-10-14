@@ -50,6 +50,8 @@ write_plist() {
   entries+=$(env_entry PATH "$path")$'\n'
   entries+=$(env_entry HOME "$HOME")$'\n'
   entries+=$(env_entry PORT "$PORT")$'\n'
+  # Lets Settings say how to change the port under the service.
+  entries+=$(env_entry PHAROS_SERVICE 1)$'\n'
   local name
   for name in PHAROS_DB PHAROS_AGENT_COMMAND PHAROS_AGENT_LOG PHAROS_WEB_URL; do
     if [ -n "${!name:-}" ]; then entries+=$(env_entry "$name" "${!name}")$'\n'; fi

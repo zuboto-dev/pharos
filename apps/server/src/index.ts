@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,16 @@ const agent = new AgentRunner(store, {
   serverUrl,
   mode: setup.mode,
   logPath: agentLog,
-  prompt: (projectIds) => answerBrief(store, projectIds),
+  // Which earlier answers were offered for reuse, and which were stale (R11.6), go to the log.
+  prompt: (projectIds) =>
+    answerBrief(store, projectIds, (line) => {
+      try {
+        mkdirSync(dirname(agentLog), { recursive: true });
+        appendFileSync(agentLog, `${line}\n`);
+      } catch (error) {
+        console.error('[pharos] Could not write to the agent log:', error);
+      }
+    }),
   presence,
 });
 if (agent.configured) agent.watch(feed);
@@ -66,6 +75,9 @@ const app = createApp(store, feed, agent, {
   port,
   files,
   presence,
+  // Set by scripts/pharos-service.sh; launchd also names the job in XPC_SERVICE_NAME.
+  service:
+    process.env.PHAROS_SERVICE === '1' || process.env.XPC_SERVICE_NAME === 'dev.pharos.server',
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
 });
 

@@ -206,6 +206,8 @@ describe('AgentRunner', () => {
     expect(await res.json()).toEqual({
       configured: true,
       enabled: true,
+      paused: false,
+      state: 'idle',
       mode: 'custom',
       command: 'answer-my-questions',
       running: false,
@@ -213,8 +215,11 @@ describe('AgentRunner', () => {
       queued: [],
     });
     const without = createApp(store);
+    // W7.9: nothing set up means questions aren't answered automatically.
     expect(await (await without.request('/api/agent')).json()).toMatchObject({
       configured: false,
+      enabled: false,
+      state: 'unavailable',
     });
   });
 });

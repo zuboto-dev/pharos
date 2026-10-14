@@ -232,3 +232,51 @@ were checked with controlled fake runners; calendar cases used fixed test dates.
 needs a usability and release check. Declared agent headers are roles, not authentication: this
 review assumes honest role declarations and does not establish a boundary against local
 operating-system access or human impersonation.
+
+## Fixed
+
+2026-10-13, fix round F2 (Opus 5.5). All 44 review tests pass, with every earlier test.
+docs/reframe/r11-notes.md has the behaviour.
+
+1. **Hidden files through evidence.** Agent-facing evidence (`evidenceState`, used by the
+   snapshot and the answer brief, and the brief's Refresh lines) is worked out through
+   `AgentFiles`: hidden items' changes are dropped, other changes keep only fields agents can read,
+   and the data is the agent dataset. Tests: `does not let MCP evidence reveal a guessed hidden
+filename changing`, `does not expose withheld note changes through snapshot evidence`.
+2. **Old words become fresh.** Evidence depends on the board as built (from the change log) plus
+   the current board; a page reading no data is unknown (`reason: "no_data"`) and unknown answers
+   aren't offered for linking. A Refresh must be answered with the whole page as widgets: ops and
+   renames are refused. Tests: `does not make old prose fresh by removing its evidence block with
+ops`, `does not certify a prose-only answer as fresh…`, `keeps a stale answer stale when Refresh
+only renames the tab`. The last now expects the rename to be refused (it still checks the page
+   stays stale and isn't offered), and `updates the same answer with a checked revision…` and
+   R11's own refresh test answer with widgets instead of ops, as the brief for this round asks.
+3. **References and project settings.** `changeTouches` follows items linked from selected ones
+   (filters and displayed fields alike), items linked from named ones, `currentStageId`, option
+   lists and record types. Tests: the seven `counts …` cases in `reads.r11review.test.ts`, plus
+   precision cases in `reads.test.ts`.
+4. **Dates and timestamps.** Each revision is judged on its own day; a dated page written on an
+   earlier day is stale (`stale.calendar`) when its blocks select other items today; changed items
+   keep their real timestamps and timestamp queries count every edit. Tests: `evaluates $today
+filters on the revision date…`, `does not certify yesterday's written answer…`, `uses entity
+timestamps…`; `a dated page written yesterday stays fresh while today selects the same items`.
+5. **Refresh in another page.** `view_answer` refuses a Refresh request; `Store.apply` refuses
+   marking a Refresh answered unless the same write rebuilds its view (dismissing still works).
+   Tests: `refuses view_answer creating a different page…`, `refuses linking a stale answer…`,
+   `a Refresh is answered only by rebuilding its page; it can still be dismissed`.
+6. **Block reply as a whole board.** A block request never renews evidence. Test: `allows
+replacing only the asked block without renewing evidence for the entire page`.
+7. **Out-of-order responses.** The page's freshness and the shared changed-dot load drop responses
+   older than the one shown. Tests: `does not replace a newer stale result with an older fresh
+response`, `an older load finishing last never replaces a newer one`.
+8. **Queued after a restart.** "Queued" only when the project is in the agent's queue; otherwise
+   "Waiting: no run is set for it yet" with Try again. The runner itself is unchanged (no outcome
+   saved across restarts, no automatic start for old questions): the owner starts them. Tests:
+   `does not label an idle unqueued request as scheduled after a restart`; R11's own run-state test
+   now checks queued and unqueued.
+9. **Hidden onePer rows.** Queries cut by `limit` or `onePer` count a row only when it is shown
+   before or after the change. Test: `does not mark a change to an older onePer row…`, and the
+   limit case in `reads.test.ts`.
+10. **Seen input.** Malformed JSON gets 400; stored marks are validated and repaired. Tests:
+    `refuses malformed JSON…`, `recovers a malformed stored view mark…`, `repairs a damaged seen
+setting and accepts an empty seen body`.

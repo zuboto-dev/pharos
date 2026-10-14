@@ -10,8 +10,9 @@ export function isCalendarDate(value: unknown): value is string {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
-export function localToday(): string {
-  const d = new Date();
+/** Today (or the day of `at`) as YYYY-MM-DD in the local time zone. */
+export function localToday(at: Date | string = new Date()): string {
+  const d = typeof at === 'string' ? new Date(at) : at;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 

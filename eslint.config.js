@@ -15,6 +15,7 @@ export default defineConfig([
       '*.js',
       'samples/**/*.mjs',
       'scripts/**/*.mjs',
+      'eval/compat/**/*.mjs',
     ],
     languageOptions: { globals: globals.node },
   },

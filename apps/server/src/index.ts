@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +12,7 @@ import { answerBrief } from './guidance.js';
 import { Presence } from './presence.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
+import { seenMarks } from './views/freshness.js';
 import { webBuildId } from './version.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
@@ -28,6 +29,9 @@ const port = Number(process.env.PORT ?? 4300);
 const dbPath = defaultDatabasePath();
 const store = new Store(openDatabase(dbPath));
 store.ensureDefaultViews();
+// R11: Pharos starts keeping track of what the reader has seen when it first runs with it, so
+// what agents change from then on is marked even before the owner opens the app.
+seenMarks(store);
 const feed = new RevisionFeed(store);
 // Who is working where (v0.2 B5): shared by the MCP tools, the answering run and the feed.
 const presence = new Presence();
@@ -56,7 +60,16 @@ const agent = new AgentRunner(store, {
   serverUrl,
   mode: setup.mode,
   logPath: agentLog,
-  prompt: (projectIds) => answerBrief(store, projectIds),
+  // Which earlier answers were offered for reuse, and which were stale (R11.6), go to the log.
+  prompt: (projectIds) =>
+    answerBrief(store, projectIds, (line) => {
+      try {
+        mkdirSync(dirname(agentLog), { recursive: true });
+        appendFileSync(agentLog, `${line}\n`);
+      } catch (error) {
+        console.error('[pharos] Could not write to the agent log:', error);
+      }
+    }),
   presence,
 });
 if (agent.configured) agent.watch(feed);
@@ -66,6 +79,9 @@ const app = createApp(store, feed, agent, {
   port,
   files,
   presence,
+  // Set by scripts/pharos-service.sh; launchd also names the job in XPC_SERVICE_NAME.
+  service:
+    process.env.PHAROS_SERVICE === '1' || process.env.XPC_SERVICE_NAME === 'dev.pharos.server',
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
 });
 

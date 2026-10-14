@@ -45,6 +45,7 @@ import { FolderRequestNotice } from '../files/FolderRequests';
 import { ExpiryNotice } from '../files/expiry-notice';
 import { dismissAnswer, keepAnswer } from './answers';
 import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboarding';
+import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ViewRenderer } from '../catalog/renderer';
@@ -67,7 +68,8 @@ function AnswerHeader({ view }: { view: Entity<'view'> }) {
   return (
     <div className="flex flex-wrap items-start gap-3 rounded-block border border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
       <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-accent" />
-      <div className="min-w-0 flex-1">
+      {/* Room for the question first; on a phone the buttons go below it. */}
+      <div className="min-w-0 flex-1 basis-48">
         <div className="font-medium">{view.data.question}</div>
         <div className="text-xs text-muted">
           Answer ·{' '}
@@ -191,6 +193,15 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
     reveal.current = null;
   }, [dataset.version]);
   const { reload } = dataset;
+  // Freshness (R11): what changed since the reader last looked at the open view, and whether an
+  // agent's page is stale. Opening the view marks it seen.
+  const shownViewId = filesPage
+    ? undefined
+    : (viewId ??
+      (dataset.data
+        ? sortViews(dataset.data.views.filter((v) => !v.data.archived && !isExpired(v)))[0]?.id
+        : undefined));
+  const freshness = usePageFreshness(projectId, shownViewId);
   // When the owner last changed something from this page: the reload that follows isn't a live
   // update, so the blocks it changes aren't marked (v0.2 B4).
   const ownChangeAt = useRef(0);
@@ -527,6 +538,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         {!editing && <ExpiryNotice />}
         {filesPage && <FilesPage onAdded={reload} />}
         {active && !editing && <ViewUpdated view={active} />}
+        {active && !editing && <WhatChanged freshness={freshness} />}
         {editing && (
           <p className="text-xs text-muted">
             <span className="hidden md:inline">
@@ -541,6 +553,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           </p>
         )}
         {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
+        {active && !editing && <EvidenceNote view={active} freshness={freshness} />}
         {!filesPage &&
           active?.data.kind !== 'answer' &&
           !editing &&

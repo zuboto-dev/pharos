@@ -14,11 +14,28 @@ export type Runner = (
   signal?: AbortSignal,
 ) => Promise<RunResult>;
 
+/**
+ * What the answering agent is really doing (R11, W7): off (PHAROS_AGENT_COMMAND=off),
+ * unavailable (no command), paused (in Settings; nothing runs and nothing is queued), idle,
+ * queued (questions wait for the next run), running, or stopping (paused during a run: the run
+ * was told to stop and hasn't exited yet).
+ */
+export type AgentState =
+  'off' | 'unavailable' | 'paused' | 'idle' | 'queued' | 'running' | 'stopping';
+
+/** How a run ended. */
+export type RunOutcome = 'finished' | 'failed' | 'timed_out' | 'stopped';
+
 export type AgentStatus = {
   /** A command is set up (Claude Code found, or PHAROS_AGENT_COMMAND). */
   configured: boolean;
-  /** Turned on in Settings (on unless someone paused it). */
+  /** Questions are answered automatically: set up and not paused (W7.9). */
   enabled: boolean;
+  /** Paused in Settings (the stored switch, whether or not a command is set up). */
+  paused: boolean;
+  state: AgentState;
+  /** The run in progress: what it answers and since when. */
+  run?: { projectIds: string[]; requestIds: string[]; startedAt: string };
   /** Where the command comes from. */
   mode: AgentSetup['mode'];
   command?: string;
@@ -36,6 +53,9 @@ export type AgentStatus = {
     timedOut: boolean;
     /** Stopped because answering was paused. */
     stopped?: boolean;
+    outcome: RunOutcome;
+    requestIds: string[];
+    finishedAt: string;
   };
 };
 
@@ -124,6 +144,7 @@ export function shellRunner(logFile: string): Runner {
 export class AgentRunner {
   private readonly queue = new Set<string>();
   private answering: string[] = [];
+  private run: AgentStatus['run'];
   private get running(): boolean {
     return this.answering.length > 0;
   }
@@ -162,6 +183,16 @@ export class AgentRunner {
     return this.store.setting<boolean>('agent.enabled') ?? true;
   }
 
+  /** What is really happening now (see AgentState). */
+  get state(): AgentState {
+    const mode = this.options.mode ?? (this.configured ? 'custom' : 'unavailable');
+    if (mode === 'off') return 'off';
+    if (!this.configured) return 'unavailable';
+    if (this.running) return this.stopRun?.signal.aborted ? 'stopping' : 'running';
+    if (!this.enabled) return 'paused';
+    return this.queue.size ? 'queued' : 'idle';
+  }
+
   setEnabled(enabled: boolean): void {
     this.store.setSetting('agent.enabled', enabled);
     if (!enabled) {
@@ -190,10 +221,14 @@ export class AgentRunner {
 
   status(): AgentStatus {
     const { mode, command, logPath } = this.options;
+    const resolved = mode ?? (this.configured ? 'custom' : 'unavailable');
     return {
       configured: this.configured,
-      enabled: this.enabled,
-      mode: mode ?? (this.configured ? 'custom' : 'unavailable'),
+      enabled: this.configured && resolved !== 'off' && this.enabled,
+      paused: !this.enabled,
+      state: this.state,
+      ...(this.run ? { run: this.run } : {}),
+      mode: resolved,
       ...(command ? { command } : {}),
       ...(logPath ? { logPath } : {}),
       running: this.running,
@@ -256,9 +291,11 @@ export class AgentRunner {
     this.queue.clear();
     if (!projectIds.length) return this.changed();
     this.answering = projectIds;
+    const requestIds = projectIds.flatMap((id) => this.openQuestions(id));
     const stop = new AbortController();
     this.stopRun = stop;
     const started = Date.now();
+    this.run = { projectIds, requestIds, startedAt: new Date(started).toISOString() };
     const presence = this.options.presence;
     const source = `runner:${started}`;
     const agentName =
@@ -292,7 +329,7 @@ export class AgentRunner {
         this.options.command!,
         {
           PHAROS_PROJECT_IDS: projectIds.join(','),
-          PHAROS_REQUEST_IDS: projectIds.flatMap((id) => this.openQuestions(id)).join(','),
+          PHAROS_REQUEST_IDS: requestIds.join(','),
           PHAROS_URL: this.options.serverUrl ?? 'http://localhost:4300',
           ...(this.options.prompt ? { PHAROS_PROMPT: this.options.prompt(projectIds) } : {}),
         },
@@ -301,9 +338,32 @@ export class AgentRunner {
       );
       this.lastRun = {
         projectIds,
+        requestIds,
         startedAt: new Date(started).toISOString(),
+        finishedAt: new Date().toISOString(),
         durationMs: Date.now() - started,
         ...result,
+        ...(stop.signal.aborted ? { stopped: true } : {}),
+        outcome: stop.signal.aborted
+          ? 'stopped'
+          : result.timedOut
+            ? 'timed_out'
+            : result.exitCode === 0
+              ? 'finished'
+              : 'failed',
+      };
+    } catch (error) {
+      // A runner that throws is a failed run, not a server crash (CLAUDE.md).
+      console.error('[pharos] The answering run failed:', error);
+      this.lastRun = {
+        projectIds,
+        requestIds,
+        startedAt: new Date(started).toISOString(),
+        finishedAt: new Date().toISOString(),
+        durationMs: Date.now() - started,
+        exitCode: null,
+        timedOut: false,
+        outcome: stop.signal.aborted ? 'stopped' : 'failed',
         ...(stop.signal.aborted ? { stopped: true } : {}),
       };
     } finally {
@@ -317,6 +377,7 @@ export class AgentRunner {
         console.error('[pharos] Could not clear the answering marks:', error);
       }
       this.answering = [];
+      this.run = undefined;
       this.changed();
       // Questions asked during the run get their own run.
       if (this.queue.size) this.schedule();

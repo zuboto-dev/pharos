@@ -488,8 +488,25 @@ export class Store {
   // ---------------------------------------------------------------- writes
 
   /** Applies operations atomically as one revision. */
-  apply(author: Author, raw: ApplyInput): ApplyResult {
+  apply(
+    author: Author,
+    raw: ApplyInput,
+    options: {
+      /**
+       * R11: the views this writes were built from the data as it is now; Pharos sets their
+       * `evidenceRevision`. Only the view service passes it, for agents' views.
+       */
+      evidence?: boolean;
+    } = {},
+  ): ApplyResult {
     let input = raw;
+    raw.operations.forEach((op, index) => {
+      if (op.type === 'view' && op.op !== 'delete' && 'evidenceRevision' in op.data)
+        throw new PharosError(
+          'invalid',
+          `operations[${index}]: evidenceRevision is set by Pharos when an agent builds a view; leave it out`,
+        );
+    });
     if (author.kind === 'agent') {
       input.operations.forEach((op, index) => {
         const issue = agentFileIssue(op) ?? agentArtifactFileIssue(op);
@@ -504,9 +521,15 @@ export class Store {
     const result = this.transaction(author, input.message, null, (tx) => {
       const created: Record<string, string> = {};
       const refs = new Map<string, string>();
+      // Everything before this revision (inside the transaction, nothing else can write).
+      const evidence = options.evidence ? this.latestRevisionId() - 1 : undefined;
       input.operations.forEach((op, index) => {
         tx.context = `operations[${index}]`;
-        const id = tx.runOperation(op, refs, index);
+        const stamped =
+          evidence !== undefined && op.type === 'view' && op.op !== 'delete'
+            ? ({ ...op, data: { ...op.data, evidenceRevision: evidence } } as Operation)
+            : op;
+        const id = tx.runOperation(stamped, refs, index);
         if (op.op === 'create') created[op.ref ?? String(index)] = id;
       });
       return created;

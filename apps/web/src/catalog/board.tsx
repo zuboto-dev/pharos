@@ -28,6 +28,9 @@ import { BLOCK_PRESENCE_OUTLINE, BlockPresence, ViewPresence, useViewPresence } 
 import { Node } from './renderer';
 import { WidgetSettings } from './settings';
 
+/** Blocks drawn without a card frame or title bar: Ask can't sit in a corner of their frame. */
+export const FRAMELESS: ReadonlySet<string> = new Set(['Text', 'Markdown']);
+
 export type BoardChange = (board: Board, message: string) => void;
 
 /** The widgets to draw: the board's, with the ones just removed back at their old places. */
@@ -317,6 +320,12 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
             className={clsx(
               'group/widget relative flex min-w-0 flex-col *:flex-1 md:[grid-column:var(--col)]',
               !editing && present.widgets.has(widget.id) && BLOCK_PRESENCE_OUTLINE,
+              // On touch screens Ask always shows; a block without a frame (plain text) keeps
+              // room for it so it never covers the words (v0.2 polish).
+              !editing &&
+                actions.ask &&
+                FRAMELESS.has(widget.node.component) &&
+                'pointer-coarse:pr-9',
               // A saved height is a minimum: content that grows later is never cut off.
               (resizing ? preview.h : widget.h) && 'md:min-h-(--h)',
               editing &&

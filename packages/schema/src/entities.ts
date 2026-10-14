@@ -177,6 +177,14 @@ export const ViewData = z.strictObject({
     .datetime()
     .optional()
     .describe('For answer views: hidden after this time unless kept'),
+  evidenceRevision: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Set by Pharos, never by agents: the revision whose data an agent built this view from (R11); later changes to that data make its written parts stale',
+    ),
   order: Order,
 });
 
@@ -190,9 +198,11 @@ export const RequestData = z.strictObject({
   status: z.enum(['open', 'answered', 'dismissed']),
   answerViewId: Id.optional().describe('The answer view that answers it'),
   mode: z
-    .enum(['answer', 'block'])
+    .enum(['answer', 'block', 'refresh'])
     .optional()
-    .describe('"block": change only widgetId in place (R10), not answer in a new view'),
+    .describe(
+      '"block": change only widgetId in place (R10), not answer in a new view; "refresh": the data behind answer view viewId changed, so answer it again in that view (R11)',
+    ),
   reply: z.string().min(1).max(300).optional().describe('Your short note to the person'),
 });
 

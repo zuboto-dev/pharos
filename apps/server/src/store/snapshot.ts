@@ -9,6 +9,7 @@ import {
   type EntityDataMap,
 } from '@pharos/schema';
 import { projectActions } from '../actions/service.js';
+import { evidenceState } from '../views/freshness.js';
 import { isExpired, requestContext } from '../views/service.js';
 import { forAgent, savedRequests } from '../files/requests.js';
 import { AgentFiles } from './agent-files.js';
@@ -263,6 +264,11 @@ export function projectSnapshot(store: Store, projectId: string) {
               ? 'custom'
               : `template:${v.data.template ?? 'overview'}`,
         ...(v.data.question ? { question: v.data.question } : {}),
+        // R11: whether what an agent wrote on it still matches the data (stale answers are
+        // answered again, never linked).
+        ...(v.data.kind === 'answer' || v.data.evidenceRevision !== undefined
+          ? { evidence: evidenceState(store, v) }
+          : {}),
       })),
     /** Questions people asked from the UI that no agent has answered yet. */
     requests: agentFiles

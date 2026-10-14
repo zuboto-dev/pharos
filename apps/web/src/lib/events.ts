@@ -7,8 +7,14 @@ export type RevisionEvent = { id: number; projectIds: string[] };
 export type AgentStatus = {
   /** A command is set up on the server. */
   configured: boolean;
-  /** Not paused in Settings. */
+  /** Answering automatically: set up and not paused in Settings (W7.9). */
   enabled: boolean;
+  /** Paused in Settings (the stored switch). */
+  paused?: boolean;
+  /** What is really happening (R11, W7); older servers leave it out. */
+  state?: 'off' | 'unavailable' | 'paused' | 'idle' | 'queued' | 'running' | 'stopping';
+  /** The run in progress. */
+  run?: { projectIds: string[]; requestIds: string[]; startedAt: string };
   mode: 'default' | 'custom' | 'off' | 'unavailable';
   command?: string;
   logPath?: string;
@@ -23,6 +29,9 @@ export type AgentStatus = {
     timedOut: boolean;
     /** Stopped because answering was paused (pausing stops the run, v0.2 B5). */
     stopped?: boolean;
+    outcome?: 'finished' | 'failed' | 'timed_out' | 'stopped';
+    requestIds?: string[];
+    finishedAt?: string;
   };
 };
 

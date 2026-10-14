@@ -15,7 +15,8 @@ import type { AskAbout, ViewActions } from '../catalog/context';
 import { MENU_PANEL } from '../catalog/select';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
 import { BUTTON } from '../catalog/ui';
-import { useAgentStatus } from '../lib/events';
+import { postJson } from '../lib/api';
+import { useAgentStatus, type AgentStatus } from '../lib/events';
 import { timeAgo } from '../lib/format';
 
 /** Asks the agent a question about part of the project; it becomes a request the agent sees. */
@@ -195,6 +196,41 @@ export function AskDialog({
   );
 }
 
+/**
+ * Where an open question really is with the answering agent (R11, W7.5): in the run now, waiting
+ * for the next run, left open by a run that failed, timed out or was stopped (with a retry), or
+ * waiting for a person because answering is paused or not set up.
+ */
+export function requestRunState(
+  requestId: string,
+  agent: AgentStatus,
+): { kind: 'running' | 'queued' | 'failed' | 'waiting'; text: string; retry?: boolean } {
+  if (agent.run?.requestIds.includes(requestId))
+    return agent.state === 'stopping' || agent.paused
+      ? { kind: 'waiting', text: 'Stopping: answering was paused' }
+      : { kind: 'running', text: 'Being answered now' };
+  const last = agent.lastRun;
+  if (last?.requestIds?.includes(requestId) && last.outcome && last.outcome !== 'finished') {
+    const why =
+      last.outcome === 'stopped'
+        ? 'The run was stopped when answering was paused'
+        : last.outcome === 'timed_out'
+          ? 'The run timed out before answering it'
+          : `The run failed${last.exitCode !== null ? ` (exit ${last.exitCode})` : ''} before answering it`;
+    return { kind: 'failed', text: why, retry: agent.configured && agent.enabled };
+  }
+  if (last?.requestIds?.includes(requestId) && last.outcome === 'finished')
+    return {
+      kind: 'failed',
+      text: 'The last run ended without answering it',
+      retry: agent.configured && agent.enabled,
+    };
+  if (agent.configured && agent.enabled) return { kind: 'queued', text: 'Queued for the next run' };
+  if (agent.configured && agent.paused)
+    return { kind: 'waiting', text: 'Answering is paused: waits for you or your agent' };
+  return { kind: 'waiting', text: 'Waits for your agent' };
+}
+
 /** The project's questions: open ones waiting for the agent, and recent answered ones. */
 export function RequestsButton({
   projectId,
@@ -206,8 +242,15 @@ export function RequestsButton({
   apply: ViewActions['apply'];
 }) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const agent = useAgentStatus();
   const open = requests.filter((r) => r.data.status === 'open');
+  const retry = (id: string) => {
+    setRetrying(id);
+    postJson('/api/agent/answer-waiting', {})
+      .catch(() => {})
+      .finally(() => setRetrying(null));
+  };
   const answered = requests
     .filter((r) => r.data.status === 'answered')
     .sort((a, b) => b.updatedRev - a.updatedRev)
@@ -270,9 +313,15 @@ export function RequestsButton({
                     <div>{r.data.question}</div>
                     <div className="text-xs text-faint">
                       {r.data.mode === 'block' ? 'Change ' : ''}
+                      {r.data.mode === 'refresh' ? 'Refresh ' : ''}
                       {r.data.about ? `${r.data.about} · ` : ''}
                       {timeAgo(r.createdAt)}
                     </div>
+                    <RunState
+                      state={requestRunState(r.id, agent)}
+                      busy={retrying === r.id}
+                      onRetry={() => retry(r.id)}
+                    />
                   </div>
                   <button
                     type="button"
@@ -331,5 +380,44 @@ export function RequestsButton({
           document.body,
         )}
     </>
+  );
+}
+
+const RUN_STATE_TONE = {
+  running: 'text-emerald-700 dark:text-emerald-300',
+  queued: 'text-sky-700 dark:text-sky-300',
+  failed: 'text-amber-700 dark:text-amber-300',
+  waiting: 'text-muted',
+};
+
+/** One open question's state with the answering agent, and a retry when a run left it open. */
+function RunState({
+  state,
+  busy,
+  onRetry,
+}: {
+  state: ReturnType<typeof requestRunState>;
+  busy: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      className={clsx(
+        'mt-0.5 flex flex-wrap items-center gap-2 text-xs',
+        RUN_STATE_TONE[state.kind],
+      )}
+    >
+      <span role="status">{state.text}</span>
+      {state.retry && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onRetry}
+          className="rounded-control font-medium underline underline-offset-2 hover:no-underline disabled:opacity-50"
+        >
+          {busy ? 'Trying again…' : 'Try again'}
+        </button>
+      )}
+    </div>
   );
 }

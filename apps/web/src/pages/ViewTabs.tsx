@@ -23,7 +23,9 @@ import { PresenceDot, viewsWithPresence, workingLine } from '../catalog/presence
 import { usePresence } from '../lib/events';
 import { useResource } from '../lib/api';
 import { timeAgo } from '../lib/format';
+import { useChangedViews } from '../lib/freshness';
 import { dismissAnswer, keepAnswer } from './answers';
+import { CHANGED_TEXT, ChangedDot } from './freshness';
 
 /** Pinned views first, then by order. */
 const isAnswer = (v: Entity<'view'>) => v.data.kind === 'answer';
@@ -125,7 +127,7 @@ function moveBetweenTabs(e: KeyboardEvent<HTMLElement>) {
 }
 
 const TAB =
-  'relative inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
+  'relative inline-flex max-w-56 min-w-0 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 const ICON =
   'mb-1 inline-flex shrink-0 items-center rounded-control p-1.5 text-faint hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 
@@ -163,6 +165,9 @@ export function ViewTabs({
   const navigate = useNavigate();
   // Views an agent is working on right now (v0.2 B5): view id → agents.
   const working = viewsWithPresence(usePresence());
+  // Views changed since the reader last looked (R11); the open one counts as seen.
+  const changedIds = useChangedViews().projects[projectId];
+  const changed = new Set((changedIds ?? []).filter((id) => id !== active?.id));
   const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -289,7 +294,11 @@ export function ViewTabs({
         const isActive = view.id === active?.id;
         const firstAnswer = isAnswer(view) && (i === 0 || !isAnswer(visible[i - 1]!));
         return (
-          <div key={view.id} className="relative flex min-w-0 shrink-0 items-center">
+          <div
+            key={view.id}
+            // The open tab gives way on a narrow screen (its name truncates), so More stays in sight.
+            className={clsx('relative flex min-w-0 items-center', isActive ? 'shrink' : 'shrink-0')}
+          >
             {firstAnswer && i > 0 && (
               <span
                 aria-hidden
@@ -332,11 +341,18 @@ export function ViewTabs({
                 )}
               >
                 <TabLabel view={view} />
-                {working.has(view.id) && (
+                {working.has(view.id) ? (
                   <>
                     <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
                     <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
                   </>
+                ) : (
+                  changed.has(view.id) && (
+                    <>
+                      <ChangedDot className="absolute top-1.5 right-0.5" />
+                      <span className="sr-only"> ({CHANGED_TEXT})</span>
+                    </>
+                  )
                 )}
               </Link>
             )}
@@ -459,8 +475,15 @@ export function ViewTabs({
           }
           className={clsx(ICON, 'relative gap-1 px-2 text-xs text-muted')}
         >
-          {overflow.some((v) => working.has(v.id)) && (
+          {overflow.some((v) => working.has(v.id)) ? (
             <PresenceDot className="absolute top-0.5 right-0.5 size-1.5" />
+          ) : (
+            overflow.some((v) => changed.has(v.id)) && (
+              <>
+                <ChangedDot className="absolute top-0.5 right-0.5" />
+                <span className="sr-only"> (some {CHANGED_TEXT})</span>
+              </>
+            )
           )}
           {overflow.length ? (
             <>
@@ -500,6 +523,12 @@ export function ViewTabs({
                 <>
                   <PresenceDot className="ml-1.5 size-1.5 align-middle" />
                   <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
+                </>
+              )}
+              {!working.has(view.id) && changed.has(view.id) && (
+                <>
+                  <ChangedDot className="ml-1.5 align-middle" />
+                  <span className="sr-only"> ({CHANGED_TEXT})</span>
                 </>
               )}
             </MenuItem>

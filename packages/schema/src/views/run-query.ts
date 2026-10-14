@@ -262,6 +262,23 @@ export function fieldReader(data: ProjectDataset, context: QueryContext = {}) {
   return (entity: Entity, path: string) => resolveField(entity, path, run);
 }
 
+/**
+ * Whether one entity passes a filter's `where` and `anyOf` (not its sort or limit), following
+ * references through `data` (R11: which changes touch what a block shows). The entity may be an
+ * earlier version of one in `data`.
+ */
+export function filterMatcher(data: ProjectDataset, context: QueryContext = {}) {
+  const run = newRun(data, context);
+  return (entity: Entity, filter: Pick<Filter, 'where' | 'anyOf'> = {}): boolean => {
+    // An earlier version of a record may be due on another date: work it out again.
+    run.due.clear();
+    return (
+      (!filter.where || matches(entity, filter.where, run)) &&
+      (!filter.anyOf?.length || filter.anyOf.some((w) => matches(entity, w, run)))
+    );
+  };
+}
+
 /** When a repeating record is due next, as DueTracker and the "due.*" paths see it. */
 export function dueOf(
   data: ProjectDataset,

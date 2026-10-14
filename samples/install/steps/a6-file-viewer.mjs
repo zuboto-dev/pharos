@@ -20,7 +20,9 @@ export const VIEWS = [VIEW];
 
 export async function run({ call, samples }) {
   const projectId = samples.id;
-  const files = await call('list', { type: 'file', projectId, where: { tags: TAG } });
+  const files = (await call('list', { type: 'file', projectId })).filter((f) =>
+    (f.tags ?? []).includes(TAG),
+  );
   if (!files.length)
     throw new StepError(
       `No files tagged "${TAG}" in "${samples.name}": the R7.12 step brings them in first.`,
@@ -34,6 +36,7 @@ export async function run({ call, samples }) {
         purpose: 'done',
         why: "Example Co's registration papers, ready to read and hand on",
         headline: 'Every registration paper is here at a glance; tap one to read it.',
+        yourPart: 'Nothing now. Open a paper when you need to hand it on.',
         ...(tax ? { evidence: [{ id: tax.id, label: 'Tax letter' }] } : {}),
         date: day(0),
         path: [
@@ -59,6 +62,8 @@ export async function run({ call, samples }) {
     'A6 sample: files show at a glance; tapping one opens the file viewer',
     widgets,
     'A6 sample: a page that lists the registration papers at a glance; tapping one opens the file viewer (no FileView needed)',
+    // The papers belong to no stage or goal of the samples project.
+    (warning) => !warning.includes('where it sits'),
   );
   return [{ project: samples.name, projectId, view: VIEW, viewId: page.id, made: page.made }];
 }

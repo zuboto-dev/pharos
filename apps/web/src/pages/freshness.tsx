@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useViewData } from '../catalog/context';
 import { BUTTON } from '../catalog/ui';
 import { useRevisionEvents } from '../lib/events';
-import { formatDate, plural, timeAgo } from '../lib/format';
+import { formatDate, localToday, plural, timeAgo } from '../lib/format';
 import { markViewSeen, viewFreshness } from '../lib/freshness';
 
 // Freshness on a page (R11): a dot on views that changed since the reader looked, a short "what
@@ -230,7 +230,10 @@ export function EvidenceNote({
         {button}
       </div>
     );
-  const asOf = evidence.at ? formatDate(evidence.at.slice(0, 10)) : `revision ${evidence.revision}`;
+  // The reader's own calendar day, not the server's UTC one.
+  const asOf = evidence.at
+    ? formatDate(localToday(new Date(evidence.at)))
+    : `revision ${evidence.revision}`;
   if (!evidence.stale)
     return (
       <p data-evidence="fresh" className="text-xs text-muted">
@@ -238,6 +241,21 @@ export function EvidenceNote({
         {evidence.at ? ` (${timeAgo(evidence.at)})` : ''}; nothing it was written from has changed
         since.
       </p>
+    );
+  // A saved page an agent built is mostly live blocks: a quiet line. An answer is what was
+  // written, so it says plainly that it may be out of date.
+  if (view.data.kind !== 'answer')
+    return (
+      <div
+        data-evidence="stale"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted"
+      >
+        <span className="min-w-0 flex-1">
+          Written as of {asOf}; since then {changesSentence(evidence.stale)}. Its blocks show
+          today’s data; its text may be out of date.
+        </span>
+        {button}
+      </div>
     );
   return (
     <div

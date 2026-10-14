@@ -127,7 +127,7 @@ function moveBetweenTabs(e: KeyboardEvent<HTMLElement>) {
 }
 
 const TAB =
-  'relative inline-flex max-w-56 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
+  'relative inline-flex max-w-56 min-w-0 items-center gap-1.5 border-b-2 py-2 pl-3 text-sm font-medium whitespace-nowrap transition-colors duration-(--motion-base) ease-calm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 const ICON =
   'mb-1 inline-flex shrink-0 items-center rounded-control p-1.5 text-faint hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400';
 
@@ -294,7 +294,11 @@ export function ViewTabs({
         const isActive = view.id === active?.id;
         const firstAnswer = isAnswer(view) && (i === 0 || !isAnswer(visible[i - 1]!));
         return (
-          <div key={view.id} className="relative flex min-w-0 shrink-0 items-center">
+          <div
+            key={view.id}
+            // The open tab gives way on a narrow screen (its name truncates), so More stays in sight.
+            className={clsx('relative flex min-w-0 items-center', isActive ? 'shrink' : 'shrink-0')}
+          >
             {firstAnswer && i > 0 && (
               <span
                 aria-hidden

@@ -68,7 +68,8 @@ function AnswerHeader({ view }: { view: Entity<'view'> }) {
   return (
     <div className="flex flex-wrap items-start gap-3 rounded-block border border-sky-200 bg-sky-50/70 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/40">
       <MessageCircleQuestion className="mt-0.5 size-5 shrink-0 text-accent" />
-      <div className="min-w-0 flex-1">
+      {/* Room for the question first; on a phone the buttons go below it. */}
+      <div className="min-w-0 flex-1 basis-48">
         <div className="font-medium">{view.data.question}</div>
         <div className="text-xs text-muted">
           Answer ·{' '}

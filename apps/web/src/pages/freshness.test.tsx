@@ -160,6 +160,24 @@ describe('stale answers (R11.5)', () => {
     });
   });
 
+  it('a saved page an agent built says it calmly, in one line', () => {
+    renderWith(
+      <EvidenceNote
+        view={first!}
+        freshness={{
+          viewId: first!.id,
+          seen: 1,
+          changed: null,
+          evidence: { revision: 9, at, stale: changes },
+        }}
+      />,
+    );
+    const note = document.querySelector('[data-evidence="stale"]')!;
+    expect(note.textContent).toContain('its text may be out of date');
+    expect(note.textContent).not.toContain('May be out of date.');
+    expect(screen.getByRole('button', { name: /Refresh/ })).toBeTruthy();
+  });
+
   it('a refresh already asked waits for the agent', () => {
     renderWith(
       <EvidenceNote

@@ -2,7 +2,7 @@
 
 Generative UI project management for people working with AI agents.
 
-**v0.1.0 — early development.** This is the first public preview, shared so you can follow
+**v0.2.0 — early development.** This is the second public preview, shared so you can follow
 the work, try it locally, and contribute. APIs and saved-view formats may change as the project
 develops. See the [roadmap](docs/PLAN.md) and [release notes](CHANGELOG.md).
 
@@ -168,6 +168,34 @@ A custom command receives `PHAROS_PROMPT` (the questions plus the view guideline
 examples, ready to pass to an agent), `PHAROS_PROJECT_IDS`, `PHAROS_REQUEST_IDS`, and `PHAROS_URL`
 in its environment. Output goes to `~/.pharos/agent.log`. Only one run happens at a time.
 
+## Report pages
+
+Most views are boards of catalog blocks. For a story that needs its own look, its own charts or
+something to play with, an agent can instead write a **report page**: a whole HTML document that
+reads live project data. Pharos shows it in a locked frame, keeps every version, and marks it out
+of date when the data it read changes.
+
+![The made-up "Spending story" report page in the Pharos web app](docs/images/report-page-spending-story.png)
+
+_The "Spending story" sample (`samples/install/steps/r13-report-page.mjs`, made-up data): the
+numbers and the chart come from the project's records as the page loads._
+
+An agent makes one over MCP:
+
+1. `report_guide` explains when to write a page instead of a board, the `window.pharos` API, the
+   frame's limits and a skeleton to start from.
+2. `view_preview` with a `page` (the HTML, a short `summary`, and named `data` reads, each an
+   entity type and filter) checks the page and its reads before anything is saved.
+3. `view_create` with that `page` saves it (`view_update` changes it later).
+4. `report_asset_put` uploads the pictures, fonts, stylesheets and scripts it refers to by
+   relative path (`report_asset_list` lists them).
+
+The page can't reach the network, open popups or leave its frame; links open through Pharos. It
+gets its data only through `window.pharos`: `pharos.data(name)` resolves to the rows of a named read,
+`pharos.onData` and `pharos.onTheme` call back when the data or the light/dark theme changes, and
+`pharos.openFile` and `pharos.openLink` ask Pharos to open a project file or a web address.
+[`docs/reframe/r13-report-pages.md`](docs/reframe/r13-report-pages.md) has the contract.
+
 ## Configuration
 
 | Variable               | Default                  | Purpose                                                 |
@@ -181,7 +209,7 @@ in its environment. Output goes to `~/.pharos/agent.log`. Only one run happens a
 
 Set configuration variables in the environment before starting Pharos; it does not automatically
 load a root `.env` file. The server only accepts requests from localhost. Keep the web app and
-server local: v0.1 has no authentication. See [SECURITY.md](SECURITY.md) for the trust model and
+server local: v0.2 has no authentication. See [SECURITY.md](SECURITY.md) for the trust model and
 vulnerability reporting.
 
 ## Troubleshooting

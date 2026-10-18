@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 /**
  * Identifies a build of the web app this server serves: a short hash of its index.html, which

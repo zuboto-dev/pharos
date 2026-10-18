@@ -14,7 +14,7 @@ separate maintenance policy.
 
 ## Local trust model
 
-Pharos v0.1 is a single-user local application. It has no user authentication or tenant isolation.
+Pharos v0.2 is a single-user local application. It has no user authentication or tenant isolation.
 The HTTP server binds to `127.0.0.1` and checks local hosts and origins. Keep both the API/MCP
 server and web app on your own machine; do not expose them through public tunnels or reverse
 proxies. A local process or connected MCP client can read and modify your project data.

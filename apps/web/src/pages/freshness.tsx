@@ -204,6 +204,44 @@ export function refreshRequest(view: Entity<'view'>) {
 }
 
 /**
+ * Refresh for a page an agent wrote: asks the answering agent to write it again (a request with
+ * `mode: "refresh"`), or says it is already asked.
+ */
+export function RefreshButton({
+  view,
+  label = 'Refresh',
+}: {
+  view: Entity<'view'>;
+  label?: string;
+}) {
+  const { requests, actions } = useViewData();
+  const [asking, setAsking] = useState(false);
+  const waiting = (requests ?? []).some(
+    (r) => r.data.mode === 'refresh' && r.data.viewId === view.id && r.data.status === 'open',
+  );
+  const refresh = async () => {
+    setAsking(true);
+    const { message, operations } = refreshRequest(view);
+    await actions.apply(message, operations);
+    setAsking(false);
+  };
+  return waiting ? (
+    <span className="text-xs text-muted" role="status">
+      Refresh asked: waiting for your agent
+    </span>
+  ) : (
+    <button
+      type="button"
+      onClick={() => void refresh()}
+      disabled={asking}
+      className={clsx(BUTTON.secondary, 'shrink-0')}
+    >
+      <RefreshCw className={clsx('size-3.5', asking && 'animate-spin')} aria-hidden /> {label}
+    </button>
+  );
+}
+
+/**
  * For a page an agent wrote: "as of" its evidence, and whether what it wrote still matches the
  * data. Live blocks always show today's data; the written parts are a snapshot. Stale pages (and
  * answers whose evidence is unknown) offer Refresh, which asks the answering agent again.
@@ -215,33 +253,9 @@ export function EvidenceNote({
   view: Entity<'view'>;
   freshness: ViewFreshness | null;
 }) {
-  const { requests, actions } = useViewData();
-  const [asking, setAsking] = useState(false);
   const evidence = freshness?.evidence;
   if (!evidence) return null;
-  const waiting = (requests ?? []).some(
-    (r) => r.data.mode === 'refresh' && r.data.viewId === view.id && r.data.status === 'open',
-  );
-  const refresh = async () => {
-    setAsking(true);
-    const { message, operations } = refreshRequest(view);
-    await actions.apply(message, operations);
-    setAsking(false);
-  };
-  const button = waiting ? (
-    <span className="text-xs text-muted" role="status">
-      Refresh asked: waiting for your agent
-    </span>
-  ) : (
-    <button
-      type="button"
-      onClick={() => void refresh()}
-      disabled={asking}
-      className={clsx(BUTTON.secondary, 'shrink-0')}
-    >
-      <RefreshCw className={clsx('size-3.5', asking && 'animate-spin')} aria-hidden /> Refresh
-    </button>
-  );
+  const button = <RefreshButton view={view} />;
   if ('unknown' in evidence)
     return (
       <div

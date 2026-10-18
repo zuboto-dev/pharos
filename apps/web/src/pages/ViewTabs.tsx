@@ -7,6 +7,7 @@ import {
   ChevronDown,
   MessageCircleQuestion,
   MoreHorizontal,
+  Newspaper,
   Pencil,
   Pin,
   PinOff,
@@ -138,6 +139,10 @@ function TabLabel({ view }: { view: Entity<'view'> }) {
       {view.data.pinned && <Pin className="size-3 shrink-0" />}
       {isAnswer(view) && (
         <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
+      )}
+      {/* A report page (R13): the agent's own page, told apart from working pages. */}
+      {view.data.page && !isAnswer(view) && (
+        <Newspaper className="size-3.5 shrink-0 text-faint" aria-label="Report" />
       )}
       <span className="truncate">{view.data.name}</span>
     </>
@@ -512,7 +517,15 @@ export function ViewTabs({
           {overflow.map((view) => (
             <MenuItem
               key={view.id}
-              icon={isAnswer(view) ? MessageCircleQuestion : view.data.pinned ? Pin : undefined}
+              icon={
+                isAnswer(view)
+                  ? MessageCircleQuestion
+                  : view.data.page
+                    ? Newspaper
+                    : view.data.pinned
+                      ? Pin
+                      : undefined
+              }
               onClick={() => {
                 close();
                 navigate(`/projects/${projectId}/views/${view.id}`);

@@ -1,5 +1,5 @@
 import { REPORT_LIMITS, type Author, type Entity } from '@pharos/schema';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
 import { injectBridge, type PageTheme } from './bridge.js';
@@ -11,17 +11,55 @@ import { ReportAssets, assetPath, pageOf, pageSource, reportCsp } from './report
  */
 
 /**
- * Headers on everything served from /views/:id/page/: the page, its assets and the 404s. The
- * CSP names the view's own page path, from the request's Host (checked: local hosts only).
+ * Headers on every response under /api/views/:id/page: the page, its assets, the 404s, the
+ * redirect, refusals and errors, whatever the method (R13.6). The CSP names the view's own page
+ * path, from the request's Host (checked: local hosts only).
  */
-function locked(c: Context): Record<string, string> {
-  const host = c.req.header('host') ?? new URL(c.req.url).host;
+export function lockedHeaders(host: string | undefined, viewId: string | undefined) {
   return {
-    'Content-Security-Policy': reportCsp(pageSource(host, c.req.param('id'))),
+    'Content-Security-Policy': reportCsp(pageSource(host, viewId)),
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
 }
+
+/** The request target as the client sent it (before URL parsing resolves "..", "%2e%2e"). */
+function rawTarget(c: Context): string | undefined {
+  const incoming = (c.env as { incoming?: { url?: unknown } } | undefined)?.incoming;
+  return typeof incoming?.url === 'string' ? incoming.url.split('?')[0] : undefined;
+}
+
+/**
+ * Sets the locked headers on every response to a request for /api/views/:id/page…, by the path
+ * as parsed or as sent. Mounted first on the app, so it covers the local-only refusal too.
+ */
+export const lockPageResponses: MiddlewareHandler = async (c, next) => {
+  const match =
+    PAGE_PREFIX.exec(new URL(c.req.url).pathname) ?? PAGE_PREFIX.exec(rawTarget(c) ?? '');
+  await next();
+  if (!match) return;
+  let viewId: string | undefined;
+  try {
+    viewId = decodeURIComponent(match[1]!);
+  } catch {
+    viewId = undefined;
+  }
+  const headers = lockedHeaders(c.req.header('host') ?? new URL(c.req.url).host, viewId);
+  try {
+    for (const [name, value] of Object.entries(headers)) c.res.headers.set(name, value);
+  } catch {
+    // A response with immutable headers: answer with a copy that carries them.
+    const res = c.res;
+    const copy = new Headers(res.headers);
+    for (const [name, value] of Object.entries(headers)) copy.set(name, value);
+    c.res = undefined;
+    c.res = new Response(res.body, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: copy,
+    });
+  }
+};
 
 /**
  * Headers on the web app's own pages (R13.6). `frame-src 'self'`: a frame in the app may only
@@ -44,32 +82,29 @@ export function isPageRead(method: string, path: string): boolean {
   return (method === 'GET' || method === 'HEAD') && PAGE_PREFIX.test(path);
 }
 
-function notFoundPage(c: Context, message: string): Response {
+function notFoundPage(message: string): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>Not found</title><p style="font:14px system-ui;color:#666;padding:24px">${message}</p>`,
     {
       status: 404,
-      headers: {
-        ...locked(c),
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store',
-      },
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
     },
   );
 }
 
 /**
  * The asset path after /page/, from the raw URL: percent-decoded once, then checked, so an
- * encoded "..", slash or absolute path is refused rather than resolved.
+ * encoded "..", slash or absolute path is refused rather than resolved. Null when it can't be
+ * decoded (`%ZZ`): no such file.
  */
-function rawAssetPath(c: Context): string {
+function rawAssetPath(c: Context): string | null {
   const pathname = new URL(c.req.url).pathname;
   const rest = PAGE_PREFIX.exec(pathname)?.[2] ?? '';
   const raw = rest.slice(1);
   try {
     return decodeURIComponent(raw);
   } catch {
-    throw new PharosError('invalid', 'Asset path is not valid');
+    return null;
   }
 }
 
@@ -124,8 +159,9 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   routes.get('/views/:id/page/*', (c) => {
     const view = viewWithPage(c.req.param('id'));
     const page = view && pageOf(view);
-    if (!view || !page) return notFoundPage(c, 'This view has no report page.');
+    if (!view || !page) return notFoundPage('This view has no report page.');
     const raw = rawAssetPath(c);
+    if (raw === null) return notFoundPage('No such file in this page.');
     if (!raw) {
       const theme = c.req.query('theme');
       const html = injectBridge(
@@ -134,7 +170,6 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
       );
       return new Response(html, {
         headers: {
-          ...locked(c),
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
         },
@@ -144,13 +179,12 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
     try {
       path = assetPath(raw);
     } catch {
-      return notFoundPage(c, 'No such file in this page.');
+      return notFoundPage('No such file in this page.');
     }
     const asset = assets.get(view.id, path);
-    if (!asset) return notFoundPage(c, 'No such file in this page.');
+    if (!asset) return notFoundPage('No such file in this page.');
     return new Response(asset.bytes as Uint8Array<ArrayBuffer>, {
       headers: {
-        ...locked(c),
         'Content-Type': asset.mime,
         'Content-Length': String(asset.bytes.byteLength),
         'Cache-Control': 'no-cache',
@@ -162,6 +196,7 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   // Upload one asset: the raw body is the file (owner or agent, by X-Pharos-Author).
   routes.put('/views/:id/page/*', async (c) => {
     const raw = rawAssetPath(c);
+    if (raw === null) throw new PharosError('invalid', 'Asset path is not valid');
     if (!raw) throw new PharosError('invalid', 'Name the asset: PUT /api/views/:id/page/<path>');
     const body = await readLimited(c.req.raw, REPORT_LIMITS.assetBytes);
     return c.json(assets.put(authorOf(c), c.req.param('id'), raw, body));

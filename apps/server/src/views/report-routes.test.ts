@@ -259,6 +259,67 @@ describe('asset uploads over REST (R13)', () => {
   });
 });
 
+describe('every response under /page carries the locked headers (R13.6)', () => {
+  const lockedFor = (res: Response, id = pageView) => {
+    expect(res.headers.get('content-security-policy'), `${res.status}`).toBe(exactCsp(id));
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+  };
+
+  it('an undecodable path (%ZZ) is a locked not-found page, not a JSON 400', async () => {
+    for (const method of ['GET', 'HEAD']) {
+      const res = await app.request(`/api/views/${pageView}/page/%ZZ`, { method });
+      expect(res.status, method).toBe(404);
+      lockedFor(res);
+      expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      if (method === 'GET') expect(await res.text()).toContain('No such file');
+    }
+    const put = await app.request(`/api/views/${pageView}/page/%ZZ.png`, {
+      method: 'PUT',
+      body: new Uint8Array([1]),
+    });
+    expect(put.status).toBe(400);
+    lockedFor(put);
+  });
+
+  it('other methods, the redirect, HEAD and refusals too', async () => {
+    const cases: [string, RequestInit, number][] = [
+      [`/api/views/${pageView}/page/`, { method: 'POST' }, 404],
+      [`/api/views/${pageView}/page/img/a.png`, { method: 'DELETE' }, 404],
+      [`/api/views/${pageView}/page`, {}, 308],
+      [`/api/views/${pageView}/page`, { method: 'HEAD' }, 308],
+      [`/api/views/${pageView}/page/`, { method: 'HEAD' }, 200],
+      [`/api/views/${pageView}/page/img/a.png`, { method: 'HEAD' }, 200],
+      [`/api/views/${pageView}/page/nothere.png`, { method: 'HEAD' }, 404],
+      // Refused by the local-only check (Origin: null may only read).
+      [
+        `/api/views/${pageView}/page/img/b.png`,
+        { method: 'PUT', headers: { origin: 'null' } },
+        403,
+      ],
+      // An error from the route (a board has no assets).
+      [`/api/views/${board}/page/a.png`, { method: 'PUT', body: new Uint8Array([1]) }, 400],
+    ];
+    for (const [url, init, status] of cases) {
+      const res = await app.request(url, init);
+      expect(res.status, `${init.method ?? 'GET'} ${url}`).toBe(status);
+      lockedFor(res, url.includes(board) ? board : pageView);
+    }
+  });
+
+  it('a request sent with "%2e%2e" is locked by the path as sent', async () => {
+    // The URL parser resolves %2e%2e, so the route sees another path; the target as the client
+    // sent it (the node server's incoming.url) still names a page.
+    const sent = `/api/views/${pageView}/page/%2e%2e/%2e%2e/projects/${projectId}/data`;
+    const res = await app.request(`http://localhost${sent}`, {}, { incoming: { url: sent } });
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    // Nothing else under /api is touched.
+    const data = await app.request(`/api/projects/${projectId}/data`);
+    expect(data.headers.get('content-security-policy')).toBeNull();
+  });
+});
+
 describe('upload bodies are bounded as they stream (R13.6)', () => {
   const MB = 1024 * 1024;
   /** A body of 1 MB chunks, endless unless `count` is given, counting what was pulled. */

@@ -40,7 +40,9 @@ ReportPage = {
 
 - `GET /api/views/:id/page/` serves `page.html`; `GET /api/views/:id/page/<path>` serves an asset.
   Relative URLs in the page (`images/a.jpg`) therefore resolve to assets.
-- Both responses carry:
+- Every response under `/api/views/:id/page` carries these (R13.6: one middleware,
+  `lockPageResponses`, whatever the status or method: 404s, the redirect, refusals and errors
+  too; a path that can't be decoded, like `%ZZ`, is a 404 page):
   - `Content-Security-Policy: sandbox allow-scripts allow-modals;
 default-src 'none'; script-src OWN 'unsafe-inline' https://cdnjs.cloudflare.com
 https://cdn.jsdelivr.net https://unpkg.com; style-src OWN 'unsafe-inline'

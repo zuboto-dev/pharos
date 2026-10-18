@@ -25,7 +25,12 @@ import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
 import { changedViews, markSeen, projectFreshness } from './views/freshness.js';
-import { APP_PAGE_HEADERS, isPageRead, reportRoutes } from './views/report-routes.js';
+import {
+  APP_PAGE_HEADERS,
+  isPageRead,
+  lockPageResponses,
+  reportRoutes,
+} from './views/report-routes.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -149,6 +154,10 @@ export function createApp(
   // and from the answering run. Not project data; sent on the change feed as `presence`.
   const presence = info.presence ?? new Presence();
   watchAgentRevisions(store, feed, presence);
+
+  // Every response under /api/views/:id/page carries the report page's locked headers (R13.6),
+  // the refusals below included.
+  app.use(lockPageResponses);
 
   // Pharos is local-only: refuse requests that didn't come from a localhost page or client,
   // which also blocks DNS-rebinding attacks from websites.

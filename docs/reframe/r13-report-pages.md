@@ -36,11 +36,11 @@ ReportPage = {
   Relative URLs in the page (`images/a.jpg`) therefore resolve to assets.
 - Both responses carry:
   - `Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals;
-    default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com
-    https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'
-    https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;
-    img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none';
-    form-action 'none'; frame-src 'none'; base-uri 'none'`
+default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com
+https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'
+https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;
+img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none';
+form-action 'none'; frame-src 'none'; base-uri 'none'`
   - `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`
     for the page.
 - The page can't reach the API, other sites or the parent's storage: opaque origin, no `fetch`.
@@ -77,6 +77,47 @@ question (a slider, a toggle, a filter, a simulator); real pictures with credits
 `:root` with a dark set under `[data-theme=dark]`; works at 390 px; no network except fonts and
 the three CDNs; live numbers come from `pharos.data`, never copied into the HTML when the project
 has them.
+
+## Bridge messages
+
+The injected script (`apps/server/src/views/bridge.ts`) and the web app's frame talk only with
+`postMessage`. Every message is a plain object with `pharos: 1` and a `kind`; anything else is
+ignored on both sides. The frame has an opaque origin, so both sides post with target origin
+`"*"` and check the sender instead: the frame accepts a message only when
+`event.source === window.parent`; the parent only when `event.source` is that frame's
+`contentWindow`.
+
+Frame → parent:
+
+| Message                                   | When                                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `{ pharos: 1, kind: 'ready' }`            | As soon as the bridge runs (before the page's own scripts). The parent answers with `theme`.    |
+| `{ pharos: 1, kind: 'data', id, name }`   | `pharos.data(name)`. `id` is a string unique within the frame (`"r1"`, `"r2"`, …).              |
+| `{ pharos: 1, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) if the file is in the project. |
+
+Parent → frame:
+
+| Message                                               | Meaning                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `{ pharos: 1, kind: 'data', id, name, rows, error? }` | The answer to the `data` request with that `id`: `rows` is `runQuery(dataset, read.type, read.filter)` for `page.data[name]` (entities as `{id, type, data, …}`, the owner's dataset). With `error` (a string, e.g. an unknown name), `pharos.data` rejects with it and `rows` is ignored (send `[]`). |
+| `{ pharos: 1, kind: 'changed' }`                      | The project data changed. The frame asks again (`data`) for every name it has asked for so far and, once all have answered, calls each `onData` callback once with `{ [name]: rows }`.                                                                                                                 |
+| `{ pharos: 1, kind: 'theme', theme }`                 | `"light"` or `"dark"`. The frame sets `data-theme` on `<html>` and, when it changed, calls each `onTheme` callback with it.                                                                                                                                                                            |
+
+Details:
+
+- The initial theme comes from the page address: `GET /api/views/:id/page/?theme=dark|light`
+  (the frame's `src`), so the first paint is right; without it the bridge uses
+  `prefers-color-scheme`. `pharos.theme` always holds the current one.
+- `pharos.data` rejects after 20 s without an answer, and at once when the page is opened outside
+  a frame (top level): "open this page in Pharos to see it".
+- `window.pharos` can't be replaced or changed by the page (a frozen object on a read-only
+  property).
+- Assets: fonts and module scripts load in CORS mode from the frame's opaque origin
+  (`Origin: null`). The server accepts `Origin: null` only for `GET`/`HEAD` of
+  `/api/views/:id/page/…` and adds `Access-Control-Allow-Origin: *` to font and script assets.
+- Uploads: `PUT /api/views/:id/page/<path>` with the raw file as the body (owner, or an agent by
+  `X-Pharos-Author`), `GET /api/views/:id/assets` lists them. `GET /api/views/:id/page`
+  redirects to `/page/`.
 
 ## Not in R13
 

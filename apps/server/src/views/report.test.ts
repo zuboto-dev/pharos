@@ -406,6 +406,62 @@ describe('page checks (view_preview, R13)', () => {
     expect(blocked.join('\n')).not.toContain('gstatic');
   });
 
+  it('looks for files only in markup and CSS, never in script text (R13.5)', () => {
+    const html = `<!doctype html><html><head>
+      <link rel="stylesheet" href="css/a.css"><link rel="icon" href="favicon.png">
+      <link rel="preload" as="font" href="fonts/x.woff2"><link rel="canonical" href="page.html">
+      <style>@import "css/b.css"; .h { background: url(img/bg.png) } /* url(img/no.png) */</style>
+      <script type="application/json" id="d">{"dir":[{"n":"Mixbook","src":"img/no1.png"}],"q":"\\""}</script>
+      <script>
+        const clean = (m) => m.source_name.replace(/url\(/g, '').replace(/"/g, '\\"');
+        el.innerHTML = '<img src="img/no2.png">' + "<a href='x'>" + \`url('img/no3.png')\`;
+        const css = "background:url(img/no4.png)";
+      </script>
+      <!-- <img src="img/no5.png"> -->
+    </head><body>
+      <a href="notes/a.pdf">a link isn't loaded</a><a href="#top">top</a>
+      <img src="https://pics.example/p.jpg"><img src="//cdn.example/p.jpg"><img src="data:image/png;base64,AA">
+      <img src="blob:abc"><a href="mailto:me@example.com">m</a>
+      <video poster="img/poster.jpg" src="media/v.mp4"></video><object data="docs/o.svg"></object>
+      <img srcset="s1.png 1x, s2.png 2x"><div style="background:url(&quot;img/inline.webp&quot;)"></div>
+      <p>Text url(img/no6.png) and src="img/no7.png" in prose</p>
+      <textarea><img src="img/no8.png"></textarea>
+    </body></html>`;
+    expect(referencedPaths(html).sort()).toEqual(
+      [
+        'css/a.css',
+        'css/b.css',
+        'docs/o.svg',
+        'favicon.png',
+        'fonts/x.woff2',
+        'img/bg.png',
+        'img/inline.webp',
+        'img/poster.jpg',
+        'media/v.mp4',
+        's1.png',
+        's2.png',
+      ].sort(),
+    );
+    expect(blockedExternals(html).join('\n')).toContain('pics.example');
+  });
+
+  it('a big page with script text warns once, for the one missing picture (R13.5)', () => {
+    const { store, projectId } = setup();
+    const blob = JSON.stringify({
+      dir: Array.from({ length: 2000 }, (_, i) => ({ n: 'Mixbook', i, s: 'a"b' })),
+    });
+    const html = `<!doctype html><html><head><style>:root{--a:#000}[data-theme=dark]{--a:#fff}</style></head>
+      <body><h1>Spend</h1><img src="images/x.jpg" alt="">
+      <script>const DATA = ${blob};
+      const name = (m) => m.source_name.replace(/[^a-z]/g, '').replace(/"/g, '\\""');
+      const q = "\\"\"";</script></body></html>`;
+    expect(html.length).toBeGreaterThan(50_000);
+    const preview = previewAny(store, { projectId, page: { html, summary: 'Spend.' } });
+    const assetWarnings = preview.warnings.filter((w) => /asset|won't load/.test(w));
+    expect(assetWarnings).toHaveLength(1);
+    expect(assetWarnings[0]).toMatch(/"images\/x\.jpg", which isn't an asset/);
+  });
+
   it('previews a saved page and a draft: rows per read, missing assets, unknown reads', () => {
     const { store, projectId, make } = setup();
     const id = make().view.id;

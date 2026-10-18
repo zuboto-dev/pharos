@@ -63,7 +63,10 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`
 - `report_asset_put { viewId, path, base64 }` and `report_asset_list { viewId }`.
 - `report_guide` returns the report-writing guide (see below). `view_preview` checks a page:
   size, the named reads (query check, as for blocks), asset paths the HTML references that don't
-  exist, and external hosts the CSP will block.
+  exist, and external hosts the CSP will block. References are looked for only where the browser
+  loads them: `src`, `poster`, `srcset`, `<object data>`, `<link href>` that loads (stylesheet,
+  icon, preload; never `<a href>`), and `url()`/`@import` in `<style>` blocks and `style`
+  attributes; never in script text, comments or plain text.
 - Reads: `boardReads` for a report page = the queries in `page.data`, so R11 freshness works
   unchanged: when data a page read changes, the page is out of date and the reader can ask for a
   refresh (request `mode: "refresh"`).

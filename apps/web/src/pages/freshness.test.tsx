@@ -6,7 +6,14 @@ import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, type ViewActions } from '../catalog/context';
 import type { AgentStatus } from '../lib/events';
 import { announceChangedViews, reloadChangedViews, useChangedViews } from '../lib/freshness';
-import { EvidenceNote, WhatChanged, changesSentence, refreshRequest } from './freshness';
+import {
+  EvidenceNote,
+  WhatChanged,
+  authorName,
+  changesSentence,
+  refreshRequest,
+  staleSentence,
+} from './freshness';
 import { requestRunState } from './requests';
 import { agentSummary, lastRunText } from './SettingsPage';
 import { ViewTabs } from './ViewTabs';
@@ -79,6 +86,33 @@ describe('what changed since you looked (R11.5)', () => {
         recent: [{ ...changes.recent[0]!, author: { kind: 'human', name: 'me' } }],
       }),
     ).toBe('You changed “Oil change” (and 4 earlier changes)');
+  });
+
+  it('says "you" in lower case unless it starts the sentence (R13.5)', () => {
+    const me = { kind: 'human' as const, name: 'me' };
+    expect(authorName(me)).toBe('You');
+    expect(authorName(me, false)).toBe('you');
+    expect(authorName({ kind: 'human', name: 'Ana' }, false)).toBe('Ana');
+    const mine = {
+      ...changes,
+      total: 1,
+      recent: [{ ...changes.recent[0]!, author: me }],
+    };
+    expect(staleSentence(mine)).toBe('you changed “Oil change”');
+    // A second clause is inside the sentence too; the same author keeps one clause.
+    const both = {
+      ...changes,
+      total: 3,
+      recent: [
+        changes.recent[0]!,
+        { ...changes.recent[0]!, revision: 11, author: me },
+        { ...changes.recent[0]!, revision: 10, author: me },
+      ],
+    };
+    expect(changesSentence(both)).toBe('Opus 5.5 changed “Oil change”; you changed “Oil change”');
+    expect(changesSentence({ ...both, recent: both.recent.slice(1) })).toBe(
+      'You changed “Oil change” (and 1 earlier change)',
+    );
   });
 
   it('shows the line with a link to history, and hides it on request', () => {
@@ -175,6 +209,28 @@ describe('stale answers (R11.5)', () => {
     const note = document.querySelector('[data-evidence="stale"]')!;
     expect(note.textContent).toContain('its text may be out of date');
     expect(note.textContent).not.toContain('May be out of date.');
+    cleanup();
+    renderWith(
+      <EvidenceNote
+        view={answer}
+        freshness={{
+          viewId: answer.id,
+          seen: 1,
+          changed: null,
+          evidence: {
+            revision: 9,
+            at,
+            stale: {
+              ...changes,
+              recent: [{ ...changes.recent[0]!, author: { kind: 'human', name: 'me' } }],
+            },
+          },
+        }}
+      />,
+    );
+    expect(document.querySelector('[data-evidence="stale"]')!.textContent).toContain(
+      'since then you changed “Oil change”',
+    );
     expect(screen.getByRole('button', { name: /Refresh/ })).toBeTruthy();
   });
 

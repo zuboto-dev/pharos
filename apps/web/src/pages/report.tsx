@@ -303,7 +303,7 @@ export function ReportBar({
           className="min-w-0 text-left hover:text-ink"
         >
           Updated {timeAgo(view.updatedAt)}
-          {rev && ` by ${authorName(rev.author)}`}
+          {rev && ` by ${authorName(rev.author, false)}`}
         </button>
         {stale && (
           <span

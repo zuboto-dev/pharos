@@ -343,7 +343,7 @@ describe('report bar (R13)', () => {
     await screen.findByText(/Updated .* by Claude Code/);
     expect(screen.getByText('Out of date')).toBeTruthy();
     expect(document.querySelector('[data-report-bar]')?.textContent).toContain(
-      'You changed “Write the brief”',
+      'Since it was written, you changed “Write the brief”',
     );
     const link = screen.getByRole('link', { name: /Open in new tab/ });
     expect(link.getAttribute('href')).toBe(reportUrl(report));

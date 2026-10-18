@@ -1,7 +1,13 @@
-import { runQuery, type Entity, type RevisionSummary, type ViewFreshness } from '@pharos/schema';
+import {
+  runQuery,
+  type Entity,
+  type ProjectDataset,
+  type RevisionSummary,
+  type ViewFreshness,
+} from '@pharos/schema';
 import { AlertTriangle, ExternalLink, FileWarning } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useViewData, type ViewData } from '../catalog/context';
+import { useViewData } from '../catalog/context';
 import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { useFileViewer } from '../files/viewer-context';
 import { useResource } from '../lib/api';
@@ -70,7 +76,7 @@ function readMessage(data: unknown): FromFrame | null {
 /** The answer to `pharos.data(name)`: rows of the page's named read, or why there are none. */
 export function readRows(
   view: Entity<'view'>,
-  data: ViewData,
+  data: ProjectDataset,
   name: string,
 ): { rows: unknown[]; error?: string } {
   const reads = view.data.page?.data ?? {};
@@ -81,6 +87,20 @@ export function readRows(
   } catch (err) {
     return { rows: [], error: `The read “${name}” failed: ${String(err)}` };
   }
+}
+
+/**
+ * What the page may read: the project as agents see it (the server's AgentFiles view: a file's
+ * details only, nothing from hidden folders, no local paths). The page was written by an agent,
+ * so it gets no more than its author could read; it is fetched again whenever the data changes.
+ */
+export function agentDataset(projectId: string): Promise<ProjectDataset> {
+  return fetch(`/api/projects/${encodeURIComponent(projectId)}/data`, {
+    headers: { 'x-pharos-author': 'agent:Report page' },
+  }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json() as Promise<ProjectDataset>;
+  });
 }
 
 type Status = 'loading' | 'shown' | 'missing' | 'failed';
@@ -104,6 +124,14 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
   useLayoutEffect(() => {
     latest.current = { view, data, viewer, theme };
   });
+  // The agent-visible dataset for the current data version; requests wait for it.
+  const visible = useRef<{ version: unknown; rows: Promise<ProjectDataset> } | null>(null);
+  const visibleData = useCallback(() => {
+    const { view, data } = latest.current;
+    if (!visible.current || visible.current.version !== data.version)
+      visible.current = { version: data.version, rows: agentDataset(view.data.projectId) };
+    return visible.current.rows;
+  }, []);
 
   const post = useCallback((message: Record<string, unknown>) => {
     frame.current?.contentWindow?.postMessage({ pharos: 1, ...message }, '*');
@@ -122,14 +150,21 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
         setStatus({ src, value: 'shown' });
         post({ kind: 'theme', theme });
       } else if (message.kind === 'data') {
-        const { rows, error } = readRows(view, data, message.name);
-        post({
-          kind: 'data',
-          id: message.id,
-          name: message.name,
-          rows,
-          ...(error ? { error } : {}),
-        });
+        void visibleData()
+          .then((visible) => readRows(view, visible, message.name))
+          .catch((err: unknown) => ({
+            rows: [] as unknown[],
+            error: `The project's data couldn't be loaded: ${String(err)}`,
+          }))
+          .then(({ rows, error }) =>
+            post({
+              kind: 'data',
+              id: message.id,
+              name: message.name,
+              rows,
+              ...(error ? { error } : {}),
+            }),
+          );
       } else if (message.kind === 'openFile') {
         // Only this project's files, and only through the viewer.
         if (viewer && (data.files ?? []).some((f) => f.id === message.fileId))
@@ -138,7 +173,7 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [src, post]);
+  }, [src, post, visibleData]);
 
   // The project's data reloaded (the app refetches on the change feed): the page asks again.
   const version = useRef(data.version);

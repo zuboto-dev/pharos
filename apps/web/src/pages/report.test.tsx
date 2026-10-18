@@ -29,6 +29,8 @@ const report: Entity<'view'> = {
   },
 };
 const withReport: ProjectDataset = { ...data, views: [report, ...data.views] };
+// What the server gives agents (AgentFiles); the page reads this, never the owner's dataset.
+let agentSees: ProjectDataset = withReport;
 
 // happy-dom loads a frame's page itself (not through `fetch`): answer it here, so no test ever
 // reaches the network. The page has no bridge; tests speak for it with messages.
@@ -51,10 +53,13 @@ beforeEach(() => {
   // The page route answers (HEAD after a load without a bridge); nothing else does.
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url: string, init?: RequestInit) =>
+    vi.fn(async (url: string, init?: RequestInit) =>
       init?.method === 'HEAD'
         ? new Response(null, { status: 200 })
-        : new Response('{}', { status: 404 }),
+        : url.endsWith('/data') &&
+            new Headers(init?.headers).get('x-pharos-author') === 'agent:Report page'
+          ? Response.json(agentSees)
+          : new Response('{}', { status: 404 }),
     ),
   );
 });
@@ -126,7 +131,7 @@ describe('report frame (R13)', () => {
     expect(screen.getByRole('status', { name: 'Loading page' })).toBeTruthy();
   });
 
-  it('sends the theme on ready and rows for a named read; an error for an unknown one', () => {
+  it('sends the theme on ready and rows for a named read; an error for an unknown one', async () => {
     render(
       <Providers>
         <ReportFrame view={report} />
@@ -140,28 +145,58 @@ describe('report frame (R13)', () => {
     send({ pharos: 1, kind: 'data', id: 7, name: 'done' });
     const rows = runQuery(withReport, 'task', { where: { status: 'done' } });
     expect(rows.length).toBeGreaterThan(0);
-    expect(post).toHaveBeenLastCalledWith(
-      { pharos: 1, kind: 'data', id: 7, name: 'done', rows },
-      '*',
+    await waitFor(() =>
+      expect(post).toHaveBeenLastCalledWith(
+        { pharos: 1, kind: 'data', id: 7, name: 'done', rows },
+        '*',
+      ),
     );
 
     send({ pharos: 1, kind: 'data', id: 'b', name: 'nope' });
-    expect(post).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        kind: 'data',
-        id: 'b',
-        name: 'nope',
-        rows: [],
-        error: expect.any(String),
-      }),
-      '*',
+    await waitFor(() =>
+      expect(post).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          kind: 'data',
+          id: 'b',
+          name: 'nope',
+          rows: [],
+          error: expect.any(String),
+        }),
+        '*',
+      ),
     );
     // Not an own property of the reads: still unknown.
     send({ pharos: 1, kind: 'data', id: 'c', name: 'constructor' });
-    expect(post).toHaveBeenLastCalledWith(
-      expect.objectContaining({ id: 'c', error: expect.any(String) }),
-      '*',
+    await waitFor(() =>
+      expect(post).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: 'c', error: expect.any(String) }),
+        '*',
+      ),
     );
+  });
+
+  it("answers from what agents see, not from the owner's dataset", async () => {
+    // The owner sees a done task the agent view leaves out (as AgentFiles drops hidden items).
+    const done = runQuery(withReport, 'task', { where: { status: 'done' } });
+    agentSees = { ...withReport, tasks: withReport.tasks.filter((t) => t.id !== done[0]!.id) };
+    try {
+      render(
+        <Providers>
+          <ReportFrame view={report} />
+        </Providers>,
+      );
+      const post = spyOnFrame();
+      send({ pharos: 1, kind: 'ready' });
+      send({ pharos: 1, kind: 'data', id: 1, name: 'done' });
+      await waitFor(() =>
+        expect(post).toHaveBeenLastCalledWith(
+          expect.objectContaining({ id: 1, rows: done.slice(1) }),
+          '*',
+        ),
+      );
+    } finally {
+      agentSees = withReport;
+    }
   });
 
   it('ignores messages from other sources, unknown kinds and malformed ones', () => {

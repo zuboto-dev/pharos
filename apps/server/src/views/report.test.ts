@@ -1,10 +1,16 @@
 import { REPORT_LIMITS, type Author } from '@pharos/schema';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../store/database.js';
 import { projectSnapshot } from '../store/snapshot.js';
 import { Store } from '../store/store.js';
 import { evidenceState, projectFreshness } from './freshness.js';
-import { ReportAssets, blockedExternals, decodeBase64, referencedPaths } from './report.js';
+import {
+  ReportAssets,
+  blockedExternals,
+  decodeBase64,
+  referencedPaths,
+  scheduleAssetPurge,
+} from './report.js';
 import {
   PAGE_HTML_SHOWN,
   createView,
@@ -351,7 +357,7 @@ describe('report assets (R13)', () => {
     expect(make().view.id).toBeTruthy();
   });
 
-  it('go with their view: delete, cascade from the project, and a revert of the create', () => {
+  it('outlive a delete so a revert restores the whole page; purged 30 days after (R13.5)', () => {
     const { store, projectId, make } = setup();
     const assets = new ReportAssets(store);
     const a = make().view.id;
@@ -360,20 +366,48 @@ describe('report assets (R13)', () => {
     assets.put(agent, b, 'x.png', png(2));
     const made = make();
     assets.put(agent, made.view.id, 'x.png', png(2));
-    store.apply(me, { message: 'del', operations: [{ op: 'delete', type: 'view', id: a }] });
-    expect(assets.list(a)).toEqual([]);
-    expect(assets.list(b)).toHaveLength(1);
+    const deleted = store.apply(me, {
+      message: 'del',
+      operations: [{ op: 'delete', type: 'view', id: a }],
+    });
+    // Kept (not served: the routes need the view), and back with the view on undo.
+    expect(assets.list(a)).toHaveLength(1);
+    store.revert(deleted.revision!.id, me);
+    expect(store.get(a)?.type).toBe('view');
+    expect(assets.get(a, 'x.png')?.bytes.byteLength).toBe(2);
+    // Reverting the create removes the view; its assets wait like a delete's.
     store.revert(made.revision!.id, me);
+    expect(assets.list(made.view.id)).toHaveLength(1);
+    // Nothing gone long enough yet.
+    expect(assets.purgeGone()).toBe(0);
+    expect(assets.purgeGone(Date.now() + 29 * 86_400_000)).toBe(0);
+    // 31 days on: only the gone view's assets go; live views keep theirs.
+    expect(assets.purgeGone(Date.now() + 31 * 86_400_000)).toBe(1);
     expect(assets.list(made.view.id)).toEqual([]);
+    expect(assets.list(a)).toHaveLength(1);
+    expect(assets.list(b)).toHaveLength(1);
+    // A project delete takes its views; their assets go 30 days later.
     store.apply(me, {
       message: 'del project',
       operations: [{ op: 'delete', type: 'project', id: projectId }],
     });
-    expect(assets.list(b)).toEqual([]);
+    expect(assets.purgeGone()).toBe(0);
+    expect(assets.purgeGone(Date.now() + 31 * 86_400_000)).toBe(2);
     const count = store.database.prepare('SELECT COUNT(*) AS n FROM report_assets').get() as {
       n: number;
     };
     expect(count.n).toBe(0);
+  });
+
+  it('the purge runs at start and logs, never throws (R13.5)', () => {
+    const { store } = setup();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stop = scheduleAssetPurge(store);
+    stop();
+    store.database.exec('DROP TABLE report_assets');
+    expect(() => scheduleAssetPurge(store)()).not.toThrow();
+    expect(errors).toHaveBeenCalledWith('[pharos] Report asset purge failed:', expect.anything());
+    errors.mockRestore();
   });
 
   it('decodes base64 strictly (a data: URL is fine)', () => {
@@ -404,6 +438,62 @@ describe('page checks (view_preview, R13)', () => {
     expect(blocked.join('\n')).not.toContain('jsdelivr');
     expect(blocked.join('\n')).not.toContain('googleapis');
     expect(blocked.join('\n')).not.toContain('gstatic');
+  });
+
+  it('looks for files only in markup and CSS, never in script text (R13.5)', () => {
+    const html = `<!doctype html><html><head>
+      <link rel="stylesheet" href="css/a.css"><link rel="icon" href="favicon.png">
+      <link rel="preload" as="font" href="fonts/x.woff2"><link rel="canonical" href="page.html">
+      <style>@import "css/b.css"; .h { background: url(img/bg.png) } /* url(img/no.png) */</style>
+      <script type="application/json" id="d">{"dir":[{"n":"Mixbook","src":"img/no1.png"}],"q":"\\""}</script>
+      <script>
+        const clean = (m) => m.source_name.replace(/url\\(/g, '').replace(/"/g, '\\"');
+        el.innerHTML = '<img src="img/no2.png">' + "<a href='x'>" + \`url('img/no3.png')\`;
+        const css = "background:url(img/no4.png)";
+      </script>
+      <!-- <img src="img/no5.png"> -->
+    </head><body>
+      <a href="notes/a.pdf">a link isn't loaded</a><a href="#top">top</a>
+      <img src="https://pics.example/p.jpg"><img src="//cdn.example/p.jpg"><img src="data:image/png;base64,AA">
+      <img src="blob:abc"><a href="mailto:me@example.com">m</a>
+      <video poster="img/poster.jpg" src="media/v.mp4"></video><object data="docs/o.svg"></object>
+      <img srcset="s1.png 1x, s2.png 2x"><div style="background:url(&quot;img/inline.webp&quot;)"></div>
+      <p>Text url(img/no6.png) and src="img/no7.png" in prose</p>
+      <textarea><img src="img/no8.png"></textarea>
+    </body></html>`;
+    expect(referencedPaths(html).sort()).toEqual(
+      [
+        'css/a.css',
+        'css/b.css',
+        'docs/o.svg',
+        'favicon.png',
+        'fonts/x.woff2',
+        'img/bg.png',
+        'img/inline.webp',
+        'img/poster.jpg',
+        'media/v.mp4',
+        's1.png',
+        's2.png',
+      ].sort(),
+    );
+    expect(blockedExternals(html).join('\n')).toContain('pics.example');
+  });
+
+  it('a big page with script text warns once, for the one missing picture (R13.5)', () => {
+    const { store, projectId } = setup();
+    const blob = JSON.stringify({
+      dir: Array.from({ length: 2000 }, (_, i) => ({ n: 'Mixbook', i, s: 'a"b' })),
+    });
+    const html = `<!doctype html><html><head><style>:root{--a:#000}[data-theme=dark]{--a:#fff}</style></head>
+      <body><h1>Spend</h1><img src="images/x.jpg" alt="">
+      <script>const DATA = ${blob};
+      const name = (m) => m.source_name.replace(/[^a-z]/g, '').replace(/"/g, '\\""');
+      const q = "\\"\\"";</script></body></html>`;
+    expect(html.length).toBeGreaterThan(50_000);
+    const preview = previewAny(store, { projectId, page: { html, summary: 'Spend.' } });
+    const assetWarnings = preview.warnings.filter((w) => /asset|won't load/.test(w));
+    expect(assetWarnings).toHaveLength(1);
+    expect(assetWarnings[0]).toMatch(/"images\/x\.jpg", which isn't an asset/);
   });
 
   it('previews a saved page and a draft: rows per read, missing assets, unknown reads', () => {

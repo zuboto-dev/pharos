@@ -200,7 +200,8 @@ export function createApp(
     } satisfies HealthResponse),
   );
 
-  // Live updates: one `revision` event per new revision, with the projects it touched.
+  // Live updates: one `revision` event per new revision, with the projects it touched, and
+  // `report-assets` when files of a report page are uploaded.
   api.get('/events', (c) =>
     streamSSE(c, async (stream) => {
       // A write fails once the browser has gone (a closed tab, a reload); that rejection must not
@@ -209,6 +210,10 @@ export function createApp(
         stream.writeSSE(message).catch(() => {});
       const unsubscribe = feed.subscribe((event) => {
         void send({ event: 'revision', data: JSON.stringify(event), id: String(event.id) });
+      });
+      // New files on a report page (not revisions): an open frame of that view reloads (R13.5).
+      const unwatchAssets = feed.subscribeAssets((event) => {
+        void send({ event: 'report-assets', data: JSON.stringify(event) });
       });
       // The question-answering agent's status (when one is configured).
       const unwatchAgent = agent?.onChange((status) => {
@@ -220,6 +225,7 @@ export function createApp(
       });
       stream.onAbort(() => {
         unsubscribe();
+        unwatchAssets();
         unwatchAgent?.();
         unwatchPresence();
       });
@@ -240,6 +246,7 @@ export function createApp(
         if (!stream.aborted) await stream.write(': keep-alive\n\n');
       }
       unsubscribe();
+      unwatchAssets();
       unwatchAgent?.();
       unwatchPresence();
     }),

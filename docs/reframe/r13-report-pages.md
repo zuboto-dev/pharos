@@ -26,8 +26,13 @@ ReportPage = {
 - Pictures, fonts and scripts the page ships go in **report assets**: a `report_assets` SQLite
   table (migration), keyed by `(view_id, path)`, `mime` from the extension
   (png jpg jpeg gif webp svg avif css js json woff woff2 ttf otf mp4 webm), ≤ 10 MB each,
-  ≤ 64 MB per view. Assets are page files, not project data, so not revisions; deleting the view
-  deletes them.
+  ≤ 64 MB per view. Assets are page files, not project data, so not revisions. Deleting the view
+  stops serving them but keeps them, so undoing the delete brings the whole page back; assets of
+  views gone for 30 days are purged (at server start and once a day).
+- Uploads aren't revisions, so the change feed (`GET /api/events`) announces them as
+  `event: report-assets`, `data: { type: 'report-assets', viewId, at }` (polled by `updated_at`,
+  so uploads from the stdio process count; one event per view per poll). An open frame of that
+  view reloads (`?v=<updatedAt>-<n>`) once the uploads have paused for 1.5 s.
 - `evidenceRevision` is set by Pharos when an agent writes the page (same rule as R11).
 
 ## Serving and the frame
@@ -63,7 +68,10 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`
 - `report_asset_put { viewId, path, base64 }` and `report_asset_list { viewId }`.
 - `report_guide` returns the report-writing guide (see below). `view_preview` checks a page:
   size, the named reads (query check, as for blocks), asset paths the HTML references that don't
-  exist, and external hosts the CSP will block.
+  exist, and external hosts the CSP will block. References are looked for only where the browser
+  loads them: `src`, `poster`, `srcset`, `<object data>`, `<link href>` that loads (stylesheet,
+  icon, preload; never `<a href>`), and `url()`/`@import` in `<style>` blocks and `style`
+  attributes; never in script text, comments or plain text.
 - Reads: `boardReads` for a report page = the queries in `page.data`, so R11 freshness works
   unchanged: when data a page read changes, the page is out of date and the reader can ask for a
   refresh (request `mode: "refresh"`).

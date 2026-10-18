@@ -68,6 +68,30 @@ export function assetMime(path: string): string {
 
 const megabytes = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
 
+/** How long a deleted view's assets are kept, so undoing the delete restores the whole page. */
+export const REPORT_ASSETS_KEEP_DAYS = 30;
+
+/**
+ * Purges long-gone views' assets now and then once a day (the HTTP server calls it at start).
+ * Errors are logged, never thrown: background work must not stop the server. Returns a stop.
+ */
+export function scheduleAssetPurge(store: Store, everyMs = 24 * 60 * 60 * 1000): () => void {
+  const assets = new ReportAssets(store);
+  const run = () => {
+    try {
+      const removed = assets.purgeGone();
+      if (removed)
+        console.log(`[pharos] Removed ${removed} asset(s) of report pages deleted 30+ days ago`);
+    } catch (error) {
+      console.error('[pharos] Report asset purge failed:', error);
+    }
+  };
+  run();
+  const timer = setInterval(run, everyMs);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
 /** Report assets: a view's page files, kept beside revisions (never project data). */
 export class ReportAssets {
   constructor(private readonly store: Store) {}
@@ -96,6 +120,27 @@ export class ReportAssets {
           .prepare('DELETE FROM report_assets WHERE view_id = ? AND path = ?')
           .run(viewId, path).changes,
       ) > 0
+    );
+  }
+
+  /**
+   * Removes the assets of views that have been gone (deleted, or their project deleted) for
+   * `keepDays` or more, by the time of the last revision that touched the view. Assets outlive a
+   * delete so that undoing it brings the whole page back. Returns how many assets went.
+   */
+  purgeGone(now: number = Date.now(), keepDays = REPORT_ASSETS_KEEP_DAYS): number {
+    const cutoff = new Date(now - keepDays * 24 * 60 * 60 * 1000).toISOString();
+    return Number(
+      this.store.database
+        .prepare(
+          `DELETE FROM report_assets WHERE view_id IN (
+             SELECT a.view_id FROM (SELECT DISTINCT view_id FROM report_assets) a
+             WHERE NOT EXISTS (SELECT 1 FROM entities e WHERE e.id = a.view_id)
+               AND COALESCE((SELECT MAX(r.created_at) FROM changes c
+                   JOIN revisions r ON r.id = c.revision_id WHERE c.entity_id = a.view_id), '') < ?
+           )`,
+        )
+        .run(cutoff).changes,
     );
   }
 
@@ -167,24 +212,95 @@ export function decodeBase64(text: string): Uint8Array {
 
 // ---------------------------------------------------------------- what the HTML refers to
 
-/** Relative URLs in the page (src, href, srcset, poster, CSS url()), as asset paths. */
-export function referencedPaths(html: string): string[] {
+type Tag = { name: string; attrs: Map<string, string> };
+
+/**
+ * The page's markup as the browser would load from it: start tags with their attributes, inline
+ * styles and <style> blocks. Script text, comments and plain text are skipped, so a string in a
+ * script (`{"src":"x"}`, `s.replace(/url(/)`) is never taken for a file the page loads.
+ */
+export function pageMarkup(html: string): { tags: Tag[]; css: string[] } {
+  const tags: Tag[] = [];
+  const css: string[] = [];
+  const re =
+    /<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|title)\b((?:"[^"]*"|'[^']*'|[^'">])*)>([\s\S]*?)(?:<\/\1\s*>|$)|<([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^'">])*)>/gi;
+  for (const m of html.matchAll(re)) {
+    if (m[1]) {
+      const name = m[1].toLowerCase();
+      tags.push({ name, attrs: attributes(m[2] ?? '') });
+      if (name === 'style') css.push(m[3] ?? '');
+    } else if (m[4]) tags.push({ name: m[4].toLowerCase(), attrs: attributes(m[5] ?? '') });
+  }
+  for (const tag of tags) {
+    const style = tag.attrs.get('style');
+    if (style) css.push(style);
+  }
+  return { tags, css };
+}
+
+function attributes(text: string): Map<string, string> {
+  const attrs = new Map<string, string>();
+  for (const m of text.matchAll(
+    /([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g,
+  )) {
+    const name = m[1]!.toLowerCase();
+    if (!attrs.has(name)) attrs.set(name, decodeEntities(m[2] ?? m[3] ?? m[4] ?? ''));
+  }
+  return attrs;
+}
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(amp|quot|apos|#39|lt|gt);/g, (_, e: string) =>
+    e === 'amp' ? '&' : e === 'quot' ? '"' : e === 'lt' ? '<' : e === 'gt' ? '>' : "'",
+  );
+}
+
+/** URLs a stylesheet loads: url(…) and @import "…". */
+function cssUrls(css: string): string[] {
   const urls: string[] = [];
-  for (const m of html.matchAll(
-    /\s(?:src|href|poster|data)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
-  ))
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const m of text.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi))
     urls.push(m[1] ?? m[2] ?? m[3] ?? '');
-  for (const m of html.matchAll(/\ssrcset\s*=\s*(?:"([^"]*)"|'([^']*)')/gi))
-    for (const part of (m[1] ?? m[2] ?? '').split(','))
-      urls.push(part.trim().split(/\s+/)[0] ?? '');
-  for (const m of html.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi))
-    urls.push(m[1] ?? m[2] ?? m[3] ?? '');
+  for (const m of text.matchAll(/@import\s+(?:"([^"]*)"|'([^']*)')/gi))
+    urls.push(m[1] ?? m[2] ?? '');
+  return urls;
+}
+
+/** <link rel> values that make the browser load the href. */
+const LOADING_LINKS = /\b(?:stylesheet|icon|preload|modulepreload|apple-touch-icon|manifest)\b/i;
+
+/**
+ * Every URL the page's markup loads, with what loads it: src (any element), data (<object>),
+ * poster, srcset (img and source), href of a <link> that loads (stylesheet, icon, preload; never
+ * <a>), and url()/@import in <style> blocks and style attributes.
+ */
+function loadedUrls(html: string): { url: string; tag: Tag | null }[] {
+  const { tags, css } = pageMarkup(html);
+  const out: { url: string; tag: Tag | null }[] = [];
+  for (const tag of tags) {
+    const add = (url: string | undefined) => {
+      if (url !== undefined) out.push({ url, tag });
+    };
+    add(tag.attrs.get('src'));
+    add(tag.attrs.get('poster'));
+    if (tag.name === 'object') add(tag.attrs.get('data'));
+    if (tag.name === 'link' && LOADING_LINKS.test(tag.attrs.get('rel') ?? ''))
+      add(tag.attrs.get('href'));
+    const srcset = tag.attrs.get('srcset');
+    if (srcset) for (const part of srcset.split(',')) add(part.trim().split(/\s+/)[0]);
+  }
+  for (const block of css) for (const url of cssUrls(block)) out.push({ url, tag: null });
+  return out;
+}
+
+/** Relative URLs the page's markup loads (never text in its scripts), as asset paths. */
+export function referencedPaths(html: string): string[] {
   const paths = new Set<string>();
-  for (const raw of urls) {
+  for (const { url: raw } of loadedUrls(html)) {
     const url = raw.trim();
     if (!url || url.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//'))
       continue;
-    if (url.includes('${') || url.includes('{{')) continue; // built in script, not a file
+    if (url.includes('${') || url.includes('{{')) continue; // a template, not a file
     const path = url.split(/[?#]/)[0]!.replace(/^\.\//, '');
     if (path) paths.add(decodeOrKeep(path));
   }
@@ -216,27 +332,27 @@ export function blockedExternals(html: string): string[] {
     out.add(`${what} ${url.slice(0, 120)} (${host}) will be blocked`);
   };
   const external = /^(?:https?:)?\/\//i;
-  for (const m of html.matchAll(/<script\b[^>]*\ssrc\s*=\s*["']?([^"'\s>]+)/gi))
-    if (external.test(m[1]!)) check(m[1]!, 'script', 'Script');
-  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
-    const href = /\shref\s*=\s*["']?([^"'\s>]+)/i.exec(m[0])?.[1];
-    if (!href || !external.test(href)) continue;
-    const rel = /\srel\s*=\s*["']?([^"'>]+)/i.exec(m[0])?.[1]?.toLowerCase() ?? '';
-    if (rel.includes('stylesheet')) check(href, 'style', 'Stylesheet');
-    else if (rel.includes('preconnect') || rel.includes('dns-prefetch')) continue;
-    else if (rel.includes('preload') && /\sas\s*=\s*["']?font/i.test(m[0]))
-      check(href, 'font', 'Font');
-  }
-  for (const m of html.matchAll(
-    /<(img|video|audio|source|iframe|embed|object)\b[^>]*\s(?:src|data)\s*=\s*["']?([^"'\s>]+)/gi,
-  ))
-    if (external.test(m[2]!))
-      check(m[2]!, 'other', m[1]!.toLowerCase() === 'iframe' ? 'Frame' : 'Picture or media');
-  for (const m of html.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)/gi))
-    if (external.test(m[1]!)) check(m[1]!, 'style', 'Stylesheet');
-  for (const m of html.matchAll(/url\(\s*["']?((?:https?:)?\/\/[^"')\s]+)/gi)) {
-    const kind = /\.(woff2?|ttf|otf)(?:[?#]|$)/i.test(m[1]!) ? 'font' : 'other';
-    check(m[1]!, kind, kind === 'font' ? 'Font' : 'Picture');
+  for (const { url: raw, tag } of loadedUrls(html)) {
+    const url = raw.trim();
+    if (!external.test(url)) continue;
+    if (!tag) {
+      const font = /\.(woff2?|ttf|otf)(?:[?#]|$)/i.test(url);
+      // An @import or a url() of a .css file is a stylesheet.
+      if (/\.css(?:[?#]|$)/i.test(url) || /fonts\.googleapis\.com/i.test(url))
+        check(url, 'style', 'Stylesheet');
+      else check(url, font ? 'font' : 'other', font ? 'Font' : 'Picture');
+    } else if (tag.name === 'script') check(url, 'script', 'Script');
+    else if (tag.name === 'link') {
+      const rel = tag.attrs.get('rel')?.toLowerCase() ?? '';
+      if (rel.includes('stylesheet')) check(url, 'style', 'Stylesheet');
+      else if (rel.includes('preload') && tag.attrs.get('as')?.toLowerCase() === 'font')
+        check(url, 'font', 'Font');
+      else if (rel.includes('preload') && tag.attrs.get('as')?.toLowerCase() === 'script')
+        check(url, 'script', 'Script');
+      else if (rel.includes('preload') && tag.attrs.get('as')?.toLowerCase() === 'style')
+        check(url, 'style', 'Stylesheet');
+      else check(url, 'other', 'Picture or media');
+    } else check(url, 'other', tag.name === 'iframe' ? 'Frame' : 'Picture or media');
   }
   if (/\bfetch\s*\(|XMLHttpRequest|new\s+WebSocket|EventSource\s*\(/.test(html))
     out.add(

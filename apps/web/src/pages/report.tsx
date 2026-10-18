@@ -11,6 +11,7 @@ import { useViewData } from '../catalog/context';
 import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { useFileViewer } from '../files/viewer-context';
 import { useResource } from '../lib/api';
+import { useReportAssetEvents } from '../lib/events';
 import { timeAgo } from '../lib/format';
 import { authorName, staleSentence, RefreshButton } from './freshness';
 
@@ -21,9 +22,13 @@ import { authorName, staleSentence, RefreshButton } from './freshness';
 /** Whether a view is a report page (its `page` wins over any board). */
 export const isReport = (view: Entity<'view'> | undefined): boolean => Boolean(view?.data.page);
 
-/** Where the server serves a report page; `updatedAt` makes a new version load fresh. */
-export function reportUrl(view: Entity<'view'>): string {
-  return `/api/views/${encodeURIComponent(view.id)}/page/?v=${encodeURIComponent(view.updatedAt)}`;
+/**
+ * Where the server serves a report page; `updatedAt` makes a new version load fresh, and
+ * `reload` (bumped when its files are uploaded) makes the same version load again.
+ */
+export function reportUrl(view: Entity<'view'>, reload = 0): string {
+  const version = reload ? `${view.updatedAt}-${reload}` : view.updatedAt;
+  return `/api/views/${encodeURIComponent(view.id)}/page/?v=${encodeURIComponent(version)}`;
 }
 
 /**
@@ -105,6 +110,25 @@ export function agentDataset(projectId: string): Promise<ProjectDataset> {
 
 type Status = 'loading' | 'shown' | 'missing' | 'failed';
 
+/** How long uploads must pause before an open page reloads: a batch of files is one reload. */
+export const ASSET_RELOAD_DELAY_MS = 1500;
+
+/**
+ * Counts reloads of a view's page for its uploaded files (R13.5): each burst of report-assets
+ * events for the view, once quiet for ASSET_RELOAD_DELAY_MS, adds one.
+ */
+export function useAssetReloads(viewId: string): number {
+  const [reloads, setReloads] = useState(0);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useReportAssetEvents((event) => {
+    if (event.viewId !== viewId) return;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setReloads((n) => n + 1), ASSET_RELOAD_DELAY_MS);
+  });
+  useEffect(() => () => clearTimeout(timer.current), [viewId]);
+  return reloads;
+}
+
 /**
  * The page in its locked frame, tall enough to fill the window below it (the page scrolls inside),
  * with a skeleton while it loads and a plain message when it can't be served.
@@ -114,7 +138,8 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
   const viewer = useFileViewer();
   const theme = useShownTheme();
   const frame = useRef<HTMLIFrameElement>(null);
-  const src = reportUrl(view);
+  const reloads = useAssetReloads(view.id);
+  const src = reportUrl(view, reloads);
   const [status, setStatus] = useState<{ src: string; value: Status }>({ src, value: 'loading' });
   const shown = status.src === src ? status.value : 'loading';
   // The bridge said ready (per frame load); until then nothing is posted.
@@ -303,7 +328,7 @@ export function ReportBar({
           className="min-w-0 text-left hover:text-ink"
         >
           Updated {timeAgo(view.updatedAt)}
-          {rev && ` by ${authorName(rev.author)}`}
+          {rev && ` by ${authorName(rev.author, false)}`}
         </button>
         {stale && (
           <span

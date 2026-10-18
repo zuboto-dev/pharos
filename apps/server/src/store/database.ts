@@ -150,6 +150,17 @@ export const MIGRATIONS: string[] = [
     DELETE FROM report_assets WHERE view_id = OLD.id;
   END;
   `,
+  // R13.5: a view's assets outlive its delete, so undoing the delete (a revert) brings the whole
+  // page back. Routes serve them only while the view exists; ReportAssets.purgeGone removes the
+  // assets of views gone for 30 days.
+  `
+  DROP TRIGGER report_assets_view_deleted;
+  `,
+  // R13.5: the change feed polls for new uploads by time; this index answers without reading
+  // the files themselves.
+  `
+  CREATE INDEX report_assets_updated ON report_assets(updated_at, view_id);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

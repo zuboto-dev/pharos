@@ -134,9 +134,12 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
 - A view has a page or a board, never both (the store refuses `page` with `spec`); a page has no
   blocks, so block asks on it are refused. Its named reads (`page.data`) get the same query
   checks as blocks and are what R11 freshness tracks (`pageReads` in `reads.ts`).
-- Report assets (pictures, fonts, scripts) are in the `report_assets` table, not revisions; a
-  trigger removes them with their view. `views/report.ts` has the limits, path checks and the
-  page preview; agents use `report_asset_put`, `report_asset_list` and `report_guide`.
+- Report assets (pictures, fonts, scripts) are in the `report_assets` table, not revisions. They
+  outlive a view delete (served only while the view exists), so undoing the delete restores the
+  whole page; `scheduleAssetPurge` removes those of views gone 30+ days, at start and daily.
+  Uploads aren't revisions: the feed polls for them and sends `report-assets` (`{ viewId, at }`),
+  and an open frame of that view reloads once a burst of uploads goes quiet. `views/report.ts` has the limits, path checks and the page preview; agents use
+  `report_asset_put`, `report_asset_list` and `report_guide`.
 
 ## Files
 

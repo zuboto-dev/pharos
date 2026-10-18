@@ -35,22 +35,29 @@ export function ChangedDot({ className }: { className?: string }) {
 /** Words for a screen reader beside a ChangedDot. */
 export const CHANGED_TEXT = 'changed since you looked';
 
-/** Who made a change, in a few words. */
-export function authorName(author: Author): string {
-  if (author.kind === 'human') return author.name === 'me' ? 'You' : author.name;
+/**
+ * Who made a change, in a few words. The owner is "You" at the start of a sentence and "you"
+ * inside one ("Since it was written, you changed…", "Updated by you").
+ */
+export function authorName(author: Author, start = true): string {
+  if (author.kind === 'human') return author.name === 'me' ? (start ? 'You' : 'you') : author.name;
   if (author.kind === 'system') return 'Pharos';
   return agentLabel(author.name);
 }
 
 /**
  * One sentence on what changed: who changed which items (the first few, by name), and whether
- * they changed the page itself. Newest first, one clause per author.
+ * they changed the page itself. Newest first, one clause per author. `start: false` when it
+ * goes inside a sentence ("since then …"): only a first word at the start is capitalised.
  */
-export function changesSentence(changes: PageChanges): string {
-  const byAuthor = new Map<string, { labels: string[]; more: number; page: boolean }>();
+export function changesSentence(changes: PageChanges, { start = true } = {}): string {
+  const byAuthor = new Map<
+    string,
+    { author: Author; labels: string[]; more: number; page: boolean }
+  >();
   for (const change of changes.recent) {
     const who = authorName(change.author);
-    const entry = byAuthor.get(who) ?? { labels: [], more: 0, page: false };
+    const entry = byAuthor.get(who) ?? { author: change.author, labels: [], more: 0, page: false };
     for (const item of change.items) {
       const label = item.label ? `“${item.label}”` : `a ${item.type.replace('_', ' ')}`;
       if (entry.labels.includes(label)) continue;
@@ -60,7 +67,8 @@ export function changesSentence(changes: PageChanges): string {
     entry.page ||= change.page;
     byAuthor.set(who, entry);
   }
-  const clauses = [...byAuthor].map(([who, { labels, more, page }]) => {
+  const clauses = [...byAuthor.values()].map(({ author, labels, more, page }, i) => {
+    const who = authorName(author, start && i === 0);
     const things = [...labels, ...(more ? [`${more} more`] : [])];
     const items = things.length
       ? things.length === 1
@@ -75,11 +83,13 @@ export function changesSentence(changes: PageChanges): string {
 }
 
 /**
- * What changed since an answer was written: the changes, and when the date moved on far enough
- * that its date-based blocks ("due today") show other items (R11 review, gap 4).
+ * What changed since an answer was written, to go inside a sentence: the changes, and when the
+ * date moved on far enough that its date-based blocks ("due today") show other items (R11
+ * review, gap 4).
  */
 export function staleSentence(stale: PageChanges): string {
-  const parts = stale.recent.length ? [changesSentence(stale)] : [];
+  // It always follows other words ("since then", "Since it was written,").
+  const parts = stale.recent.length ? [changesSentence(stale, { start: false })] : [];
   if (stale.calendar)
     parts.push(
       `the date moved on from ${formatDate(stale.calendar.from)}, so its date-based blocks show other items`,

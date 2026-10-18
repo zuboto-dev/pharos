@@ -7,7 +7,7 @@ import { REPORT_GUIDE } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { BRIDGE_SCRIPT } from './bridge.js';
-import { REPORT_CSP, ReportAssets } from './report.js';
+import { ReportAssets, pageSource, reportCsp } from './report.js';
 import { createView } from './service.js';
 
 // R13: serving report pages and their assets, uploads over REST, and the MCP tools.
@@ -46,15 +46,15 @@ beforeEach(() => {
   new ReportAssets(store).put(agent, pageView, 'fonts/a.woff2', new Uint8Array([4]));
 });
 
-const EXACT_CSP =
-  "sandbox allow-scripts allow-modals; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'";
+/** The exact CSP of a page served for `host` (R13.6: its own page path instead of 'self'). */
+const exactCsp = (id: string, host = 'localhost') =>
+  `sandbox allow-scripts allow-modals; default-src 'none'; script-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://fonts.googleapis.com; font-src http://${host}/api/views/${id}/page/ data: https://fonts.gstatic.com; img-src http://${host}/api/views/${id}/page/ data: blob:; media-src http://${host}/api/views/${id}/page/ data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'`;
 
 describe('GET /api/views/:id/page/ (R13)', () => {
   it('serves the page with the contract headers and the bridge first', async () => {
-    expect(REPORT_CSP).toBe(EXACT_CSP);
     const res = await app.request(`/api/views/${pageView}/page/`);
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -79,9 +79,65 @@ describe('GET /api/views/:id/page/ (R13)', () => {
     for (const id of [board, 'view_000000000000', projectId]) {
       const res = await app.request(`/api/views/${id}/page/`);
       expect(res.status).toBe(404);
-      expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+      expect(res.headers.get('content-security-policy')).toBe(exactCsp(id));
       expect(await res.text()).toContain('no report page');
     }
+  });
+});
+
+describe("a page's CSP names only its own files (R13.6)", () => {
+  it("uses the view's page path on the request's host, never the whole origin", async () => {
+    const res = await app.request(`/api/views/${pageView}/page/`, {
+      headers: { host: '127.0.0.1:4300' },
+    });
+    const csp = res.headers.get('content-security-policy')!;
+    expect(csp).toBe(exactCsp(pageView, '127.0.0.1:4300'));
+    expect(csp).not.toContain("'self'");
+    // Another view's files are outside this source (a path prefix).
+    expect(csp).not.toContain(otherPage);
+    const asset = await app.request(`/api/views/${pageView}/page/img/a.png`, {
+      headers: { host: 'localhost:5173' },
+    });
+    expect(asset.headers.get('content-security-policy')).toBe(exactCsp(pageView, 'localhost:5173'));
+  });
+
+  it('trusts only local hosts: any other Host gets no own-file source at all', () => {
+    expect(pageSource('127.0.0.1:4300', 'view_1')).toBe(
+      'http://127.0.0.1:4300/api/views/view_1/page/',
+    );
+    expect(pageSource('LOCALHOST', 'view_1')).toBe('http://localhost/api/views/view_1/page/');
+    expect(pageSource('[::1]:4300', 'view_1')).toBe('http://[::1]:4300/api/views/view_1/page/');
+    for (const host of [
+      'evil.example',
+      'evil.example:4300',
+      '127.0.0.1.evil.example',
+      '127.0.0.1:4300; script-src *',
+      '127.0.0.1:4300 https://evil.example',
+      '127.0.0.1:43000000',
+      'localhost:',
+      '',
+      undefined,
+    ])
+      expect(pageSource(host, 'view_1'), String(host)).toBeNull();
+    for (const id of ['view 1', "view_1'", 'a;b', 'x'.repeat(65), undefined])
+      expect(pageSource('127.0.0.1:4300', id), String(id)).toBeNull();
+    const none = reportCsp(null);
+    expect(none).toContain("script-src 'unsafe-inline' https://cdnjs.cloudflare.com");
+    expect(none).toContain('img-src data: blob:');
+    expect(none).not.toContain("'self'");
+    expect(none).not.toContain('evil');
+  });
+
+  it('a hostile Host: refused, and never written into the CSP', async () => {
+    // The server builds the request URL from Host, so a foreign host is refused outright.
+    expect((await app.request(`http://evil.example/api/views/${pageView}/page/`)).status).toBe(403);
+    // Should one get through, the CSP names no files of its own rather than that host.
+    const res = await app.request(`/api/views/${pageView}/page/`, {
+      headers: { host: 'evil.example:4300' },
+    });
+    const csp = res.headers.get('content-security-policy')!;
+    expect(csp).toBe(reportCsp(null));
+    expect(csp).not.toContain('evil');
   });
 });
 
@@ -90,7 +146,7 @@ describe('GET /api/views/:id/page/<asset> (R13)', () => {
     const res = await app.request(`/api/views/${pageView}/page/img/a.png`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('access-control-allow-origin')).toBeNull();

@@ -41,11 +41,16 @@ ReportPage = {
   Relative URLs in the page (`images/a.jpg`) therefore resolve to assets.
 - Both responses carry:
   - `Content-Security-Policy: sandbox allow-scripts allow-modals;
-default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com
-https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'
-https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;
-img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none';
-form-action 'none'; frame-src 'none'; base-uri 'none'`
+default-src 'none'; script-src OWN 'unsafe-inline' https://cdnjs.cloudflare.com
+https://cdn.jsdelivr.net https://unpkg.com; style-src OWN 'unsafe-inline'
+https://fonts.googleapis.com; font-src OWN data: https://fonts.gstatic.com;
+img-src OWN data: blob:; media-src OWN data: blob:; connect-src 'none';
+form-action 'none'; frame-src 'none'; base-uri 'none'`, where `OWN` is the view's own page path
+    as an absolute source, `http://<host>/api/views/<id>/page/` (R13.6; `reportCsp`/`pageSource`
+    in `views/report.ts`). `'self'` would be the whole origin, and with `Access-Control-Allow-Origin: *`
+    on scripts and fonts a page could load another view's (another project's) files. `<host>` is
+    the request's Host, used only when it is 127.0.0.1, localhost or [::1] with an optional port
+    (and the id only when it looks like one); otherwise the page gets no own-file source at all.
   - `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`
     for the page.
 - The page can't reach the API, other sites or the parent's storage: opaque origin, no `fetch`,
@@ -158,7 +163,8 @@ Details:
   property).
 - Assets: fonts and module scripts load in CORS mode from the frame's opaque origin
   (`Origin: null`). The server accepts `Origin: null` only for `GET`/`HEAD` of
-  `/api/views/:id/page/…` and adds `Access-Control-Allow-Origin: *` to font and script assets.
+  `/api/views/:id/page/…` and adds `Access-Control-Allow-Origin: *` to font and script assets;
+  the page's CSP (its own page path only) keeps it to its own view's files.
 - Uploads: `PUT /api/views/:id/page/<path>` with the raw file as the body (owner, or an agent by
   `X-Pharos-Author`), `GET /api/views/:id/assets` lists them. `GET /api/views/:id/page`
   redirects to `/page/`.

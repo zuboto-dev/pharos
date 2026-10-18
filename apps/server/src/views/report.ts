@@ -22,20 +22,42 @@ import type { WidgetPreview } from './preview.js';
  * contract; serving is in report-routes.ts.
  */
 
-/** What the page's Content-Security-Policy allows: scripts and styles from three CDNs, fonts. */
-export const REPORT_CSP = [
-  'sandbox allow-scripts allow-modals',
-  "default-src 'none'",
-  "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
-  "media-src 'self' data: blob:",
-  "connect-src 'none'",
-  "form-action 'none'",
-  "frame-src 'none'",
-  "base-uri 'none'",
-].join('; ');
+/** A Host header Pharos answers on: 127.0.0.1, localhost or [::1], with an optional port. */
+const LOCAL_HOST = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/i;
+const VIEW_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The page's own files as a CSP source (R13.6): `http://<host>/api/views/<id>/page/`, a path
+ * prefix, so a page loads its own assets and never another view's (which `'self'`, the whole
+ * origin, allowed). Null when the Host or the id isn't one Pharos would serve: then the page
+ * loads no files of its own rather than trusting a host it was given.
+ */
+export function pageSource(host: string | undefined, viewId: string | undefined): string | null {
+  if (!host || !viewId || !LOCAL_HOST.test(host) || !VIEW_ID.test(viewId)) return null;
+  return `http://${host.toLowerCase()}/api/views/${viewId}/page/`;
+}
+
+/**
+ * The Content-Security-Policy of a report page and its files: no popups, no network; scripts and
+ * styles from its own files (`own`, from pageSource) and three CDNs, Google Fonts; framed only by
+ * Pharos itself.
+ */
+export function reportCsp(own: string | null): string {
+  const self = own ? `${own} ` : '';
+  return [
+    'sandbox allow-scripts allow-modals',
+    "default-src 'none'",
+    `script-src ${self}'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com`,
+    `style-src ${self}'unsafe-inline' https://fonts.googleapis.com`,
+    `font-src ${self}data: https://fonts.gstatic.com`,
+    `img-src ${self}data: blob:`,
+    `media-src ${self}data: blob:`,
+    "connect-src 'none'",
+    "form-action 'none'",
+    "frame-src 'none'",
+    "base-uri 'none'",
+  ].join('; ');
+}
 
 /** External hosts the page may load from, by what loads them. */
 const ALLOWED_HOSTS: Record<'script' | 'style' | 'font', string[]> = {

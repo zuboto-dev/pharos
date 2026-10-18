@@ -3,19 +3,25 @@ import { Hono, type Context } from 'hono';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
 import { injectBridge, type PageTheme } from './bridge.js';
-import { REPORT_CSP, ReportAssets, assetPath, pageOf } from './report.js';
+import { ReportAssets, assetPath, pageOf, pageSource, reportCsp } from './report.js';
 
 /**
  * Report pages over HTTP (R13): the page and its assets, served for a sandboxed frame with the
  * contract's headers, and assets uploaded by the owner or an agent. Mounted under /api.
  */
 
-/** Headers on everything served from /views/:id/page/: the page, its assets and the 404s. */
-const LOCKED: Record<string, string> = {
-  'Content-Security-Policy': REPORT_CSP,
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer',
-};
+/**
+ * Headers on everything served from /views/:id/page/: the page, its assets and the 404s. The
+ * CSP names the view's own page path, from the request's Host (checked: local hosts only).
+ */
+function locked(c: Context): Record<string, string> {
+  const host = c.req.header('host') ?? new URL(c.req.url).host;
+  return {
+    'Content-Security-Policy': reportCsp(pageSource(host, c.req.param('id'))),
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  };
+}
 
 /**
  * Headers on the web app's own pages (R13.6). `frame-src 'self'`: a frame in the app may only
@@ -38,13 +44,13 @@ export function isPageRead(method: string, path: string): boolean {
   return (method === 'GET' || method === 'HEAD') && PAGE_PREFIX.test(path);
 }
 
-function notFoundPage(message: string): Response {
+function notFoundPage(c: Context, message: string): Response {
   return new Response(
     `<!doctype html><meta charset="utf-8"><title>Not found</title><p style="font:14px system-ui;color:#666;padding:24px">${message}</p>`,
     {
       status: 404,
       headers: {
-        ...LOCKED,
+        ...locked(c),
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
       },
@@ -86,7 +92,7 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   routes.get('/views/:id/page/*', (c) => {
     const view = viewWithPage(c.req.param('id'));
     const page = view && pageOf(view);
-    if (!view || !page) return notFoundPage('This view has no report page.');
+    if (!view || !page) return notFoundPage(c, 'This view has no report page.');
     const raw = rawAssetPath(c);
     if (!raw) {
       const theme = c.req.query('theme');
@@ -96,7 +102,7 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
       );
       return new Response(html, {
         headers: {
-          ...LOCKED,
+          ...locked(c),
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'no-store',
         },
@@ -106,13 +112,13 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
     try {
       path = assetPath(raw);
     } catch {
-      return notFoundPage('No such file in this page.');
+      return notFoundPage(c, 'No such file in this page.');
     }
     const asset = assets.get(view.id, path);
-    if (!asset) return notFoundPage('No such file in this page.');
+    if (!asset) return notFoundPage(c, 'No such file in this page.');
     return new Response(asset.bytes as Uint8Array<ArrayBuffer>, {
       headers: {
-        ...LOCKED,
+        ...locked(c),
         'Content-Type': asset.mime,
         'Content-Length': String(asset.bytes.byteLength),
         'Cache-Control': 'no-cache',

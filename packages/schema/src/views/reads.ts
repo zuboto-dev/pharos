@@ -150,6 +150,21 @@ export function boardReads(board: Board): BoardReads {
   return reads;
 }
 
+/**
+ * What a report page reads (R13): the queries in its named reads (`page.data`). The HTML itself
+ * is not read for ids: what the page shows live comes only through those reads.
+ */
+export function pageReads(page: { data?: Record<string, ReadQuery> }): BoardReads {
+  const reads: BoardReads = { queries: [], ids: new Set(), project: false, everything: false };
+  for (const read of Object.values(page.data ?? {})) {
+    reads.queries.push({ type: read.type, ...(read.filter ? { filter: read.filter } : {}) });
+    const text = read.filter ? JSON.stringify(read.filter) : '';
+    if (text.includes('"$currentStage"')) reads.currentStage = true;
+    if (read.filter && datedFilter(read.filter)) reads.dates = true;
+  }
+  return reads;
+}
+
 /** Whether a page reads nothing from the project's data (only what its agent wrote). */
 export function readsNothing(reads: BoardReads): boolean {
   return !reads.queries.length && !reads.ids.size && !reads.project && !reads.everything;

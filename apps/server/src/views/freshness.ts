@@ -8,6 +8,7 @@ import {
   filterMatcher,
   localToday,
   mergeReads,
+  pageReads,
   readsNothing,
   runQuery,
   type Author,
@@ -36,6 +37,11 @@ import { effectiveBoard, isExpired } from './service.js';
  * reader last looked, and whether an agent-built page's written parts still match their data.
  * Computed from the change log on request; nothing here is a revision.
  */
+
+/** What a view reads: a report page's named reads (R13), or its board's queries. */
+export function viewReads(view: Entity<'view'>): BoardReads {
+  return view.data.page ? pageReads(view.data.page) : boardReads(effectiveBoard(view));
+}
 
 /** The one reader of a local install: the owner, who writes from the web app as human:me. */
 export const READER: Author = { kind: 'human', name: 'me' };
@@ -309,7 +315,7 @@ export function projectFreshness(
   const out: Record<string, ViewFreshness> = {};
   for (const view of views) {
     const seen = seenOf(view);
-    const reads = boardReads(effectiveBoard(view));
+    const reads = viewReads(view);
     const changed = options.files
       ? null
       : pageChanges(revisions, view, reads, matcherOn, {
@@ -348,7 +354,7 @@ function evidenceOf(
   const evidenceRevision = view.data.evidenceRevision;
   if (evidenceRevision === undefined) return view.data.kind === 'answer' ? { unknown: true } : null;
   const built = builtVersion(store, view, evidenceRevision);
-  const reads = built ? mergeReads(boardReads(effectiveBoard(built.view)), current) : current;
+  const reads = built ? mergeReads(viewReads(built.view), current) : current;
   if (readsNothing(reads))
     return view.data.kind === 'answer' ? { unknown: true, reason: 'no_data' } : null;
   let stale = pageChanges(revisions, view, reads, matcherOn, {

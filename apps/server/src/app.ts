@@ -25,6 +25,7 @@ import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
 import { changedViews, markSeen, projectFreshness } from './views/freshness.js';
+import { isPageRead, reportRoutes } from './views/report-routes.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -153,8 +154,14 @@ export function createApp(
   // which also blocks DNS-rebinding attacks from websites.
   app.use(async (c, next) => {
     // The node adapter builds the request URL from the Host header.
-    const hostOk = LOCAL_HOSTS.has(new URL(c.req.url).hostname);
-    const originOk = isLocal(c.req.header('origin'), (o) => new URL(o).hostname);
+    const url = new URL(c.req.url);
+    const hostOk = LOCAL_HOSTS.has(url.hostname);
+    // A report page runs in a sandboxed frame with an opaque origin: its fonts and module scripts
+    // come with "Origin: null" (R13). Only reads of the page and its assets accept it.
+    const origin = c.req.header('origin');
+    const originOk =
+      isLocal(origin, (o) => new URL(o).hostname) ||
+      (origin === 'null' && isPageRead(c.req.method, url.pathname));
     if (!hostOk || !originOk)
       return c.json({ error: { code: 'forbidden', message: 'Non-local request' } }, 403);
     await next();
@@ -388,6 +395,9 @@ export function createApp(
     const viewId = c.req.param('id');
     return c.json({ viewId, seen: markSeen(store, viewId, body.revision) });
   });
+
+  // Report pages (R13): the page and its assets for the frame; asset uploads and the asset list.
+  api.route('/', reportRoutes(store, authorOf));
 
   api.get('/history', (c) => {
     const q = c.req.query();

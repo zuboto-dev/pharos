@@ -1,0 +1,476 @@
+import { REPORT_LIMITS, type Author } from '@pharos/schema';
+import { describe, expect, it } from 'vitest';
+import { openDatabase } from '../store/database.js';
+import { projectSnapshot } from '../store/snapshot.js';
+import { Store } from '../store/store.js';
+import { evidenceState, projectFreshness } from './freshness.js';
+import { ReportAssets, blockedExternals, decodeBase64, referencedPaths } from './report.js';
+import {
+  PAGE_HTML_SHOWN,
+  createView,
+  getView,
+  listViews,
+  previewAny,
+  updateView,
+} from './service.js';
+
+// R13: report pages on the server: the store, the view service, assets, checks and freshness.
+
+const me: Author = { kind: 'human', name: 'me' };
+const agent: Author = { kind: 'agent', name: 'Opus 5.5' };
+
+const HTML = `<!doctype html><html><head><style>:root{--a:#000}[data-theme=dark]{--a:#fff}</style></head>
+<body><h1>Spending</h1><img src="img/hero.svg" alt=""><script>pharos.data('spend').then(r => r)</script></body></html>`;
+
+const SPEND = { spend: { type: 'record' as const, filter: { where: { recordType: 'spending' } } } };
+
+function setup() {
+  const store = new Store(openDatabase(':memory:'));
+  const { created } = store.apply(me, {
+    message: 'Set up',
+    operations: [
+      {
+        op: 'create',
+        type: 'project',
+        ref: 'p',
+        data: {
+          name: 'Money',
+          recordTypes: [
+            {
+              key: 'spending',
+              name: 'Spending',
+              plural: 'Spending',
+              fields: [
+                { key: 'date', label: 'Date', kind: 'date' },
+                { key: 'amount', label: 'Amount', kind: 'money', currency: 'EUR' },
+                { key: 'category', label: 'Category', kind: 'text' },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        op: 'create',
+        type: 'record',
+        ref: 'r1',
+        data: {
+          projectId: '$p',
+          recordType: 'spending',
+          title: 'Groceries',
+          fields: { date: '2026-09-02', amount: { amount: 4210, currency: 'EUR' } },
+        },
+      },
+      { op: 'create', type: 'task', ref: 't', data: { projectId: '$p', title: 'Budget' } },
+    ],
+  });
+  const projectId = created.p!;
+  const make = (author: Author = agent, page: Record<string, unknown> = {}) =>
+    createView(store, author, {
+      projectId,
+      name: 'Spending story',
+      message: 'A report page',
+      page: { html: HTML, data: SPEND, summary: 'Groceries lead.', ...page },
+    });
+  return { store, projectId, record: created.r1!, task: created.t!, make };
+}
+
+const png = (n: number) => new Uint8Array(n).fill(7);
+
+describe('report pages in the store and view service (R13)', () => {
+  it('creates a page view: no board, its reads and summary listed, evidence stamped for agents', () => {
+    const { store, projectId, make } = setup();
+    const made = make();
+    const view = store.getOfType('view', made.view.id);
+    expect(view.data.page?.summary).toBe('Groceries lead.');
+    expect(view.data.spec).toBeUndefined();
+    expect(view.data.evidenceRevision).toBe(made.revision!.id - 1);
+    // The result leaves out the HTML the agent just sent; the preview is the page check.
+    expect(made.view.page).toEqual({ summary: 'Groceries lead.', data: SPEND });
+    expect((made.preview as { kind?: string }).kind).toBe('report page');
+    expect(made.preview.summary).toMatch(/^report page, .* 1 named read, 0 assets/);
+    const listed = listViews(store, projectId).find((v) => v.id === view.id)!;
+    expect(listed).toMatchObject({ layout: 'report page', reads: ['spend'] });
+    expect(projectSnapshot(store, projectId).views.find((v) => v.id === view.id)).toMatchObject({
+      kind: 'report page',
+      summary: 'Groceries lead.',
+    });
+    expect(getView(store, view.id).board.widgets).toEqual([]);
+  });
+
+  it('needs widgets or page, one of the two, and checks the page', () => {
+    const { store, projectId } = setup();
+    expect(() => createView(store, agent, { projectId, name: 'x', message: 'm' })).toThrow(
+      /one of the two/,
+    );
+    expect(() =>
+      createView(store, agent, {
+        projectId,
+        name: 'x',
+        message: 'm',
+        widgets: [],
+        page: { html: HTML },
+      }),
+    ).toThrow(/one of the two/);
+    expect(() =>
+      createView(store, agent, { projectId, name: 'x', message: 'm', page: { html: '' } }),
+    ).toThrow(/Invalid page/);
+    expect(() =>
+      createView(store, agent, {
+        projectId,
+        name: 'x',
+        message: 'm',
+        page: { html: 'x'.repeat(REPORT_LIMITS.htmlChars + 1) },
+      }),
+    ).toThrow(/Invalid page/);
+    const many = Object.fromEntries(
+      Array.from({ length: REPORT_LIMITS.reads + 1 }, (_, i) => [`r${i}`, { type: 'task' }]),
+    );
+    expect(() =>
+      createView(store, agent, {
+        projectId,
+        name: 'x',
+        message: 'm',
+        page: { html: HTML, data: many },
+      }),
+    ).toThrow(/Invalid page/);
+  });
+
+  it('refuses a named read the query check rejects, naming the read', () => {
+    const { store, projectId } = setup();
+    try {
+      createView(store, agent, {
+        projectId,
+        name: 'x',
+        message: 'm',
+        page: {
+          html: HTML,
+          data: { spend: { type: 'record', filter: { where: { recordType: 'spendng' } } } },
+        },
+      });
+      expect.unreachable();
+    } catch (error) {
+      const issues = (error as { issues?: string[] }).issues ?? [];
+      expect(issues.join('\n')).toMatch(/page\.data\.spend\.filter\.where.*\(read "spend"\)/);
+    }
+  });
+
+  it('keeps a view a board or a page, never both; old board views stay valid', () => {
+    const { store, projectId, make } = setup();
+    const board = createView(store, me, {
+      projectId,
+      name: 'Board',
+      message: 'm',
+      widgets: [{ id: 'a', node: { component: 'TaskTable' } }],
+    }).view.id;
+    // A write with both is refused by the store (the REST apply path too).
+    expect(() =>
+      store.apply(me, {
+        message: 'both',
+        operations: [{ op: 'update', type: 'view', id: board, data: { page: { html: HTML } } }],
+      }),
+    ).toThrow(/Invalid changes/);
+    // Renaming the old board still works.
+    store.apply(me, {
+      message: 'rename',
+      operations: [{ op: 'update', type: 'view', id: board, data: { name: 'Board 2' } }],
+    });
+    // view_update with page turns the board into a page (spec cleared) …
+    updateView(store, agent, {
+      viewId: board,
+      message: 'now a page',
+      expectedRevision: store.getOfType('view', board).updatedRev,
+      page: { html: HTML, data: SPEND },
+    });
+    let view = store.getOfType('view', board);
+    expect(view.data.page).toBeDefined();
+    expect(view.data.spec).toBeUndefined();
+    // … ops make no sense on it …
+    expect(() =>
+      updateView(store, agent, {
+        viewId: board,
+        message: 'ops',
+        ops: [{ op: 'remove', id: 'a' }],
+      }),
+    ).toThrow(/report page: it has no widgets/);
+    // … and widgets make it a board again.
+    updateView(store, agent, {
+      viewId: board,
+      message: 'board again',
+      widgets: [{ id: 'b', node: { component: 'TaskTable' } }],
+    });
+    view = store.getOfType('view', board);
+    expect(view.data.page).toBeUndefined();
+    expect(view.data.spec).toBeDefined();
+    // A page view made from scratch.
+    expect(make().view.id).toMatch(/^view_/);
+  });
+
+  it('replaces the whole page with expectedRevision; refuses a stale one', () => {
+    const { store, make } = setup();
+    const id = make().view.id;
+    const rev = store.getOfType('view', id).updatedRev;
+    store.apply(me, {
+      message: 'rename',
+      operations: [{ op: 'update', type: 'view', id, data: { name: 'Renamed' } }],
+    });
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        message: 'again',
+        expectedRevision: rev,
+        page: { html: HTML },
+      }),
+    ).toThrow(/changed since revision/);
+    // Without a revision, after a person's change: refused too (v0.2 review gap 4 rule).
+    expect(() =>
+      updateView(store, agent, { viewId: id, message: 'again', page: { html: HTML } }),
+    ).toThrow(/expectedRevision/);
+    const result = updateView(store, agent, {
+      viewId: id,
+      message: 'again',
+      expectedRevision: store.getOfType('view', id).updatedRev,
+      page: { html: `${HTML}<!-- v2 -->`, data: SPEND },
+    });
+    const view = store.getOfType('view', id);
+    expect(view.data.page?.html).toContain('v2');
+    expect(view.data.page?.summary).toBeUndefined(); // whole replace
+    expect(view.data.evidenceRevision).toBe(result.revision!.id - 1);
+  });
+
+  it('shows a long page cut in view_get, with a note and the assets', () => {
+    const { store, make } = setup();
+    const long = `${HTML}${'<p>more</p>'.repeat(6000)}`;
+    const id = make(agent, { html: long }).view.id;
+    new ReportAssets(store).put(agent, id, 'img/hero.svg', png(10));
+    const got = getView(store, id);
+    expect(got.page!.html.length).toBe(PAGE_HTML_SHOWN);
+    expect(got.page!.htmlTruncated).toMatch(/send the whole HTML again/);
+    expect(got.assets).toEqual([
+      expect.objectContaining({ path: 'img/hero.svg', mime: 'image/svg+xml', size: 10 }),
+    ]);
+  });
+
+  it('refuses block asks on a report page (store and view_update)', () => {
+    const { store, projectId, make } = setup();
+    const id = make().view.id;
+    expect(() =>
+      store.apply(me, {
+        message: 'ask',
+        operations: [
+          {
+            op: 'create',
+            type: 'request',
+            data: { projectId, question: 'Bigger?', viewId: id, widgetId: 'x', mode: 'block' },
+          },
+        ],
+      }),
+    ).toThrow(/Invalid changes/);
+    // A plain question and a refresh about the page are fine.
+    const { created } = store.apply(me, {
+      message: 'ask',
+      operations: [
+        {
+          op: 'create',
+          type: 'request',
+          ref: 'q',
+          data: { projectId, question: 'Refresh', viewId: id, mode: 'refresh' },
+        },
+      ],
+    });
+    // A refresh is answered with the whole page; a rename is refused.
+    expect(() =>
+      updateView(store, agent, { viewId: id, message: 'r', name: 'n', requestId: created.q }),
+    ).toThrow(/whole page as page/);
+    updateView(store, agent, {
+      viewId: id,
+      message: 'refreshed',
+      expectedRevision: store.getOfType('view', id).updatedRev,
+      requestId: created.q,
+      page: { html: HTML, data: SPEND },
+    });
+    expect(store.getOfType('request', created.q!).data.status).toBe('answered');
+  });
+});
+
+describe('report assets (R13)', () => {
+  it('puts, lists, replaces, gets and deletes; refuses bad paths, types and empty files', () => {
+    const { store, make } = setup();
+    const id = make().view.id;
+    const assets = new ReportAssets(store);
+    assets.put(agent, id, 'img/hero.svg', png(3));
+    assets.put(agent, id, 'img/hero.svg', png(5));
+    assets.put(me, id, 'fonts/a.woff2', png(4));
+    expect(assets.list(id).map((a) => [a.path, a.size, a.mime])).toEqual([
+      ['fonts/a.woff2', 4, 'font/woff2'],
+      ['img/hero.svg', 5, 'image/svg+xml'],
+    ]);
+    expect(assets.get(id, 'img/hero.svg')?.bytes.byteLength).toBe(5);
+    for (const bad of [
+      '../x.png',
+      '/etc/a.png',
+      'a/../b.png',
+      './a.png',
+      'a.exe',
+      'a.html',
+      'a b.png',
+      '',
+    ])
+      expect(() => assets.put(agent, id, bad, png(1)), bad).toThrow(/isn't allowed/);
+    expect(() => assets.put(agent, id, 'e.png', png(0))).toThrow(/empty/);
+    expect(assets.delete(id, 'fonts/a.woff2')).toBe(true);
+    expect(assets.list(id)).toHaveLength(1);
+  });
+
+  it('keeps to the size limits: 10 MB per asset, 64 MB per page', () => {
+    const { store, make } = setup();
+    const id = make().view.id;
+    const assets = new ReportAssets(store);
+    expect(() => assets.put(agent, id, 'big.png', png(REPORT_LIMITS.assetBytes + 1))).toThrow(
+      /at most 10 MB/,
+    );
+    const ten = png(REPORT_LIMITS.assetBytes);
+    for (let i = 0; i < 6; i++) assets.put(agent, id, `p${i}.png`, ten);
+    expect(() => assets.put(agent, id, 'p6.png', ten)).toThrow(/at most 64 MB/);
+    // Replacing one counts its new size only.
+    assets.put(agent, id, 'p0.png', ten);
+    assets.put(agent, id, 'small.png', png(REPORT_LIMITS.viewAssetBytes - 6 * ten.byteLength));
+  });
+
+  it('only on a report page that exists', () => {
+    const { store, projectId, task, make } = setup();
+    const assets = new ReportAssets(store);
+    const board = createView(store, me, {
+      projectId,
+      name: 'Board',
+      message: 'm',
+      widgets: [{ id: 'a', node: { component: 'TaskTable' } }],
+    }).view.id;
+    expect(() => assets.put(agent, board, 'a.png', png(1))).toThrow(/is a board/);
+    expect(() => assets.put(agent, 'view_000000000000', 'a.png', png(1))).toThrow(/not found/);
+    expect(() => assets.put(agent, task, 'a.png', png(1))).toThrow(/not found/);
+    expect(make().view.id).toBeTruthy();
+  });
+
+  it('go with their view: delete, cascade from the project, and a revert of the create', () => {
+    const { store, projectId, make } = setup();
+    const assets = new ReportAssets(store);
+    const a = make().view.id;
+    const b = make().view.id;
+    assets.put(agent, a, 'x.png', png(2));
+    assets.put(agent, b, 'x.png', png(2));
+    const made = make();
+    assets.put(agent, made.view.id, 'x.png', png(2));
+    store.apply(me, { message: 'del', operations: [{ op: 'delete', type: 'view', id: a }] });
+    expect(assets.list(a)).toEqual([]);
+    expect(assets.list(b)).toHaveLength(1);
+    store.revert(made.revision!.id, me);
+    expect(assets.list(made.view.id)).toEqual([]);
+    store.apply(me, {
+      message: 'del project',
+      operations: [{ op: 'delete', type: 'project', id: projectId }],
+    });
+    expect(assets.list(b)).toEqual([]);
+    const count = store.database.prepare('SELECT COUNT(*) AS n FROM report_assets').get() as {
+      n: number;
+    };
+    expect(count.n).toBe(0);
+  });
+
+  it('decodes base64 strictly (a data: URL is fine)', () => {
+    expect(Buffer.from(decodeBase64('aGk=')).toString()).toBe('hi');
+    expect(Buffer.from(decodeBase64('data:image/png;base64,aGk=')).toString()).toBe('hi');
+    expect(() => decodeBase64('not base64!')).toThrow(/not valid/);
+  });
+});
+
+describe('page checks (view_preview, R13)', () => {
+  it('finds relative references and blocked hosts', () => {
+    const html = `<img src="img/a.png"><img src='b.jpg?x=1#y'><a href="#top">t</a>
+      <link rel="stylesheet" href="css/site.css"><div style="background:url('img/bg.webp')"></div>
+      <img srcset="s1.png 1x, s2.png 2x"><a href="https://example.com">src</a><img src="data:image/png;base64,AA">
+      <script src="https://cdn.jsdelivr.net/npm/d3"></script><script src="https://evil.example/x.js"></script>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">
+      <link rel="stylesheet" href="https://cdn.example/x.css"><img src="https://pics.example/p.jpg">
+      <link rel="preconnect" href="https://fonts.gstatic.com">
+      <script>fetch('/api/projects')</script>`;
+    expect(referencedPaths(html).sort()).toEqual(
+      ['b.jpg', 'css/site.css', 'img/a.png', 'img/bg.webp', 's1.png', 's2.png'].sort(),
+    );
+    const blocked = blockedExternals(html);
+    expect(blocked.join('\n')).toContain('evil.example');
+    expect(blocked.join('\n')).toContain('cdn.example');
+    expect(blocked.join('\n')).toContain('pics.example');
+    expect(blocked.join('\n')).toContain('fetch');
+    expect(blocked.join('\n')).not.toContain('jsdelivr');
+    expect(blocked.join('\n')).not.toContain('googleapis');
+    expect(blocked.join('\n')).not.toContain('gstatic');
+  });
+
+  it('previews a saved page and a draft: rows per read, missing assets, unknown reads', () => {
+    const { store, projectId, make } = setup();
+    const id = make().view.id;
+    let preview = previewAny(store, { viewId: id }) as ReturnType<typeof previewAny> & {
+      reads: { name: string; rows: number }[];
+    };
+    expect(preview.reads).toEqual([expect.objectContaining({ name: 'spend', rows: 1 })]);
+    expect(preview.warnings.join('\n')).toMatch(/"img\/hero\.svg", which isn't an asset/);
+    new ReportAssets(store).put(agent, id, 'img/hero.svg', png(3));
+    preview = previewAny(store, { viewId: id }) as typeof preview;
+    expect(preview.warnings.join('\n')).not.toContain('hero.svg');
+    const draft = previewAny(store, {
+      projectId,
+      page: { html: '<p>pharos.data("other")</p><script>pharos.data("other")</script>' },
+    });
+    expect(draft.warnings.join('\n')).toMatch(
+      /pharos\.data\("other"\), which isn't one of its named reads/,
+    );
+    expect(draft.warnings.join('\n')).toMatch(/No dark colours/);
+    expect(draft.warnings.join('\n')).toMatch(/No summary/);
+  });
+});
+
+describe('freshness of report pages (R13 + R11)', () => {
+  it('a page reading spending goes stale when a spending record changes', () => {
+    const { store, projectId, record, task, make } = setup();
+    const id = make().view.id;
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');
+    // An unrelated change (a task) leaves it fresh.
+    store.apply(me, {
+      message: 'task',
+      operations: [{ op: 'update', type: 'task', id: task, data: { title: 'Budget v2' } }],
+    });
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('fresh');
+    store.apply(me, {
+      message: 'spent more',
+      operations: [
+        {
+          op: 'update',
+          type: 'record',
+          id: record,
+          data: { fields: { amount: { amount: 9999, currency: 'EUR' } } },
+        },
+      ],
+    });
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('stale');
+    const evidence = projectFreshness(store, projectId).views[id]!.evidence;
+    expect(evidence && 'stale' in evidence && evidence.stale?.total).toBe(1);
+  });
+
+  it('a page that reads nothing never goes stale from data', () => {
+    const { store, projectId, record, make } = setup();
+    const id = make(agent, { data: undefined }).view.id;
+    store.apply(me, {
+      message: 'spent more',
+      operations: [
+        {
+          op: 'update',
+          type: 'record',
+          id: record,
+          data: { fields: { amount: { amount: 1, currency: 'EUR' } } },
+        },
+      ],
+    });
+    expect(projectFreshness(store, projectId).views[id]!.evidence).toBeNull();
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('unknown');
+  });
+});

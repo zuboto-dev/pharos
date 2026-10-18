@@ -32,6 +32,7 @@ import {
   type OptionKey,
   Board,
   checkBoardQueries,
+  checkReadQueries,
   findRecordType,
   findingKey,
   formatFinding,
@@ -121,6 +122,14 @@ for (const type of ENTITY_TYPES) {
     list.push({ type, field, spec });
     INCOMING_REFS.set(spec.type, list);
   }
+}
+
+/** A query finding as one line; a report page's (R13) names its read, not a widget. */
+function findingLine(f: QueryFinding): string {
+  const line = formatFinding(f);
+  return f.path.startsWith('page.')
+    ? line.replace(`(widget "${f.widget}")`, `(read "${f.widget}")`)
+    : line;
 }
 
 export function newId(type: EntityType): string {
@@ -1228,8 +1237,12 @@ class Transaction {
             );
         issues.push(...this.projectViewIssues(entity as Entity<'project'>, prefix));
       }
-      if (entity.type === 'view')
+      if (entity.type === 'view') {
         issues.push(...this.viewQueryIssues(entity as Entity<'view'>, prefix));
+        issues.push(...this.reportPageIssues(entity as Entity<'view'>, prefix));
+      }
+      if (entity.type === 'request')
+        issues.push(...this.blockRequestIssues(entity as Entity<'request'>, prefix));
       if (entity.type === 'decision')
         issues.push(...this.decisionChoiceIssues(entity as Entity<'decision'>, prefix));
     }
@@ -1374,7 +1387,7 @@ class Transaction {
           ...this.viewFindings(entity as Entity<'view'>)
             .filter((f) => f.level === 'warn')
             .map(
-              (f) => `view ${id} ("${(entity.data as Data).name as string}"): ${formatFinding(f)}`,
+              (f) => `view ${id} ("${(entity.data as Data).name as string}"): ${findingLine(f)}`,
             ),
         );
         continue;
@@ -1392,15 +1405,45 @@ class Transaction {
     return out;
   }
 
-  /** Query findings of a view's own spec (templates are built in and trusted). */
+  /**
+   * Query findings of a view's own spec (templates are built in and trusted), or of a report
+   * page's named reads (R13).
+   */
   private viewFindings(
     view: Entity<'view'>,
-    spec = view.data.spec,
     project = this.store.get(view.data.projectId) as Entity<'project'> | null,
   ): QueryFinding[] {
+    if (view.data.page) return checkReadQueries(view.data.page.data, project);
+    const spec = view.data.spec;
     if (!spec) return [];
     const parsed = Board.safeParse(toBoard(spec as ViewSpec));
     return parsed.success ? checkBoardQueries(parsed.data, project) : [];
+  }
+
+  /**
+   * A view is a board or a report page (R13), never both: a page with a spec beside it would
+   * leave readers and agents unsure which one is shown.
+   */
+  private reportPageIssues(view: Entity<'view'>, prefix: string): string[] {
+    if (!view.data.page || !view.data.spec) return [];
+    return [
+      `${prefix}: a view has either a page (a report page) or a spec (a board of blocks), not both; clear spec to keep the page, or page to keep the board`,
+    ];
+  }
+
+  /** "Ask about this block" (R10) needs a block: report pages have none (R13). */
+  private blockRequestIssues(request: Entity<'request'>, prefix: string): string[] {
+    if (request.data.mode !== 'block' || request.data.status !== 'open' || !request.data.viewId)
+      return [];
+    const view = this.store.get(request.data.viewId);
+    if (view?.type !== 'view' || !(view as Entity<'view'>).data.page) return [];
+    const first = this.changes.find((c) => c.id === request.id);
+    // Only a new or reopened ask is refused; one left over from before the view became a page
+    // can still be answered or dismissed.
+    if (first?.before && (first.before as Data).status === 'open') return [];
+    return [
+      `${prefix}: a report page has no blocks to ask about; ask about the whole page (a question, or "Ask to refresh") instead`,
+    ];
   }
 
   /**
@@ -1415,7 +1458,7 @@ class Transaction {
     const old = new Set(before ? this.viewFindings({ ...view, data: before }).map(findingKey) : []);
     return rejects
       .filter((f) => !old.has(findingKey(f)))
-      .map((f) => `${prefix}: ${formatFinding(f)}`);
+      .map((f) => `${prefix}: ${findingLine(f)}`);
   }
 
   /**
@@ -1436,15 +1479,13 @@ class Transaction {
     const issues: string[] = [];
     for (const view of this.store.list('view', { projectId: project.id })) {
       if (this.touched.has(view.id)) continue;
-      const rejects = this.viewFindings(view, view.data.spec, project).filter(
-        (f) => f.level === 'reject',
-      );
+      const rejects = this.viewFindings(view, project).filter((f) => f.level === 'reject');
       if (!rejects.length) continue;
-      const old = new Set(this.viewFindings(view, view.data.spec, before).map(findingKey));
+      const old = new Set(this.viewFindings(view, before).map(findingKey));
       for (const f of rejects)
         if (!old.has(findingKey(f)))
           issues.push(
-            `${prefix}: page ${describe('view', view.id, view.data)} would break: ${formatFinding(f)}`,
+            `${prefix}: page ${describe('view', view.id, view.data)} would break: ${findingLine(f)}`,
           );
     }
     return issues;

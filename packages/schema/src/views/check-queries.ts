@@ -12,7 +12,7 @@ import {
   type FieldScope,
   type PathResult,
 } from './fields.js';
-import type { Condition, Filter, Query, Scalar, Where } from './query.js';
+import type { Condition, Filter, Query, QueryableType, Scalar, Where } from './query.js';
 
 /**
  * Query checks (R8.5–R8.9): every filter, sort, group, sum and column a page names is checked
@@ -725,6 +725,22 @@ export function checkBoardQueries(board: Board, project: Entity<'project'> | nul
         );
     }
   });
+  return out;
+}
+
+/**
+ * Query findings of a report page's named reads (R13), by read name (in `widget`), at
+ * `page.data.<name>.filter`: the same checks a block's query gets.
+ */
+export function checkReadQueries(
+  reads: Record<string, { type: QueryableType; filter?: Filter }> | undefined,
+  project: Entity<'project'> | null,
+): QueryFinding[] {
+  const out: QueryFinding[] = [];
+  for (const [name, read] of Object.entries(reads ?? {})) {
+    const ctx: Ctx = { project, recordTypes: recordTypesOf(project), widget: name, out };
+    checkFilter(ctx, read.type, read.filter, `page.data.${name}.filter`);
+  }
   return out;
 }
 

@@ -29,6 +29,10 @@ ReportPage = {
   ≤ 64 MB per view. Assets are page files, not project data, so not revisions. Deleting the view
   stops serving them but keeps them, so undoing the delete brings the whole page back; assets of
   views gone for 30 days are purged (at server start and once a day).
+- Uploads aren't revisions, so the change feed (`GET /api/events`) announces them as
+  `event: report-assets`, `data: { type: 'report-assets', viewId, at }` (polled by `updated_at`,
+  so uploads from the stdio process count; one event per view per poll). An open frame of that
+  view reloads (`?v=<updatedAt>-<n>`) once the uploads have paused for 1.5 s.
 - `evidenceRevision` is set by Pharos when an agent writes the page (same rule as R11).
 
 ## Serving and the frame

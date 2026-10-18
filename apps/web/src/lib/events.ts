@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 
 export type RevisionEvent = { id: number; projectIds: string[] };
 
+/** Files of a report page were uploaded (not a revision): an open frame of it reloads (R13.5). */
+export type ReportAssetsEvent = { type: 'report-assets'; viewId: string; at: string };
+
 /** The server's question-answering agent (Claude Code, or PHAROS_AGENT_COMMAND). */
 export type AgentStatus = {
   /** A command is set up on the server. */
@@ -42,6 +45,7 @@ const listeners = new Set<(event: RevisionEvent) => void>();
 const agentListeners = new Set<(status: AgentStatus) => void>();
 const updateListeners = new Set<(build: string | undefined) => void>();
 const presenceListeners = new Set<(entries: PresenceEntry[]) => void>();
+const assetListeners = new Set<(event: ReportAssetsEvent) => void>();
 let source: EventSource | null = null;
 /** The build this page was loaded with (the first one the server reported), and a newer one. */
 let loadedBuild: string | undefined;
@@ -68,6 +72,13 @@ function connect() {
   source.addEventListener('revision', (e) => {
     const event = JSON.parse((e as MessageEvent<string>).data) as RevisionEvent;
     for (const listener of listeners) listener(event);
+  });
+  source.addEventListener('report-assets', (e) => {
+    try {
+      announceReportAssets(JSON.parse((e as MessageEvent<string>).data) as ReportAssetsEvent);
+    } catch {
+      // An unreadable event reloads nothing.
+    }
   });
   source.addEventListener('agent', (e) => {
     const status = JSON.parse((e as MessageEvent<string>).data) as AgentStatus;
@@ -99,6 +110,7 @@ function disconnect() {
     agentListeners.size ||
     updateListeners.size ||
     presenceListeners.size ||
+    assetListeners.size ||
     !source
   )
     return;
@@ -118,6 +130,29 @@ export function useRevisionEvents(handler: (event: RevisionEvent) => void): void
     connect();
     return () => {
       listeners.delete(listener);
+      disconnect();
+    };
+  }, []);
+}
+
+/** Passes on a report-assets event from the feed (or a test) to whoever listens. */
+export function announceReportAssets(event: ReportAssetsEvent): void {
+  if (typeof event?.viewId !== 'string') return;
+  for (const listener of assetListeners) listener(event);
+}
+
+/** Calls `handler` when files of a report page are uploaded (any view; filter by viewId). */
+export function useReportAssetEvents(handler: (event: ReportAssetsEvent) => void): void {
+  const latest = useRef(handler);
+  useEffect(() => {
+    latest.current = handler;
+  });
+  useEffect(() => {
+    const listener = (event: ReportAssetsEvent) => latest.current(event);
+    assetListeners.add(listener);
+    connect();
+    return () => {
+      assetListeners.delete(listener);
       disconnect();
     };
   }, []);

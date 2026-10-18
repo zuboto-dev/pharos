@@ -8,7 +8,8 @@ import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, type ViewActions } from '../catalog/context';
 import { FileViewerContext, type FileViewerApi } from '../files/viewer-context';
 import { ProjectPage } from './ProjectPage';
-import { REPORT_SANDBOX, ReportBar, ReportFrame, reportUrl } from './report';
+import { announceReportAssets } from '../lib/events';
+import { ASSET_RELOAD_DELAY_MS, REPORT_SANDBOX, ReportBar, ReportFrame, reportUrl } from './report';
 
 const data = dataset as unknown as ProjectDataset;
 const [board] = data.views as Entity<'view'>[];
@@ -265,6 +266,45 @@ describe('report frame (R13)', () => {
     expect(open).not.toHaveBeenCalled();
     send({ pharos: 1, kind: 'openFile', fileId: file.id });
     expect(open).toHaveBeenCalledWith(file.id);
+  });
+
+  it('reloads once after a burst of uploads to its files, not once per file (R13.5)', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      render(
+        <Providers>
+          <ReportFrame view={report} />
+        </Providers>,
+      );
+      const first = frameOf().getAttribute('src');
+      const upload = (viewId = report.id) =>
+        act(() =>
+          announceReportAssets({ type: 'report-assets', viewId, at: '2026-10-17T10:00:00Z' }),
+        );
+      for (let i = 0; i < 37; i++) {
+        upload();
+        act(() => vi.advanceTimersByTime(ASSET_RELOAD_DELAY_MS / 2));
+      }
+      upload('view_other'); // another view's files change nothing here
+      expect(frameOf().getAttribute('src')).toBe(first);
+      act(() => vi.advanceTimersByTime(ASSET_RELOAD_DELAY_MS));
+      const second = frameOf().getAttribute('src');
+      expect(second).toBe(
+        `/api/views/view_report/page/?v=${encodeURIComponent(`${report.updatedAt}-1`)}`,
+      );
+      expect(reportUrl(report, 1)).toBe(second);
+      act(() => vi.advanceTimersByTime(ASSET_RELOAD_DELAY_MS * 4));
+      expect(frameOf().getAttribute('src')).toBe(second);
+      upload();
+      act(() => vi.advanceTimersByTime(ASSET_RELOAD_DELAY_MS));
+      expect(frameOf().getAttribute('src')).toContain(encodeURIComponent(`${report.updatedAt}-2`));
+      // Another view's burst: nothing here.
+      upload('view_other');
+      act(() => vi.advanceTimersByTime(ASSET_RELOAD_DELAY_MS));
+      expect(frameOf().getAttribute('src')).toContain(encodeURIComponent(`${report.updatedAt}-2`));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('says so plainly when the page route is missing', async () => {

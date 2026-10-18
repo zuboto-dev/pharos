@@ -156,6 +156,11 @@ export const MIGRATIONS: string[] = [
   `
   DROP TRIGGER report_assets_view_deleted;
   `,
+  // R13.5: the change feed polls for new uploads by time; this index answers without reading
+  // the files themselves.
+  `
+  CREATE INDEX report_assets_updated ON report_assets(updated_at, view_id);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

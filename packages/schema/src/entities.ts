@@ -5,6 +5,7 @@ import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from '.
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
 import { ViewSpec } from './views/board.js';
 import { GALLERY, ImageRef } from './views/pictures.js';
+import { ReportPage } from './views/report.js';
 
 export {
   ArtifactKind,
@@ -165,6 +166,9 @@ export const ViewData = z.strictObject({
     .describe('Render a built-in template (kept up to date); ignored when spec is set'),
   spec: ViewSpec.optional().describe(
     'The view: a Board of widgets (preferred) or a single component tree',
+  ),
+  page: ReportPage.optional().describe(
+    'A report page (R13): the whole page as HTML the agent wrote; spec and template are ignored when set',
   ),
   pinned: z.boolean().describe('Pinned views are shown first'),
   archived: z.boolean().optional().describe('Archived views are hidden from the tabs'),

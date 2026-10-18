@@ -95,6 +95,8 @@ const READ_ONLY = new Set([
   'pack_list',
   'files_unadded',
   'folder_request_status',
+  'report_guide',
+  'report_asset_list',
 ]);
 
 /**
@@ -151,6 +153,9 @@ export function guarded(raw, scope) {
       case 'view_update':
         own(await projectOf(input.viewId), 'view_update');
         return note(await raw(tool, input));
+      case 'report_asset_put':
+        own(await projectOf(input.viewId), 'report_asset_put');
+        return raw(tool, input);
       case 'pack_apply': {
         if (input.projectId) own(input.projectId, 'pack_apply');
         else await newName(input.name);

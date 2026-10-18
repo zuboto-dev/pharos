@@ -49,6 +49,7 @@ import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboar
 import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
+import { ReportBar, ReportFrame, isReport } from './report';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
@@ -442,6 +443,10 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   };
 
   const canReset = Boolean(active?.data.template && active.data.spec);
+  // A report page (R13): the agent's own HTML in a locked frame instead of the board.
+  const report = isReport(active) ? active : undefined;
+  // A report has no board to customize: leave layout editing when one opens.
+  if (report && editing) setEditing(false);
 
   return (
     <ViewDataProvider data={dataset.data} version={dataset.version} actions={actions}>
@@ -520,7 +525,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                         <History className="size-4" aria-hidden />
                       </button>
                     </Tip>
-                    {!filesPage && (
+                    {!filesPage && !report && (
                       <Tip label="Customize" align="end">
                         <button
                           type="button"
@@ -542,7 +547,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           {/* Files that expired or expire within 60 days (R7.15). */}
           {!editing && <ExpiryNotice />}
           {filesPage && <FilesPage onAdded={reload} />}
-          {active && !editing && <ViewUpdated view={active} />}
+          {active && !report && !editing && <ViewUpdated view={active} />}
           {active && !editing && <WhatChanged freshness={freshness} />}
           {editing && (
             <p className="text-xs text-muted">
@@ -558,14 +563,16 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             </p>
           )}
           {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
-          {active && !editing && <EvidenceNote view={active} freshness={freshness} />}
+          {active && !report && !editing && <EvidenceNote view={active} freshness={freshness} />}
+          {report && <ReportBar view={report} freshness={freshness} />}
           {!filesPage &&
+            !report &&
             active?.data.kind !== 'answer' &&
             !editing &&
             isEmptyProject(dataset.data) && (
               <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
             )}
-          {!filesPage && board.widgets.length === 0 && !editing && (
+          {!filesPage && !report && board.widgets.length === 0 && !editing && (
             <div className="rounded-block border border-dashed border-line-strong">
               <EmptyState
                 icon={LayoutGrid}
@@ -598,7 +605,12 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
               </EmptyState>
             </div>
           )}
-          {!filesPage && (
+          {report && (
+            <div key={report.id} className="animate-fade-in">
+              <ReportFrame view={report} />
+            </div>
+          )}
+          {!filesPage && !report && (
             // A tab switch fades the new view in (opacity only, so nothing shifts).
             <div key={active?.id} className="animate-fade-in">
               <ViewRenderer

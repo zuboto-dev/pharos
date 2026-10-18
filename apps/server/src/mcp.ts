@@ -28,7 +28,7 @@ import {
 import { PharosError } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
-import { registerGuidance } from './guidance.js';
+import { REPORT_GUIDE, registerGuidance } from './guidance.js';
 import type { Presence, PresenceTarget } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { changesSince, unseenCount } from './views/changes.js';
@@ -43,9 +43,11 @@ import {
   deleteView,
   getView,
   listViews,
-  previewView,
+  previewAny,
   updateView,
 } from './views/service.js';
+
+import { ReportAssets, decodeBase64, reportView } from './views/report.js';
 
 /**
  * Agents edit views with the view tools, which keeps apply's schema small, and only fill in the
@@ -90,6 +92,7 @@ Generating views (what the user sees):
 - Query checks: every filter, sort, group, sum and column in a view is checked against the project's fields (record fields included) before it is saved. An unknown field, record type or option value, a sum over something that isn't a number, an unreadable relative date, or a value that doesn't fit its field (e.g. a range on money; use "fields.amount.amount" in cents) refuses the save; the error gives the JSON path, the allowed values, the closest match and a corrected example, so fix exactly that and retry. A record query without recordType, or a field only some of its record types have, only warns. Empty results, custom option values and mixed currencies are fine.
 - People can rearrange views too, so read a view with view_get before editing it, keep widget ids stable, and pass its revision as view_update's expectedRevision: if a person changed the view since, nothing is saved and you read it again and redo your change on what it shows now.
 - Actions (R10): an Action block is a button and a short form people use to change records from a page ("Log a service", "Mark paid"); the form is built from the record type. Offer one only on a page about records the owner keeps up by hand, for what they do often (pack pages have theirs; pharos://guide/packs). project_snapshot.actions lists them; action_run submits one that only adds a record as one revision. Marking a record done (Mark paid, Log a service with its reminder) is the owner's to do on the page: agents are refused, also with apply (interval.lastDate/lastMeter) and Undo.
+- Two kinds of pages. A board (widgets) is a live working page the owner uses day to day: tasks, money this month, files, quick answers. A report page (view_create or view_update with page instead of widgets) is HTML you write whole, with its own look, story and interactives, for something to read: an explanation, research, a story with its evidence. Its live numbers come from named reads (page.data) through pharos.data, and it is marked out of date when that data changes. Call report_guide before writing one; upload its pictures and fonts with report_asset_put. A refresh request on a report page is answered with view_update and the whole page as page.
 - A request with mode "block" asks you to change one block (its widgetId) in place: view_update with requestId and ops on that block only (other blocks and the view are refused while it is open), and a short reply. If it can't be done in that block, dismiss the request with a reply saying why.
 
 History:
@@ -472,7 +475,7 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
             ? [{ projectId: input.projectId, activity: 'editing' }]
             : [],
       );
-      return run(() => previewView(store, input));
+      return run(() => previewAny(store, input));
     },
   );
 
@@ -518,6 +521,55 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       mark(() => [{ ...viewTarget(input.viewId, 'editing'), viewId: undefined }]);
       return run(() => deleteView(store, author(), input));
     },
+  );
+
+  server.registerTool(
+    'report_guide',
+    {
+      title: 'How to write a report page',
+      description:
+        'The guide to report pages (HTML you write whole, shown in a locked frame with live data through pharos.data): when to write one instead of a board, the pharos API, assets, the frame’s limits, and a skeleton. Read it before view_create or view_update with page.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    () => ({ content: [{ type: 'text', text: REPORT_GUIDE }] }),
+  );
+
+  const assets = new ReportAssets(store);
+  server.registerTool(
+    'report_asset_put',
+    {
+      title: 'Upload a report page asset',
+      description:
+        'Save (or replace) a picture, font, stylesheet or script a report page ships, by its relative path in the page (e.g. "img/map.svg"); the page refers to it with that relative URL. Types: png jpg jpeg gif webp avif svg css js json woff woff2 ttf otf mp4 webm; at most 10 MB each and 64 MB per page. Assets are page files, not project data: they have no history and go when the view goes.',
+      inputSchema: {
+        viewId: z.string().describe('A report page (a view with page)'),
+        path: z.string().describe('Relative path, e.g. "img/hero.png" (no "..", no leading /)'),
+        base64: z.string().describe('The file, base64-encoded (a data: URL is fine)'),
+      },
+      annotations: { destructiveHint: true },
+    },
+    ({ viewId, path, base64 }) => {
+      mark(() => [viewTarget(viewId, 'editing')]);
+      return run(() => {
+        const saved = assets.put(author(), viewId, path, decodeBase64(base64));
+        return { saved, assets: assets.list(viewId).length };
+      });
+    },
+  );
+  server.registerTool(
+    'report_asset_list',
+    {
+      title: 'List report page assets',
+      description: "A report page's assets: path, type, size and when each was saved.",
+      inputSchema: { viewId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ viewId }) =>
+      run(() => {
+        const view = reportView(store, viewId);
+        return assets.list(view.id);
+      }),
   );
 
   const actions = new ActionService(store);

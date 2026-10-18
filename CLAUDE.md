@@ -123,6 +123,21 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
 - The answering agent's `state` (off, unavailable, paused, idle, queued, running, stopping) and
   `lastRun.outcome` are what Settings and the questions list show; pausing stops the run.
 
+## Report pages (R13)
+
+- A view with `page` (`packages/schema/src/views/report.ts`) is a report page: HTML an agent
+  wrote whole, served by `apps/server/src/views/report-routes.ts` at `/api/views/:id/page/` in a
+  locked frame (CSP with `sandbox`, no network) with the bridge from `views/bridge.ts` injected
+  first; it defines `window.pharos` (data, onData, theme, onTheme, openFile).
+  docs/reframe/r13-report-pages.md has the contract and the bridge messages, which the web app
+  must match exactly.
+- A view has a page or a board, never both (the store refuses `page` with `spec`); a page has no
+  blocks, so block asks on it are refused. Its named reads (`page.data`) get the same query
+  checks as blocks and are what R11 freshness tracks (`pageReads` in `reads.ts`).
+- Report assets (pictures, fonts, scripts) are in the `report_assets` table, not revisions; a
+  trigger removes them with their view. `views/report.ts` has the limits, path checks and the
+  page preview; agents use `report_asset_put`, `report_asset_list` and `report_guide`.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

@@ -3,13 +3,35 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { Board, toBoard } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { EXAMPLES, EXPLAIN_EXAMPLE, VIEW_GUIDELINES, answerBrief } from './guidance.js';
+import {
+  EXAMPLES,
+  EXPLAIN_EXAMPLE,
+  REPORT_GUIDE,
+  VIEW_GUIDELINES,
+  answerBrief,
+} from './guidance.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { answerView, effectiveBoard, previewView, requestContext } from './views/service.js';
 import { projectSnapshot } from './store/snapshot.js';
 
 describe('guidance', () => {
+  it('has a short, practical report guide with a tokens-and-pharos.data skeleton (R13)', () => {
+    for (const part of [
+      'When to write one',
+      ':root {',
+      '[data-theme=dark] {',
+      'await pharos.data("spend")',
+      'pharos.onData(render)',
+      'report_asset_put',
+      '390 px',
+      'honesty box',
+      'cdnjs.cloudflare.com',
+    ])
+      expect(REPORT_GUIDE).toContain(part);
+    expect(REPORT_GUIDE.split('\n').length).toBeLessThan(120);
+  });
+
   it('keeps cancelled tasks out of the blocked-or-overdue example', () => {
     const line = VIEW_GUIDELINES.split('\n').find((l) => l.startsWith('- Blocked or overdue'))!;
     expect(line).toContain('status: {not: ["done", "cancelled"]}');

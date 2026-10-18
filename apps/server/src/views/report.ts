@@ -1,0 +1,341 @@
+import {
+  REPORT_ASSET_TYPES,
+  REPORT_LIMITS,
+  ReportAssetPath,
+  checkReadQueries,
+  formatFinding,
+  runQuery,
+  type Author,
+  type Entity,
+  type QueryFinding,
+  type ReportPage,
+} from '@pharos/schema';
+import { AgentFiles } from '../store/agent-files.js';
+import { PharosError } from '../store/errors.js';
+import type { Store } from '../store/store.js';
+import { openBlockRequests } from './block-ask.js';
+import type { WidgetPreview } from './preview.js';
+
+/**
+ * Report pages (R13): the page an agent wrote as HTML, the files it ships (report assets) and
+ * the checks an agent sees before the reader does. docs/reframe/r13-report-pages.md has the
+ * contract; serving is in report-routes.ts.
+ */
+
+/** What the page's Content-Security-Policy allows: scripts and styles from three CDNs, fonts. */
+export const REPORT_CSP = [
+  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals',
+  "default-src 'none'",
+  "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "media-src 'self' data: blob:",
+  "connect-src 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+  "base-uri 'none'",
+].join('; ');
+
+/** External hosts the page may load from, by what loads them. */
+const ALLOWED_HOSTS: Record<'script' | 'style' | 'font', string[]> = {
+  script: ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'unpkg.com'],
+  style: ['fonts.googleapis.com'],
+  font: ['fonts.gstatic.com'],
+};
+
+export type AssetInfo = { path: string; mime: string; size: number; updatedAt: string };
+
+/** The page of a view, or null for a board. */
+export function pageOf(view: Entity<'view'>): ReportPage | null {
+  return view.data.page ?? null;
+}
+
+/** An asset path checked against the contract: relative, no "..", a known file type. */
+export function assetPath(path: string): string {
+  const parsed = ReportAssetPath.safeParse(path);
+  if (!parsed.success)
+    throw new PharosError(
+      'invalid',
+      `Asset path "${path.slice(0, 200)}" isn't allowed: use a relative path such as "images/chart.png" (letters, digits, . _ - /, no "..") ending in ${Object.keys(REPORT_ASSET_TYPES).join(', ')}`,
+    );
+  return parsed.data;
+}
+
+export function assetMime(path: string): string {
+  return REPORT_ASSET_TYPES[(path.split('.').pop() ?? '').toLowerCase()]!;
+}
+
+const megabytes = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+
+/** Report assets: a view's page files, kept beside revisions (never project data). */
+export class ReportAssets {
+  constructor(private readonly store: Store) {}
+
+  list(viewId: string): AssetInfo[] {
+    return (
+      this.store.database
+        .prepare(
+          'SELECT path, mime, size, updated_at FROM report_assets WHERE view_id = ? ORDER BY path',
+        )
+        .all(viewId) as { path: string; mime: string; size: number; updated_at: string }[]
+    ).map((r) => ({ path: r.path, mime: r.mime, size: r.size, updatedAt: r.updated_at }));
+  }
+
+  get(viewId: string, path: string): { mime: string; bytes: Uint8Array } | null {
+    const row = this.store.database
+      .prepare('SELECT mime, bytes FROM report_assets WHERE view_id = ? AND path = ?')
+      .get(viewId, path) as { mime: string; bytes: Uint8Array } | undefined;
+    return row ?? null;
+  }
+
+  delete(viewId: string, path: string): boolean {
+    return (
+      Number(
+        this.store.database
+          .prepare('DELETE FROM report_assets WHERE view_id = ? AND path = ?')
+          .run(viewId, path).changes,
+      ) > 0
+    );
+  }
+
+  /**
+   * Saves (or replaces) one asset of a report page. Who may: anyone who may change the view, and
+   * only on a view that is a report page.
+   */
+  put(author: Author, viewId: string, rawPath: string, bytes: Uint8Array): AssetInfo {
+    const view = reportView(this.store, viewId, author);
+    const path = assetPath(rawPath);
+    if (!bytes.byteLength) throw new PharosError('invalid', `Asset "${path}" is empty`);
+    if (bytes.byteLength > REPORT_LIMITS.assetBytes)
+      throw new PharosError(
+        'invalid',
+        `Asset "${path}" is ${megabytes(bytes.byteLength)}; one asset may be at most ${megabytes(REPORT_LIMITS.assetBytes)}`,
+      );
+    const db = this.store.database;
+    const { total } = db
+      .prepare(
+        'SELECT COALESCE(SUM(size), 0) AS total FROM report_assets WHERE view_id = ? AND path <> ?',
+      )
+      .get(view.id, path) as { total: number };
+    if (total + bytes.byteLength > REPORT_LIMITS.viewAssetBytes)
+      throw new PharosError(
+        'invalid',
+        `The page's assets would come to ${megabytes(total + bytes.byteLength)}; a page may ship at most ${megabytes(REPORT_LIMITS.viewAssetBytes)}`,
+      );
+    const mime = assetMime(path);
+    const updatedAt = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO report_assets (view_id, path, mime, bytes, size, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (view_id, path) DO UPDATE SET mime = excluded.mime, bytes = excluded.bytes,
+         size = excluded.size, updated_at = excluded.updated_at`,
+    ).run(view.id, path, mime, bytes, bytes.byteLength, updatedAt);
+    return { path, mime, size: bytes.byteLength, updatedAt };
+  }
+}
+
+/**
+ * The view an asset is for: it must be a report page in an existing project. An agent follows
+ * the view tools' rules: while a person waits for a change to one block of it, nothing else
+ * changes (pages have no blocks, so that only holds for a view that was a board).
+ */
+export function reportView(store: Store, viewId: string, author?: Author): Entity<'view'> {
+  const found = store.get(viewId);
+  if (found?.type !== 'view') throw new PharosError('not_found', `view ${viewId} not found`);
+  const view = found as Entity<'view'>;
+  if (!pageOf(view))
+    throw new PharosError(
+      'invalid',
+      `View "${view.data.name}" is a board, not a report page: assets belong to report pages (view_create or view_update with page)`,
+    );
+  store.getOfType('project', view.data.projectId);
+  if (author?.kind === 'agent' && openBlockRequests(store, view).length)
+    throw new PharosError(
+      'invalid',
+      `View "${view.data.name}" has an open request to change one block; answer or dismiss it first`,
+    );
+  return view;
+}
+
+/** Strict base64 (a data: URL prefix and white space are fine), as bytes. */
+export function decodeBase64(text: string): Uint8Array {
+  const body = text.replace(/^data:[^,]*;base64,/i, '').replace(/\s+/g, '');
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(body) || body.length % 4 === 1)
+    throw new PharosError('invalid', 'base64 is not valid base64');
+  return new Uint8Array(Buffer.from(body, 'base64'));
+}
+
+// ---------------------------------------------------------------- what the HTML refers to
+
+/** Relative URLs in the page (src, href, srcset, poster, CSS url()), as asset paths. */
+export function referencedPaths(html: string): string[] {
+  const urls: string[] = [];
+  for (const m of html.matchAll(
+    /\s(?:src|href|poster|data)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
+  ))
+    urls.push(m[1] ?? m[2] ?? m[3] ?? '');
+  for (const m of html.matchAll(/\ssrcset\s*=\s*(?:"([^"]*)"|'([^']*)')/gi))
+    for (const part of (m[1] ?? m[2] ?? '').split(','))
+      urls.push(part.trim().split(/\s+/)[0] ?? '');
+  for (const m of html.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi))
+    urls.push(m[1] ?? m[2] ?? m[3] ?? '');
+  const paths = new Set<string>();
+  for (const raw of urls) {
+    const url = raw.trim();
+    if (!url || url.startsWith('#') || /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//'))
+      continue;
+    if (url.includes('${') || url.includes('{{')) continue; // built in script, not a file
+    const path = url.split(/[?#]/)[0]!.replace(/^\.\//, '');
+    if (path) paths.add(decodeOrKeep(path));
+  }
+  return [...paths];
+}
+
+function decodeOrKeep(path: string): string {
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+}
+
+/** External addresses the page loads that the frame's CSP will block, one line each. */
+export function blockedExternals(html: string): string[] {
+  const out = new Set<string>();
+  const check = (url: string, kind: keyof typeof ALLOWED_HOSTS | 'other', what: string) => {
+    let host: string;
+    try {
+      const parsed = new URL(url.startsWith('//') ? `https:${url}` : url);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return;
+      host = parsed.hostname;
+      if (kind !== 'other' && parsed.protocol === 'https:' && ALLOWED_HOSTS[kind].includes(host))
+        return;
+    } catch {
+      return;
+    }
+    out.add(`${what} ${url.slice(0, 120)} (${host}) will be blocked`);
+  };
+  const external = /^(?:https?:)?\/\//i;
+  for (const m of html.matchAll(/<script\b[^>]*\ssrc\s*=\s*["']?([^"'\s>]+)/gi))
+    if (external.test(m[1]!)) check(m[1]!, 'script', 'Script');
+  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+    const href = /\shref\s*=\s*["']?([^"'\s>]+)/i.exec(m[0])?.[1];
+    if (!href || !external.test(href)) continue;
+    const rel = /\srel\s*=\s*["']?([^"'>]+)/i.exec(m[0])?.[1]?.toLowerCase() ?? '';
+    if (rel.includes('stylesheet')) check(href, 'style', 'Stylesheet');
+    else if (rel.includes('preconnect') || rel.includes('dns-prefetch')) continue;
+    else if (rel.includes('preload') && /\sas\s*=\s*["']?font/i.test(m[0]))
+      check(href, 'font', 'Font');
+  }
+  for (const m of html.matchAll(
+    /<(img|video|audio|source|iframe|embed|object)\b[^>]*\s(?:src|data)\s*=\s*["']?([^"'\s>]+)/gi,
+  ))
+    if (external.test(m[2]!))
+      check(m[2]!, 'other', m[1]!.toLowerCase() === 'iframe' ? 'Frame' : 'Picture or media');
+  for (const m of html.matchAll(/@import\s+(?:url\()?\s*["']?([^"')\s;]+)/gi))
+    if (external.test(m[1]!)) check(m[1]!, 'style', 'Stylesheet');
+  for (const m of html.matchAll(/url\(\s*["']?((?:https?:)?\/\/[^"')\s]+)/gi)) {
+    const kind = /\.(woff2?|ttf|otf)(?:[?#]|$)/i.test(m[1]!) ? 'font' : 'other';
+    check(m[1]!, kind, kind === 'font' ? 'Font' : 'Picture');
+  }
+  if (/\bfetch\s*\(|XMLHttpRequest|new\s+WebSocket|EventSource\s*\(/.test(html))
+    out.add(
+      'The page calls fetch/XMLHttpRequest/WebSocket: the frame allows no network; use pharos.data for project data and ship files as assets',
+    );
+  return [...out];
+}
+
+// ---------------------------------------------------------------- preview
+
+/** Query findings of a page's named reads, as lines naming the read. */
+export function pageReadFindings(
+  page: ReportPage,
+  project: Entity<'project'> | null,
+): QueryFinding[] {
+  return checkReadQueries(page.data, project);
+}
+
+export function formatReadFinding(f: QueryFinding): string {
+  return formatFinding(f).replace(`(widget "${f.widget}")`, `(read "${f.widget}")`);
+}
+
+/**
+ * What an agent should check on a page before the reader sees it: its size, what each named
+ * read returns now (and query findings), assets the HTML refers to that aren't there, and
+ * external hosts the frame will block. Warnings only: the save already refused what can't work.
+ */
+export function previewPage(store: Store, projectId: string, page: ReportPage, viewId?: string) {
+  const data = new AgentFiles(store).dataset(store.dataset(projectId));
+  const findings = pageReadFindings(page, data.project);
+  const reads = Object.entries(page.data ?? {}).map(([name, read]) => {
+    const own = findings.filter((f) => f.widget === name);
+    let rows: number | undefined;
+    try {
+      rows = runQuery(data, read.type, read.filter ?? {}).length;
+    } catch {
+      rows = undefined;
+    }
+    return {
+      name,
+      type: read.type,
+      ...(rows !== undefined ? { rows } : {}),
+      ...(rows === 0 ? { empty: true } : {}),
+      warnings: own.map(formatReadFinding),
+    };
+  });
+  const assets = viewId ? new ReportAssets(store).list(viewId) : [];
+  const have = new Set(assets.map((a) => a.path));
+  const missing = referencedPaths(page.html).filter((p) => !have.has(p));
+  const warnings: string[] = [];
+  for (const path of missing) {
+    const ok = ReportAssetPath.safeParse(path).success;
+    warnings.push(
+      ok
+        ? `The page refers to "${path}", which isn't an asset of this page yet: upload it with report_asset_put${viewId ? '' : ' after saving'}`
+        : `The page refers to "${path}", which can't be an asset (relative path, no "..", file types ${Object.keys(REPORT_ASSET_TYPES).join(' ')}): it won't load`,
+    );
+  }
+  warnings.push(...blockedExternals(page.html));
+  const used = new Set<string>();
+  for (const m of page.html.matchAll(/pharos\.data\(\s*["'`]([^"'`]+)["'`]\s*\)/g)) used.add(m[1]!);
+  for (const name of used)
+    if (!page.data?.[name])
+      warnings.push(
+        `The page asks pharos.data("${name}"), which isn't one of its named reads (page.data)`,
+      );
+  for (const name of Object.keys(page.data ?? {}))
+    if (!used.has(name) && !page.html.includes(name))
+      warnings.push(`The named read "${name}" isn't used by the page`);
+  if (!/data-theme|prefers-color-scheme/.test(page.html))
+    warnings.push(
+      'No dark colours: define colour tokens on :root and a dark set under [data-theme=dark] (report_guide)',
+    );
+  const all = [
+    ...(page.summary
+      ? []
+      : ['No summary: add one or two sentences saying what the page says (shown in lists)']),
+    ...warnings,
+  ];
+  const bytes = assets.reduce((n, a) => n + a.size, 0);
+  const empty = reads.filter((r) => r.empty).map((r) => r.name);
+  const rejects = findings.filter((f) => f.level === 'reject').length;
+  return {
+    kind: 'report page' as const,
+    /** A page has no blocks; kept so a page preview reads like a board's. */
+    widgets: [] as WidgetPreview[],
+    layout: [] as string[],
+    warnings: all,
+    findings,
+    size: { htmlChars: page.html.length, limit: REPORT_LIMITS.htmlChars },
+    reads,
+    assets: { count: assets.length, bytes },
+    summary:
+      `report page, ${page.html.length.toLocaleString('en')} characters, ${reads.length} named read${reads.length === 1 ? '' : 's'}` +
+      (empty.length ? ` (${empty.join(', ')} empty now)` : '') +
+      `, ${assets.length} asset${assets.length === 1 ? '' : 's'}` +
+      (rejects
+        ? `; ${rejects} query problem${rejects === 1 ? '' : 's'} would refuse the save`
+        : '') +
+      (all.length || reads.some((r) => r.warnings.length) ? '; see warnings' : ''),
+  };
+}

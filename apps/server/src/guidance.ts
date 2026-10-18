@@ -3,6 +3,7 @@ import {
   COMPONENT_INFO,
   FILE_TEXT_TOOL,
   PACK_GUIDE,
+  REPORT_LIMITS,
   similarAnswers,
   type ComponentName,
   type Entity,
@@ -19,6 +20,95 @@ import { isExpired, requestContext } from './views/service.js';
  * Guidance for agents as MCP resources and prompts, so clients can load it without a tool call.
  * The same rules back the catalog tools; this adds the judgement about what makes a good view.
  */
+/**
+ * How to write a report page (R13): returned by report_guide and served as
+ * pharos://guide/reports. docs/reframe/r13-report-pages.md has the contract.
+ */
+export const REPORT_GUIDE = `# Writing a Pharos report page
+
+A report page is a whole HTML document you write, with its own look, story and interactives.
+Pharos shows it in a locked frame beside the project, keeps every version, gives it live data
+through named reads, and marks it out of date when that data changes.
+
+## When to write one
+
+- A report page is for reading: an explanation, research, a story with its evidence, "what we
+  found". Use a board (widgets) for a live working page the owner uses day to day (tasks, money
+  this month, files, quick answers).
+
+## How it fits
+
+- view_create {projectId, name, page: {html, data, summary}, message}. view_update {viewId,
+  expectedRevision, page, message} replaces the whole page; view_get shows it and its assets.
+- data: named reads, {"spend": {"type": "record", "filter": {"where": {"recordType": "spending"}}}}.
+  The same filters as blocks, checked the same way; at most ${REPORT_LIMITS.reads}.
+- In the page, \`await pharos.data("spend")\` returns the rows: items as {id, type, data} (a record's
+  values are in data.fields; money is {amount in cents, currency}).
+  \`pharos.onData(fresh => …)\` runs again when the project data changes (fresh: rows by name).
+- \`pharos.theme\` is "light" or "dark" and \`pharos.onTheme(cb)\` tells you when it changes; Pharos
+  also sets data-theme on <html>. \`pharos.openFile(fileId)\` opens a project file in the viewer.
+- Pictures, fonts and scripts you ship are assets: report_asset_put {viewId, path, base64} after
+  the page is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif webp avif
+  svg css js json woff woff2 ttf otf mp4 webm; 10 MB each, 64 MB per page.
+- The frame has no network: no fetch, no forms, no other sites. Allowed: scripts from
+  cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts. Links open in a new tab.
+- view_preview {viewId} (or {projectId, page} for a draft) checks the size, the reads (rows now,
+  query findings), assets the HTML names that aren't uploaded, and hosts the frame will block.
+
+## Write it well
+
+- One subject, one visual world: pick a palette, a type pairing and one motif that fit the
+  subject, not the Pharos look.
+- Open with the claim, then 3–5 key numbers. Headings are claims, not topics.
+- A source on every number. Live numbers come from pharos.data, never typed into the HTML when
+  the project has them; say what each number counts.
+- An honesty box: what the evidence doesn't say, and what would change the conclusion.
+- Interactives only where they answer the reader's question: a slider, a toggle, a filter, a
+  simulator. Charts drawn in SVG or canvas from the rows.
+- Real pictures with credits (as assets, or data: URLs).
+- Colour tokens on :root with a dark set under [data-theme=dark]; check both.
+- Works at 390 px wide: one column, no horizontal scroll, tap targets of 44 px.
+- A summary (one or two sentences: what the page says), shown in lists and to agents.
+
+## Skeleton
+
+\`\`\`html
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #fbf7f0; --ink: #1d1a16; --accent: #c2410c; --muted: #6b6257; }
+  [data-theme=dark] { --bg: #16130f; --ink: #f3ece2; --accent: #fb923c; --muted: #a39686; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 Georgia, serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+  .num { font: 600 2.4rem/1 system-ui, sans-serif; color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Groceries took a third of September's spending</h1>
+  <p><span class="num" id="total">…</span> spent, from <span id="count">…</span> records.</p>
+  <aside><strong>What this doesn't say:</strong> cash payments aren't recorded.</aside>
+</main>
+<script>
+  const euros = (cents) => (cents / 100).toLocaleString('en', { style: 'currency', currency: 'EUR' });
+  async function render() {
+    const rows = await pharos.data('spend');
+    const total = rows.reduce((n, r) => n + (r.data.fields.amount?.amount ?? 0), 0);
+    document.getElementById('total').textContent = euros(total);
+    document.getElementById('count').textContent = rows.length;
+  }
+  render();
+  pharos.onData(render);
+</script>
+</body>
+</html>
+\`\`\`
+
+with page.data = {"spend": {"type": "record", "filter": {"where": {"recordType": "spending"}}}}.
+`;
+
 export const VIEW_GUIDELINES = `# Designing Pharos views
 
 Pharos shows a project as views made of widgets. People read views instead of long text, so a
@@ -684,6 +774,17 @@ export function registerGuidance(server: McpServer, store: Store): void {
       mimeType: 'text/markdown',
     },
     (uri) => text(uri.href, examplesMarkdown()),
+  );
+  server.registerResource(
+    'report-guide',
+    'pharos://guide/reports',
+    {
+      title: 'Writing a report page',
+      description:
+        'Report pages (R13): a whole HTML page with its own look, live data through pharos.data, assets and the frame’s limits',
+      mimeType: 'text/markdown',
+    },
+    (uri) => text(uri.href, REPORT_GUIDE),
   );
   server.registerResource(
     'pack-guide',

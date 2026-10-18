@@ -131,6 +131,25 @@ export const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  // Report pages (R13): pictures, fonts and scripts a page ships, by view and relative path. Page
+  // files, not project data (never revisions); they go when their view goes, however it goes (a
+  // delete, a cascade, a revert), so a trigger removes them.
+  `
+  CREATE TABLE report_assets (
+    view_id TEXT NOT NULL,
+    path TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    bytes BLOB NOT NULL,
+    size INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (view_id, path)
+  );
+  CREATE TRIGGER report_assets_view_deleted AFTER DELETE ON entities
+  WHEN OLD.type = 'view'
+  BEGIN
+    DELETE FROM report_assets WHERE view_id = OLD.id;
+  END;
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

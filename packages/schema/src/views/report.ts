@@ -11,6 +11,8 @@ export const REPORT_LIMITS = {
   reads: 30,
   assetBytes: 10 * 1024 * 1024,
   viewAssetBytes: 64 * 1024 * 1024,
+  /** All report pages' files together, including those of deleted pages still kept (R13.6). */
+  totalAssetBytes: 1024 * 1024 * 1024,
 } as const;
 
 /** Asset file types a report page may ship (by extension). */

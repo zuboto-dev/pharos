@@ -73,6 +73,38 @@ function rawAssetPath(c: Context): string {
   }
 }
 
+/**
+ * The request body, read as a stream and refused as soon as it passes `limit` bytes, whether or
+ * not it said its length (R13.6): never more than the limit and one chunk is held.
+ */
+export async function readLimited(req: Request, limit: number): Promise<Uint8Array> {
+  const tooBig = () =>
+    new PharosError('invalid', `One asset may be at most ${limit / 1024 / 1024} MB`);
+  const declared = Number(req.headers.get('content-length') ?? 0);
+  if (declared > limit) throw tooBig();
+  if (!req.body) return new Uint8Array();
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      throw tooBig();
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return body;
+}
+
 export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   const routes = new Hono();
   const assets = new ReportAssets(store);
@@ -131,14 +163,7 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   routes.put('/views/:id/page/*', async (c) => {
     const raw = rawAssetPath(c);
     if (!raw) throw new PharosError('invalid', 'Name the asset: PUT /api/views/:id/page/<path>');
-    // Refuse a body that says it is too big before reading it; put() checks the real size.
-    const declared = Number(c.req.header('content-length') ?? 0);
-    if (declared > REPORT_LIMITS.assetBytes)
-      throw new PharosError(
-        'invalid',
-        `One asset may be at most ${REPORT_LIMITS.assetBytes / 1024 / 1024} MB`,
-      );
-    const body = new Uint8Array(await c.req.arrayBuffer());
+    const body = await readLimited(c.req.raw, REPORT_LIMITS.assetBytes);
     return c.json(assets.put(authorOf(c), c.req.param('id'), raw, body));
   });
 

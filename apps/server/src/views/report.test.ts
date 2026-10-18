@@ -418,6 +418,40 @@ describe('report assets (R13)', () => {
   });
 });
 
+describe('all report assets together are bounded (R13.6)', () => {
+  it("counts every page's files, deleted pages' kept files too, and says so plainly", () => {
+    const { store, make } = setup();
+    const a = make().view.id;
+    const b = make().view.id;
+    const limits = { ...REPORT_LIMITS, totalAssetBytes: 10 };
+    const assets = new ReportAssets(store, limits);
+    assets.put(agent, a, 'a.png', png(4));
+    assets.put(agent, b, 'b.png', png(4));
+    // Replacing a file counts its new size, not both.
+    assets.put(agent, a, 'a.png', png(6));
+    expect(() => assets.put(agent, b, 'c.png', png(1))).toThrow(
+      /Report pages' files would come to .* in all; Pharos keeps at most .* deleted in the last 30 days/,
+    );
+    // A deleted page's files are kept (for undo) and still count.
+    store.apply(me, {
+      message: 'Delete a page',
+      operations: [{ op: 'delete', type: 'view', id: a }],
+    });
+    expect(() => assets.put(agent, b, 'c.png', png(1))).toThrow(/in all/);
+    expect(new ReportAssets(store).list(b)).toHaveLength(1);
+  });
+
+  it('answers the size checks from an index, never reading the files', () => {
+    const { store } = setup();
+    const plan = store.database
+      .prepare(
+        'EXPLAIN QUERY PLAN SELECT COALESCE(SUM(size), 0) AS stored FROM report_assets WHERE NOT (view_id = ? AND path = ?)',
+      )
+      .all('v', 'p') as { detail: string }[];
+    expect(plan.map((r) => r.detail).join(' ')).toMatch(/COVERING INDEX report_assets_sizes/);
+  });
+});
+
 describe('page checks (view_preview, R13)', () => {
   it('finds relative references and blocked hosts', () => {
     const html = `<img src="img/a.png"><img src='b.jpg?x=1#y'><a href="#top">t</a>

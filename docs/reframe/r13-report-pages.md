@@ -26,7 +26,8 @@ ReportPage = {
 - Pictures, fonts and scripts the page ships go in **report assets**: a `report_assets` SQLite
   table (migration), keyed by `(view_id, path)`, `mime` from the extension
   (png jpg jpeg gif webp svg avif css js json woff woff2 ttf otf mp4 webm), ≤ 10 MB each,
-  ≤ 64 MB per view. Assets are page files, not project data, so not revisions. Deleting the view
+  ≤ 64 MB per view, ≤ 1 GB for all report pages together, the kept files of deleted pages
+  included (R13.6, `REPORT_LIMITS.totalAssetBytes`). Assets are page files, not project data, so not revisions. Deleting the view
   stops serving them but keeps them, so undoing the delete brings the whole page back; assets of
   views gone for 30 days are purged (at server start and once a day).
 - Uploads aren't revisions, so the change feed (`GET /api/events`) announces them as
@@ -166,7 +167,8 @@ Details:
   `/api/views/:id/page/…` and adds `Access-Control-Allow-Origin: *` to font and script assets;
   the page's CSP (its own page path only) keeps it to its own view's files.
 - Uploads: `PUT /api/views/:id/page/<path>` with the raw file as the body (owner, or an agent by
-  `X-Pharos-Author`), `GET /api/views/:id/assets` lists them. `GET /api/views/:id/page`
+  `X-Pharos-Author`), `GET /api/views/:id/assets` lists them. The body is read as a stream and
+  refused as soon as it passes 10 MB, with or without a Content-Length (R13.6). `GET /api/views/:id/page`
   redirects to `/page/`.
 
 ## Not in R13

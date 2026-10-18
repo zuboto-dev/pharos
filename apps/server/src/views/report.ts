@@ -116,7 +116,14 @@ export function scheduleAssetPurge(store: Store, everyMs = 24 * 60 * 60 * 1000):
 
 /** Report assets: a view's page files, kept beside revisions (never project data). */
 export class ReportAssets {
-  constructor(private readonly store: Store) {}
+  /** `limits` is REPORT_LIMITS; tests pass smaller ones. */
+  constructor(
+    private readonly store: Store,
+    private readonly limits: Pick<
+      typeof REPORT_LIMITS,
+      'assetBytes' | 'viewAssetBytes' | 'totalAssetBytes'
+    > = REPORT_LIMITS,
+  ) {}
 
   list(viewId: string): AssetInfo[] {
     return (
@@ -174,10 +181,11 @@ export class ReportAssets {
     const view = reportView(this.store, viewId, author);
     const path = assetPath(rawPath);
     if (!bytes.byteLength) throw new PharosError('invalid', `Asset "${path}" is empty`);
-    if (bytes.byteLength > REPORT_LIMITS.assetBytes)
+    const limits = this.limits;
+    if (bytes.byteLength > limits.assetBytes)
       throw new PharosError(
         'invalid',
-        `Asset "${path}" is ${megabytes(bytes.byteLength)}; one asset may be at most ${megabytes(REPORT_LIMITS.assetBytes)}`,
+        `Asset "${path}" is ${megabytes(bytes.byteLength)}; one asset may be at most ${megabytes(limits.assetBytes)}`,
       );
     const db = this.store.database;
     const { total } = db
@@ -185,10 +193,21 @@ export class ReportAssets {
         'SELECT COALESCE(SUM(size), 0) AS total FROM report_assets WHERE view_id = ? AND path <> ?',
       )
       .get(view.id, path) as { total: number };
-    if (total + bytes.byteLength > REPORT_LIMITS.viewAssetBytes)
+    if (total + bytes.byteLength > limits.viewAssetBytes)
       throw new PharosError(
         'invalid',
-        `The page's assets would come to ${megabytes(total + bytes.byteLength)}; a page may ship at most ${megabytes(REPORT_LIMITS.viewAssetBytes)}`,
+        `The page's assets would come to ${megabytes(total + bytes.byteLength)}; a page may ship at most ${megabytes(limits.viewAssetBytes)}`,
+      );
+    // One bound for all of them, the kept files of deleted pages included (R13.6).
+    const { stored } = db
+      .prepare(
+        'SELECT COALESCE(SUM(size), 0) AS stored FROM report_assets WHERE NOT (view_id = ? AND path = ?)',
+      )
+      .get(view.id, path) as { stored: number };
+    if (stored + bytes.byteLength > limits.totalAssetBytes)
+      throw new PharosError(
+        'invalid',
+        `Report pages' files would come to ${megabytes(stored + bytes.byteLength)} in all; Pharos keeps at most ${megabytes(limits.totalAssetBytes)} of them (files of pages deleted in the last ${REPORT_ASSETS_KEEP_DAYS} days count too). Use smaller files, or delete report pages you no longer need.`,
       );
     const mime = assetMime(path);
     const updatedAt = new Date().toISOString();

@@ -7,6 +7,7 @@ import { REPORT_GUIDE } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { BRIDGE_SCRIPT } from './bridge.js';
+import { readLimited } from './report-routes.js';
 import { ReportAssets, pageSource, reportCsp } from './report.js';
 import { createView } from './service.js';
 
@@ -255,6 +256,61 @@ describe('asset uploads over REST (R13)', () => {
       body: new Uint8Array([1]),
     });
     expect(big.status).toBe(400);
+  });
+});
+
+describe('upload bodies are bounded as they stream (R13.6)', () => {
+  const MB = 1024 * 1024;
+  /** A body of 1 MB chunks, endless unless `count` is given, counting what was pulled. */
+  function chunked(count = Infinity) {
+    const chunk = new Uint8Array(MB).fill(7);
+    const pulled = { n: 0 };
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled.n >= count) return controller.close();
+        pulled.n += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    return { stream, pulled };
+  }
+  const putStream = (path: string, body: ReadableStream<Uint8Array>) =>
+    app.request(`/api/views/${pageView}/page/${path}`, {
+      method: 'PUT',
+      headers: { 'x-pharos-author': 'agent:Codex' },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+
+  it('refuses a chunked body as soon as it passes 10 MB, without reading the rest', async () => {
+    const { stream, pulled } = chunked();
+    const res = await putStream('endless.png', stream);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toContain(
+      'at most 10 MB',
+    );
+    // 10 MB and the chunk that passed it, give or take what the stream had queued.
+    expect(pulled.n).toBeLessThanOrEqual(13);
+    expect(new ReportAssets(store).get(pageView, 'endless.png')).toBeNull();
+  });
+
+  it('takes a chunked body under the limit whole', async () => {
+    const { stream } = chunked(3);
+    const res = await putStream('three.png', stream);
+    expect(res.status).toBe(200);
+    expect(new ReportAssets(store).get(pageView, 'three.png')?.bytes.byteLength).toBe(3 * MB);
+  });
+
+  it('readLimited: exactly the limit passes, one byte more is refused', async () => {
+    const ok = await readLimited(
+      new Request('http://x/', { method: 'PUT', body: new Uint8Array(10) }),
+      10,
+    );
+    expect(ok.byteLength).toBe(10);
+    await expect(
+      readLimited(new Request('http://x/', { method: 'PUT', body: new Uint8Array(11) }), 10),
+    ).rejects.toThrow(/at most/);
+    expect((await readLimited(new Request('http://x/', { method: 'PUT' }), 10)).byteLength).toBe(0);
   });
 });
 

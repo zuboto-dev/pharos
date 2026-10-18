@@ -85,7 +85,7 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`
     owner's dataset); `pharos.onData(cb)` → called again when the project data changes.
   - `pharos.theme` (`"light" | "dark"`) and `pharos.onTheme(cb)`; the injected script also sets
     `data-theme` on `<html>` so pages built with the usual tokens follow the app.
-  - `pharos.openFile(fileId)` → asks the parent to open the file viewer (A6).
+  - `pharos.openFile(fileId)` → asks the parent to open the file viewer (A6), only for a file agents can see (the same dataset `pharos.data` reads; never one in a hidden folder).
   - `pharos.openLink(url)` → asks the parent to open a web address in a new tab (R13.6).
   - Messages go only to `window.parent`; the parent accepts messages only from that frame's
     `contentWindow`, only the kinds below, and only with the token of the bridge that said
@@ -135,7 +135,7 @@ kept from the page's scripts; R13.6):
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `{ pharos: 1, token, kind: 'ready' }`            | As soon as the bridge runs (before the page's own scripts), once per document. The parent keeps the token and answers with `theme`; a second `ready` stops the frame. |
 | `{ pharos: 1, token, kind: 'data', id, name }`   | `pharos.data(name)`. `id` is a string unique within the frame (`"r1"`, `"r2"`, …).                                                                                    |
-| `{ pharos: 1, token, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) if the file is in the project.                                                                       |
+| `{ pharos: 1, token, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) only for a file agents can see.                                                                      |
 | `{ pharos: 1, token, kind: 'link', url }`        | A click on a web link or `pharos.openLink(url)`: the parent opens it or asks the reader (see "Serving and the frame").                                                |
 | `{ pharos: 1, token, kind: 'leaving' }`          | The document is unloading (`beforeunload`, `pagehide`): the parent stops the frame.                                                                                   |
 

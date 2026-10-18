@@ -289,7 +289,7 @@ describe('report frame (R13)', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it("opens the file viewer only for this project's files", () => {
+  it("opens the file viewer only for this project's files", async () => {
     const open = vi.fn();
     render(
       <Providers viewer={{ open }}>
@@ -299,12 +299,37 @@ describe('report frame (R13)', () => {
     const file = data.files[0]!;
     // Nothing before the bridge said ready.
     send({ pharos: 1, kind: 'openFile', fileId: file.id });
+    await new Promise((r) => setTimeout(r, 20));
     expect(open).not.toHaveBeenCalled();
     send({ pharos: 1, kind: 'ready' });
     send({ pharos: 1, kind: 'openFile', fileId: 'file_elsewhere' });
+    await new Promise((r) => setTimeout(r, 20));
     expect(open).not.toHaveBeenCalled();
     send({ pharos: 1, kind: 'openFile', fileId: file.id });
-    expect(open).toHaveBeenCalledWith(file.id);
+    await waitFor(() => expect(open).toHaveBeenCalledWith(file.id));
+  });
+
+  it("never opens a file agents can't see, such as one in a hidden folder (R13.6)", async () => {
+    // The owner's dataset has the file; what agents see (AgentFiles) leaves it out.
+    const hidden = data.files[0]!;
+    agentSees = { ...withReport, files: withReport.files.filter((f) => f.id !== hidden.id) };
+    try {
+      const open = vi.fn();
+      render(
+        <Providers viewer={{ open }}>
+          <ReportFrame view={report} />
+        </Providers>,
+      );
+      send({ pharos: 1, kind: 'ready' });
+      send({ pharos: 1, kind: 'openFile', fileId: hidden.id });
+      await new Promise((r) => setTimeout(r, 30));
+      expect(open).not.toHaveBeenCalled();
+      const shown = withReport.files.find((f) => f.id !== hidden.id)!;
+      send({ pharos: 1, kind: 'openFile', fileId: shown.id });
+      await waitFor(() => expect(open).toHaveBeenCalledWith(shown.id));
+    } finally {
+      agentSees = withReport;
+    }
   });
 
   it('reloads once after a burst of uploads to its files, not once per file (R13.5)', () => {

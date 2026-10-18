@@ -296,10 +296,16 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
             }),
           );
       } else if (message.kind === 'openFile') {
-        // Only this project's files, and only through the viewer.
-        const { viewer, data } = latest.current;
-        if (viewer && (data.files ?? []).some((f) => f.id === message.fileId))
-          viewer.open(message.fileId);
+        // Only files the page's author could see (never one in a hidden folder), through the
+        // viewer, and only while this load is still the current one.
+        const fileId = message.fileId;
+        void visibleData()
+          .then((visible) => {
+            const { viewer } = latest.current;
+            if (mine.dead || life.current !== mine || !viewer) return;
+            if ((visible.files ?? []).some((f) => f.id === fileId)) viewer.open(fileId);
+          })
+          .catch(() => {});
       } else if (message.kind === 'link') openLink(message.url);
     };
     window.addEventListener('message', onMessage);

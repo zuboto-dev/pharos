@@ -540,7 +540,7 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     'report_asset_put',
     {
       title: 'Upload a report page asset',
-      description: `Save (or replace) a picture, font, stylesheet or script a report page ships, by its relative path in the page (e.g. "img/map.svg"); the page refers to it with that relative URL. Types: png jpg jpeg gif webp avif svg css js json woff woff2 ttf otf mp4 webm; at most 10 MB each and 64 MB per page. ${MCP_ASSET_NOTE} Assets are page files, not project data: they have no history and go when the view goes.`,
+      description: `Save (or replace) a picture, font, stylesheet or script a report page ships, by its relative path in the page (e.g. "img/map.svg"); the page refers to it with that relative URL. Types: png jpg jpeg gif webp avif svg css js json woff woff2 ttf otf mp4 webm; at most 10 MB each and 64 MB per page. ${MCP_ASSET_NOTE} Assets are page files, not project data: they have no history; after the view is deleted they are kept for 30 days, so undoing the delete restores the page.`,
       inputSchema: {
         viewId: z.string().describe('A report page (a view with page)'),
         path: z.string().describe('Relative path, e.g. "img/hero.png" (no "..", no leading /)'),

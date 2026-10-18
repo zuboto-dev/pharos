@@ -13,6 +13,7 @@ import { Presence } from './presence.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { seenMarks } from './views/freshness.js';
+import { scheduleAssetPurge } from './views/report.js';
 import { webBuildId } from './version.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
@@ -32,6 +33,8 @@ store.ensureDefaultViews();
 // R11: Pharos starts keeping track of what the reader has seen when it first runs with it, so
 // what agents change from then on is marked even before the owner opens the app.
 seenMarks(store);
+// R13.5: assets of report pages deleted 30+ days ago go, at start and once a day.
+scheduleAssetPurge(store);
 const feed = new RevisionFeed(store);
 // Who is working where (v0.2 B5): shared by the MCP tools, the answering run and the feed.
 const presence = new Presence();

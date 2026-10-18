@@ -26,8 +26,9 @@ ReportPage = {
 - Pictures, fonts and scripts the page ships go in **report assets**: a `report_assets` SQLite
   table (migration), keyed by `(view_id, path)`, `mime` from the extension
   (png jpg jpeg gif webp svg avif css js json woff woff2 ttf otf mp4 webm), ≤ 10 MB each,
-  ≤ 64 MB per view. Assets are page files, not project data, so not revisions; deleting the view
-  deletes them.
+  ≤ 64 MB per view. Assets are page files, not project data, so not revisions. Deleting the view
+  stops serving them but keeps them, so undoing the delete brings the whole page back; assets of
+  views gone for 30 days are purged (at server start and once a day).
 - `evidenceRevision` is set by Pharos when an agent writes the page (same rule as R11).
 
 ## Serving and the frame

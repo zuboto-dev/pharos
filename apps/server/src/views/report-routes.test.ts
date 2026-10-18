@@ -103,6 +103,21 @@ describe('GET /api/views/:id/page/<asset> (R13)', () => {
     expect(font.headers.get('access-control-allow-origin')).toBe('*');
   });
 
+  it('a deleted view serves nothing; undoing the delete serves its assets again (R13.5)', async () => {
+    const del = store.apply(me, {
+      message: 'Delete the page',
+      operations: [{ op: 'delete', type: 'view', id: pageView }],
+    });
+    for (const path of ['', 'img/a.png'])
+      expect((await app.request(`/api/views/${pageView}/page/${path}`)).status).toBe(404);
+    expect((await app.request(`/api/views/${pageView}/assets`)).status).toBe(404);
+    store.revert(del.revision.id, me);
+    const res = await app.request(`/api/views/${pageView}/page/img/a.png`);
+    expect(res.status).toBe(200);
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([1, 2, 3]);
+    expect((await app.request(`/api/views/${pageView}/page/`)).status).toBe(200);
+  });
+
   it("never serves view A's asset under view B", async () => {
     const res = await app.request(`/api/views/${otherPage}/page/img/a.png`);
     expect(res.status).toBe(404);

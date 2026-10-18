@@ -68,6 +68,30 @@ export function assetMime(path: string): string {
 
 const megabytes = (bytes: number) => `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
 
+/** How long a deleted view's assets are kept, so undoing the delete restores the whole page. */
+export const REPORT_ASSETS_KEEP_DAYS = 30;
+
+/**
+ * Purges long-gone views' assets now and then once a day (the HTTP server calls it at start).
+ * Errors are logged, never thrown: background work must not stop the server. Returns a stop.
+ */
+export function scheduleAssetPurge(store: Store, everyMs = 24 * 60 * 60 * 1000): () => void {
+  const assets = new ReportAssets(store);
+  const run = () => {
+    try {
+      const removed = assets.purgeGone();
+      if (removed)
+        console.log(`[pharos] Removed ${removed} asset(s) of report pages deleted 30+ days ago`);
+    } catch (error) {
+      console.error('[pharos] Report asset purge failed:', error);
+    }
+  };
+  run();
+  const timer = setInterval(run, everyMs);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
 /** Report assets: a view's page files, kept beside revisions (never project data). */
 export class ReportAssets {
   constructor(private readonly store: Store) {}
@@ -96,6 +120,27 @@ export class ReportAssets {
           .prepare('DELETE FROM report_assets WHERE view_id = ? AND path = ?')
           .run(viewId, path).changes,
       ) > 0
+    );
+  }
+
+  /**
+   * Removes the assets of views that have been gone (deleted, or their project deleted) for
+   * `keepDays` or more, by the time of the last revision that touched the view. Assets outlive a
+   * delete so that undoing it brings the whole page back. Returns how many assets went.
+   */
+  purgeGone(now: number = Date.now(), keepDays = REPORT_ASSETS_KEEP_DAYS): number {
+    const cutoff = new Date(now - keepDays * 24 * 60 * 60 * 1000).toISOString();
+    return Number(
+      this.store.database
+        .prepare(
+          `DELETE FROM report_assets WHERE view_id IN (
+             SELECT a.view_id FROM (SELECT DISTINCT view_id FROM report_assets) a
+             WHERE NOT EXISTS (SELECT 1 FROM entities e WHERE e.id = a.view_id)
+               AND COALESCE((SELECT MAX(r.created_at) FROM changes c
+                   JOIN revisions r ON r.id = c.revision_id WHERE c.entity_id = a.view_id), '') < ?
+           )`,
+        )
+        .run(cutoff).changes,
     );
   }
 

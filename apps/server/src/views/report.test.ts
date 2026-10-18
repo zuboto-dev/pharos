@@ -1,10 +1,16 @@
 import { REPORT_LIMITS, type Author } from '@pharos/schema';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { openDatabase } from '../store/database.js';
 import { projectSnapshot } from '../store/snapshot.js';
 import { Store } from '../store/store.js';
 import { evidenceState, projectFreshness } from './freshness.js';
-import { ReportAssets, blockedExternals, decodeBase64, referencedPaths } from './report.js';
+import {
+  ReportAssets,
+  blockedExternals,
+  decodeBase64,
+  referencedPaths,
+  scheduleAssetPurge,
+} from './report.js';
 import {
   PAGE_HTML_SHOWN,
   createView,
@@ -351,7 +357,7 @@ describe('report assets (R13)', () => {
     expect(make().view.id).toBeTruthy();
   });
 
-  it('go with their view: delete, cascade from the project, and a revert of the create', () => {
+  it('outlive a delete so a revert restores the whole page; purged 30 days after (R13.5)', () => {
     const { store, projectId, make } = setup();
     const assets = new ReportAssets(store);
     const a = make().view.id;
@@ -360,20 +366,48 @@ describe('report assets (R13)', () => {
     assets.put(agent, b, 'x.png', png(2));
     const made = make();
     assets.put(agent, made.view.id, 'x.png', png(2));
-    store.apply(me, { message: 'del', operations: [{ op: 'delete', type: 'view', id: a }] });
-    expect(assets.list(a)).toEqual([]);
-    expect(assets.list(b)).toHaveLength(1);
+    const deleted = store.apply(me, {
+      message: 'del',
+      operations: [{ op: 'delete', type: 'view', id: a }],
+    });
+    // Kept (not served: the routes need the view), and back with the view on undo.
+    expect(assets.list(a)).toHaveLength(1);
+    store.revert(deleted.revision.id, me);
+    expect(store.get(a)?.type).toBe('view');
+    expect(assets.get(a, 'x.png')?.bytes.byteLength).toBe(2);
+    // Reverting the create removes the view; its assets wait like a delete's.
     store.revert(made.revision!.id, me);
+    expect(assets.list(made.view.id)).toHaveLength(1);
+    // Nothing gone long enough yet.
+    expect(assets.purgeGone()).toBe(0);
+    expect(assets.purgeGone(Date.now() + 29 * 86_400_000)).toBe(0);
+    // 31 days on: only the gone view's assets go; live views keep theirs.
+    expect(assets.purgeGone(Date.now() + 31 * 86_400_000)).toBe(1);
     expect(assets.list(made.view.id)).toEqual([]);
+    expect(assets.list(a)).toHaveLength(1);
+    expect(assets.list(b)).toHaveLength(1);
+    // A project delete takes its views; their assets go 30 days later.
     store.apply(me, {
       message: 'del project',
       operations: [{ op: 'delete', type: 'project', id: projectId }],
     });
-    expect(assets.list(b)).toEqual([]);
+    expect(assets.purgeGone()).toBe(0);
+    expect(assets.purgeGone(Date.now() + 31 * 86_400_000)).toBe(2);
     const count = store.database.prepare('SELECT COUNT(*) AS n FROM report_assets').get() as {
       n: number;
     };
     expect(count.n).toBe(0);
+  });
+
+  it('the purge runs at start and logs, never throws (R13.5)', () => {
+    const { store } = setup();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stop = scheduleAssetPurge(store);
+    stop();
+    store.database.exec('DROP TABLE report_assets');
+    expect(() => scheduleAssetPurge(store)()).not.toThrow();
+    expect(errors).toHaveBeenCalledWith('[pharos] Report asset purge failed:', expect.anything());
+    errors.mockRestore();
   });
 
   it('decodes base64 strictly (a data: URL is fine)', () => {

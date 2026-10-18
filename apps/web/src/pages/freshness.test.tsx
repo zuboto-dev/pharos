@@ -194,6 +194,20 @@ describe('stale answers (R11.5)', () => {
     });
   });
 
+  it('a refresh of a report page says it is about that page', () => {
+    const page: Entity<'view'> = {
+      ...first!,
+      id: 'view_page',
+      data: { ...first!.data, name: 'Spending story', page: { html: '<p>Hi</p>' } },
+    };
+    expect(refreshRequest(page).operations[0]!.data).toMatchObject({
+      mode: 'refresh',
+      viewId: 'view_page',
+      about: 'Report page “Spending story”',
+    });
+    expect(refreshRequest(answer).operations[0]!.data.about).toBe('Answer “Blocked?”');
+  });
+
   it('a saved page an agent built says it calmly, in one line', () => {
     renderWith(
       <EvidenceNote

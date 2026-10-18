@@ -1,5 +1,6 @@
 import { REPORT_LIMITS, type Author } from '@pharos/schema';
 import { describe, expect, it, vi } from 'vitest';
+import { answerBrief } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { projectSnapshot } from '../store/snapshot.js';
 import { Store } from '../store/store.js';
@@ -638,5 +639,145 @@ describe('freshness of report pages (R13 + R11)', () => {
     });
     expect(projectFreshness(store, projectId).views[id]!.evidence).toBeNull();
     expect(evidenceState(store, store.getOfType('view', id))).toBe('unknown');
+  });
+});
+
+describe('refreshing a report page (R13 + R11: the refresh loop)', () => {
+  /** A page an agent wrote, gone stale by a person's change, with a refresh asked from the app. */
+  function staleWithRefresh() {
+    const ctx = setup();
+    const { store, projectId, record, make } = ctx;
+    const id = make().view.id;
+    new ReportAssets(store).put(agent, id, 'img/hero.svg', png(10));
+    store.apply(me, {
+      message: 'spent more',
+      operations: [
+        {
+          op: 'update',
+          type: 'record',
+          id: record,
+          data: { fields: { amount: { amount: 9999, currency: 'EUR' } } },
+        },
+      ],
+    });
+    const { created } = store.apply(me, {
+      message: 'Refresh',
+      operations: [
+        {
+          op: 'create',
+          type: 'request',
+          ref: 'q',
+          data: {
+            projectId,
+            question: 'Refresh “Spending story”',
+            about: 'Report page “Spending story”',
+            viewId: id,
+            mode: 'refresh',
+          },
+        },
+      ],
+    });
+    return { ...ctx, id, requestId: created.q! };
+  }
+
+  it('tells the answering agent to write the same page again, with the same named reads', () => {
+    const { store, projectId, id, requestId } = staleWithRefresh();
+    expect(evidenceState(store, store.getOfType('view', id))).toBe('stale');
+    const brief = answerBrief(store, [projectId]);
+    // The request's own lines, up to the general rules after them.
+    const entry = brief.slice(brief.indexOf(`requestId ${requestId}`)).split('\n\n')[0]!;
+    expect(entry).toContain('Refresh this report page (mode "refresh")');
+    expect(entry).not.toContain('Refresh this answer');
+    for (const step of [
+      'report_guide',
+      `view_get ${id}`,
+      `requestId: "${requestId}"`,
+      `data: ${JSON.stringify(SPEND)}`,
+      'summary:',
+      "Its assets stay with the view: don't upload them again",
+      'Never send widgets',
+    ])
+      expect(entry, step).toContain(step);
+    // What changed since it was written (R11), named for the agent.
+    expect(entry).toMatch(/changed since: record "Groceries" \(.+, updated\)/);
+    // The general rules say the same for report pages.
+    expect(brief).toContain('When the view is a report page');
+    // The request in project_snapshot carries the same steps.
+    const asked = projectSnapshot(store, projectId).requests.find((r) => r.id === requestId)!;
+    expect(asked.context.join('\n')).toContain(`data: ${JSON.stringify(SPEND)}`);
+  });
+
+  it('an answer view refresh keeps its own wording (no report-page steps)', () => {
+    const { store, projectId, make } = setup();
+    const id = make().view.id;
+    store.apply(me, {
+      message: 'board again',
+      operations: [{ op: 'update', type: 'view', id, data: { page: null } }],
+    });
+    const { created } = store.apply(me, {
+      message: 'Refresh',
+      operations: [
+        {
+          op: 'create',
+          type: 'request',
+          ref: 'q',
+          data: { projectId, question: 'Refresh', viewId: id, mode: 'refresh' },
+        },
+      ],
+    });
+    const brief = answerBrief(store, [projectId]);
+    const entry = brief.slice(brief.indexOf(`requestId ${created.q}`)).split('\n\n')[0]!;
+    expect(entry).toContain('Refresh this answer (mode "refresh")');
+    expect(entry).not.toContain('Refresh this report page');
+  });
+
+  it('refuses widgets or a page without its reads; the rewrite clears the mark and keeps assets', () => {
+    const { store, projectId, id, requestId } = staleWithRefresh();
+    const expectedRevision = store.getOfType('view', id).updatedRev;
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        message: 'r',
+        expectedRevision,
+        requestId,
+        widgets: [{ id: 't', node: { component: 'Text', text: 'Hi' } }],
+      }),
+    ).toThrow(/not widgets/);
+    expect(() =>
+      updateView(store, agent, {
+        viewId: id,
+        message: 'r',
+        expectedRevision,
+        requestId,
+        page: { html: HTML },
+      }),
+    ).toThrow(/send page.data again with its named reads \("spend"\)/);
+    const before = store.getOfType('view', id);
+    const versions = () => store.history({ entityId: id }).length;
+    const n = versions();
+    const result = updateView(store, agent, {
+      viewId: id,
+      message: 'Refreshed from the data now',
+      expectedRevision,
+      requestId,
+      reply: 'Groceries are now €99.99.',
+      page: { html: `${HTML}<!-- v2 -->`, data: SPEND, summary: 'Groceries jumped.' },
+    });
+    const view = store.getOfType('view', id);
+    expect(versions()).toBe(n + 1); // every version is kept: the page's history grew by one
+    expect(view.updatedRev).toBe(result.revision!.id);
+    expect(view.data.page).toMatchObject({ summary: 'Groceries jumped.', data: SPEND });
+    expect(view.data.evidenceRevision).toBe(result.revision!.id - 1);
+    expect(view.data.evidenceRevision).toBeGreaterThan(before.data.evidenceRevision!);
+    expect(evidenceState(store, view)).toBe('fresh');
+    const evidence = projectFreshness(store, projectId, { view: id }).views[id]!.evidence;
+    expect(evidence && 'stale' in evidence && evidence.stale).toBeFalsy();
+    expect(store.getOfType('request', requestId).data).toMatchObject({
+      status: 'answered',
+      reply: 'Groceries are now €99.99.',
+    });
+    expect(new ReportAssets(store).list(id).map((a) => a.path)).toEqual(['img/hero.svg']);
+    // Nothing left to ask: the brief has no open request for it.
+    expect(answerBrief(store, [projectId])).not.toContain(`requestId ${requestId}`);
   });
 });

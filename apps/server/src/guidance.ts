@@ -627,6 +627,11 @@ function text(uri: string, body: string, mimeType = 'text/markdown') {
   return { contents: [{ uri, mimeType, text: body }] };
 }
 
+const isReportPage = (store: Store, viewId: string | undefined) => {
+  const view = viewId ? store.get(viewId) : null;
+  return view?.type === 'view' && !!(view as Entity<'view'>).data.page;
+};
+
 /** For a refresh request (R11): what changed in the data since the answer was written. */
 function refreshContext(store: Store, request: Entity<'request'>): string[] {
   const view = request.data.viewId ? store.get(request.data.viewId) : null;
@@ -677,7 +682,11 @@ export function answerBrief(
         `- requestId ${r.id} in project "${project.data.name}" (${projectId}): ${r.data.question}`,
         r.data.about ? `  Asked from: ${r.data.about}` : '',
         r.data.mode === 'block' ? '  Change this block (mode "block")' : '',
-        r.data.mode === 'refresh' ? '  Refresh this answer (mode "refresh")' : '',
+        r.data.mode === 'refresh'
+          ? isReportPage(store, r.data.viewId)
+            ? '  Refresh this report page (mode "refresh")'
+            : '  Refresh this answer (mode "refresh")'
+          : '',
         ...requestContext(store, r).map((line) => `  ${line}`),
         ...(r.data.mode === 'refresh' ? refreshContext(store, r) : []),
         ...similarAnswers(r.data.question, answers, (v) => v.data.question)
@@ -722,6 +731,11 @@ export function answerBrief(
     'whole page as new widgets (check every number and sentence against the data now; ops or a',
     'rename are refused), and a one-sentence reply saying what changed. Never link an answer that',
     'is marked stale or unknown.',
+    'When the view is a report page (the request says "Refresh this report page"), write the page',
+    'again instead: call report_guide, view_get it (its html, page.data and summary), read what',
+    'each named read selects now, and view_update with expectedRevision, the requestId and the',
+    'whole page as page: new html and summary worked out from the data now, the same page.data.',
+    'Its assets stay. Never send widgets for a report page.',
     '',
     'People use Ask for three things. Work out which one each request is:',
     '- A question about the project: answer it with view_answer (pass the requestId).',

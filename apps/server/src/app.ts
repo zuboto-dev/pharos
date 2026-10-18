@@ -20,6 +20,7 @@ import { fileRoutes } from './files/routes.js';
 import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
+import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
@@ -524,7 +525,22 @@ export function createApp(
       await mcp.connect(created);
       transport = created;
     }
-    return transport.handleRequest(c.req.raw);
+    const res = await transport.handleRequest(c.req.raw);
+    // The transport refuses bodies over 4 MB; say what to do instead (R13.6). Not raised: the
+    // limit keeps one request from holding the server's memory.
+    if (res.status === 413)
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: `This MCP request is over 4 MB, more than Pharos takes over HTTP. ${MCP_ASSET_NOTE}`,
+          },
+          id: null,
+        },
+        413,
+      );
+    return res;
   });
 
   // The built web app, so one process can serve the whole thing (see `pnpm service`). Files are

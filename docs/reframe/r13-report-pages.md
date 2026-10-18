@@ -48,7 +48,7 @@ default-src 'none'; script-src OWN 'unsafe-inline' https://cdnjs.cloudflare.com
 https://cdn.jsdelivr.net https://unpkg.com; style-src OWN 'unsafe-inline'
 https://fonts.googleapis.com; font-src OWN data: https://fonts.gstatic.com;
 img-src OWN data: blob:; media-src OWN data: blob:; connect-src 'none';
-form-action 'none'; frame-src 'none'; base-uri 'none'`, where `OWN` is the view's own page path
+form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'`, where `OWN` is the view's own page path
     as an absolute source, `http://<host>/api/views/<id>/page/` (R13.6; `reportCsp`/`pageSource`
     in `views/report.ts`). `'self'` would be the whole origin, and with `Access-Control-Allow-Origin: *`
     on scripts and fonts a page could load another view's (another project's) files. `<host>` is
@@ -67,7 +67,9 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`, where `OWN` is the view'
   shows a strip above the frame with the whole address ("This page wants to open: …", Open /
   Cancel), one at a time. Other schemes are ignored.
 - The frame never leaves its page (R13.6). The app's own pages are served with
-  `Content-Security-Policy: frame-src 'self'` (the built server's HTML and Vite's dev server), and
+  `Content-Security-Policy: frame-src 'self'; frame-ancestors 'self'` and
+  `X-Frame-Options: SAMEORIGIN` (`APP_PAGE_HEADERS`: the built server's HTML and Vite's dev
+  server; no other site may frame the app or a report page), and
   the browser checks the parent's `frame-src` on every navigation of the frame, including one the
   page starts itself (`location.href = …`, a meta refresh, a link that gets past the bridge): a
   navigation to another site is refused before any request is made. (The Navigation API can't
@@ -105,7 +107,10 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`, where `OWN` is the view'
 ## Agents (MCP)
 
 - `view_create` / `view_update` accept `page` (replace whole page; `expectedRevision` as today).
-- `report_asset_put { viewId, path, base64 }` and `report_asset_list { viewId }`.
+- `report_asset_put { viewId, path, base64 }` and `report_asset_list { viewId }`. Over MCP's HTTP
+  transport a request carries at most 4 MB (not raised), and base64 adds a third, so files over
+  ~3 MB go over REST (`PUT /api/views/:id/page/<path>`, below); the tool's description, the
+  transport's 413 (rewritten by Pharos) and the report guide say so (`MCP_ASSET_NOTE`, R13.6).
 - `report_guide` returns the report-writing guide (see below). `view_preview` checks a page:
   size, the named reads (query check, as for blocks), asset paths the HTML references that don't
   exist, external hosts the CSP will block, and scripts that would navigate the page (setting

@@ -601,6 +601,10 @@ describe('serving the built web app', () => {
     expect(home.headers.get('content-security-policy')).toContain("frame-src 'self'");
     expect(page.headers.get('content-security-policy')).toContain("frame-src 'self'");
     expect(asset.headers.get('content-security-policy')).toBeNull();
+    // And no other site may frame the app (R13.6 finding 6).
+    expect(home.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+    expect(home.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(page.headers.get('x-frame-options')).toBe('SAMEORIGIN');
     const api = await served.request('/api/health');
     expect(api.headers.get('content-type')).toMatch(/json/);
     expect(api.headers.get('content-security-policy')).toBeNull();

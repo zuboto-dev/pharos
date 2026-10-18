@@ -66,10 +66,12 @@ export const lockPageResponses: MiddlewareHandler = async (c, next) => {
  * show Pharos addresses. The browser checks it on every navigation of the frame, including one
  * the report page starts itself (`location.href = 'https://elsewhere/?d=…'`), and refuses it
  * before any request is made; the frame then loads an error page, which the app notices (a
- * second load) and stops the frame.
+ * second load) and stops the frame. `frame-ancestors 'self'` and X-Frame-Options: no other
+ * site may frame the app (R13.6 finding 6).
  */
 export const APP_PAGE_HEADERS: Record<string, string> = {
-  'Content-Security-Policy': "frame-src 'self'",
+  'Content-Security-Policy': "frame-src 'self'; frame-ancestors 'self'",
+  'X-Frame-Options': 'SAMEORIGIN',
 };
 
 /** Fonts and module scripts load in CORS mode from the frame's opaque origin ("null"). */

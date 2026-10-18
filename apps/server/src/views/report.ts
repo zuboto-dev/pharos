@@ -56,6 +56,7 @@ export function reportCsp(own: string | null): string {
     "form-action 'none'",
     "frame-src 'none'",
     "base-uri 'none'",
+    "frame-ancestors 'self'",
   ].join('; ');
 }
 

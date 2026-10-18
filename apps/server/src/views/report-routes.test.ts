@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
-import { REPORT_GUIDE } from '../guidance.js';
+import { MCP_ASSET_NOTE, REPORT_GUIDE } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { BRIDGE_SCRIPT } from './bridge.js';
@@ -49,7 +49,7 @@ beforeEach(() => {
 
 /** The exact CSP of a page served for `host` (R13.6: its own page path instead of 'self'). */
 const exactCsp = (id: string, host = 'localhost') =>
-  `sandbox allow-scripts allow-modals; default-src 'none'; script-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://fonts.googleapis.com; font-src http://${host}/api/views/${id}/page/ data: https://fonts.gstatic.com; img-src http://${host}/api/views/${id}/page/ data: blob:; media-src http://${host}/api/views/${id}/page/ data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'`;
+  `sandbox allow-scripts allow-modals; default-src 'none'; script-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://fonts.googleapis.com; font-src http://${host}/api/views/${id}/page/ data: https://fonts.gstatic.com; img-src http://${host}/api/views/${id}/page/ data: blob:; media-src http://${host}/api/views/${id}/page/ data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'`;
 
 describe('GET /api/views/:id/page/ (R13)', () => {
   it('serves the page with the contract headers and the bridge first', async () => {
@@ -93,7 +93,7 @@ describe("a page's CSP names only its own files (R13.6)", () => {
     });
     const csp = res.headers.get('content-security-policy')!;
     expect(csp).toBe(exactCsp(pageView, '127.0.0.1:4300'));
-    expect(csp).not.toContain("'self'");
+    expect(csp.replace("frame-ancestors 'self'", '')).not.toContain("'self'");
     // Another view's files are outside this source (a path prefix).
     expect(csp).not.toContain(otherPage);
     const asset = await app.request(`/api/views/${pageView}/page/img/a.png`, {
@@ -125,7 +125,7 @@ describe("a page's CSP names only its own files (R13.6)", () => {
     const none = reportCsp(null);
     expect(none).toContain("script-src 'unsafe-inline' https://cdnjs.cloudflare.com");
     expect(none).toContain('img-src data: blob:');
-    expect(none).not.toContain("'self'");
+    expect(none.replace("frame-ancestors 'self'", '')).not.toContain("'self'");
     expect(none).not.toContain('evil');
   });
 
@@ -394,6 +394,30 @@ describe('report tools over MCP (R13)', () => {
       return text;
     }
   }
+
+  it('says plainly that files over ~3 MB go over REST, in the tool, its error and the guide (R13.6)', async () => {
+    const client = await connect();
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'report_asset_put')!;
+    expect(tool.description).toContain(MCP_ASSET_NOTE);
+    expect(REPORT_GUIDE).toContain(MCP_ASSET_NOTE);
+    expect(MCP_ASSET_NOTE).toMatch(/under 3 MB.*PUT \/api\/views\/<viewId>\/page\/<path>/);
+    // 3.2 MB of file is ~4.3 MB of base64: the transport refuses the request, and says why.
+    await expect(
+      call(client, 'report_asset_put', {
+        viewId: pageView,
+        path: 'img/big.png',
+        base64: Buffer.alloc(3.2 * 1024 * 1024, 1).toString('base64'),
+      }),
+    ).rejects.toThrow(/over 4 MB.*keep each file under 3 MB/);
+    expect(new ReportAssets(store).get(pageView, 'img/big.png')).toBeNull();
+    // Under 3 MB goes through.
+    const ok = await call(client, 'report_asset_put', {
+      viewId: pageView,
+      path: 'img/fine.png',
+      base64: Buffer.alloc(2.9 * 1024 * 1024, 1).toString('base64'),
+    });
+    expect(ok.saved.size).toBe(Math.floor(2.9 * 1024 * 1024));
+  });
 
   it('creates a page, uploads and lists assets, previews, gets the guide', async () => {
     const client = await connect();

@@ -17,6 +17,17 @@ const LOCKED: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
 };
 
+/**
+ * Headers on the web app's own pages (R13.6). `frame-src 'self'`: a frame in the app may only
+ * show Pharos addresses. The browser checks it on every navigation of the frame, including one
+ * the report page starts itself (`location.href = 'https://elsewhere/?d=…'`), and refuses it
+ * before any request is made; the frame then loads an error page, which the app notices (a
+ * second load) and stops the frame.
+ */
+export const APP_PAGE_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': "frame-src 'self'",
+};
+
 /** Fonts and module scripts load in CORS mode from the frame's opaque origin ("null"). */
 const CORS_TYPES = /^(font\/|text\/javascript)/;
 

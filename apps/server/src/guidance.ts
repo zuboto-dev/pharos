@@ -51,9 +51,14 @@ through named reads, and marks it out of date when that data changes.
   the page is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif webp avif
   svg css js json woff woff2 ttf otf mp4 webm; 10 MB each, 64 MB per page.
 - The frame has no network: no fetch, no forms, no other sites. Allowed: scripts from
-  cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts. Links open in a new tab.
+  cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts.
+- Sources are plain links, \`<a href="https://…">\`: they open through Pharos in a new tab (a link
+  with a query or a long path asks the reader first, showing where it goes). From a script, use
+  \`pharos.openLink(url)\`. Never navigate the page: no location.href = …, window.open or meta
+  refresh; Pharos refuses them and stops the page.
 - view_preview {viewId} (or {projectId, page} for a draft) checks the size, the reads (rows now,
-  query findings), assets the HTML names that aren't uploaded, and hosts the frame will block.
+  query findings), assets the HTML names that aren't uploaded, hosts the frame will block, and
+  scripts that would navigate the page.
 
 ## Write it well
 

@@ -9,7 +9,14 @@ import { ViewDataProvider, type ViewActions } from '../catalog/context';
 import { FileViewerContext, type FileViewerApi } from '../files/viewer-context';
 import { ProjectPage } from './ProjectPage';
 import { announceReportAssets } from '../lib/events';
-import { ASSET_RELOAD_DELAY_MS, REPORT_SANDBOX, ReportBar, ReportFrame, reportUrl } from './report';
+import {
+  ASSET_RELOAD_DELAY_MS,
+  REPORT_SANDBOX,
+  ReportBar,
+  ReportFrame,
+  linkDecision,
+  reportUrl,
+} from './report';
 
 const data = dataset as unknown as ProjectDataset;
 const [board] = data.views as Entity<'view'>[];
@@ -97,11 +104,19 @@ function frameOf(): HTMLIFrameElement {
   return frame;
 }
 
-/** A message from `source` (the frame's window by default), as the browser would deliver it. */
-function send(message: unknown, source: Window | null = frameOf().contentWindow) {
+/** The token the page's bridge signs its messages with (R13.6). */
+const TOKEN = '0123456789abcdef0123456789abcdef';
+
+/** A message as it arrives, from `source` (the frame's window by default), exactly as given. */
+function sendRaw(message: unknown, source: Window | null = frameOf().contentWindow) {
   act(() => {
     window.dispatchEvent(new MessageEvent('message', { data: message, source }));
   });
+}
+
+/** A message from the page's bridge: signed with TOKEN unless it names its own token. */
+function send(message: object, source: Window | null = frameOf().contentWindow) {
+  sendRaw({ token: TOKEN, ...message }, source);
 }
 
 function spyOnFrame() {
@@ -118,9 +133,7 @@ describe('report frame (R13)', () => {
     );
     const frame = frameOf();
     const tokens = (frame.getAttribute('sandbox') ?? '').split(/\s+/).sort();
-    expect(tokens).toEqual(
-      ['allow-modals', 'allow-popups', 'allow-popups-to-escape-sandbox', 'allow-scripts'].sort(),
-    );
+    expect(tokens).toEqual(['allow-modals', 'allow-scripts'].sort());
     expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
     expect(REPORT_SANDBOX).not.toContain('same-origin');
     expect(frame.getAttribute('src')).toBe(
@@ -212,8 +225,30 @@ describe('report frame (R13)', () => {
     send({ pharos: 1, kind: 'fetch', url: '/api/projects' });
     send({ pharos: 2, kind: 'ready' });
     send({ pharos: 1, kind: 'data', name: 'done' });
-    send('ready');
+    sendRaw('ready');
+    // Unsigned or badly signed: not the bridge.
+    sendRaw({ pharos: 1, kind: 'ready' });
+    send({ pharos: 1, kind: 'ready', token: 'not-hex!' });
     expect(post).not.toHaveBeenCalled();
+  });
+
+  it('answers only the document that said ready, by its token (R13.6)', async () => {
+    render(
+      <Providers>
+        <ReportFrame view={report} />
+      </Providers>,
+    );
+    const post = spyOnFrame();
+    send({ pharos: 1, kind: 'data', id: 0, name: 'done' }); // before ready: nothing
+    send({ pharos: 1, kind: 'ready' });
+    post.mockClear();
+    send({ pharos: 1, kind: 'data', id: 1, name: 'done', token: 'f'.repeat(32) });
+    sendRaw({ pharos: 1, kind: 'data', id: 2, name: 'done' });
+    send({ pharos: 1, kind: 'data', id: 3, name: 'done' });
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(expect.objectContaining({ kind: 'data', id: 3 }), '*'),
+    );
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it("sends 'changed' when the project data reloads and 'theme' when the theme changes", async () => {
@@ -262,6 +297,10 @@ describe('report frame (R13)', () => {
       </Providers>,
     );
     const file = data.files[0]!;
+    // Nothing before the bridge said ready.
+    send({ pharos: 1, kind: 'openFile', fileId: file.id });
+    expect(open).not.toHaveBeenCalled();
+    send({ pharos: 1, kind: 'ready' });
     send({ pharos: 1, kind: 'openFile', fileId: 'file_elsewhere' });
     expect(open).not.toHaveBeenCalled();
     send({ pharos: 1, kind: 'openFile', fileId: file.id });
@@ -333,6 +372,175 @@ describe('report frame (R13)', () => {
     );
     fireEvent.load(frameOf());
     expect((await screen.findByRole('alert')).textContent).toContain('couldn’t be loaded');
+  });
+});
+
+describe('a page that leaves its frame is stopped (R13.6)', () => {
+  function shownFrame() {
+    render(
+      <Providers>
+        <ReportFrame view={report} />
+      </Providers>,
+    );
+    const post = spyOnFrame();
+    send({ pharos: 1, kind: 'ready' });
+    return post;
+  }
+  const stopped = () => document.querySelector('[data-report-error="stopped"]');
+
+  it('stops on a second load of the same address, and reloads fresh on request', async () => {
+    const post = shownFrame();
+    const first = frameOf();
+    const src = first.getAttribute('src')!;
+    fireEvent.load(first);
+    expect(stopped()).toBeNull();
+    post.mockClear();
+    fireEvent.load(first); // the page navigated its own frame
+    expect(first.getAttribute('src')).toBe('about:blank');
+    expect(stopped()?.textContent).toContain('This page tried to leave Pharos, so it was stopped.');
+    expect(document.querySelector('iframe')).toBeNull();
+    // Nothing more is answered or posted.
+    send({ pharos: 1, kind: 'data', id: 1, name: 'done' }, first.contentWindow);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(post).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Reload page/ }));
+    expect(stopped()).toBeNull();
+    expect(frameOf().getAttribute('src')).not.toBe(src);
+    expect(frameOf().getAttribute('src')).toBe(reportUrl(report, 1));
+  });
+
+  it('stops on a second ready (another document) and on leaving', () => {
+    shownFrame();
+    send({ pharos: 1, kind: 'ready', token: 'e'.repeat(32) });
+    expect(stopped()).toBeTruthy();
+    cleanup();
+
+    shownFrame();
+    send({ pharos: 1, kind: 'leaving', token: 'e'.repeat(32) }); // not its token
+    expect(stopped()).toBeNull();
+    send({ pharos: 1, kind: 'leaving' });
+    expect(stopped()).toBeTruthy();
+  });
+
+  it('never posts an answer that was in flight when the frame was stopped', async () => {
+    const post = shownFrame();
+    post.mockClear();
+    const win = frameOf().contentWindow;
+    send({ pharos: 1, kind: 'data', id: 1, name: 'done' });
+    send({ pharos: 1, kind: 'leaving' }, win);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(post).not.toHaveBeenCalled();
+  });
+});
+
+describe('links from a report page (R13.6)', () => {
+  let opened: ReturnType<typeof vi.fn>;
+  function setActive(isActive: boolean) {
+    Object.defineProperty(navigator, 'userActivation', {
+      value: { isActive },
+      configurable: true,
+    });
+  }
+  beforeEach(() => {
+    opened = vi.fn();
+    vi.stubGlobal('open', opened);
+    setActive(true);
+    render(
+      <Providers>
+        <ReportFrame view={report} />
+      </Providers>,
+    );
+    send({ pharos: 1, kind: 'ready' });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'userActivation');
+  });
+  const link = (url: string) => send({ pharos: 1, kind: 'link', url });
+  const strip = () => document.querySelector('[data-report-link]');
+
+  it('opens a plain link at once after a click, in a new tab without opener or referrer', () => {
+    link('https://en.wikipedia.org/wiki/Lighthouse');
+    expect(opened).toHaveBeenCalledWith(
+      'https://en.wikipedia.org/wiki/Lighthouse',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(strip()).toBeNull();
+  });
+
+  it('asks first, showing the whole address, for a link with a query, a fragment or a long path', () => {
+    const long = `https://example.org/${'a'.repeat(130)}`;
+    for (const url of [
+      'http://127.0.0.1:4399/evil.html?d=%5B%22secret%22%5D',
+      'https://example.org/page#rows',
+      long,
+      'https://user:pw@example.org/',
+    ]) {
+      link(url);
+      expect(opened).not.toHaveBeenCalled();
+      expect(strip()?.textContent).toContain(`This page wants to open: ${new URL(url).href}`);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(strip()).toBeNull();
+    }
+    expect(opened).not.toHaveBeenCalled();
+  });
+
+  it('asks first when the reader did not just click (a script asked)', () => {
+    setActive(false);
+    link('https://example.org/plain');
+    expect(opened).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(opened).toHaveBeenCalledWith(
+      'https://example.org/plain',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(strip()).toBeNull();
+  });
+
+  it('keeps one question at a time: a later link does not replace the one shown', () => {
+    link('https://example.org/?first');
+    link('https://example.org/?second');
+    expect(strip()?.textContent).toContain('?first');
+    expect(strip()?.textContent).not.toContain('?second');
+  });
+
+  it('opens at most 3 links at once in 10 s; the next one asks', () => {
+    for (let i = 0; i < 4; i++) link(`https://example.org/p${i}`);
+    expect(opened).toHaveBeenCalledTimes(3);
+    expect(strip()?.textContent).toContain('https://example.org/p3');
+  });
+
+  it('ignores other schemes, very long addresses and unsigned requests', () => {
+    setActive(true);
+    for (const url of [
+      'mailto:me@example.org',
+      'javascript:alert(1)',
+      'data:text/html,<p>x',
+      'file:///etc/passwd',
+      `https://example.org/${'a'.repeat(2000)}`,
+      'not a url',
+    ])
+      link(url);
+    sendRaw({ pharos: 1, kind: 'link', url: 'https://example.org/unsigned' });
+    expect(opened).not.toHaveBeenCalled();
+    expect(strip()).toBeNull();
+  });
+});
+
+describe('link decisions (R13.6)', () => {
+  it('says which links are plain', () => {
+    expect(linkDecision('https://example.org/a/b')).toEqual({
+      url: 'https://example.org/a/b',
+      plain: true,
+    });
+    expect(linkDecision('https://example.org/a?')?.plain).toBe(false);
+    expect(linkDecision('https://example.org/a#')?.plain).toBe(false);
+    expect(linkDecision(`https://example.org/${'a'.repeat(119)}`)?.plain).toBe(true);
+    expect(linkDecision(`https://example.org/${'a'.repeat(120)}`)?.plain).toBe(false);
+    expect(linkDecision('ftp://example.org/')).toBeNull();
+    expect(linkDecision(`https://example.org/${'a'.repeat(1990)}`)).toBeNull();
   });
 });
 

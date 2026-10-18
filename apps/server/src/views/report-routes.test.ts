@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 const EXACT_CSP =
-  "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'";
+  "sandbox allow-scripts allow-modals; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'";
 
 describe('GET /api/views/:id/page/ (R13)', () => {
   it('serves the page with the contract headers and the bridge first', async () => {

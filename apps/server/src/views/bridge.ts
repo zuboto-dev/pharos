@@ -9,6 +9,20 @@
  */
 export const BRIDGE_SCRIPT = String.raw`(function () {
   'use strict';
+  // Captured before any script of the page runs, so the page can't change what the bridge uses.
+  var apply = Reflect.apply;
+  var defineProperty = Object.defineProperty;
+  var getRandomValues = window.crypto && window.crypto.getRandomValues;
+  var cryptoObject = window.crypto;
+  var timeout = window.setTimeout;
+  var clearTimer = window.clearTimeout;
+  var URLClass = window.URL;
+  var preventDefault = window.Event && window.Event.prototype.preventDefault;
+  function cancel(event) {
+    if (preventDefault) apply(preventDefault, event, []);
+    else event.preventDefault();
+  }
+  var locationObject = window.location;
   var parentWindow = window.parent;
   var framed = parentWindow && parentWindow !== window;
   var initial = __PHAROS_THEME__;
@@ -18,14 +32,36 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
       : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'dark'
         : 'light';
+  // Says which document sent a message: the parent answers only this one (not a page the frame
+  // navigated to). Never given to the page's scripts.
+  var token = (function () {
+    var out = '';
+    try {
+      var bytes = new Uint8Array(16);
+      apply(getRandomValues, cryptoObject, [bytes]);
+      for (var i = 0; i < bytes.length; i++) out += (bytes[i] + 256).toString(16).slice(1);
+    } catch (e) {
+      for (var j = 0; j < 4; j++)
+        out += ('0000000' + Math.floor(Math.random() * 0x100000000).toString(16)).slice(-8);
+    }
+    return out;
+  })();
   var seq = 0;
   var pending = {};
   var asked = {};
   var dataListeners = [];
   var themeListeners = [];
-  function send(message) {
+  // Every message is built here as one literal: nothing the page defines runs while it is made.
+  function send(kind, a, b) {
     if (!framed) return;
-    message.pharos = 1;
+    var message =
+      kind === 'data'
+        ? { pharos: 1, token: token, kind: kind, id: a, name: b }
+        : kind === 'openFile'
+          ? { pharos: 1, token: token, kind: kind, fileId: a }
+          : kind === 'link'
+            ? { pharos: 1, token: token, kind: kind, url: a }
+            : { pharos: 1, token: token, kind: kind };
     try {
       parentWindow.postMessage(message, '*');
     } catch (e) {}
@@ -52,12 +88,12 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
         return;
       }
       var id = 'r' + ++seq;
-      var timer = setTimeout(function () {
+      var timer = timeout(function () {
         delete pending[id];
         reject(new Error('Pharos did not answer pharos.data("' + name + '")'));
       }, 20000);
       pending[id] = { resolve: resolve, reject: reject, timer: timer };
-      send({ kind: 'data', id: id, name: name });
+      send('data', id, name);
     });
   }
   function refresh() {
@@ -81,6 +117,28 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
       call(dataListeners, fresh);
     });
   }
+  // A web address to open: http or https only, resolved against the page; null for anything else.
+  function webAddress(raw) {
+    try {
+      var url = new URLClass(String(raw), locationObject.href);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+      return url.href;
+    } catch (e) {
+      return null;
+    }
+  }
+  // Opens a link through Pharos (a new tab, the reader sees where it goes); in a tab of its own
+  // the page simply goes there.
+  function openLink(raw) {
+    var url = webAddress(raw);
+    if (!url) return;
+    if (framed) send('link', url);
+    else {
+      try {
+        locationObject.assign(url);
+      } catch (e) {}
+    }
+  }
   var api = {
     data: function (name) {
       name = String(name);
@@ -94,17 +152,20 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
       if (typeof cb === 'function') themeListeners.push(cb);
     },
     openFile: function (fileId) {
-      send({ kind: 'openFile', fileId: String(fileId) });
+      send('openFile', String(fileId));
+    },
+    openLink: function (url) {
+      openLink(url);
     },
   };
-  Object.defineProperty(api, 'theme', {
+  defineProperty(api, 'theme', {
     enumerable: true,
     get: function () {
       return theme;
     },
   });
   Object.freeze(api);
-  Object.defineProperty(window, 'pharos', { value: api, writable: false, configurable: false });
+  defineProperty(window, 'pharos', { value: api, writable: false, configurable: false });
   setTheme(theme);
   window.addEventListener('message', function (event) {
     if (!framed || event.source !== parentWindow) return;
@@ -114,7 +175,7 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
       var p = pending[m.id];
       if (!p) return;
       delete pending[m.id];
-      clearTimeout(p.timer);
+      clearTimer(p.timer);
       if (m.error) p.reject(new Error(String(m.error)));
       else p.resolve(Array.isArray(m.rows) ? m.rows : []);
     } else if (m.kind === 'changed') {
@@ -125,7 +186,36 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
       call(themeListeners, m.theme);
     }
   });
-  send({ kind: 'ready' });
+  if (framed) {
+    // Links (sources) open through Pharos in a new tab: the frame may not open windows itself.
+    // A link to a place in this page (#section) is left alone.
+    var onClick = function (event) {
+      if (event.type === 'auxclick' && event.button !== 1) return;
+      var node = event.target;
+      while (node && node.nodeType !== 1) node = node.parentNode;
+      var link = node && node.closest ? node.closest('a[href], area[href]') : null;
+      if (!link) return;
+      var raw = link.getAttribute('href');
+      if (raw === null) return;
+      var url = webAddress(raw);
+      if (!url) return;
+      var here = String(locationObject.href).split('#')[0];
+      if (raw.indexOf('#') >= 0 && url.split('#')[0] === here) return;
+      cancel(event);
+      send('link', url);
+    };
+    window.addEventListener('click', onClick, true);
+    window.addEventListener('auxclick', onClick, true);
+    // The page navigating its own frame can't be cancelled from inside (the Navigation API has
+    // no events in an opaque origin): Pharos's own page refuses it (its frame-src) and the parent
+    // stops the frame. Saying we are leaving lets the parent stop answering at once.
+    var leaving = function () {
+      send('leaving');
+    };
+    window.addEventListener('beforeunload', leaving);
+    window.addEventListener('pagehide', leaving);
+  }
+  send('ready');
 })();`;
 
 export type PageTheme = 'light' | 'dark';

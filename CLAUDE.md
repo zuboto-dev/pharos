@@ -127,8 +127,11 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
 
 - A view with `page` (`packages/schema/src/views/report.ts`) is a report page: HTML an agent
   wrote whole, served by `apps/server/src/views/report-routes.ts` at `/api/views/:id/page/` in a
-  locked frame (CSP with `sandbox`, no network) with the bridge from `views/bridge.ts` injected
-  first; it defines `window.pharos` (data, onData, theme, onTheme, openFile).
+  locked frame (CSP with `sandbox`, no network, no popups) with the bridge from `views/bridge.ts`
+  injected first; it defines `window.pharos` (data, onData, theme, onTheme, openFile, openLink).
+  Links open through the parent (`link`); the app's pages send `frame-src 'self'`
+  (`APP_PAGE_HEADERS`), so the frame can't navigate to another site; the web app stops a frame
+  that leaves its page and answers only the bridge token that said `ready` (R13.6).
   docs/reframe/r13-report-pages.md has the contract and the bridge messages, which the web app
   must match exactly.
 - A view has a page or a board, never both (the store refuses `page` with `spec`); a page has no

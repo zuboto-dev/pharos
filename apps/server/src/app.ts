@@ -25,7 +25,7 @@ import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
 import { changedViews, markSeen, projectFreshness } from './views/freshness.js';
-import { isPageRead, reportRoutes } from './views/report-routes.js';
+import { APP_PAGE_HEADERS, isPageRead, reportRoutes } from './views/report-routes.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -521,6 +521,14 @@ export function createApp(
   // The built web app, so one process can serve the whole thing (see `pnpm service`). Files are
   // served as they are; any other page path gets index.html for the client-side router.
   if (info.webDir) {
+    // The app's pages carry APP_PAGE_HEADERS (R13.6): its frames may only show Pharos addresses,
+    // so a report page that navigates its frame elsewhere is refused before anything is sent.
+    app.use('*', async (c, next) => {
+      await next();
+      if (c.req.path.startsWith('/api/')) return;
+      if (!(c.res.headers.get('content-type') ?? '').startsWith('text/html')) return;
+      for (const [name, value] of Object.entries(APP_PAGE_HEADERS)) c.header(name, value);
+    });
     const files = serveStatic({ root: info.webDir });
     const page = serveStatic({ root: info.webDir, path: 'index.html' });
     app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : files(c, next)));

@@ -5,10 +5,11 @@ import {
   type RevisionSummary,
   type ViewFreshness,
 } from '@pharos/schema';
-import { AlertTriangle, ExternalLink, FileWarning } from 'lucide-react';
+import { AlertTriangle, ExternalLink, FileWarning, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useViewData } from '../catalog/context';
 import { Loading, SkeletonShape } from '../catalog/skeleton';
+import { BUTTON } from '../catalog/ui';
 import { useFileViewer } from '../files/viewer-context';
 import { useResource } from '../lib/api';
 import { useReportAssetEvents } from '../lib/events';
@@ -32,11 +33,11 @@ export function reportUrl(view: Entity<'view'>, reload = 0): string {
 }
 
 /**
- * What the frame may do: run its scripts, open links in a new tab and show alerts. Never
- * `allow-same-origin`: the page must not reach the app's origin, its API or its storage.
+ * What the frame may do: run its scripts and show alerts. Never `allow-same-origin` (the page
+ * must not reach the app's origin, its API or its storage) and never popups (R13.6): its links
+ * open through Pharos (the `link` message), where the reader sees where they go.
  */
-export const REPORT_SANDBOX =
-  'allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals';
+export const REPORT_SANDBOX = 'allow-scripts allow-modals';
 
 type Theme = 'light' | 'dark';
 
@@ -56,26 +57,82 @@ export function useShownTheme(): Theme {
   return theme;
 }
 
-/** Messages the page's bridge script sends (anything else is ignored). */
-type FromFrame =
-  | { pharos: 1; kind: 'ready' }
-  | { pharos: 1; kind: 'data'; id: string | number; name: string }
-  | { pharos: 1; kind: 'openFile'; fileId: string };
+/**
+ * Messages the page's bridge script sends (anything else is ignored). Each carries the token the
+ * bridge chose for its document, so the parent answers only the document that said `ready`.
+ */
+type FromFrame = { pharos: 1; token: string } & (
+  | { kind: 'ready' }
+  | { kind: 'data'; id: string | number; name: string }
+  | { kind: 'openFile'; fileId: string }
+  | { kind: 'link'; url: string }
+  | { kind: 'leaving' }
+);
 
 function readMessage(data: unknown): FromFrame | null {
   if (!data || typeof data !== 'object') return null;
   const m = data as Record<string, unknown>;
   if (m.pharos !== 1) return null;
-  if (m.kind === 'ready') return { pharos: 1, kind: 'ready' };
+  if (typeof m.token !== 'string' || !/^[0-9a-f]{16,64}$/.test(m.token)) return null;
+  const token = m.token;
+  if (m.kind === 'ready' || m.kind === 'leaving') return { pharos: 1, token, kind: m.kind };
   if (
     m.kind === 'data' &&
     (typeof m.id === 'string' || typeof m.id === 'number') &&
     typeof m.name === 'string'
   )
-    return { pharos: 1, kind: 'data', id: m.id, name: m.name };
+    return { pharos: 1, token, kind: 'data', id: m.id, name: m.name };
   if (m.kind === 'openFile' && typeof m.fileId === 'string')
-    return { pharos: 1, kind: 'openFile', fileId: m.fileId };
+    return { pharos: 1, token, kind: 'openFile', fileId: m.fileId };
+  if (m.kind === 'link' && typeof m.url === 'string')
+    return { pharos: 1, token, kind: 'link', url: m.url };
   return null;
+}
+
+/** Links a page may ask Pharos to open: http(s) only, at most this long. */
+export const LINK_MAX_CHARS = 2000;
+/** A plain link (opened at once on a click) has no query or fragment and a path this short. */
+export const PLAIN_PATH_MAX_CHARS = 120;
+/** At most this many links open at once in LINK_WINDOW_MS; more ask first. */
+export const LINK_BURST = 3;
+export const LINK_WINDOW_MS = 10_000;
+
+/**
+ * A link the page asks to open: null when refused (not http/https, too long), else its address
+ * and whether it is plain (no query, no fragment, no user name, a short path). A plain link opens
+ * at once when the reader just clicked; anything else shows the reader the whole address first.
+ */
+export function linkDecision(raw: string): { url: string; plain: boolean } | null {
+  if (raw.length > LINK_MAX_CHARS) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.href.length > LINK_MAX_CHARS) return null;
+  const plain =
+    !url.search &&
+    !url.hash &&
+    !raw.includes('#') &&
+    !raw.includes('?') &&
+    !url.username &&
+    !url.password &&
+    url.pathname.length <= PLAIN_PATH_MAX_CHARS;
+  return { url: url.href, plain };
+}
+
+function openInNewTab(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+/** Whether the reader is interacting with the page now (a click in the frame counts too). */
+function readerActive(): boolean {
+  const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } })
+    .userActivation;
+  // Without the API (older browsers) nothing opens without asking.
+  return activation ? activation.isActive : false;
 }
 
 /** The answer to `pharos.data(name)`: rows of the page's named read, or why there are none. */
@@ -108,7 +165,7 @@ export function agentDataset(projectId: string): Promise<ProjectDataset> {
   });
 }
 
-type Status = 'loading' | 'shown' | 'missing' | 'failed';
+type Status = 'loading' | 'shown' | 'missing' | 'failed' | 'stopped';
 
 /** How long uploads must pause before an open page reloads: a batch of files is one reload. */
 export const ASSET_RELOAD_DELAY_MS = 1500;
@@ -130,8 +187,16 @@ export function useAssetReloads(viewId: string): number {
 }
 
 /**
+ * One load of the page in the frame: what the parent knows of the document in it. The bridge of
+ * the page's own document says `ready` once with its token; a second `ready`, a second `load`
+ * or the bridge saying it is leaving means the frame went somewhere else (R13.6), and the frame
+ * is stopped: nothing more is answered or posted to it.
+ */
+type FrameLife = { src: string; loads: number; token: string | null; dead: boolean };
+
+/**
  * The page in its locked frame, tall enough to fill the window below it (the page scrolls inside),
- * with a skeleton while it loads and a plain message when it can't be served.
+ * with a skeleton while it loads and a plain message when it can't be served or was stopped.
  */
 export function ReportFrame({ view }: { view: Entity<'view'> }) {
   const data = useViewData();
@@ -139,11 +204,16 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
   const theme = useShownTheme();
   const frame = useRef<HTMLIFrameElement>(null);
   const reloads = useAssetReloads(view.id);
-  const src = reportUrl(view, reloads);
+  // "Reload page" after the page was stopped: a fresh frame at a fresh address.
+  const [restarts, setRestarts] = useState(0);
+  const src = reportUrl(view, reloads + restarts);
   const [status, setStatus] = useState<{ src: string; value: Status }>({ src, value: 'loading' });
   const shown = status.src === src ? status.value : 'loading';
-  // The bridge said ready (per frame load); until then nothing is posted.
-  const ready = useRef(false);
+  const life = useRef<FrameLife>({ src, loads: 0, token: null, dead: false });
+  // A link the page asked to open that the reader must confirm (one at a time).
+  const [confirm, setConfirm] = useState<string | null>(null);
+  // When links opened at once lately, for the rate limit.
+  const opened = useRef<number[]>([]);
   // The latest of what message handlers need, without re-subscribing on every reload.
   const latest = useRef({ view, data, viewer, theme });
   useLayoutEffect(() => {
@@ -158,23 +228,58 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
     return visible.current.rows;
   }, []);
 
-  const post = useCallback((message: Record<string, unknown>) => {
+  /** Posts to the frame only while this load is the current one and its page said ready. */
+  const post = useCallback((which: FrameLife, message: Record<string, unknown>) => {
+    if (which.dead || which.token === null || life.current !== which) return;
     frame.current?.contentWindow?.postMessage({ pharos: 1, ...message }, '*');
   }, []);
 
+  /** The frame left its page: stop answering first, then empty the frame and say so. */
+  const stop = useCallback((which: FrameLife) => {
+    if (which.dead) return;
+    which.dead = true;
+    const el = frame.current;
+    if (el && el.getAttribute('src') === which.src) el.setAttribute('src', 'about:blank');
+    setConfirm(null);
+    setStatus({ src: which.src, value: 'stopped' });
+  }, []);
+
+  /** A link the page asked to open: at once when plain and clicked, else the reader confirms. */
+  const openLink = useCallback((raw: string) => {
+    const link = linkDecision(raw);
+    if (!link) return;
+    const now = Date.now();
+    opened.current = opened.current.filter((t) => now - t < LINK_WINDOW_MS);
+    if (link.plain && readerActive() && opened.current.length < LINK_BURST) {
+      opened.current.push(now);
+      openInNewTab(link.url);
+      return;
+    }
+    setConfirm((pending) => pending ?? link.url);
+  }, []);
+
   useEffect(() => {
-    ready.current = false;
+    const mine: FrameLife = { src, loads: 0, token: null, dead: false };
+    life.current = mine;
     const onMessage = (event: MessageEvent) => {
       const win = frame.current?.contentWindow;
       if (!win || event.source !== win) return;
+      if (life.current !== mine || mine.dead) return;
       const message = readMessage(event.data);
       if (!message) return;
-      const { view, data, viewer, theme } = latest.current;
       if (message.kind === 'ready') {
-        ready.current = true;
+        // One bridge per document says ready once: another one is another document.
+        if (mine.token !== null) return stop(mine);
+        mine.token = message.token;
         setStatus({ src, value: 'shown' });
-        post({ kind: 'theme', theme });
-      } else if (message.kind === 'data') {
+        post(mine, { kind: 'theme', theme: latest.current.theme });
+        return;
+      }
+      // Only the document that said ready is answered.
+      if (mine.token === null || message.token !== mine.token) return;
+      const { view } = latest.current;
+      if (message.kind === 'leaving') stop(mine);
+      else if (message.kind === 'data') {
         void visibleData()
           .then((visible) => readRows(view, visible, message.name))
           .catch((err: unknown) => ({
@@ -182,7 +287,7 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
             error: `The project's data couldn't be loaded: ${String(err)}`,
           }))
           .then(({ rows, error }) =>
-            post({
+            post(mine, {
               kind: 'data',
               id: message.id,
               name: message.name,
@@ -192,33 +297,39 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
           );
       } else if (message.kind === 'openFile') {
         // Only this project's files, and only through the viewer.
+        const { viewer, data } = latest.current;
         if (viewer && (data.files ?? []).some((f) => f.id === message.fileId))
           viewer.open(message.fileId);
-      }
+      } else if (message.kind === 'link') openLink(message.url);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [src, post, visibleData]);
+  }, [src, post, stop, openLink, visibleData]);
 
   // The project's data reloaded (the app refetches on the change feed): the page asks again.
   const version = useRef(data.version);
   useEffect(() => {
     if (version.current === data.version) return;
     version.current = data.version;
-    if (ready.current) post({ kind: 'changed' });
+    post(life.current, { kind: 'changed' });
   }, [data.version, post]);
 
   const sentTheme = useRef(theme);
   useEffect(() => {
     if (sentTheme.current === theme) return;
     sentTheme.current = theme;
-    if (ready.current) post({ kind: 'theme', theme });
+    post(life.current, { kind: 'theme', theme });
   }, [theme, post]);
 
-  // Loaded without a word from the bridge: either the page has none (shown as it is) or the
-  // server answered with an error, which the frame can't tell us; ask the route itself.
   const onLoad = () => {
-    if (ready.current) return;
+    const mine = life.current;
+    if (mine.src !== src || mine.dead) return;
+    mine.loads += 1;
+    // Each address loads once; a second load is the page navigating its own frame.
+    if (mine.loads > 1) return stop(mine);
+    if (mine.token !== null) return;
+    // Loaded without a word from the bridge: either the page has none (shown as it is) or the
+    // server answered with an error, which the frame can't tell us; ask the route itself.
     const loaded = src;
     void fetch(loaded, { method: 'HEAD' })
       .then((res) => {
@@ -246,7 +357,32 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, []);
+  }, [confirm]);
+
+  if (shown === 'stopped')
+    return (
+      <div
+        role="alert"
+        data-report-error="stopped"
+        className="flex items-start gap-3 rounded-block border border-line-strong bg-surface px-4 py-6 text-sm"
+      >
+        <ShieldAlert className="mt-0.5 size-5 shrink-0 text-faint" aria-hidden />
+        <div className="min-w-0 space-y-2">
+          <p className="font-medium">This page tried to leave Pharos, so it was stopped.</p>
+          <p className="text-muted">
+            A report page stays inside Pharos; its links open in a new tab. Reload it to see it
+            again. If this keeps happening, ask your agent to use plain links instead.
+          </p>
+          <button
+            type="button"
+            onClick={() => setRestarts((n) => n + 1)}
+            className={BUTTON.secondary}
+          >
+            <RefreshCw className="size-3.5" aria-hidden /> Reload page
+          </button>
+        </div>
+      </div>
+    );
 
   if (shown === 'missing' || shown === 'failed')
     return (
@@ -270,30 +406,60 @@ export function ReportFrame({ view }: { view: Entity<'view'> }) {
     );
 
   return (
-    <div
-      ref={box}
-      className="relative overflow-hidden rounded-block border border-line bg-surface"
-      style={{ height: height ?? '75vh' }}
-    >
-      {shown === 'loading' && (
-        <Loading label="Loading page" className="absolute inset-0 space-y-4 p-6">
-          <SkeletonShape className="h-7 w-2/3 rounded-tile" />
-          <SkeletonShape style={{ width: '85%' }} />
-          <SkeletonShape style={{ width: '72%' }} />
-          <SkeletonShape className="mt-6 h-40 w-full rounded-tile" />
-        </Loading>
+    <div className="space-y-2">
+      {confirm && (
+        <div
+          role="alertdialog"
+          aria-label="Open a link from this page"
+          data-report-link=""
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-block border border-line-strong bg-surface px-3 py-2 text-sm"
+        >
+          <p className="min-w-0 flex-1">
+            <span className="text-muted">This page wants to open: </span>
+            <span className="font-mono text-xs break-all">{confirm}</span>
+          </p>
+          <span className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                openInNewTab(confirm);
+                setConfirm(null);
+              }}
+              className={BUTTON.primary}
+            >
+              Open
+            </button>
+            <button type="button" onClick={() => setConfirm(null)} className={BUTTON.secondary}>
+              Cancel
+            </button>
+          </span>
+        </div>
       )}
-      <iframe
-        key={src}
-        ref={frame}
-        src={src}
-        title={view.data.name}
-        sandbox={REPORT_SANDBOX}
-        referrerPolicy="no-referrer"
-        onLoad={onLoad}
-        className="block size-full border-0 transition-opacity duration-(--motion-base) ease-calm"
-        style={{ opacity: shown === 'loading' ? 0 : 1 }}
-      />
+      <div
+        ref={box}
+        className="relative overflow-hidden rounded-block border border-line bg-surface"
+        style={{ height: height ?? '75vh' }}
+      >
+        {shown === 'loading' && (
+          <Loading label="Loading page" className="absolute inset-0 space-y-4 p-6">
+            <SkeletonShape className="h-7 w-2/3 rounded-tile" />
+            <SkeletonShape style={{ width: '85%' }} />
+            <SkeletonShape style={{ width: '72%' }} />
+            <SkeletonShape className="mt-6 h-40 w-full rounded-tile" />
+          </Loading>
+        )}
+        <iframe
+          key={src}
+          ref={frame}
+          src={src}
+          title={view.data.name}
+          sandbox={REPORT_SANDBOX}
+          referrerPolicy="no-referrer"
+          onLoad={onLoad}
+          className="block size-full border-0 transition-opacity duration-(--motion-base) ease-calm"
+          style={{ opacity: shown === 'loading' ? 0 : 1 }}
+        />
+      </div>
     </div>
   );
 }

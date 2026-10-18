@@ -24,7 +24,7 @@ import type { WidgetPreview } from './preview.js';
 
 /** What the page's Content-Security-Policy allows: scripts and styles from three CDNs, fonts. */
 export const REPORT_CSP = [
-  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals',
+  'sandbox allow-scripts allow-modals',
   "default-src 'none'",
   "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -361,6 +361,46 @@ export function blockedExternals(html: string): string[] {
   return [...out];
 }
 
+/** The page's script text: inline <script> blocks and on… attributes (onclick="…"). */
+function scriptText(html: string): string[] {
+  const out: string[] = [];
+  for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)(?:<\/script\s*>|$)/gi))
+    out.push(m[1] ?? '');
+  for (const tag of pageMarkup(html).tags)
+    for (const [name, value] of tag.attrs) if (name.startsWith('on')) out.push(value);
+  return out;
+}
+
+const SETS_LOCATION =
+  /(?:^|[^\w$.])(?:(?:window|self|top|parent|document|globalThis)\s*\.\s*)?location\s*(?:\.\s*href\s*)?=(?!=)|\blocation\s*\.\s*(?:assign|replace)\s*\(/;
+const OPENS_WINDOW = /\b(?:window|self|top|globalThis)\s*\.\s*open\s*\(/;
+
+/**
+ * Ways a page tries to leave its frame (R13.6): setting location, window.open, a meta refresh.
+ * Pharos refuses them and stops the page; links and pharos.openLink are the way.
+ */
+export function navigationWarnings(html: string): string[] {
+  const scripts = scriptText(html);
+  const out: string[] = [];
+  const instead =
+    'use plain links (<a href="https://…">), which open through Pharos in a new tab, or pharos.openLink(url)';
+  if (scripts.some((s) => SETS_LOCATION.test(s)))
+    out.push(
+      `The page sets location (location.href, assign or replace): a report page never navigates itself; Pharos refuses it and stops the page. To send the reader somewhere, ${instead}`,
+    );
+  if (scripts.some((s) => OPENS_WINDOW.test(s)))
+    out.push(`The page calls window.open: the frame can't open windows; ${instead}`);
+  const refresh = pageMarkup(html).tags.some(
+    (t) =>
+      t.name === 'meta' && (t.attrs.get('http-equiv') ?? '').trim().toLowerCase() === 'refresh',
+  );
+  if (refresh)
+    out.push(
+      `The page has <meta http-equiv="refresh">: a report page never reloads or leaves by itself; remove it (data updates arrive through pharos.onData)`,
+    );
+  return out;
+}
+
 // ---------------------------------------------------------------- preview
 
 /** Query findings of a page's named reads, as lines naming the read. */
@@ -412,6 +452,7 @@ export function previewPage(store: Store, projectId: string, page: ReportPage, v
     );
   }
   warnings.push(...blockedExternals(page.html));
+  warnings.push(...navigationWarnings(page.html));
   const used = new Set<string>();
   for (const m of page.html.matchAll(/pharos\.data\(\s*["'`]([^"'`]+)["'`]\s*\)/g)) used.add(m[1]!);
   for (const name of used)

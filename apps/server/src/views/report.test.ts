@@ -372,7 +372,7 @@ describe('report assets (R13)', () => {
     });
     // Kept (not served: the routes need the view), and back with the view on undo.
     expect(assets.list(a)).toHaveLength(1);
-    store.revert(deleted.revision.id, me);
+    store.revert(deleted.revision!.id, me);
     expect(store.get(a)?.type).toBe('view');
     expect(assets.get(a, 'x.png')?.bytes.byteLength).toBe(2);
     // Reverting the create removes the view; its assets wait like a delete's.
@@ -447,7 +447,7 @@ describe('page checks (view_preview, R13)', () => {
       <style>@import "css/b.css"; .h { background: url(img/bg.png) } /* url(img/no.png) */</style>
       <script type="application/json" id="d">{"dir":[{"n":"Mixbook","src":"img/no1.png"}],"q":"\\""}</script>
       <script>
-        const clean = (m) => m.source_name.replace(/url\(/g, '').replace(/"/g, '\\"');
+        const clean = (m) => m.source_name.replace(/url\\(/g, '').replace(/"/g, '\\"');
         el.innerHTML = '<img src="img/no2.png">' + "<a href='x'>" + \`url('img/no3.png')\`;
         const css = "background:url(img/no4.png)";
       </script>
@@ -488,7 +488,7 @@ describe('page checks (view_preview, R13)', () => {
       <body><h1>Spend</h1><img src="images/x.jpg" alt="">
       <script>const DATA = ${blob};
       const name = (m) => m.source_name.replace(/[^a-z]/g, '').replace(/"/g, '\\""');
-      const q = "\\"\"";</script></body></html>`;
+      const q = "\\"\\"";</script></body></html>`;
     expect(html.length).toBeGreaterThan(50_000);
     const preview = previewAny(store, { projectId, page: { html, summary: 'Spend.' } });
     const assetWarnings = preview.warnings.filter((w) => /asset|won't load/.test(w));

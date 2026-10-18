@@ -111,7 +111,7 @@ describe('GET /api/views/:id/page/<asset> (R13)', () => {
     for (const path of ['', 'img/a.png'])
       expect((await app.request(`/api/views/${pageView}/page/${path}`)).status).toBe(404);
     expect((await app.request(`/api/views/${pageView}/assets`)).status).toBe(404);
-    store.revert(del.revision.id, me);
+    store.revert(del.revision!.id, me);
     const res = await app.request(`/api/views/${pageView}/page/img/a.png`);
     expect(res.status).toBe(200);
     expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([1, 2, 3]);

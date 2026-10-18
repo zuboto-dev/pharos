@@ -20,12 +20,18 @@ import { fileRoutes } from './files/routes.js';
 import { FileService } from './files/service.js';
 import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
+import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
 import { changedViews, markSeen, projectFreshness } from './views/freshness.js';
-import { isPageRead, reportRoutes } from './views/report-routes.js';
+import {
+  APP_PAGE_HEADERS,
+  isPageRead,
+  lockPageResponses,
+  reportRoutes,
+} from './views/report-routes.js';
 import { AgentFiles } from './store/agent-files.js';
 import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
@@ -149,6 +155,10 @@ export function createApp(
   // and from the answering run. Not project data; sent on the change feed as `presence`.
   const presence = info.presence ?? new Presence();
   watchAgentRevisions(store, feed, presence);
+
+  // Every response under /api/views/:id/page carries the report page's locked headers (R13.6),
+  // the refusals below included.
+  app.use(lockPageResponses);
 
   // Pharos is local-only: refuse requests that didn't come from a localhost page or client,
   // which also blocks DNS-rebinding attacks from websites.
@@ -515,12 +525,35 @@ export function createApp(
       await mcp.connect(created);
       transport = created;
     }
-    return transport.handleRequest(c.req.raw);
+    const res = await transport.handleRequest(c.req.raw);
+    // The transport refuses bodies over 4 MB; say what to do instead (R13.6). Not raised: the
+    // limit keeps one request from holding the server's memory.
+    if (res.status === 413)
+      return c.json(
+        {
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: `This MCP request is over 4 MB, more than Pharos takes over HTTP. ${MCP_ASSET_NOTE}`,
+          },
+          id: null,
+        },
+        413,
+      );
+    return res;
   });
 
   // The built web app, so one process can serve the whole thing (see `pnpm service`). Files are
   // served as they are; any other page path gets index.html for the client-side router.
   if (info.webDir) {
+    // The app's pages carry APP_PAGE_HEADERS (R13.6): its frames may only show Pharos addresses,
+    // so a report page that navigates its frame elsewhere is refused before anything is sent.
+    app.use('*', async (c, next) => {
+      await next();
+      if (c.req.path.startsWith('/api/')) return;
+      if (!(c.res.headers.get('content-type') ?? '').startsWith('text/html')) return;
+      for (const [name, value] of Object.entries(APP_PAGE_HEADERS)) c.header(name, value);
+    });
     const files = serveStatic({ root: info.webDir });
     const page = serveStatic({ root: info.webDir, path: 'index.html' });
     app.use('*', (c, next) => (c.req.path.startsWith('/api/') ? next() : files(c, next)));

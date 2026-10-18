@@ -161,6 +161,11 @@ export const MIGRATIONS: string[] = [
   `
   CREATE INDEX report_assets_updated ON report_assets(updated_at, view_id);
   `,
+  // R13.6: uploads check the size of a page's files and of all of them; this index answers
+  // without reading the files themselves (size comes after the bytes in each row).
+  `
+  CREATE INDEX report_assets_sizes ON report_assets(view_id, path, size);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

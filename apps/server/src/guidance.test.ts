@@ -27,6 +27,9 @@ describe('guidance', () => {
       '390 px',
       'honesty box',
       'cdnjs.cloudflare.com',
+      // R13.6: links go through Pharos; the page never navigates itself.
+      'pharos.openLink(url)',
+      'Never navigate the page',
     ])
       expect(REPORT_GUIDE).toContain(part);
     expect(REPORT_GUIDE.split('\n').length).toBeLessThan(120);

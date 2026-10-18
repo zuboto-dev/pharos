@@ -24,6 +24,14 @@ import { isExpired, requestContext } from './views/service.js';
  * How to write a report page (R13): returned by report_guide and served as
  * pharos://guide/reports. docs/reframe/r13-report-pages.md has the contract.
  */
+/**
+ * What an MCP request can carry (R13.6): the HTTP transport refuses bodies over 4 MB, and base64
+ * adds a third, so files over ~3 MB go over REST instead. Said in report_asset_put, its error and
+ * the report guide.
+ */
+export const MCP_ASSET_NOTE =
+  'Over MCP keep each file under 3 MB: a request carries at most 4 MB and base64 adds a third. Upload a larger file (up to 10 MB) over REST instead: PUT /api/views/<viewId>/page/<path> on this Pharos server (the host and port of /mcp), the raw file as the body, with the header X-Pharos-Author: agent:<your name>.';
+
 export const REPORT_GUIDE = `# Writing a Pharos report page
 
 A report page is a whole HTML document you write, with its own look, story and interactives.
@@ -49,11 +57,16 @@ through named reads, and marks it out of date when that data changes.
   also sets data-theme on <html>. \`pharos.openFile(fileId)\` opens a project file in the viewer.
 - Pictures, fonts and scripts you ship are assets: report_asset_put {viewId, path, base64} after
   the page is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif webp avif
-  svg css js json woff woff2 ttf otf mp4 webm; 10 MB each, 64 MB per page.
+  svg css js json woff woff2 ttf otf mp4 webm; 10 MB each, 64 MB per page. ${MCP_ASSET_NOTE}
 - The frame has no network: no fetch, no forms, no other sites. Allowed: scripts from
-  cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts. Links open in a new tab.
+  cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts.
+- Sources are plain links, \`<a href="https://…">\`: they open through Pharos in a new tab (a link
+  with a query or a long path asks the reader first, showing where it goes). From a script, use
+  \`pharos.openLink(url)\`. Never navigate the page: no location.href = …, window.open or meta
+  refresh; Pharos refuses them and stops the page.
 - view_preview {viewId} (or {projectId, page} for a draft) checks the size, the reads (rows now,
-  query findings), assets the HTML names that aren't uploaded, and hosts the frame will block.
+  query findings), assets the HTML names that aren't uploaded, hosts the frame will block, and
+  scripts that would navigate the page.
 
 ## Write it well
 

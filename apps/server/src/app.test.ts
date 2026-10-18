@@ -597,8 +597,17 @@ describe('serving the built web app', () => {
     const asset = await served.request('/assets/app.js');
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toMatch(/javascript/);
+    // The app's pages may frame only Pharos addresses (R13.6); other files carry no such header.
+    expect(home.headers.get('content-security-policy')).toContain("frame-src 'self'");
+    expect(page.headers.get('content-security-policy')).toContain("frame-src 'self'");
+    expect(asset.headers.get('content-security-policy')).toBeNull();
+    // And no other site may frame the app (R13.6 finding 6).
+    expect(home.headers.get('content-security-policy')).toContain("frame-ancestors 'self'");
+    expect(home.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(page.headers.get('x-frame-options')).toBe('SAMEORIGIN');
     const api = await served.request('/api/health');
     expect(api.headers.get('content-type')).toMatch(/json/);
+    expect(api.headers.get('content-security-policy')).toBeNull();
     expect((await served.request('/api/nothing')).status).toBe(404);
   });
 

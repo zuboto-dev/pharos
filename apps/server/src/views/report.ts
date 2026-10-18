@@ -22,20 +22,43 @@ import type { WidgetPreview } from './preview.js';
  * contract; serving is in report-routes.ts.
  */
 
-/** What the page's Content-Security-Policy allows: scripts and styles from three CDNs, fonts. */
-export const REPORT_CSP = [
-  'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals',
-  "default-src 'none'",
-  "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
-  "media-src 'self' data: blob:",
-  "connect-src 'none'",
-  "form-action 'none'",
-  "frame-src 'none'",
-  "base-uri 'none'",
-].join('; ');
+/** A Host header Pharos answers on: 127.0.0.1, localhost or [::1], with an optional port. */
+const LOCAL_HOST = /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/i;
+const VIEW_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The page's own files as a CSP source (R13.6): `http://<host>/api/views/<id>/page/`, a path
+ * prefix, so a page loads its own assets and never another view's (which `'self'`, the whole
+ * origin, allowed). Null when the Host or the id isn't one Pharos would serve: then the page
+ * loads no files of its own rather than trusting a host it was given.
+ */
+export function pageSource(host: string | undefined, viewId: string | undefined): string | null {
+  if (!host || !viewId || !LOCAL_HOST.test(host) || !VIEW_ID.test(viewId)) return null;
+  return `http://${host.toLowerCase()}/api/views/${viewId}/page/`;
+}
+
+/**
+ * The Content-Security-Policy of a report page and its files: no popups, no network; scripts and
+ * styles from its own files (`own`, from pageSource) and three CDNs, Google Fonts; framed only by
+ * Pharos itself.
+ */
+export function reportCsp(own: string | null): string {
+  const self = own ? `${own} ` : '';
+  return [
+    'sandbox allow-scripts allow-modals',
+    "default-src 'none'",
+    `script-src ${self}'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com`,
+    `style-src ${self}'unsafe-inline' https://fonts.googleapis.com`,
+    `font-src ${self}data: https://fonts.gstatic.com`,
+    `img-src ${self}data: blob:`,
+    `media-src ${self}data: blob:`,
+    "connect-src 'none'",
+    "form-action 'none'",
+    "frame-src 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
+  ].join('; ');
+}
 
 /** External hosts the page may load from, by what loads them. */
 const ALLOWED_HOSTS: Record<'script' | 'style' | 'font', string[]> = {
@@ -94,7 +117,14 @@ export function scheduleAssetPurge(store: Store, everyMs = 24 * 60 * 60 * 1000):
 
 /** Report assets: a view's page files, kept beside revisions (never project data). */
 export class ReportAssets {
-  constructor(private readonly store: Store) {}
+  /** `limits` is REPORT_LIMITS; tests pass smaller ones. */
+  constructor(
+    private readonly store: Store,
+    private readonly limits: Pick<
+      typeof REPORT_LIMITS,
+      'assetBytes' | 'viewAssetBytes' | 'totalAssetBytes'
+    > = REPORT_LIMITS,
+  ) {}
 
   list(viewId: string): AssetInfo[] {
     return (
@@ -152,10 +182,11 @@ export class ReportAssets {
     const view = reportView(this.store, viewId, author);
     const path = assetPath(rawPath);
     if (!bytes.byteLength) throw new PharosError('invalid', `Asset "${path}" is empty`);
-    if (bytes.byteLength > REPORT_LIMITS.assetBytes)
+    const limits = this.limits;
+    if (bytes.byteLength > limits.assetBytes)
       throw new PharosError(
         'invalid',
-        `Asset "${path}" is ${megabytes(bytes.byteLength)}; one asset may be at most ${megabytes(REPORT_LIMITS.assetBytes)}`,
+        `Asset "${path}" is ${megabytes(bytes.byteLength)}; one asset may be at most ${megabytes(limits.assetBytes)}`,
       );
     const db = this.store.database;
     const { total } = db
@@ -163,10 +194,21 @@ export class ReportAssets {
         'SELECT COALESCE(SUM(size), 0) AS total FROM report_assets WHERE view_id = ? AND path <> ?',
       )
       .get(view.id, path) as { total: number };
-    if (total + bytes.byteLength > REPORT_LIMITS.viewAssetBytes)
+    if (total + bytes.byteLength > limits.viewAssetBytes)
       throw new PharosError(
         'invalid',
-        `The page's assets would come to ${megabytes(total + bytes.byteLength)}; a page may ship at most ${megabytes(REPORT_LIMITS.viewAssetBytes)}`,
+        `The page's assets would come to ${megabytes(total + bytes.byteLength)}; a page may ship at most ${megabytes(limits.viewAssetBytes)}`,
+      );
+    // One bound for all of them, the kept files of deleted pages included (R13.6).
+    const { stored } = db
+      .prepare(
+        'SELECT COALESCE(SUM(size), 0) AS stored FROM report_assets WHERE NOT (view_id = ? AND path = ?)',
+      )
+      .get(view.id, path) as { stored: number };
+    if (stored + bytes.byteLength > limits.totalAssetBytes)
+      throw new PharosError(
+        'invalid',
+        `Report pages' files would come to ${megabytes(stored + bytes.byteLength)} in all; Pharos keeps at most ${megabytes(limits.totalAssetBytes)} of them (files of pages deleted in the last ${REPORT_ASSETS_KEEP_DAYS} days count too). Use smaller files, or delete report pages you no longer need.`,
       );
     const mime = assetMime(path);
     const updatedAt = new Date().toISOString();
@@ -361,6 +403,46 @@ export function blockedExternals(html: string): string[] {
   return [...out];
 }
 
+/** The page's script text: inline <script> blocks and on… attributes (onclick="…"). */
+function scriptText(html: string): string[] {
+  const out: string[] = [];
+  for (const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)(?:<\/script\s*>|$)/gi))
+    out.push(m[1] ?? '');
+  for (const tag of pageMarkup(html).tags)
+    for (const [name, value] of tag.attrs) if (name.startsWith('on')) out.push(value);
+  return out;
+}
+
+const SETS_LOCATION =
+  /(?:^|[^\w$.])(?:(?:window|self|top|parent|document|globalThis)\s*\.\s*)?location\s*(?:\.\s*href\s*)?=(?!=)|\blocation\s*\.\s*(?:assign|replace)\s*\(/;
+const OPENS_WINDOW = /\b(?:window|self|top|globalThis)\s*\.\s*open\s*\(/;
+
+/**
+ * Ways a page tries to leave its frame (R13.6): setting location, window.open, a meta refresh.
+ * Pharos refuses them and stops the page; links and pharos.openLink are the way.
+ */
+export function navigationWarnings(html: string): string[] {
+  const scripts = scriptText(html);
+  const out: string[] = [];
+  const instead =
+    'use plain links (<a href="https://…">), which open through Pharos in a new tab, or pharos.openLink(url)';
+  if (scripts.some((s) => SETS_LOCATION.test(s)))
+    out.push(
+      `The page sets location (location.href, assign or replace): a report page never navigates itself; Pharos refuses it and stops the page. To send the reader somewhere, ${instead}`,
+    );
+  if (scripts.some((s) => OPENS_WINDOW.test(s)))
+    out.push(`The page calls window.open: the frame can't open windows; ${instead}`);
+  const refresh = pageMarkup(html).tags.some(
+    (t) =>
+      t.name === 'meta' && (t.attrs.get('http-equiv') ?? '').trim().toLowerCase() === 'refresh',
+  );
+  if (refresh)
+    out.push(
+      `The page has <meta http-equiv="refresh">: a report page never reloads or leaves by itself; remove it (data updates arrive through pharos.onData)`,
+    );
+  return out;
+}
+
 // ---------------------------------------------------------------- preview
 
 /** Query findings of a page's named reads, as lines naming the read. */
@@ -412,6 +494,7 @@ export function previewPage(store: Store, projectId: string, page: ReportPage, v
     );
   }
   warnings.push(...blockedExternals(page.html));
+  warnings.push(...navigationWarnings(page.html));
   const used = new Set<string>();
   for (const m of page.html.matchAll(/pharos\.data\(\s*["'`]([^"'`]+)["'`]\s*\)/g)) used.add(m[1]!);
   for (const name of used)

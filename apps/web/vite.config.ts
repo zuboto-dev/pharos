@@ -33,6 +33,12 @@ export default defineConfig({
     },
   },
   server: {
+    // As the built server sends with the app's pages (APP_PAGE_HEADERS, R13.6): frames show only
+    // Pharos addresses, so a report page can't take its frame elsewhere; no other site frames the app.
+    headers: {
+      'Content-Security-Policy': "frame-src 'self'; frame-ancestors 'self'",
+      'X-Frame-Options': 'SAMEORIGIN',
+    },
     proxy: {
       '/api': serverUrl,
     },

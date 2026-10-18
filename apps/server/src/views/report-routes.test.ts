@@ -3,11 +3,12 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
-import { REPORT_GUIDE } from '../guidance.js';
+import { MCP_ASSET_NOTE, REPORT_GUIDE } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { BRIDGE_SCRIPT } from './bridge.js';
-import { REPORT_CSP, ReportAssets } from './report.js';
+import { readLimited } from './report-routes.js';
+import { ReportAssets, pageSource, reportCsp } from './report.js';
 import { createView } from './service.js';
 
 // R13: serving report pages and their assets, uploads over REST, and the MCP tools.
@@ -46,15 +47,15 @@ beforeEach(() => {
   new ReportAssets(store).put(agent, pageView, 'fonts/a.woff2', new Uint8Array([4]));
 });
 
-const EXACT_CSP =
-  "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'";
+/** The exact CSP of a page served for `host` (R13.6: its own page path instead of 'self'). */
+const exactCsp = (id: string, host = 'localhost') =>
+  `sandbox allow-scripts allow-modals; default-src 'none'; script-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com; style-src http://${host}/api/views/${id}/page/ 'unsafe-inline' https://fonts.googleapis.com; font-src http://${host}/api/views/${id}/page/ data: https://fonts.gstatic.com; img-src http://${host}/api/views/${id}/page/ data: blob:; media-src http://${host}/api/views/${id}/page/ data: blob:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'`;
 
 describe('GET /api/views/:id/page/ (R13)', () => {
   it('serves the page with the contract headers and the bridge first', async () => {
-    expect(REPORT_CSP).toBe(EXACT_CSP);
     const res = await app.request(`/api/views/${pageView}/page/`);
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -79,9 +80,65 @@ describe('GET /api/views/:id/page/ (R13)', () => {
     for (const id of [board, 'view_000000000000', projectId]) {
       const res = await app.request(`/api/views/${id}/page/`);
       expect(res.status).toBe(404);
-      expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+      expect(res.headers.get('content-security-policy')).toBe(exactCsp(id));
       expect(await res.text()).toContain('no report page');
     }
+  });
+});
+
+describe("a page's CSP names only its own files (R13.6)", () => {
+  it("uses the view's page path on the request's host, never the whole origin", async () => {
+    const res = await app.request(`/api/views/${pageView}/page/`, {
+      headers: { host: '127.0.0.1:4300' },
+    });
+    const csp = res.headers.get('content-security-policy')!;
+    expect(csp).toBe(exactCsp(pageView, '127.0.0.1:4300'));
+    expect(csp.replace("frame-ancestors 'self'", '')).not.toContain("'self'");
+    // Another view's files are outside this source (a path prefix).
+    expect(csp).not.toContain(otherPage);
+    const asset = await app.request(`/api/views/${pageView}/page/img/a.png`, {
+      headers: { host: 'localhost:5173' },
+    });
+    expect(asset.headers.get('content-security-policy')).toBe(exactCsp(pageView, 'localhost:5173'));
+  });
+
+  it('trusts only local hosts: any other Host gets no own-file source at all', () => {
+    expect(pageSource('127.0.0.1:4300', 'view_1')).toBe(
+      'http://127.0.0.1:4300/api/views/view_1/page/',
+    );
+    expect(pageSource('LOCALHOST', 'view_1')).toBe('http://localhost/api/views/view_1/page/');
+    expect(pageSource('[::1]:4300', 'view_1')).toBe('http://[::1]:4300/api/views/view_1/page/');
+    for (const host of [
+      'evil.example',
+      'evil.example:4300',
+      '127.0.0.1.evil.example',
+      '127.0.0.1:4300; script-src *',
+      '127.0.0.1:4300 https://evil.example',
+      '127.0.0.1:43000000',
+      'localhost:',
+      '',
+      undefined,
+    ])
+      expect(pageSource(host, 'view_1'), String(host)).toBeNull();
+    for (const id of ['view 1', "view_1'", 'a;b', 'x'.repeat(65), undefined])
+      expect(pageSource('127.0.0.1:4300', id), String(id)).toBeNull();
+    const none = reportCsp(null);
+    expect(none).toContain("script-src 'unsafe-inline' https://cdnjs.cloudflare.com");
+    expect(none).toContain('img-src data: blob:');
+    expect(none.replace("frame-ancestors 'self'", '')).not.toContain("'self'");
+    expect(none).not.toContain('evil');
+  });
+
+  it('a hostile Host: refused, and never written into the CSP', async () => {
+    // The server builds the request URL from Host, so a foreign host is refused outright.
+    expect((await app.request(`http://evil.example/api/views/${pageView}/page/`)).status).toBe(403);
+    // Should one get through, the CSP names no files of its own rather than that host.
+    const res = await app.request(`/api/views/${pageView}/page/`, {
+      headers: { host: 'evil.example:4300' },
+    });
+    const csp = res.headers.get('content-security-policy')!;
+    expect(csp).toBe(reportCsp(null));
+    expect(csp).not.toContain('evil');
   });
 });
 
@@ -90,7 +147,7 @@ describe('GET /api/views/:id/page/<asset> (R13)', () => {
     const res = await app.request(`/api/views/${pageView}/page/img/a.png`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
-    expect(res.headers.get('content-security-policy')).toBe(EXACT_CSP);
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('access-control-allow-origin')).toBeNull();
@@ -202,6 +259,122 @@ describe('asset uploads over REST (R13)', () => {
   });
 });
 
+describe('every response under /page carries the locked headers (R13.6)', () => {
+  const lockedFor = (res: Response, id = pageView) => {
+    expect(res.headers.get('content-security-policy'), `${res.status}`).toBe(exactCsp(id));
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+  };
+
+  it('an undecodable path (%ZZ) is a locked not-found page, not a JSON 400', async () => {
+    for (const method of ['GET', 'HEAD']) {
+      const res = await app.request(`/api/views/${pageView}/page/%ZZ`, { method });
+      expect(res.status, method).toBe(404);
+      lockedFor(res);
+      expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      if (method === 'GET') expect(await res.text()).toContain('No such file');
+    }
+    const put = await app.request(`/api/views/${pageView}/page/%ZZ.png`, {
+      method: 'PUT',
+      body: new Uint8Array([1]),
+    });
+    expect(put.status).toBe(400);
+    lockedFor(put);
+  });
+
+  it('other methods, the redirect, HEAD and refusals too', async () => {
+    const cases: [string, RequestInit, number][] = [
+      [`/api/views/${pageView}/page/`, { method: 'POST' }, 404],
+      [`/api/views/${pageView}/page/img/a.png`, { method: 'DELETE' }, 404],
+      [`/api/views/${pageView}/page`, {}, 308],
+      [`/api/views/${pageView}/page`, { method: 'HEAD' }, 308],
+      [`/api/views/${pageView}/page/`, { method: 'HEAD' }, 200],
+      [`/api/views/${pageView}/page/img/a.png`, { method: 'HEAD' }, 200],
+      [`/api/views/${pageView}/page/nothere.png`, { method: 'HEAD' }, 404],
+      // Refused by the local-only check (Origin: null may only read).
+      [
+        `/api/views/${pageView}/page/img/b.png`,
+        { method: 'PUT', headers: { origin: 'null' } },
+        403,
+      ],
+      // An error from the route (a board has no assets).
+      [`/api/views/${board}/page/a.png`, { method: 'PUT', body: new Uint8Array([1]) }, 400],
+    ];
+    for (const [url, init, status] of cases) {
+      const res = await app.request(url, init);
+      expect(res.status, `${init.method ?? 'GET'} ${url}`).toBe(status);
+      lockedFor(res, url.includes(board) ? board : pageView);
+    }
+  });
+
+  it('a request sent with "%2e%2e" is locked by the path as sent', async () => {
+    // The URL parser resolves %2e%2e, so the route sees another path; the target as the client
+    // sent it (the node server's incoming.url) still names a page.
+    const sent = `/api/views/${pageView}/page/%2e%2e/%2e%2e/projects/${projectId}/data`;
+    const res = await app.request(`http://localhost${sent}`, {}, { incoming: { url: sent } });
+    expect(res.headers.get('content-security-policy')).toBe(exactCsp(pageView));
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    // Nothing else under /api is touched.
+    const data = await app.request(`/api/projects/${projectId}/data`);
+    expect(data.headers.get('content-security-policy')).toBeNull();
+  });
+});
+
+describe('upload bodies are bounded as they stream (R13.6)', () => {
+  const MB = 1024 * 1024;
+  /** A body of 1 MB chunks, endless unless `count` is given, counting what was pulled. */
+  function chunked(count = Infinity) {
+    const chunk = new Uint8Array(MB).fill(7);
+    const pulled = { n: 0 };
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (pulled.n >= count) return controller.close();
+        pulled.n += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    return { stream, pulled };
+  }
+  const putStream = (path: string, body: ReadableStream<Uint8Array>) =>
+    app.request(`/api/views/${pageView}/page/${path}`, {
+      method: 'PUT',
+      headers: { 'x-pharos-author': 'agent:Codex' },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+
+  it('refuses a chunked body as soon as it passes 10 MB, without reading the rest', async () => {
+    const { stream, pulled } = chunked();
+    const res = await putStream('endless.png', stream);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { message: string } }).error.message).toContain(
+      'at most 10 MB',
+    );
+    // 10 MB and the chunk that passed it, give or take what the stream had queued.
+    expect(pulled.n).toBeLessThanOrEqual(13);
+    expect(new ReportAssets(store).get(pageView, 'endless.png')).toBeNull();
+  });
+
+  it('takes a chunked body under the limit whole', async () => {
+    const { stream } = chunked(3);
+    const res = await putStream('three.png', stream);
+    expect(res.status).toBe(200);
+    expect(new ReportAssets(store).get(pageView, 'three.png')?.bytes.byteLength).toBe(3 * MB);
+  });
+
+  it('readLimited: exactly the limit passes, one byte more is refused', async () => {
+    const ok = await readLimited(
+      new Request('http://x/', { method: 'PUT', body: new Uint8Array(10) }),
+      10,
+    );
+    expect(ok.byteLength).toBe(10);
+    await expect(
+      readLimited(new Request('http://x/', { method: 'PUT', body: new Uint8Array(11) }), 10),
+    ).rejects.toThrow(/at most/);
+    expect((await readLimited(new Request('http://x/', { method: 'PUT' }), 10)).byteLength).toBe(0);
+  });
+});
+
 describe('report tools over MCP (R13)', () => {
   async function connect(name = 'Opus 5.5') {
     const client = new Client({ name, version: '1.0.0' });
@@ -221,6 +394,30 @@ describe('report tools over MCP (R13)', () => {
       return text;
     }
   }
+
+  it('says plainly that files over ~3 MB go over REST, in the tool, its error and the guide (R13.6)', async () => {
+    const client = await connect();
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'report_asset_put')!;
+    expect(tool.description).toContain(MCP_ASSET_NOTE);
+    expect(REPORT_GUIDE).toContain(MCP_ASSET_NOTE);
+    expect(MCP_ASSET_NOTE).toMatch(/under 3 MB.*PUT \/api\/views\/<viewId>\/page\/<path>/);
+    // 3.2 MB of file is ~4.3 MB of base64: the transport refuses the request, and says why.
+    await expect(
+      call(client, 'report_asset_put', {
+        viewId: pageView,
+        path: 'img/big.png',
+        base64: Buffer.alloc(3.2 * 1024 * 1024, 1).toString('base64'),
+      }),
+    ).rejects.toThrow(/over 4 MB.*keep each file under 3 MB/);
+    expect(new ReportAssets(store).get(pageView, 'img/big.png')).toBeNull();
+    // Under 3 MB goes through.
+    const ok = await call(client, 'report_asset_put', {
+      viewId: pageView,
+      path: 'img/fine.png',
+      base64: Buffer.alloc(2.9 * 1024 * 1024, 1).toString('base64'),
+    });
+    expect(ok.saved.size).toBe(Math.floor(2.9 * 1024 * 1024));
+  });
 
   it('creates a page, uploads and lists assets, previews, gets the guide', async () => {
     const client = await connect();

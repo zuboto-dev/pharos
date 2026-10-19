@@ -278,7 +278,9 @@ describe('shellRunner', () => {
     const log = join(dir, 'agent.log');
     const stop = new AbortController();
     const started = Date.now();
-    const running = shellRunner(log)('sleep 30', {}, 60_000, stop.signal);
+    // Two commands, so the shell runs `sleep` as its own child (as `sh -c` does on Linux even
+    // for one): stopping must reach it too.
+    const running = shellRunner(log)('sleep 30; echo late', {}, 60_000, stop.signal);
     setTimeout(() => stop.abort(), 100);
     const result = await running;
     expect(Date.now() - started).toBeLessThan(10_000);

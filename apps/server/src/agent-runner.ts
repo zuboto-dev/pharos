@@ -103,19 +103,30 @@ export function shellRunner(logFile: string): Runner {
         cwd: dirname(logFile),
         env: { ...process.env, ...env },
         stdio: ['ignore', 'pipe', 'pipe'],
+        // Its own process group, so stopping it also stops what the shell started: on Linux,
+        // `sh -c` runs the command as a child, which would outlive the shell and keep the run open.
+        detached: process.platform !== 'win32',
       });
+      const kill = () => {
+        try {
+          if (child.pid && process.platform !== 'win32') process.kill(-child.pid, 'SIGTERM');
+          else child.kill('SIGTERM');
+        } catch {
+          child.kill('SIGTERM');
+        }
+      };
       child.stdout.on('data', (d: Buffer) => log(d.toString()));
       child.stderr.on('data', (d: Buffer) => log(d.toString()));
       let timedOut = false;
       let done = false;
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill('SIGTERM');
+        kill();
       }, timeoutMs);
       // Paused in Settings: the run stops, so nothing says it is still answering.
       const stop = () => {
         log('--- stopped: answering was paused\n');
-        child.kill('SIGTERM');
+        kill();
       };
       signal?.addEventListener('abort', stop, { once: true });
       const finish = (line: string, result: RunResult) => {

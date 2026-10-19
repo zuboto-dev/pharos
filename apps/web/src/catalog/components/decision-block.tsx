@@ -26,6 +26,7 @@ import { useViewData, type ViewData } from '../context';
 import { EntityRef } from '../interactive';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { BUTTON, Badge } from '../ui';
+import { useInDocument } from '../variant';
 
 /**
  * A decision the reader makes on the page (R10.19): the question, its options side by side with
@@ -167,6 +168,8 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
   const [mode, setMode] = useState<Mode>('idle');
   const [busy, setBusy] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  // In a report document (R14) a decision is read, not made: no choosing, changing or answering.
+  const readOnly = useInDocument();
   const titleId = useId();
   const options = decision.data.options ?? [];
   const state = decisionState(decision.data);
@@ -271,14 +274,16 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
                 {showOptions ? 'Hide options' : 'See options'}
               </button>
             )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void reopen()}
-              className={BUTTON.secondary}
-            >
-              <Undo2 aria-hidden className="size-3.5" /> Change
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void reopen()}
+                className={BUTTON.secondary}
+              >
+                <Undo2 aria-hidden className="size-3.5" /> Change
+              </button>
+            )}
           </div>
         </div>
       ) : null}
@@ -301,7 +306,7 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
                 chosen={state.kind === 'chosen' && state.option.id === option.id}
                 busy={busy}
                 onChoose={
-                  answered
+                  answered || readOnly
                     ? undefined
                     : () =>
                         void answer(
@@ -330,6 +335,7 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
       )}
 
       {!answered &&
+        !readOnly &&
         (mode === 'answer' ? (
           <AnswerForm
             busy={busy}

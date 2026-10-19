@@ -190,8 +190,8 @@ export function drawingReads(view: Entity<'view'>, block: Drawing): FrameReads {
   );
 }
 
-const FRAME_NOTICE =
-  'flex h-full items-start gap-3 overflow-auto rounded-tile bg-sunken px-4 py-5 text-sm';
+/** A notice in place of a frame: as tall as its words, never the frame's reserved height. */
+const FRAME_NOTICE = 'flex items-start gap-3 rounded-tile bg-sunken px-4 py-4 text-sm';
 
 /**
  * A drawing: the agent's HTML for one section in the locked report frame (same sandbox, bridge
@@ -210,24 +210,16 @@ export function DrawingFrame({ view, block }: { view: Entity<'view'>; block: Dra
     what: 'drawing',
   });
   const box = { height: block.height };
-  // A drawing that can't be shown says so in a short box, not a tall empty one.
-  const notice = { height: Math.min(block.height, 160) };
   if (shown === 'stopped')
     return (
-      <div style={box}>
-        <FrameStopped
-          what="drawing"
-          onReload={() => setRestarts((n) => n + 1)}
-          className={FRAME_NOTICE}
-        />
-      </div>
+      <FrameStopped
+        what="drawing"
+        onReload={() => setRestarts((n) => n + 1)}
+        className={FRAME_NOTICE}
+      />
     );
   if (shown === 'missing' || shown === 'failed')
-    return (
-      <div style={notice}>
-        <FrameUnavailable what="drawing" status={shown} className={FRAME_NOTICE} />
-      </div>
-    );
+    return <FrameUnavailable what="drawing" status={shown} className={FRAME_NOTICE} />;
   return (
     <div className="space-y-2">
       {confirm && <LinkConfirm what="drawing" url={confirm} onDone={() => setConfirm(null)} />}
@@ -300,9 +292,7 @@ export function EmbedFrame({ view, block }: { view: Entity<'view'>; block: Embed
         </a>
       </div>
       {missing?.src === src ? (
-        <div style={{ height: Math.min(height, 160) }}>
-          <FrameUnavailable what="embed" status={missing.status} className={FRAME_NOTICE} />
-        </div>
+        <FrameUnavailable what="embed" status={missing.status} className={FRAME_NOTICE} />
       ) : (
         <iframe
           src={src}

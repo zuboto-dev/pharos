@@ -302,6 +302,39 @@ describe('report document (R14)', () => {
     });
     await waitFor(() => expect(block('ref').querySelector('[data-report-error]')).toBeTruthy());
     expect(block('ref').querySelector('a[data-embed-open]')).toBeTruthy();
+    // As tall as the notice, not the embed's reserved height.
+    expect(block('ref').querySelector('[style*="height"]')).toBeNull();
+  });
+
+  it('collapses a drawing whose route is not there to its notice', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === 'HEAD' ? new Response(null, { status: 404 }) : Response.json([]),
+      ),
+    );
+    render(
+      <Providers>
+        <DocumentView view={docView} />
+      </Providers>,
+    );
+    act(() => {
+      block('map').querySelector('iframe')!.dispatchEvent(new Event('load'));
+    });
+    await waitFor(() =>
+      expect(block('map').querySelector('[data-report-error="missing"]')).toBeTruthy(),
+    );
+    expect(block('map').querySelector('[style*="height"]')).toBeNull();
+    // Its caption still says what was meant to be there.
+    expect(block('map').querySelector('figcaption')?.textContent).toBe('Where the work happened');
+  });
+
+  it('gives every block one left edge: text keeps to the reading column from it', () => {
+    const css = readFileSync(new URL(cssFile, import.meta.url), 'utf8');
+    expect(css).toMatch(/\.doc-flow > \* {\s*grid-column: band;/);
+    expect(css).toMatch(/\.doc-flow > \[data-width='full'\] {\s*grid-column: full;/);
+    const block = css.match(/\.doc-block {[^}]*}/)?.[0] ?? '';
+    expect(block).not.toMatch(/margin-inline/);
   });
 });
 
@@ -361,8 +394,8 @@ describe('drawing frame guard (R13.6 in a document)', () => {
       'This drawing tried to leave Pharos, so it was stopped.',
     );
     expect(block('map').querySelector('iframe')).toBeNull();
-    // The block keeps its height, so the document doesn't jump.
-    expect((stopped!.parentElement as HTMLElement).style.height).toBe('320px');
+    // The notice is as tall as its words, not the drawing's reserved height.
+    expect(stopped!.closest('[style*="height"]')).toBeNull();
   });
 
   it('stops on a second load of the same address', () => {
@@ -537,5 +570,68 @@ describe('project page with a report document (R14)', () => {
     expect(screen.queryByRole('link', { name: /Open in new tab/ })).toBeNull();
     const tab = screen.getByRole('link', { name: /Where it stands/ });
     expect(tab.querySelector('[aria-label="Report"]')).toBeTruthy();
+  });
+});
+
+describe('a document is read-only', () => {
+  const readOnly = (variant: 'board' | 'document', node: ViewNode) => {
+    const { container, unmount } = inVariant(node, variant);
+    const found = {
+      add: [...container.querySelectorAll('button')].some((b) =>
+        /^Add /.test(b.textContent?.trim() ?? ''),
+      ),
+      check:
+        container.querySelector('button[aria-label^="Mark “"], button[aria-label^="Reopen “"]') !==
+        null,
+      drag: container.querySelector('[draggable="true"]') !== null,
+      editOptions: container.querySelector('button[aria-label^="Edit "]') !== null,
+      start: [...container.querySelectorAll('button')].some(
+        (b) => b.textContent?.trim() === 'Start',
+      ),
+    };
+    unmount();
+    return found;
+  };
+
+  it('TaskTable: no quick add or done toggles (rows still open)', () => {
+    const node: ViewNode = { component: 'TaskTable' };
+    expect(readOnly('board', node)).toMatchObject({ add: true, check: true });
+    expect(readOnly('document', node)).toMatchObject({ add: false, check: false });
+    inVariant(node, 'document');
+    expect(document.querySelectorAll('[data-task-mark]').length).toBeGreaterThan(0);
+  });
+
+  it('KanbanBoard: no dragging, quick add or option editing', () => {
+    const node: ViewNode = { component: 'KanbanBoard' };
+    expect(readOnly('board', node)).toMatchObject({ add: true, drag: true, editOptions: true });
+    expect(readOnly('document', node)).toMatchObject({
+      add: false,
+      drag: false,
+      editOptions: false,
+      check: false,
+    });
+  });
+
+  it('TaskChecklist: no Start buttons or quick add', () => {
+    const node: ViewNode = { component: 'TaskChecklist', hideDone: false };
+    expect(readOnly('board', node)).toMatchObject({ add: true, start: true });
+    expect(readOnly('document', node)).toMatchObject({ add: false, start: false, check: false });
+  });
+
+  it('ScopeBoard, GoalTree, MilestoneList, DecisionLog: no quick add or group editing', () => {
+    for (const component of ['ScopeBoard', 'GoalTree', 'MilestoneList', 'DecisionLog'] as const) {
+      const node = { component } as ViewNode;
+      expect(readOnly('document', node), component).toMatchObject({
+        add: false,
+        editOptions: false,
+      });
+    }
+    expect(readOnly('board', { component: 'ScopeBoard' } as ViewNode).editOptions).toBe(true);
+  });
+
+  it('Action: says what it is, without its button', () => {
+    const node = COMPONENT_INFO.Action.example as ViewNode;
+    inVariant(node, 'document');
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

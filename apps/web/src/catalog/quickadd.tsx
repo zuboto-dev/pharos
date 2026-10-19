@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useViewData } from './context';
 import { TYPE_LABELS } from './interactive';
 import { BUTTON } from './ui';
+import { useInDocument } from './variant';
 
 /**
  * Field values a new item should get so it shows up in a widget filtered by `where`: exact
@@ -55,6 +56,8 @@ export function QuickAdd({
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
+  // A report document (R14) is read-only: nothing is added from it.
+  if (useInDocument()) return null;
   if (!open) {
     return (
       <button

@@ -56,12 +56,25 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
   database, installs the "Spending story" sample, makes it stale, asks to refresh, and checks the
   page was rewritten (one more version, newer evidence, fresh); `stub-agent.mjs` is the no-model
   answering agent, `--agent claude` uses Claude Code (its usage)
-- `pnpm service install|status|start|stop|restart|log|uninstall` — run the built server as a
-  launchd user agent on macOS (`scripts/pharos-service.sh`): starts at login, restarts on exit,
-  logs to `~/.pharos/server.log`. The built server also serves `apps/web/dist`. It shares port
-  4300 with `pnpm dev`, so stop one before starting the other; the server exits with a clear
-  message on a port conflict. `tsx watch` doesn't restart a crashed process until a file changes,
-  which is why the service exists; re-run `install` after changing server code.
+- `pnpm service install|status|update|autoupdate on|off|start|stop|restart|log|uninstall` — run
+  the built server as a launchd user agent on macOS (`scripts/pharos-service.sh`): starts at
+  login, restarts on exit, logs to `~/.pharos/server.log`. The built server also serves
+  `apps/web/dist`. It shares port 4300 with `pnpm dev`, so stop one before starting the other;
+  the server exits with a clear message on a port conflict. `tsx watch` doesn't restart a crashed
+  process until a file changes, which is why the service exists.
+  - The service runs from a deploy copy, never this checkout: git worktrees of local `main` in
+    `~/.pharos/slots/{a,b}`, with `~/.pharos/app` pointing at the deployed one
+    (`~/.pharos/deployed` has its commit). The `dev.pharos.updater` job (`autoupdate on`, set by
+    `install`) runs `update` when `.git/refs/heads/main` or `packed-refs` changes and every 5
+    minutes: it builds the new main in the other slot (`pnpm install --frozen-lockfile`,
+    `pnpm build`), backs up the database to `~/.pharos/backups` (last 5), switches, restarts,
+    and switches back if the server isn't healthy within 20 s. A failed build or start leaves
+    the old version running and that commit is skipped until main moves again; updates wait
+    while the answering agent is queued or running. Log: `~/.pharos/update.log`. Merging to main
+    deploys; no re-install needed.
+  - Never test against the live service. Every name is overridable: `LABEL`, `UPDATER_LABEL`,
+    `PORT`, `PHAROS_HOME` (its database and logs go there too), and `PHAROS_SOURCE` (a throwaway
+    `git clone --local` whose main you move).
 
 Data lives in `~/.pharos/pharos.db` (override with `PHAROS_DB`). The HTTP server and stdio MCP
 processes can share it.

@@ -15,7 +15,7 @@ export const key = 'R13';
 export const title = 'Report pages: a story written as HTML, with live numbers';
 
 const VIEW = 'Spending story';
-const TYPE = 'household_spending';
+export const TYPE = 'household_spending';
 export const VIEWS = [VIEW];
 
 const RECORD_TYPE = {
@@ -313,13 +313,10 @@ const PAGE = String.raw`<!doctype html>
 const SUMMARY =
   'Rent stayed the same each month while groceries rose every month from July to September, and eating out fell; a slider shows what a smaller grocery bill would save. Made-up data.';
 
-export async function run({ call, samples, log }) {
-  const projectId = samples.id;
-  const tools = (await call.tools()).map((t) => t.name);
-  if (!tools.includes('report_asset_put'))
-    throw new StepError('This Pharos has no report pages (R13): update it first. Nothing changed.');
-
-  // The record type and the made-up records, each only when missing.
+/**
+ * The record type and the made-up records, each only when missing (R13 and R14 read them).
+ */
+export async function ensureSpending({ call, projectId, log }) {
   const project = await call('get', { id: projectId });
   const types = project.data.recordTypes ?? [];
   if (!types.some((t) => t.key === TYPE)) {
@@ -355,6 +352,15 @@ export async function run({ call, samples, log }) {
     });
     log(`Added ${SPENDING.length} made-up spending records.`);
   }
+}
+
+export async function run({ call, samples, log }) {
+  const projectId = samples.id;
+  const tools = (await call.tools()).map((t) => t.name);
+  if (!tools.includes('report_asset_put'))
+    throw new StepError('This Pharos has no report pages (R13): update it first. Nothing changed.');
+
+  await ensureSpending({ call, projectId, log });
 
   // The page, then its asset.
   let view = await viewNamed(call, projectId, VIEW);

@@ -26,6 +26,14 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
   var parentWindow = window.parent;
   var framed = parentWindow && parentWindow !== window;
   var initial = __PHAROS_THEME__;
+  // A drawing in a report document (R14) may read only the names it lists; a page, any of its
+  // own. A lookup table without a prototype, so the page can't widen it.
+  var listed = __PHAROS_READS__;
+  var allowed = null;
+  if (listed) {
+    allowed = Object.create(null);
+    for (var k = 0; k < listed.length; k++) allowed[listed[k]] = true;
+  }
   var theme =
     initial === 'dark' || initial === 'light'
       ? initial
@@ -142,6 +150,10 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
   var api = {
     data: function (name) {
       name = String(name);
+      if (allowed && allowed[name] !== true)
+        return Promise.reject(
+          new Error('This drawing does not list "' + name + '" in its reads'),
+        );
       asked[name] = true;
       return ask(name);
     },
@@ -220,8 +232,17 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
 
 export type PageTheme = 'light' | 'dark';
 
-export function bridgeScript(theme?: PageTheme): string {
-  return BRIDGE_SCRIPT.replace('__PHAROS_THEME__', JSON.stringify(theme ?? null));
+/**
+ * The bridge for one document. `reads` (a drawing in a report document, R14) limits
+ * `pharos.data` to those names: any other is refused in the frame and never asked of the parent.
+ */
+export function bridgeScript(theme?: PageTheme, reads?: string[]): string {
+  // JSON inside a <script>: "<" escaped so a name can never close the tag.
+  const json = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
+  return BRIDGE_SCRIPT.replace('__PHAROS_THEME__', JSON.stringify(theme ?? null)).replace(
+    '__PHAROS_READS__',
+    json(reads ?? null),
+  );
 }
 
 /** A doctype, after an optional byte-order mark, white space and comments. */
@@ -232,8 +253,8 @@ const DOCTYPE = /^\uFEFF?\s*(?:<!--[\s\S]*?-->\s*)*<!doctype[^>]*>/i;
  * page keeps standards mode), or at the very start. The parser puts it in <head> either way,
  * before any script of the page, whether or not the page writes <html> and <head>.
  */
-export function injectBridge(html: string, theme?: PageTheme): string {
-  const tag = `<script>${bridgeScript(theme)}</script>`;
+export function injectBridge(html: string, theme?: PageTheme, reads?: string[]): string {
+  const tag = `<script>${bridgeScript(theme, reads)}</script>`;
   const doctype = DOCTYPE.exec(html);
   if (!doctype) return `${tag}${html}`;
   const at = doctype[0].length;

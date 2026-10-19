@@ -49,16 +49,39 @@ top to bottom like a well-set article, at 1440 px and at 390 px, light and dark.
   page, or drops all its reads.
 - Drawing route: `GET /api/views/:id/doc/:blockId/` serves the drawing's HTML with the R13 CSP,
   sandbox and bridge; its rows are only its listed reads. Assets resolve as for the page.
+  As built: the CSP's own source is the drawing's path (`http://<host>/api/views/<id>/doc/<blockId>/`),
+  its relative URLs load the view's report assets under that path (`…/doc/<blockId>/img/a.svg`),
+  `/doc/<blockId>` redirects to `/doc/<blockId>/` (keeping `?theme=`), and `Origin: null` reads
+  are accepted there as for pages. The bridge is the R13 one with the drawing's `reads` built in:
+  `pharos.data(name)` for a name it doesn't list rejects in the frame ("This drawing does not list
+  …") and is never sent to the parent. The bridge messages are unchanged; the web app answers a
+  drawing's `data` message only for a name in that drawing's `reads`, with `doc.data[name]`.
 - Embed route: `GET /api/views/:id/embed/:blockId` serves a small wrapper page with no script
   (`default-src 'none'`), `frame-src` set to the embed's origin only and a sandbox that lets the
   site run as itself (`allow-scripts allow-same-origin allow-forms allow-popups
-  allow-popups-to-escape-sandbox`, never top navigation). The app's own `frame-src 'self'` stays
-  as is, so R13.6 still holds.
+allow-popups-to-escape-sandbox`, never top navigation). The app's own `frame-src 'self'` stays
+  as is, so R13.6 still holds. As built (`embedCsp`, `embedWrapper`): `sandbox <those flags>;
+default-src 'none'; style-src 'unsafe-inline'; frame-src <origin>; form-action 'none';
+base-uri 'none'; frame-ancestors 'self'`, plus `X-Frame-Options: SAMEORIGIN` and
+  `Referrer-Policy: no-referrer`; the wrapper's one `<iframe>` carries the same sandbox flags and
+  `referrerpolicy="no-referrer"`. The wrapper document itself needs `allow-same-origin` in its own
+  sandbox (a frame inherits its parent's sandbox flags) but runs no script. Anything that isn't an
+  embed is a 404 with `frame-src 'none'`. A site that redirects to another origin
+  (`example.com` → `www.example.com`) is blocked by that `frame-src`; the "Open site" link still
+  works.
 - MCP: `view_create`, `view_update` and `view_preview` accept `doc`. `view_preview` reports the
   same query warnings as for boards, plus embeds that are not https and drawings that read names
   missing from `data`. `report_guide` gains a "Report documents" section and says: write a doc
   for a report; write a page only when the whole page needs a design no document can give; use a
   drawing for one visual. Tool descriptions say the same.
+  As built: the store refuses a drawing read missing from `data` and a non-https embed (schema),
+  so `view_preview` reports them only for a draft (`{projectId, doc}`): they are set aside and
+  warned about, and the rest is checked. A document preview lists every warning at the top
+  (`warnings`, per-block ones prefixed `Block "<id>":`, drawing ones `Drawing "<id>":`) and keeps
+  `widgets` per component as for boards; `drawings`, `embeds` (with their origin) and `reads`
+  (rows now) come with it. It also warns on a missing summary, a named read no drawing lists, and
+  a document with no component blocks. Board-only checks (grid rows, the R3 StartHere opening and
+  word budget) don't apply to documents.
 
 ## Web
 

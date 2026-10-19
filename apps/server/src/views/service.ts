@@ -153,6 +153,7 @@ export function getView(store: Store, viewId: string) {
             }
           : {}),
       },
+      doc: undefined,
       assets: new ReportAssets(store).list(view.id),
     };
   }

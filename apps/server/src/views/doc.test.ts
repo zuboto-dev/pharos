@@ -1,8 +1,11 @@
 import vm from 'node:vm';
-import type { Author } from '@pharos/schema';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { ReportDoc, type Author } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
-import { answerBrief } from '../guidance.js';
+import { DOC_EXAMPLE, REPORT_GUIDE, answerBrief } from '../guidance.js';
 import { openDatabase } from '../store/database.js';
 import { projectSnapshot } from '../store/snapshot.js';
 import { Store } from '../store/store.js';
@@ -593,5 +596,99 @@ describe('drawing and embed routes (R14)', () => {
     });
     expect(res.status).toBe(200);
     expect((await app.request(`/api/views/${id}/doc/pic/img/b.svg`)).status).toBe(200);
+  });
+});
+
+describe('the report guide (R14)', () => {
+  it('has a Report documents section with a complete, valid example', () => {
+    expect(ReportDoc.safeParse(DOC_EXAMPLE).success).toBe(true);
+    for (const part of [
+      '## Report documents',
+      'the default for a report',
+      'Only when the whole page',
+      'one visual no component can draw',
+      JSON.stringify(DOC_EXAMPLE),
+    ])
+      expect(REPORT_GUIDE, part).toContain(part);
+  });
+});
+
+describe('report documents over MCP (R14)', () => {
+  async function connect(app: ReturnType<typeof createApp>) {
+    const client = new Client({ name: 'Opus 5.5', version: '1.0.0' });
+    const transport = new StreamableHTTPClientTransport(new URL('http://localhost:4300/mcp'), {
+      fetch: async (url, init) => app.fetch(new Request(url, init)),
+    });
+    await client.connect(transport);
+    return client;
+  }
+  async function call(client: Client, name: string, args: Record<string, unknown>) {
+    const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
+    const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
+    if (result.isError) throw new Error(text);
+    return JSON.parse(text);
+  }
+
+  it('says doc for reports, page for a whole bespoke design, drawing for one visual', async () => {
+    const { store } = setup();
+    const client = await connect(createApp(store));
+    const tools = (await client.listTools()).tools;
+    const tool = (name: string) => tools.find((t) => t.name === name)!;
+    for (const name of ['view_create', 'view_update', 'view_preview'])
+      expect(Object.keys(tool(name).inputSchema.properties ?? {}), name).toContain('doc');
+    for (const name of ['view_create', 'view_update']) {
+      const text = tool(name).description!;
+      expect(text, name).toMatch(/doc for reports|For a report, write doc/);
+      expect(text, name).toContain('drawing');
+      expect(text, name).toMatch(/page.*only (when|for) .*whole/);
+    }
+    expect(tool('report_guide').description).toContain('report documents');
+    expect(client.getInstructions()).toContain('is a report document');
+  });
+
+  it('creates, previews and gets a document; the guide example previews without warnings', async () => {
+    const { store, projectId } = setup();
+    store.apply(me, {
+      message: 'more',
+      operations: [
+        {
+          op: 'create',
+          type: 'record',
+          data: {
+            projectId,
+            recordType: 'spending',
+            title: 'Corner Market',
+            fields: {
+              date: '2026-08-04',
+              amount: { amount: 6230, currency: 'EUR' },
+              category: 'Groceries',
+            },
+          },
+        },
+      ],
+    });
+    const client = await connect(createApp(store));
+    const draft = await call(client, 'view_preview', { projectId, doc: DOC_EXAMPLE });
+    expect(draft.kind).toBe('report document');
+    expect(draft.warnings).toEqual([]);
+    expect(draft.widgets.every((w: { empty: boolean }) => !w.empty)).toBe(true);
+    const made = await call(client, 'view_create', {
+      projectId,
+      name: 'Spending',
+      message: 'A report document',
+      doc: DOC_EXAMPLE,
+    });
+    expect(made.preview.warnings).toEqual([]);
+    const got = await call(client, 'view_get', { viewId: made.view.id });
+    expect(got.doc.blocks).toHaveLength(DOC_EXAMPLE.blocks.length);
+    expect(got.layout).toBe('report document');
+    const http = await call(client, 'view_preview', {
+      projectId,
+      doc: {
+        ...DOC_EXAMPLE,
+        blocks: [...DOC_EXAMPLE.blocks, { kind: 'embed', id: 'e', url: 'http://example.com/' }],
+      },
+    });
+    expect(http.warnings.join('\n')).toContain('is not https');
   });
 });

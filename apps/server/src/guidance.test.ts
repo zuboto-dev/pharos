@@ -18,7 +18,7 @@ import { projectSnapshot } from './store/snapshot.js';
 describe('guidance', () => {
   it('has a short, practical report guide with a tokens-and-pharos.data skeleton (R13)', () => {
     for (const part of [
-      'When to write one',
+      'when to write one',
       ':root {',
       '[data-theme=dark] {',
       'await pharos.data("spend")',
@@ -32,7 +32,7 @@ describe('guidance', () => {
       'Never navigate the page',
     ])
       expect(REPORT_GUIDE).toContain(part);
-    expect(REPORT_GUIDE.split('\n').length).toBeLessThan(120);
+    expect(REPORT_GUIDE.split('\n').length).toBeLessThan(180);
   });
 
   it('keeps cancelled tasks out of the blocked-or-overdue example', () => {

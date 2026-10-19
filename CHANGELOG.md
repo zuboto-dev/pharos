@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — 2026-10-18
+## 0.2.0 — 2026-10-19
 
 Second development preview. Pharos now reads more like a set of pages about your project than a
 tracker: pages answer the reader's questions first, show what changed since you last looked, can
@@ -12,8 +12,9 @@ agent. This is still an early release, not a stable 1.0 product.
 - **Report pages**: an agent can write a whole page as HTML, with its own look, story and
   interactive parts, that reads live project data. Pharos shows it in a locked frame (no network,
   no popups, no leaving the page), keeps every version, and marks it out of date when the data it
-  read changes. Agents use `view_create` with a page, `report_asset_put` for pictures, fonts and
-  scripts, `report_guide` and `view_preview`.
+  read changes; "Ask to refresh" has the answering agent rewrite it from the same data. Agents use
+  `view_create` with a page, `report_asset_put` for pictures, fonts and scripts, `report_guide`
+  and `view_preview`.
 - **Actions and block asks**: Action blocks ("Log a service", "Mark paid") with a short form built
   from the record type, one revision per submission and Undo; ask an agent to change one block of
   a page, and agents may change only that block while the ask is open.

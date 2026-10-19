@@ -93,6 +93,18 @@ PLIST
 
 loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
 
+# bootout returns before launchd has finished removing the job; a bootstrap in that window fails
+# with "5: Input/output error". Wait for the job to go, and retry a few times.
+bootstrap() {
+  local i
+  for i in $(seq 1 20); do loaded || break; sleep 0.25; done
+  for i in 1 2 3 4 5; do
+    if launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null; then return 0; fi
+    sleep 1
+  done
+  launchctl bootstrap "$DOMAIN" "$PLIST"
+}
+
 wait_healthy() {
   local i
   for i in $(seq 1 40); do
@@ -112,7 +124,7 @@ do_install() {
   fi
   write_plist
   if loaded; then launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true; fi
-  launchctl bootstrap "$DOMAIN" "$PLIST"
+  bootstrap
   if wait_healthy; then
     echo "Pharos is running at http://localhost:$PORT (MCP: http://localhost:$PORT/mcp)"
     echo "It starts at login and restarts if it exits. Log: $LOG"
@@ -134,7 +146,7 @@ do_uninstall() {
 do_start() {
   require_macos
   [ -f "$PLIST" ] || fail "not installed (pnpm service install)"
-  if loaded; then launchctl kickstart "$DOMAIN/$LABEL"; else launchctl bootstrap "$DOMAIN" "$PLIST"; fi
+  if loaded; then launchctl kickstart "$DOMAIN/$LABEL"; else bootstrap; fi
   wait_healthy && echo "Running at http://localhost:$PORT"
 }
 

@@ -56,6 +56,11 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
   database, installs the "Spending story" sample, makes it stale, asks to refresh, and checks the
   page was rewritten (one more version, newer evidence, fresh); `stub-agent.mjs` is the no-model
   answering agent, `--agent claude` uses Claude Code (its usage)
+- `node eval/report-doc/run.mjs --agent claude|codex [--port 4394] [--out <dir>]` — a real agent
+  writes a report document (R14) over MCP (after `pnpm build`): its own server on a temp database
+  with answering off, a made-up garden season (`fixture.mjs`), per-run MCP config as in
+  eval/compat; checks the doc is valid, previews with no warnings, and uses live values and a
+  chart or table; saves the agent's doc to `--out` (default `eval/results/report-doc/`)
 - `pnpm service install|status|update|autoupdate on|off|start|stop|restart|log|uninstall` — run
   the built server as a launchd user agent on macOS (`scripts/pharos-service.sh`): starts at
   login, restarts on exit, logs to `~/.pharos/server.log`. The built server also serves
@@ -161,6 +166,28 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
   Uploads aren't revisions: the feed polls for them and sends `report-assets` (`{ viewId, at }`),
   and an open frame of that view reloads once a burst of uploads goes quiet. `views/report.ts` has the limits, path checks and the page preview; agents use
   `report_asset_put`, `report_asset_list` and `report_guide`.
+
+## Report documents (R14)
+
+- A view with `doc` (`packages/schema/src/views/doc.ts`) is a report document: blocks in reading
+  order (catalog components, `columns`, `drawing`, `embed`) that Pharos draws in its own style.
+  It is the default for a report; `page` (R13) is only for a whole bespoke design. A view has one
+  of `spec`, `page` or `doc` (the store refuses two); block asks on a document are refused.
+  docs/reframe/r14-report-documents.md has the contract.
+- Server side is `apps/server/src/views/doc.ts` (parse, preview, block lookup) with the view
+  service: `doc` in view_create/view_update/view_preview, evidenceRevision and R11 freshness from
+  `docReads` (components' queries plus `doc.data`), and the refresh loop (`pageRefreshSteps`
+  covers documents; `updateView` refuses a refresh that sends widgets or page, or reads nothing).
+- A drawing is served at `/api/views/:id/doc/:blockId/` like a report page (same CSP with the
+  drawing's own path as its source, same bridge, the view's assets under that path), with the
+  bridge limited to the names it lists in `reads` (`injectBridge(html, theme, reads)`). An embed
+  gets a script-free wrapper at `/api/views/:id/embed/:blockId` whose CSP (`embedCsp`) frames only
+  the embed's origin; `APP_PAGE_HEADERS` stays `frame-src 'self'`.
+- `view_preview` of a document runs the board checks on its components and the page checks on
+  each drawing; a draft's non-https embeds and drawing reads missing from `doc.data` are warnings
+  there (the save refuses them). `report_guide` leads with "Report documents" (`DOC_EXAMPLE` in
+  `guidance.ts`, tested to preview clean). `node eval/report-doc/run.mjs --agent claude|codex`
+  checks that a real agent writes one (own server on a temp database, port 4394 by default).
 
 ## Files
 

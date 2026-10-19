@@ -24,7 +24,7 @@ const EXPENSE = {
     { key: 'date', label: 'Date', kind: 'date', required: true },
     { key: 'amount', label: 'Amount', kind: 'money', currency: 'EUR', required: true },
     { key: 'category', label: 'Category', kind: 'text' },
-    { key: 'paidTo', label: 'Paid to', kind: 'text' },
+    { key: 'paid_to', label: 'Paid to', kind: 'text' },
   ],
 };
 
@@ -50,7 +50,7 @@ const HARVESTS = [
   ['2026-10-11', 'Apple', 'Orchard', 17.6],
 ];
 
-// [date, category, cents, paidTo]
+// [date, category, cents, paid_to]
 const EXPENSES = [
   ['2026-03-10', 'Seeds', 8450, 'Green Thumb Seeds'],
   ['2026-03-24', 'Tools', 12900, 'Hardware Corner'],
@@ -127,14 +127,14 @@ export const FIXTURE = {
         fields: { date, crop, plot, kg },
       },
     })),
-    ...EXPENSES.map(([date, category, amount, paidTo]) => ({
+    ...EXPENSES.map(([date, category, amount, paid_to]) => ({
       op: 'create',
       type: 'record',
       data: {
         projectId: '$project',
         recordType: 'expense',
-        title: `${paidTo} (${category.toLowerCase()})`,
-        fields: { date, amount: { amount, currency: 'EUR' }, category, paidTo },
+        title: `${paid_to} (${category.toLowerCase()})`,
+        fields: { date, amount: { amount, currency: 'EUR' }, category, paid_to },
       },
     })),
   ],

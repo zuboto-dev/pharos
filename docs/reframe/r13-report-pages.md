@@ -121,6 +121,13 @@ form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'`, 
 - Reads: `boardReads` for a report page = the queries in `page.data`, so R11 freshness works
   unchanged: when data a page read changes, the page is out of date and the reader can ask for a
   refresh (request `mode: "refresh"`).
+- Refreshing a page (R2, 2026-10-18): the request's context (answer brief and
+  `project_snapshot`) says "Refresh this report page" with the steps: report_guide, view_get, read
+  what each named read selects now, then view_update with expectedRevision, the requestId and the
+  whole page as page (new html and summary, the same page.data). view_update refuses widgets for
+  it (they would make it a board) and a page without its named reads; assets stay with the view.
+  The rewrite sets a new evidenceRevision, so the page is fresh again. `eval/report-refresh/run.mjs`
+  checks the loop end to end (a stub agent, or Claude Code).
 
 ## The report guide (agents)
 

@@ -204,7 +204,7 @@ export function refreshRequest(view: Entity<'view'>) {
         data: {
           projectId: view.data.projectId,
           question,
-          about: `Answer “${view.data.name}”`,
+          about: view.data.page ? `Report page “${view.data.name}”` : `Answer “${view.data.name}”`,
           viewId: view.id,
           mode: 'refresh' as const,
         },

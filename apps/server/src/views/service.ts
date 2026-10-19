@@ -366,6 +366,22 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
           ? `Request ${request.id} asks to refresh this report page: write it again with the whole page as page (check every number and sentence against the data now), or dismiss the request with a reply saying why`
           : `Request ${request.id} asks to refresh this view: answer it again with the whole page as widgets (check every number and sentence against the data now), or dismiss the request with a reply saying why`,
       );
+    // A refresh of a report page writes the same page again: widgets would turn it into a board,
+    // and a page without its named reads would read nothing, so nothing could mark it stale again.
+    if (request.data.mode === 'refresh' && isPage) {
+      if (input.widgets !== undefined)
+        throw new PharosError(
+          'invalid',
+          `Request ${request.id} asks to refresh report page "${view.data.name}": send the whole page again as page, not widgets (widgets would turn it into a board)`,
+        );
+      const before = Object.keys(view.data.page?.data ?? {});
+      const sent = (input.page as { data?: Record<string, unknown> } | undefined)?.data;
+      if (before.length && !Object.keys(sent ?? {}).length)
+        throw new PharosError(
+          'invalid',
+          `Request ${request.id} asks to refresh report page "${view.data.name}": send page.data again with its named reads (${before.map((n) => `"${n}"`).join(', ')}), so the page still reads its data live and Pharos can tell when it goes out of date`,
+        );
+    }
   }
   if (input.reply && !request) throw new PharosError('invalid', 'reply needs a requestId');
   const data: Record<string, unknown> = {};
@@ -574,6 +590,25 @@ export function previewView(store: Store, input: z.infer<typeof ViewPreviewInput
 }
 
 /**
+ * How to answer a refresh of a report page (R13 + R11): write the same page again from the data
+ * now, with the same named reads, so the page keeps its look, its assets and what R11 tracks.
+ * Shown in the answering brief and in project_snapshot's request context.
+ */
+export function pageRefreshSteps(view: Entity<'view'>, requestId: string): string[] {
+  const page = view.data.page;
+  if (!page) return [];
+  const reads = page.data ?? {};
+  const names = Object.keys(reads);
+  return [
+    `Refresh this report page: the data its named reads (${names.length ? names.map((n) => `"${n}"`).join(', ') : 'none'}) return changed since it was written, so its numbers, headings, sentences and summary may be out of date. Write the same page again from the data now:`,
+    `1. report_guide (how a report page works).`,
+    `2. view_get ${view.id}: the current page (html, data, summary), its assets and its revision. If html is cut (htmlTruncated), write the whole page again from what is shown; never send the cut copy back.`,
+    `3. Read the data each named read selects now (list with its type, projectId and the filter's where; view_preview {viewId: "${view.id}"} says how many rows each read returns) and work out again every number, claim, heading and the summary the page states in words.`,
+    `4. view_update {viewId: "${view.id}", expectedRevision: <the revision from view_get>, requestId: "${requestId}", page: {html: <the whole new HTML>, data: ${JSON.stringify(reads)}, summary: <one or two sentences, from the data now>}, reply: <one sentence: what changed>, message}. Keep page.data the same named reads (the page's scripts ask for them by name with pharos.data) and keep its look and structure. Its assets stay with the view: don't upload them again unless one must change. Never send widgets: that would turn the page into a board.`,
+  ];
+}
+
+/**
  * What a request from the UI was asked about, spelled out for an agent: the widget (its component,
  * title, and settings) and the view it sits in, and the item it was asked from.
  */
@@ -593,6 +628,7 @@ export function requestContext(store: Store, request: Entity<'request'>): string
       lines.push(
         `Report page "${v.data.name}" (${v.id}, ${kind}): HTML an agent wrote${v.data.page.summary ? `; it says: ${v.data.page.summary}` : ''}. To change or refresh it, view_get it, then view_update with its revision as expectedRevision and the whole page as page (report_guide has how to write one).`,
       );
+      if (request.data.mode === 'refresh') lines.push(...pageRefreshSteps(v, request.id));
     } else if (widget) {
       lines.push(
         `Widget "${widget.id}": ${widget.node.component}${widget.node.title ? ` "${widget.node.title}"` : ''}, ${widget.w ?? 12} of 12 columns wide, in view "${v.data.name}" (${v.id}, ${kind}). Its settings: ${JSON.stringify(widget.node)}`,

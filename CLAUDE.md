@@ -51,6 +51,11 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
 - `node eval/compat/run.mjs --agent claude|codex --url http://127.0.0.1:<port>` — agent
   compatibility scenarios (`eval/compat/`) with a real agent CLI against an isolated server you
   start (never 4300; answering off); checkers are unit-tested in `apps/server/src/compat.test.ts`
+- `node eval/report-refresh/run.mjs [--agent stub|claude] [--port 4392] [--shots <dir>]` — the
+  report-page refresh loop end to end (after `pnpm build`): starts its own server on a temp
+  database, installs the "Spending story" sample, makes it stale, asks to refresh, and checks the
+  page was rewritten (one more version, newer evidence, fresh); `stub-agent.mjs` is the no-model
+  answering agent, `--agent claude` uses Claude Code (its usage)
 - `pnpm service install|status|start|stop|restart|log|uninstall` — run the built server as a
   launchd user agent on macOS (`scripts/pharos-service.sh`): starts at login, restarts on exit,
   logs to `~/.pharos/server.log`. The built server also serves `apps/web/dist`. It shares port

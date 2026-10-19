@@ -24,6 +24,7 @@ import { useViewData } from './context';
 import { useOpenItem } from './open-item';
 import { OptionBadge } from './options';
 import { StatusBadge } from './ui';
+import { useInDocument } from './variant';
 
 export const TYPE_LABELS: Record<EntityType, string> = {
   section: 'Section',
@@ -248,6 +249,23 @@ export function TaskCheck({ task, className }: { task: Entity<'task'>; className
   const meaning = meaningOf(project, 'task.status', task.data.status);
   const done = meaning === 'done';
   const Icon = done ? Check : meaning === 'in_progress' ? CircleDot : Circle;
+  // In a report document (R14), read-only: the same mark, not a button.
+  if (useInDocument())
+    return (
+      <span
+        aria-hidden
+        data-task-mark=""
+        className={clsx(
+          'relative flex size-5 shrink-0 items-center justify-center rounded-full border',
+          done
+            ? 'border-emerald-500 bg-emerald-500 text-white'
+            : 'border-neutral-300 text-faint dark:border-neutral-600',
+          className,
+        )}
+      >
+        <Icon className={clsx(done ? 'size-3.5' : 'size-3')} strokeWidth={done ? 3 : 2} />
+      </span>
+    );
   return (
     <button
       type="button"

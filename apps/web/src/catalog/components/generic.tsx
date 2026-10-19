@@ -35,6 +35,7 @@ import { FileTypeIcon } from './file-list';
 import { Bar, CHART } from '../chart';
 import { MiniBar } from './overview';
 import { RecordValue } from './records';
+import { useInDocument } from '../variant';
 
 type Reader = ReturnType<typeof fieldReader>;
 
@@ -327,8 +328,14 @@ export function Stat({ node }: { node: NodeOf<'Stat'> }) {
   const n = typeof r.value === 'number' ? r.value : 1;
   // A "bad" number that is zero is good news; don't paint it red.
   const tone = node.tone === 'bad' && n === 0 ? 'neutral' : (node.tone ?? 'neutral');
+  const inDocument = useInDocument();
   return (
-    <div className="flex h-full flex-col justify-between rounded-block border border-line bg-surface px-4 py-3">
+    <div
+      className={clsx(
+        'flex h-full flex-col justify-between',
+        !inDocument && 'rounded-block border border-line bg-surface px-4 py-3',
+      )}
+    >
       <div className={CHART.figureLabel}>{node.label}</div>
       <div className={clsx('mt-1', CHART.figure, STAT_TONES[tone])}>{r.text}</div>
       {r.target && (

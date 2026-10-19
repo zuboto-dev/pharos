@@ -12,6 +12,7 @@ import { firstUses, TermText, useTermMatcher } from '../terms';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { ScrollX } from '../scroll-x';
 import { Badge } from '../ui';
+import { useInDocument } from '../variant';
 
 type Task = Entity<'task'>;
 type GroupBy = NonNullable<NodeOf<'KanbanBoard'>['groupBy']>;
@@ -61,12 +62,15 @@ function AssigneeLabel({ id }: { id?: string }) {
 function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: boolean } }) {
   const [dragging, setDragging] = useState(false);
   const options = useOptions();
+  // A report document (R14) is read-only: cards don't move.
+  const readOnly = useInDocument();
   const { priority, status, dependsOn, assigneeId, estimate, stageId } = task.data;
   const meaning = options.meaning('task.status', status);
   return (
     <div
-      draggable
+      draggable={!readOnly}
       onDragStart={(e) => {
+        if (readOnly) return;
         e.dataTransfer.setData(DRAG_TYPE, task.id);
         e.dataTransfer.effectAllowed = 'move';
         setDragging(true);
@@ -220,6 +224,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
   const create = useCreate();
   const options = useOptions();
   const [over, setOver] = useState<string | null>(null);
+  const readOnly = useInDocument();
   const groupBy = node.groupBy ?? 'status';
   const optionField =
     groupBy === 'status' ? 'task.status' : groupBy === 'priority' ? 'task.priority' : null;
@@ -249,7 +254,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
         <div
           key={column.key}
           onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+            if (readOnly || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             setOver(column.key);
@@ -257,7 +262,7 @@ export function KanbanBoard({ node }: { node: NodeOf<'KanbanBoard'> }) {
           onDragLeave={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null);
           }}
-          onDrop={(e) => onDrop(e, column)}
+          onDrop={(e) => !readOnly && onDrop(e, column)}
           className={clsx(
             'flex w-64 shrink-0 flex-col rounded-tile p-2 transition',
             over === column.key
@@ -449,6 +454,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
   const options = useOptions();
   const meaning = (t: Task) => options.meaning('task.status', t.data.status);
   const [showDone, setShowDone] = useState(false);
+  const readOnly = useInDocument();
   const hideDone = node.hideDone ?? true;
   let tasks = runQuery(data, 'task', node.filter);
   if (node.assigneeKind) {
@@ -529,7 +535,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
                 <OptionBadge field="task.priority" value={task.data.priority} />
               )}
               <AssigneeLabel id={task.data.assigneeId} />
-              {meaning(task) === 'todo' ? (
+              {meaning(task) === 'todo' && !readOnly ? (
                 <button
                   type="button"
                   onClick={() => void setStatus(task, 'in_progress')}

@@ -50,6 +50,7 @@ import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
+import { DocumentView, isDocument } from './document';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
@@ -443,8 +444,11 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   };
 
   const canReset = Boolean(active?.data.template && active.data.spec);
-  // A report page (R13): the agent's own HTML in a locked frame instead of the board.
-  const report = isReport(active) ? active : undefined;
+  // A report document (R14): blocks Pharos lays out as an article instead of the board.
+  const docView = !isReport(active) && isDocument(active) ? active : undefined;
+  // A report page (R13): the agent's own HTML in a locked frame instead of the board. Both are
+  // reports: the report bar above, no board to customize.
+  const report = isReport(active) ? active : docView;
   // A report has no board to customize: leave layout editing when one opens.
   if (report && editing) setEditing(false);
 
@@ -564,7 +568,13 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           )}
           {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
           {active && !report && !editing && <EvidenceNote view={active} freshness={freshness} />}
-          {report && <ReportBar view={report} freshness={freshness} />}
+          {report && (
+            <ReportBar
+              view={report}
+              freshness={freshness}
+              className={docView ? 'mx-auto max-w-[min(100%,60rem)]' : undefined}
+            />
+          )}
           {!filesPage &&
             !report &&
             active?.data.kind !== 'answer' &&
@@ -607,7 +617,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           )}
           {report && (
             <div key={report.id} className="animate-fade-in">
-              <ReportFrame view={report} />
+              {docView ? <DocumentView view={docView} /> : <ReportFrame view={report} />}
             </div>
           )}
           {!filesPage && !report && (

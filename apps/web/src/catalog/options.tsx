@@ -18,6 +18,7 @@ import { humanize, plural } from '../lib/format';
 import { useViewData } from './context';
 import { Select } from './select';
 import { Badge, DOT_TONES, Dot } from './ui';
+import { useInDocument } from './variant';
 
 /** The project's options for each option field, with lookups that tolerate unknown values. */
 export function useOptions() {
@@ -64,6 +65,8 @@ export function EditOptionsButton({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // A report document (R14) is read-only.
+  if (useInDocument()) return null;
   return (
     <>
       <button

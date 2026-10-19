@@ -34,6 +34,7 @@ import { useWidgetId } from '../board-files';
 import { useViewData, type ViewData } from '../context';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { BUTTON } from '../ui';
+import { useInDocument } from '../variant';
 
 /**
  * An Action block (R10): a button and a short form built from a record type's fields, e.g.
@@ -501,6 +502,10 @@ export function useActionForm(def: NodeOf<'Action'> | undefined, widgetId: strin
 export function Action({ node }: { node: NodeOf<'Action'> }) {
   const widgetId = useWidgetId() ?? undefined;
   const { usable, problems, start, element } = useActionForm(node, widgetId);
+  // A report document (R14) is read-only: it says what the action is, without the form.
+  const readOnly = useInDocument();
+  if (readOnly)
+    return node.description ? <p className="text-sm text-muted">{node.description}</p> : null;
   if (problems.length)
     return (
       <EmptyState
@@ -543,7 +548,8 @@ export function RowAction({
 }) {
   const def = useBoardActions().action(actionId);
   const { usable, start, element } = useActionForm(def, actionId);
-  if (!def || !usable) return null;
+  const readOnly = useInDocument();
+  if (!def || !usable || readOnly) return null;
   return (
     <>
       <button

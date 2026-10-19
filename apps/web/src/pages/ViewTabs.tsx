@@ -140,8 +140,8 @@ function TabLabel({ view }: { view: Entity<'view'> }) {
       {isAnswer(view) && (
         <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
       )}
-      {/* A report page (R13): the agent's own page, told apart from working pages. */}
-      {view.data.page && !isAnswer(view) && (
+      {/* A report (R13 page, R14 document): told apart from working pages. */}
+      {(view.data.page || view.data.doc) && !isAnswer(view) && (
         <Newspaper className="size-3.5 shrink-0 text-faint" aria-label="Report" />
       )}
       <span className="truncate">{view.data.name}</span>
@@ -520,7 +520,7 @@ export function ViewTabs({
               icon={
                 isAnswer(view)
                   ? MessageCircleQuestion
-                  : view.data.page
+                  : view.data.page || view.data.doc
                     ? Newspaper
                     : view.data.pinned
                       ? Pin

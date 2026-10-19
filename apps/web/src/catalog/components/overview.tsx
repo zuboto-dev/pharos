@@ -16,6 +16,7 @@ import { EntityRef } from '../interactive';
 import { useMarkdownTerms } from '../terms';
 import { Bar, CHART } from '../chart';
 import { BUTTON, Markdown, ProgressBar, StatusBadge, type Tone } from '../ui';
+import { useInDocument } from '../variant';
 
 export function ProjectHeader() {
   const { project, repository, tasks, stageById } = useViewData();
@@ -23,8 +24,14 @@ export function ProjectHeader() {
     ? stageById.get(project.data.currentStageId)
     : undefined;
   const { percent: progress, done, total } = taskProgress(tasks, project);
+  const inDocument = useInDocument();
   return (
-    <header className="flex flex-col gap-4 rounded-block border border-line bg-surface p-5 md:flex-row md:items-end md:justify-between">
+    <header
+      className={clsx(
+        'flex flex-col gap-4 md:flex-row md:items-end md:justify-between',
+        !inDocument && 'rounded-block border border-line bg-surface p-5',
+      )}
+    >
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{project.data.name}</h1>
@@ -96,8 +103,15 @@ export function MiniBar({
 
 export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
   const data = useViewData();
+  const inDocument = useInDocument();
   return (
-    <div className={clsx('grid grid-cols-2 gap-3', STAT_COLS[Math.min(node.stats.length, 4)])}>
+    <div
+      className={clsx(
+        'grid grid-cols-2',
+        inDocument ? 'gap-x-8 gap-y-5' : 'gap-3',
+        STAT_COLS[Math.min(node.stats.length, 4)],
+      )}
+    >
       {node.stats.map((stat, i) => {
         const count = stat.query ? runQuery(data, stat.query.type, stat.query).length : undefined;
         const total = stat.of ? runQuery(data, stat.of.type, stat.of).length : undefined;
@@ -106,7 +120,10 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
         return (
           <div
             key={i}
-            className="flex flex-col justify-between rounded-block border border-line bg-surface px-4 py-3"
+            className={clsx(
+              'flex flex-col justify-between',
+              !inDocument && 'rounded-block border border-line bg-surface px-4 py-3',
+            )}
           >
             <div className={CHART.figureLabel}>{stat.label}</div>
             <div
@@ -179,39 +196,59 @@ export function ProgressRing({ node }: { node: NodeOf<'ProgressRing'> }) {
   );
 }
 
-const CALLOUTS: Record<string, { icon: typeof Info; className: string; tone: Tone }> = {
+const CALLOUTS: Record<
+  string,
+  { icon: typeof Info; className: string; tone: Tone; rule: string; mark: string }
+> = {
   info: {
     icon: Info,
     tone: 'blue',
+    rule: 'border-sky-400 dark:border-sky-600',
+    mark: 'text-sky-600 dark:text-sky-400',
     className:
       'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-100',
   },
   success: {
     icon: CircleCheck,
     tone: 'green',
+    rule: 'border-emerald-400 dark:border-emerald-600',
+    mark: 'text-emerald-600 dark:text-emerald-400',
     className:
       'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-100',
   },
   warning: {
     icon: TriangleAlert,
     tone: 'amber',
+    rule: 'border-amber-400 dark:border-amber-600',
+    mark: 'text-amber-600 dark:text-amber-400',
     className:
       'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-100',
   },
   danger: {
     icon: OctagonAlert,
     tone: 'red',
+    rule: 'border-rose-400 dark:border-rose-600',
+    mark: 'text-rose-600 dark:text-rose-400',
     className:
       'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-100',
   },
 };
 
 export function Callout({ node }: { node: NodeOf<'Callout'> }) {
-  const { icon: Icon, className } = CALLOUTS[node.tone ?? 'info']!;
+  const { icon: Icon, className, rule, mark } = CALLOUTS[node.tone ?? 'info']!;
   const terms = useMarkdownTerms(node.terms);
+  // In a report document (R14) a callout is an aside in the text: a coloured rule, no box.
+  const inDocument = useInDocument();
   return (
-    <div className={clsx('flex gap-3 rounded-block border p-4', className)}>
-      <Icon className="mt-0.5 size-5 shrink-0" />
+    <div
+      data-callout={node.tone ?? 'info'}
+      className={clsx(
+        'flex gap-3',
+        inDocument ? clsx('doc-aside border-l-2 py-0.5 pl-4', rule) : 'rounded-block border p-4',
+        !inDocument && className,
+      )}
+    >
+      <Icon className={clsx('mt-0.5 size-5 shrink-0', inDocument && mark)} />
       <div className="min-w-0 space-y-1">
         {node.title && <div className="font-semibold">{node.title}</div>}
         <Markdown className="!text-current" {...terms}>

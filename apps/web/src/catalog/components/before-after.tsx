@@ -13,6 +13,7 @@ import { Columns2 } from 'lucide-react';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { Empty } from '../ui';
 import { CertaintyMark, ClaimBasis } from './knowledge';
+import { useInDocument } from '../variant';
 
 // R4 block 3 (docs/reframe/r4-plan.md): a change shown, not told. The stated change sits on top;
 // beneath it its own certainty mark and quote/assumption; below that two panes, before and after,
@@ -92,10 +93,17 @@ function Pane({
 }) {
   const quote = claim?.data.quote;
   const locator = claim?.data.locator;
+  // In a report document (R14) the two sides sit in the text under a hairline, not in cards.
+  const inDocument = useInDocument();
   return (
     <section
       aria-label={label ? `${side}, ${label}` : side}
-      className="flex min-w-0 flex-col gap-2 rounded-block border border-line bg-surface p-4"
+      className={clsx(
+        'flex min-w-0 flex-col gap-2',
+        inDocument
+          ? 'border-t border-line pt-3'
+          : 'rounded-block border border-line bg-surface p-4',
+      )}
     >
       <h3 className={CHART.axis}>
         {side}

@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { glanceName } from '../files/files';
 import { Bar } from './chart';
 import { humanize } from '../lib/format';
+import { useInDocument } from './variant';
 
 export type Tone = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'muted';
 
@@ -93,6 +94,15 @@ export function Panel({
   className?: string;
   flush?: boolean;
 }) {
+  // In a report document (R14) a block is part of the article: its title is a small heading
+  // over it, with no card, border or title bar. Wide content (a table) scrolls on its own.
+  if (useInDocument())
+    return (
+      <section data-doc-plain="" className={clsx('flex min-w-0 flex-col', className)}>
+        {title && <h3 className="doc-block-title">{title}</h3>}
+        <div className="min-w-0 flex-1 overflow-x-auto">{children}</div>
+      </section>
+    );
   return (
     <section
       className={clsx(

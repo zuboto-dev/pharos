@@ -168,7 +168,11 @@ export function resolvePath(
 ): PathResult {
   const fields = fieldsOf(scope);
   const own = fields[path];
-  if (own) return { ok: true, info: own, scope, field: path };
+  // Across a reference a label isn't unique any more: many tasks share one stage's name.
+  if (own) {
+    const info = hopped && own.unique ? { ...own, unique: false } : own;
+    return { ok: true, info, scope, field: path };
+  }
   const unknown = (message: string, code: 'unknown-field' | 'unknown-hop' = 'unknown-field') =>
     ({ ok: false, code, message, allowed: allowedPaths(scope) }) as const;
 

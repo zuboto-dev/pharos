@@ -3,6 +3,8 @@ import {
   ENTITIES,
   ReportPage,
   TEMPLATES,
+  type DocLeafBlock,
+  type ReportDoc,
   toBoard,
   type Author,
   type Entity,
@@ -15,14 +17,15 @@ import type { ApplyResult, Store } from '../store/store.js';
 import { askedBlocks, blockChangeIssue } from './block-ask.js';
 import { WidgetOp, applyWidgetOps, summarizeBoard } from './board-ops.js';
 import { previewBoard } from './preview.js';
+import { allDocWarnings, docReadsNothing, lenientDoc, parseDoc, previewDoc } from './doc.js';
 import { ReportAssets, previewPage } from './report.js';
 
 /**
- * The board a view currently shows: its own spec, or its template's. A report page (R13) has no
- * board: an empty one, so block tools find nothing on it.
+ * The board a view currently shows: its own spec, or its template's. A report page (R13) or a
+ * report document (R14) has no board: an empty one, so block tools find nothing on it.
  */
 export function effectiveBoard(view: Entity<'view'>): Board {
-  if (view.data.page) return { component: 'Board', widgets: [] };
+  if (view.data.page || view.data.doc) return { component: 'Board', widgets: [] };
   const spec: ViewSpec = view.data.spec ?? TEMPLATES[view.data.template ?? 'overview'];
   return toBoard(spec);
 }
@@ -59,22 +62,67 @@ function summary(view: Entity<'view'>) {
     order,
     layout: view.data.page
       ? 'report page'
-      : spec
-        ? template
-          ? `customized from template "${template}"`
-          : 'custom'
-        : `template "${template ?? 'overview'}"`,
+      : view.data.doc
+        ? 'report document'
+        : spec
+          ? template
+            ? `customized from template "${template}"`
+            : 'custom'
+          : `template "${template ?? 'overview'}"`,
     ...(view.data.page
       ? {
           ...(view.data.page.summary ? { summary: view.data.page.summary } : {}),
           reads: Object.keys(view.data.page.data ?? {}),
         }
-      : { widgets: summarizeBoard(effectiveBoard(view)) }),
+      : view.data.doc
+        ? {
+            ...(view.data.doc.summary ? { summary: view.data.doc.summary } : {}),
+            blocks: docOutline(view.data.doc),
+            reads: Object.keys(view.data.doc.data ?? {}),
+          }
+        : { widgets: summarizeBoard(effectiveBoard(view)) }),
   };
 }
 
 /** view_get shows a page's HTML up to this many characters (the rest is the agent's own copy). */
 export const PAGE_HTML_SHOWN = 50_000;
+
+/** A document's blocks in one line each: id, kind and what it is (for view lists). */
+function docOutline(doc: ReportDoc): string[] {
+  const line = (b: DocLeafBlock) =>
+    b.kind === 'block'
+      ? `${b.id}: ${b.node.component}${b.node.title ? ` "${b.node.title}"` : ''}`
+      : b.kind === 'drawing'
+        ? `${b.id}: drawing${b.caption ? ` "${b.caption}"` : ''}`
+        : `${b.id}: embed ${b.url}`;
+  return doc.blocks.map((b) =>
+    b.kind === 'columns'
+      ? `${b.id}: columns [${b.columns.map((c) => c.map(line).join('; ')).join(' | ')}]`
+      : line(b),
+  );
+}
+
+/** A document with each drawing's HTML cut to PAGE_HTML_SHOWN characters, saying so. */
+function docShown(doc: ReportDoc): ReportDoc & { htmlTruncated?: string } {
+  const cut: string[] = [];
+  const leaf = (b: DocLeafBlock): DocLeafBlock => {
+    if (b.kind !== 'drawing' || b.html.length <= PAGE_HTML_SHOWN) return b;
+    cut.push(b.id);
+    return { ...b, html: b.html.slice(0, PAGE_HTML_SHOWN) };
+  };
+  const blocks = doc.blocks.map((b) =>
+    b.kind === 'columns' ? { ...b, columns: b.columns.map((c) => c.map(leaf)) } : leaf(b),
+  );
+  return {
+    ...doc,
+    blocks,
+    ...(cut.length
+      ? {
+          htmlTruncated: `Shown: the first ${PAGE_HTML_SHOWN} characters of drawing ${cut.map((id) => `"${id}"`).join(', ')}. To change the document, send the whole doc again with each drawing's whole HTML; never send this cut copy back.`,
+        }
+      : {}),
+  };
+}
 
 export function listViews(store: Store, projectId: string, includeArchived = false) {
   store.getOfType('project', projectId);
@@ -108,12 +156,24 @@ export function getView(store: Store, viewId: string) {
       assets: new ReportAssets(store).list(view.id),
     };
   }
+  if (view.data.doc)
+    return {
+      ...summary(view),
+      projectId: view.data.projectId,
+      url: viewUrl(view),
+      /** A report document has no board blocks (kept so every view has a board). */
+      board: effectiveBoard(view),
+      page: undefined,
+      doc: docShown(view.data.doc),
+      assets: new ReportAssets(store).list(view.id),
+    };
   return {
     ...summary(view),
     projectId: view.data.projectId,
     url: viewUrl(view),
     board: effectiveBoard(view),
     page: undefined,
+    doc: undefined,
     assets: undefined,
   };
 }
@@ -136,7 +196,14 @@ const PageInput = z
   .unknown()
   .optional()
   .describe(
-    'A report page instead of widgets (R13): {html: the whole HTML document, data?: {name: {type, filter?}} read live with pharos.data(name), summary?: one or two sentences}. Call report_guide first.',
+    'A report page instead of widgets (R13): {html: the whole HTML document, data?: {name: {type, filter?}} read live with pharos.data(name), summary?: one or two sentences}. Only when the whole page needs a design no document can give; for a report, write doc instead. Call report_guide first.',
+  );
+
+const DocInput = z
+  .unknown()
+  .optional()
+  .describe(
+    'A report document (R14), the way to write a report: {blocks: [{kind: "block", id, node: {component: "Text", content, values}} | {kind: "columns", id, columns: [[blocks], [blocks]]} | {kind: "drawing", id, html, reads?, height} | {kind: "embed", id, url}], data?: {name: {type, filter?}} for drawings, summary}. Pharos draws it in its own style; a drawing is for one visual no component can draw. Call report_guide first ("Report documents").',
   );
 
 function parseWidgets(widgets: unknown): Board {
@@ -159,21 +226,27 @@ export const ViewCreateInput = z.object({
   widgets: z
     .array(z.unknown())
     .optional()
-    .describe('Board widgets: [{id, w?, x?, h?, node}]; see catalog_list. Or give page instead'),
+    .describe(
+      'Board widgets: [{id, w?, x?, h?, node}]; see catalog_list. Or give doc (a report) or page instead',
+    ),
   page: PageInput,
+  doc: DocInput,
   message: z.string().trim().min(1).describe('Why this view is being made'),
 });
 
 export function createView(store: Store, author: Author, input: z.infer<typeof ViewCreateInput>) {
-  if ((input.widgets === undefined) === (input.page === undefined))
+  const given = [input.widgets, input.page, input.doc].filter((x) => x !== undefined).length;
+  if (given !== 1)
     throw new PharosError(
       'invalid',
-      'Give widgets (a working page of blocks) or page (a report page written as HTML), one of the two',
+      'Give one of widgets (a working page of blocks), doc (a report document Pharos draws) or page (a whole page written as HTML)',
     );
   const layout =
     input.page !== undefined
       ? { page: parsePage(input.page) }
-      : { spec: parseWidgets(input.widgets) };
+      : input.doc !== undefined
+        ? { doc: parseDoc(input.doc) }
+        : { spec: parseWidgets(input.widgets) };
   const result = store.apply(
     author,
     {
@@ -296,7 +369,13 @@ export const ViewUpdateInput = z.object({
     .unknown()
     .optional()
     .describe(
-      'Replace the whole report page (R13): {html, data?, summary?}. Makes a board a report page; widgets or resetToTemplate make a report page a board again',
+      'Replace the whole report page (R13): {html, data?, summary?}. Makes a board or document a report page; widgets or resetToTemplate make it a board again',
+    ),
+  doc: z
+    .unknown()
+    .optional()
+    .describe(
+      'Replace the whole report document (R14): {blocks, data?, summary?}, sent whole. Makes a board or page a document; widgets or resetToTemplate make it a board again',
     ),
   resetToTemplate: z
     .boolean()
@@ -337,15 +416,16 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
     );
   const request = input.requestId ? store.getOfType('request', input.requestId) : undefined;
   const isPage = !!view.data.page;
+  const isDoc = !!view.data.doc;
   if (request) {
     if (request.data.projectId !== view.data.projectId)
       throw new PharosError('invalid', `Request ${request.id} is about another project`);
     if (request.data.status !== 'open')
       throw new PharosError('invalid', `Request ${request.id} is already ${request.data.status}`);
-    if (request.data.mode === 'block' && isPage)
+    if (request.data.mode === 'block' && (isPage || isDoc))
       throw new PharosError(
         'invalid',
-        `Request ${request.id} asks about one block, but view "${view.data.name}" is a report page, which has no blocks: dismiss the request with a reply, or answer it as a question`,
+        `Request ${request.id} asks about one block, but view "${view.data.name}" is a ${isPage ? 'report page' : 'report document'}, which has no blocks to ask about: dismiss the request with a reply, or answer it as a question`,
       );
     if (request.data.mode === 'block' && request.data.viewId !== view.id)
       throw new PharosError(
@@ -359,12 +439,19 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
       );
     // R11 review, gap 2: a refresh is answered by writing the page again from the data now, not
     // by a rename or a few ops (they would leave old words looking fresh).
-    if (request.data.mode === 'refresh' && input.widgets === undefined && input.page === undefined)
+    if (
+      request.data.mode === 'refresh' &&
+      input.widgets === undefined &&
+      input.page === undefined &&
+      input.doc === undefined
+    )
       throw new PharosError(
         'invalid',
         isPage
           ? `Request ${request.id} asks to refresh this report page: write it again with the whole page as page (check every number and sentence against the data now), or dismiss the request with a reply saying why`
-          : `Request ${request.id} asks to refresh this view: answer it again with the whole page as widgets (check every number and sentence against the data now), or dismiss the request with a reply saying why`,
+          : isDoc
+            ? `Request ${request.id} asks to refresh this report document: write it again with the whole document as doc (check every number and sentence against the data now), or dismiss the request with a reply saying why`
+            : `Request ${request.id} asks to refresh this view: answer it again with the whole page as widgets (check every number and sentence against the data now), or dismiss the request with a reply saying why`,
       );
     // A refresh of a report page writes the same page again: widgets would turn it into a board,
     // and a page without its named reads would read nothing, so nothing could mark it stale again.
@@ -381,6 +468,28 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
           'invalid',
           `Request ${request.id} asks to refresh report page "${view.data.name}": send page.data again with its named reads (${before.map((n) => `"${n}"`).join(', ')}), so the page still reads its data live and Pharos can tell when it goes out of date`,
         );
+      if (input.doc !== undefined)
+        throw new PharosError(
+          'invalid',
+          `Request ${request.id} asks to refresh report page "${view.data.name}": send the whole page again as page, not doc`,
+        );
+    }
+    // The same for a report document (R14): rewrite it as a document that still reads its data.
+    if (request.data.mode === 'refresh' && isDoc) {
+      if (input.widgets !== undefined || input.page !== undefined)
+        throw new PharosError(
+          'invalid',
+          `Request ${request.id} asks to refresh report document "${view.data.name}": send the whole document again as doc, not ${input.widgets !== undefined ? 'widgets (they would turn it into a board)' : 'page (it would turn it into an HTML page)'}`,
+        );
+      if (
+        input.doc !== undefined &&
+        !docReadsNothing(view.data.doc!) &&
+        docReadsNothing(parseDoc(input.doc))
+      )
+        throw new PharosError(
+          'invalid',
+          `Request ${request.id} asks to refresh report document "${view.data.name}": the new document reads nothing from the project. Keep its live values, charts and named reads (blocks with queries), so it still shows the data now and Pharos can tell when it goes out of date`,
+        );
     }
   }
   if (input.reply && !request) throw new PharosError('invalid', 'reply needs a requestId');
@@ -395,33 +504,46 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
     Object.assign(data, { kind: null, expiresAt: null, archived: null });
     if (!view.data.description && view.data.question) data.description = view.data.question;
   }
-  const changesLayout = [input.ops, input.widgets, input.resetToTemplate, input.page].filter(
-    (x) => x !== undefined && x !== false,
-  );
+  const changesLayout = [
+    input.ops,
+    input.widgets,
+    input.resetToTemplate,
+    input.page,
+    input.doc,
+  ].filter((x) => x !== undefined && x !== false);
   if (changesLayout.length > 1) {
     throw new PharosError(
       'invalid',
-      'Use only one of ops, widgets, page, or resetToTemplate in one update',
+      'Use only one of ops, widgets, page, doc, or resetToTemplate in one update',
     );
   }
-  if (input.ops && isPage)
+  if (input.ops && (isPage || isDoc))
     throw new PharosError(
       'invalid',
-      `View "${view.data.name}" is a report page: it has no widgets for ops. Send the whole page again as page`,
+      isPage
+        ? `View "${view.data.name}" is a report page: it has no widgets for ops. Send the whole page again as page`
+        : `View "${view.data.name}" is a report document: it has no widgets for ops. Send the whole document again as doc`,
     );
   if (input.page !== undefined) {
-    // A view is a board or a page (R13): the page replaces the board; the template stays so a
-    // reset can bring it back.
+    // A view is a board, a page or a document (R13, R14): the new one replaces the others; the
+    // template stays so a reset can bring it back.
     data.page = parsePage(input.page);
     if (view.data.spec) data.spec = null;
+    if (isDoc) data.doc = null;
+  } else if (input.doc !== undefined) {
+    data.doc = parseDoc(input.doc);
+    if (view.data.spec) data.spec = null;
+    if (isPage) data.page = null;
   } else if (input.resetToTemplate) {
     if (!view.data.template)
       throw new PharosError('invalid', `View "${view.data.name}" has no template to reset to`);
     data.spec = null;
     if (isPage) data.page = null;
+    if (isDoc) data.doc = null;
   } else if (input.widgets) {
     data.spec = parseWidgets(input.widgets);
     if (isPage) data.page = null;
+    if (isDoc) data.doc = null;
   } else if (input.ops) {
     data.spec = applyWidgetOps(effectiveBoard(view), input.ops);
   }
@@ -436,7 +558,7 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
         : askedBlocks(store, view);
   if (allowed.size) {
     const scope = `View "${view.data.name}" has an open request to change only block ${[...allowed].map((id) => `"${id}"`).join(', ')}`;
-    if (data.page !== undefined)
+    if (data.page !== undefined || data.doc !== undefined)
       throw new PharosError(
         'invalid',
         `${scope}; leave the rest of the view as it is (use ops on that block)`,
@@ -458,7 +580,10 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
   if (
     author.kind === 'agent' &&
     input.expectedRevision === undefined &&
-    (input.widgets !== undefined || input.page !== undefined || input.resetToTemplate)
+    (input.widgets !== undefined ||
+      input.page !== undefined ||
+      input.doc !== undefined ||
+      input.resetToTemplate)
   ) {
     const last = store.history({ entityId: view.id, limit: 1 })[0]?.author;
     if (last && last.kind !== 'system' && !(last.kind === 'agent' && last.name === author.name))
@@ -491,7 +616,7 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
       // leaves the rest as old as it was.
       evidence:
         author.kind === 'agent' &&
-        (input.widgets !== undefined || input.page !== undefined) &&
+        (input.widgets !== undefined || input.page !== undefined || input.doc !== undefined) &&
         request?.data.mode !== 'block',
     },
   );
@@ -520,14 +645,30 @@ function withView(store: Store, result: ApplyResult, viewId: string) {
   const view = getView(store, viewId);
   return {
     revision: result.revision,
-    // The agent just sent the page: it needn't come back (it can be 2 MB).
+    // The agent just sent the page or document: it needn't come back (it can be megabytes).
     view: view.page
       ? { ...view, page: { summary: view.page.summary, data: view.page.data } }
-      : view,
+      : view.doc
+        ? { ...view, doc: undefined }
+        : view,
     preview: entity.data.page
       ? previewPage(store, entity.data.projectId, entity.data.page, entity.id)
-      : previewBoard(store, entity.data.projectId, effectiveBoard(entity)),
+      : entity.data.doc
+        ? docPreview(store, entity.data.projectId, entity.data.doc, entity.id)
+        : previewBoard(store, entity.data.projectId, effectiveBoard(entity)),
   };
+}
+
+/** A document's preview with every warning (per block too) listed once at the top. */
+function docPreview(
+  store: Store,
+  projectId: string,
+  doc: ReportDoc,
+  viewId?: string,
+  extra: string[] = [],
+) {
+  const preview = previewDoc(store, projectId, doc, viewId, extra);
+  return { ...preview, warnings: allDocWarnings(preview) };
 }
 
 export const ViewPreviewInput = z.object({
@@ -538,6 +679,10 @@ export const ViewPreviewInput = z.object({
     .unknown()
     .optional()
     .describe('With projectId (or a viewId, to check against its assets): a draft report page'),
+  doc: z
+    .unknown()
+    .optional()
+    .describe('With projectId (or a viewId, to check against its assets): a draft report document'),
 });
 
 /**
@@ -548,8 +693,23 @@ export function previewAny(store: Store, input: z.infer<typeof ViewPreviewInput>
   return previewReport(store, input) ?? previewView(store, input);
 }
 
-/** The page checks for a draft page or a saved report page; null for a board. */
+/**
+ * The page checks for a draft page or a saved report page, the document checks for a draft or
+ * saved report document; null for a board.
+ */
 export function previewReport(store: Store, input: z.infer<typeof ViewPreviewInput>) {
+  if (input.doc !== undefined) {
+    const { doc, warnings } = lenientDoc(input.doc);
+    const view = input.viewId ? store.getOfType('view', input.viewId) : undefined;
+    const projectId = view?.data.projectId ?? input.projectId;
+    if (!projectId)
+      throw new PharosError('invalid', 'Give a projectId (or a viewId) with the draft doc');
+    store.getOfType('project', projectId);
+    return {
+      view: view ? view.data.name : '(draft)',
+      ...docPreview(store, projectId, doc, view?.id, warnings),
+    };
+  }
   if (input.page !== undefined) {
     const page = parsePage(input.page);
     const view = input.viewId ? store.getOfType('view', input.viewId) : undefined;
@@ -568,6 +728,11 @@ export function previewReport(store: Store, input: z.infer<typeof ViewPreviewInp
       return {
         view: view.data.name,
         ...previewPage(store, view.data.projectId, view.data.page, view.id),
+      };
+    if (view.data.doc)
+      return {
+        view: view.data.name,
+        ...docPreview(store, view.data.projectId, view.data.doc, view.id),
       };
   }
   return null;
@@ -595,6 +760,7 @@ export function previewView(store: Store, input: z.infer<typeof ViewPreviewInput
  * Shown in the answering brief and in project_snapshot's request context.
  */
 export function pageRefreshSteps(view: Entity<'view'>, requestId: string): string[] {
+  if (view.data.doc) return docRefreshSteps(view, requestId);
   const page = view.data.page;
   if (!page) return [];
   const reads = page.data ?? {};
@@ -605,6 +771,23 @@ export function pageRefreshSteps(view: Entity<'view'>, requestId: string): strin
     `2. view_get ${view.id}: the current page (html, data, summary), its assets and its revision. If html is cut (htmlTruncated), write the whole page again from what is shown; never send the cut copy back.`,
     `3. Read the data each named read selects now (list with its type, projectId and the filter's where; view_preview {viewId: "${view.id}"} says how many rows each read returns) and work out again every number, claim, heading and the summary the page states in words.`,
     `4. view_update {viewId: "${view.id}", expectedRevision: <the revision from view_get>, requestId: "${requestId}", page: {html: <the whole new HTML>, data: ${JSON.stringify(reads)}, summary: <one or two sentences, from the data now>}, reply: <one sentence: what changed>, message}. Keep page.data the same named reads (the page's scripts ask for them by name with pharos.data) and keep its look and structure. Its assets stay with the view: don't upload them again unless one must change. Never send widgets: that would turn the page into a board.`,
+  ];
+}
+
+/**
+ * How to answer a refresh of a report document (R14 + R11): write the same document again from
+ * the data now, keeping its structure, its block ids and what it reads.
+ */
+function docRefreshSteps(view: Entity<'view'>, requestId: string): string[] {
+  const doc = view.data.doc!;
+  const reads = doc.data ?? {};
+  const names = Object.keys(reads);
+  return [
+    `Refresh this report document: data it reads changed since it was written, so its words, headings, figures stated in prose and its summary may be out of date (its components and live values already show the data now). Write the same document again from the data now:`,
+    `1. report_guide (the "Report documents" section).`,
+    `2. view_get ${view.id}: the current doc (blocks, data, summary) and its revision. If a drawing's html is cut (htmlTruncated), write that drawing again whole; never send the cut copy back.`,
+    `3. view_preview {viewId: "${view.id}"}: what every block shows now. Read the data its blocks${names.length ? ` and named reads (${names.map((n) => `"${n}"`).join(', ')})` : ''} select (list with the same filters) and work out again every claim, heading and sentence.`,
+    `4. view_update {viewId: "${view.id}", expectedRevision: <the revision from view_get>, requestId: "${requestId}", doc: {blocks: <every block, the same ids, words rewritten>, data: ${JSON.stringify(reads)}, summary: <one or two sentences, from the data now>}, reply: <one sentence: what changed>, message}. Keep its live values, charts and named reads (a document that reads nothing is refused) and its order. Never send widgets or page: they would turn it into a board or an HTML page.`,
   ];
 }
 
@@ -627,6 +810,11 @@ export function requestContext(store: Store, request: Entity<'request'>): string
     if (v.data.page) {
       lines.push(
         `Report page "${v.data.name}" (${v.id}, ${kind}): HTML an agent wrote${v.data.page.summary ? `; it says: ${v.data.page.summary}` : ''}. To change or refresh it, view_get it, then view_update with its revision as expectedRevision and the whole page as page (report_guide has how to write one).`,
+      );
+      if (request.data.mode === 'refresh') lines.push(...pageRefreshSteps(v, request.id));
+    } else if (v.data.doc) {
+      lines.push(
+        `Report document "${v.data.name}" (${v.id}, ${kind}): blocks an agent wrote that Pharos draws${v.data.doc.summary ? `; it says: ${v.data.doc.summary}` : ''}. To change or refresh it, view_get it, then view_update with its revision as expectedRevision and the whole document as doc (report_guide has how to write one).`,
       );
       if (request.data.mode === 'refresh') lines.push(...pageRefreshSteps(v, request.id));
     } else if (widget) {

@@ -33,6 +33,7 @@ import {
   Board,
   checkBoardQueries,
   checkReadQueries,
+  docLeaves,
   findRecordType,
   findingKey,
   formatFinding,
@@ -1414,6 +1415,16 @@ class Transaction {
     project = this.store.get(view.data.projectId) as Entity<'project'> | null,
   ): QueryFinding[] {
     if (view.data.page) return checkReadQueries(view.data.page.data, project);
+    if (view.data.doc) {
+      // A report document (R14): its components' queries, as a board of them, and its named reads.
+      const widgets = docLeaves(view.data.doc.blocks).flatMap((b) =>
+        b.kind === 'block' ? [{ id: b.id, node: b.node }] : [],
+      );
+      return [
+        ...checkBoardQueries({ component: 'Board', widgets }, project),
+        ...checkReadQueries(view.data.doc.data, project),
+      ];
+    }
     const spec = view.data.spec;
     if (!spec) return [];
     const parsed = Board.safeParse(toBoard(spec as ViewSpec));
@@ -1421,28 +1432,37 @@ class Transaction {
   }
 
   /**
-   * A view is a board or a report page (R13), never both: a page with a spec beside it would
-   * leave readers and agents unsure which one is shown.
+   * A view is a board, a report page (R13) or a report document (R14), never two of them: a
+   * page or document with a spec beside it would leave readers and agents unsure which one is
+   * shown.
    */
   private reportPageIssues(view: Entity<'view'>, prefix: string): string[] {
-    if (!view.data.page || !view.data.spec) return [];
+    const kinds = (
+      [
+        ['spec', 'a board of blocks'],
+        ['page', 'a report page'],
+        ['doc', 'a report document'],
+      ] as const
+    ).filter(([key]) => !!view.data[key]);
+    if (kinds.length < 2) return [];
     return [
-      `${prefix}: a view has either a page (a report page) or a spec (a board of blocks), not both; clear spec to keep the page, or page to keep the board`,
+      `${prefix}: a view has one of spec (a board of blocks), page (a report page) or doc (a report document), not ${kinds.map(([key]) => key).join(' and ')}; clear the others to keep one`,
     ];
   }
 
-  /** "Ask about this block" (R10) needs a block: report pages have none (R13). */
+  /** "Ask about this block" (R10) needs a block: report pages (R13) and documents (R14) have none. */
   private blockRequestIssues(request: Entity<'request'>, prefix: string): string[] {
     if (request.data.mode !== 'block' || request.data.status !== 'open' || !request.data.viewId)
       return [];
     const view = this.store.get(request.data.viewId);
-    if (view?.type !== 'view' || !(view as Entity<'view'>).data.page) return [];
+    const data = view?.type === 'view' ? (view as Entity<'view'>).data : null;
+    if (!data || (!data.page && !data.doc)) return [];
     const first = this.changes.find((c) => c.id === request.id);
     // Only a new or reopened ask is refused; one left over from before the view became a page
     // can still be answered or dismissed.
     if (first?.before && (first.before as Data).status === 'open') return [];
     return [
-      `${prefix}: a report page has no blocks to ask about; ask about the whole page (a question, or "Ask to refresh") instead`,
+      `${prefix}: a report ${data.doc ? 'document' : 'page'} has no blocks to ask about; ask about the whole ${data.doc ? 'document' : 'page'} (a question, or "Ask to refresh") instead`,
     ];
   }
 

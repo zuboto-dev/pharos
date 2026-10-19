@@ -4,6 +4,7 @@ import {
   SEEN_SETTING,
   boardReads,
   changeTouches,
+  docReads,
   dueOf,
   filterMatcher,
   localToday,
@@ -38,9 +39,14 @@ import { effectiveBoard, isExpired } from './service.js';
  * Computed from the change log on request; nothing here is a revision.
  */
 
-/** What a view reads: a report page's named reads (R13), or its board's queries. */
+/**
+ * What a view reads: a report page's named reads (R13), a report document's components and named
+ * reads (R14), or its board's queries.
+ */
 export function viewReads(view: Entity<'view'>): BoardReads {
-  return view.data.page ? pageReads(view.data.page) : boardReads(effectiveBoard(view));
+  if (view.data.page) return pageReads(view.data.page);
+  if (view.data.doc) return docReads(view.data.doc);
+  return boardReads(effectiveBoard(view));
 }
 
 /** The one reader of a local install: the owner, who writes from the web app as human:me. */

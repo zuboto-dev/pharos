@@ -627,9 +627,11 @@ function text(uri: string, body: string, mimeType = 'text/markdown') {
   return { contents: [{ uri, mimeType, text: body }] };
 }
 
-const isReportPage = (store: Store, viewId: string | undefined) => {
+/** What kind of report a view is (R13 page, R14 document), or null for a board. */
+const reportKind = (store: Store, viewId: string | undefined) => {
   const view = viewId ? store.get(viewId) : null;
-  return view?.type === 'view' && !!(view as Entity<'view'>).data.page;
+  const data = view?.type === 'view' ? (view as Entity<'view'>).data : null;
+  return data?.page ? 'report page' : data?.doc ? 'report document' : null;
 };
 
 /** For a refresh request (R11): what changed in the data since the answer was written. */
@@ -683,8 +685,8 @@ export function answerBrief(
         r.data.about ? `  Asked from: ${r.data.about}` : '',
         r.data.mode === 'block' ? '  Change this block (mode "block")' : '',
         r.data.mode === 'refresh'
-          ? isReportPage(store, r.data.viewId)
-            ? '  Refresh this report page (mode "refresh")'
+          ? reportKind(store, r.data.viewId)
+            ? `  Refresh this ${reportKind(store, r.data.viewId)} (mode "refresh")`
             : '  Refresh this answer (mode "refresh")'
           : '',
         ...requestContext(store, r).map((line) => `  ${line}`),
@@ -736,6 +738,11 @@ export function answerBrief(
     'each named read selects now, and view_update with expectedRevision, the requestId and the',
     'whole page as page: new html and summary worked out from the data now, the same page.data.',
     'Its assets stay. Never send widgets for a report page.',
+    'When the view is a report document (the request says "Refresh this report document"), write',
+    'the document again the same way: report_guide ("Report documents"), view_get it (its doc),',
+    'view_preview it to see what every block shows now, and view_update with expectedRevision, the',
+    'requestId and the whole document as doc: the same blocks and ids, words and summary from the',
+    'data now, the same doc.data. Never send widgets or page for a report document.',
     '',
     'People use Ask for three things. Work out which one each request is:',
     '- A question about the project: answer it with view_answer (pass the requestId).',

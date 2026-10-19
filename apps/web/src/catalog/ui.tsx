@@ -100,7 +100,11 @@ export function Panel({
     return (
       <section data-doc-plain="" className={clsx('flex min-w-0 flex-col', className)}>
         {title && <h3 className="doc-block-title">{title}</h3>}
-        <div className="min-w-0 flex-1 overflow-x-auto">{children}</div>
+        {/* The board panel's padding, cancelled around the block: content that reaches into it
+            on a board (a table's rows edge to edge, -mx-4) isn't cut off here. */}
+        <div className={clsx('min-w-0 flex-1 overflow-x-auto', !flush && '-m-4 p-4')}>
+          {children}
+        </div>
       </section>
     );
   return (

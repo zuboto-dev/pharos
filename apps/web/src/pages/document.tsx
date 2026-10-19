@@ -210,6 +210,8 @@ export function DrawingFrame({ view, block }: { view: Entity<'view'>; block: Dra
     what: 'drawing',
   });
   const box = { height: block.height };
+  // A drawing that can't be shown says so in a short box, not a tall empty one.
+  const notice = { height: Math.min(block.height, 160) };
   if (shown === 'stopped')
     return (
       <div style={box}>
@@ -222,7 +224,7 @@ export function DrawingFrame({ view, block }: { view: Entity<'view'>; block: Dra
     );
   if (shown === 'missing' || shown === 'failed')
     return (
-      <div style={box}>
+      <div style={notice}>
         <FrameUnavailable what="drawing" status={shown} className={FRAME_NOTICE} />
       </div>
     );
@@ -298,7 +300,7 @@ export function EmbedFrame({ view, block }: { view: Entity<'view'>; block: Embed
         </a>
       </div>
       {missing?.src === src ? (
-        <div style={{ height: Math.min(height, 200) }}>
+        <div style={{ height: Math.min(height, 160) }}>
           <FrameUnavailable what="embed" status={missing.status} className={FRAME_NOTICE} />
         </div>
       ) : (

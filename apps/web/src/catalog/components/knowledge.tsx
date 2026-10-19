@@ -26,6 +26,7 @@ import { LocalSourcePath, linkedFileOf } from '../source-file';
 import { firstUses, firstUsesByKey, TermText, useTermMatcher, type TermRange } from '../terms';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { Badge, Dot, isHttp, Uri, type Tone } from '../ui';
+import { useInDocument } from '../variant';
 import {
   OpenTasks,
   ProgressLine,
@@ -351,6 +352,7 @@ export function ClaimBasis({
 
 export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
   const data = useViewData();
+  const inDocument = useInDocument();
   const matcher = useTermMatcher(node.terms);
   const claim = findClaim(data, node.claim);
   if (!claim)
@@ -394,8 +396,10 @@ export function ClaimCard({ node }: { node: NodeOf<'ClaimCard'> }) {
   return (
     <article
       className={clsx(
-        'flex h-full min-w-0 flex-col gap-1.5 rounded-block border bg-surface p-4',
-        BORDER[tone],
+        'flex h-full min-w-0 flex-col gap-1.5',
+        // In a report document (R14): a finding set off by a rule in its tone, not a card.
+        inDocument ? 'border-l-2 py-0.5 pl-4' : 'rounded-block border bg-surface p-4',
+        inDocument && tone === 'neutral' ? 'border-line-strong' : BORDER[tone],
       )}
     >
       {kicker}

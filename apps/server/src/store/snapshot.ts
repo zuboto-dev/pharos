@@ -262,11 +262,15 @@ export function projectSnapshot(store: Store, projectId: string) {
             ? 'answer'
             : v.data.page
               ? 'report page'
-              : v.data.spec
-                ? 'custom'
-                : `template:${v.data.template ?? 'overview'}`,
+              : v.data.doc
+                ? 'report document'
+                : v.data.spec
+                  ? 'custom'
+                  : `template:${v.data.template ?? 'overview'}`,
         ...(v.data.question ? { question: v.data.question } : {}),
-        ...(v.data.page?.summary ? { summary: v.data.page.summary } : {}),
+        ...((v.data.page ?? v.data.doc)?.summary
+          ? { summary: (v.data.page ?? v.data.doc)!.summary }
+          : {}),
         // R11: whether what an agent wrote on it still matches the data (stale answers are
         // answered again, never linked).
         ...(v.data.kind === 'answer' || v.data.evidenceRevision !== undefined

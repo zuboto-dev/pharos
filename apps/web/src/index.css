@@ -410,3 +410,187 @@
     @apply border-b border-line px-2 py-1;
   }
 }
+
+/*
+ * Report documents (R14, pages/document.tsx): blocks laid out as a well-set article, not a board.
+ * A reading column for text (~68 characters), a wider band for figures, full width when asked;
+ * document headings with generous vertical rhythm; light and dark from the tokens above.
+ */
+@layer components {
+  .doc {
+    --doc-text: 68ch;
+    --doc-wide: 60rem;
+    --doc-gap: 2.75rem;
+    container: doc / inline-size;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    color: var(--ph-ink-soft);
+  }
+  /*
+   * One left edge: every block starts at the left of a centred band as wide as a figure. Text
+   * keeps to the reading column from that edge; wide blocks reach the band's right; full blocks
+   * span the whole document.
+   */
+  .doc-flow {
+    display: grid;
+    grid-template-columns:
+      [full-start] minmax(0, 1fr)
+      [band-start] minmax(0, var(--doc-wide))
+      [band-end] minmax(0, 1fr)
+      [full-end];
+  }
+  .doc-flow > * {
+    grid-column: band;
+  }
+  .doc-flow > [data-width='full'] {
+    grid-column: full;
+  }
+  .doc-block {
+    width: 100%;
+    min-width: 0;
+  }
+  .doc-block[data-width='text'] {
+    max-width: var(--doc-text);
+  }
+  /* Rhythm: figures stand apart; paragraphs that follow each other read as one text. */
+  .doc-flow > * + * {
+    margin-top: var(--doc-gap);
+  }
+  .doc-flow > [data-prose] + [data-prose] {
+    margin-top: 1.1em;
+  }
+  .doc-flow > [data-prose] + [data-prose]:has(.md > :is(h1, h2, h3):first-child) {
+    margin-top: var(--doc-gap);
+  }
+  .doc-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.25rem 2.5rem;
+  }
+  @container doc (min-width: 720px) {
+    .doc-columns {
+      grid-template-columns: var(--doc-cols);
+    }
+  }
+  .doc-column {
+    min-width: 0;
+  }
+  .doc-column > * + * {
+    margin-top: 1.75rem;
+  }
+  .doc-column > [data-prose] + [data-prose] {
+    margin-top: 1em;
+  }
+
+  /* Prose: Markdown and Text blocks set as document text (sizes win over a block's own). */
+  .doc .md {
+    font-size: 1.0625rem !important;
+    line-height: 1.7 !important;
+    color: var(--ph-ink-soft);
+  }
+  .doc .md > * + * {
+    margin-top: 1em;
+  }
+  .doc .md :is(h1, h2, h3, h4) {
+    color: var(--ph-ink);
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  .doc .md h1 {
+    font-size: 2.25rem;
+    line-height: 1.15;
+    letter-spacing: -0.022em;
+    font-weight: 650;
+    margin-top: 2.5em;
+  }
+  .doc .md h2,
+  .doc-heading {
+    font-size: 1.5rem;
+    line-height: 1.25;
+    letter-spacing: -0.014em;
+    margin-top: 2.25em;
+    color: var(--ph-ink);
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  .doc .md h3 {
+    font-size: 1.1875rem;
+    line-height: 1.35;
+    letter-spacing: -0.006em;
+    margin-top: 1.9em;
+  }
+  .doc .md h4 {
+    font-size: 1.0625rem;
+    margin-top: 1.6em;
+  }
+  .doc .md > :is(h1, h2, h3, h4):first-child,
+  .doc-heading:first-child {
+    margin-top: 0;
+  }
+  .doc .md :is(h1, h2, h3, h4) + * {
+    margin-top: 0.55em;
+  }
+  .doc .md h1 + p {
+    font-size: 1.1875rem;
+    line-height: 1.6;
+    color: var(--ph-muted);
+  }
+  .doc .md :is(ul, ol) {
+    padding-left: 1.4em;
+  }
+  .doc .md li + li {
+    margin-top: 0.35em;
+  }
+  .doc .md li::marker {
+    color: var(--ph-muted);
+  }
+  .doc .md strong {
+    color: var(--ph-ink);
+    font-weight: 600;
+  }
+  .doc .md blockquote {
+    padding-left: 1.1em;
+    font-style: italic;
+  }
+  .doc .md hr {
+    margin-block: 2.5em;
+    border-color: var(--ph-line);
+  }
+  .doc .md table {
+    font-size: 0.9375rem;
+  }
+  .doc-aside .md {
+    font-size: 1rem !important;
+    line-height: 1.65 !important;
+  }
+  /* A block's own title, over a figure or table: a small heading, not a card's title bar. */
+  .doc-block-title {
+    margin-bottom: 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    font-weight: 600;
+    color: var(--ph-ink);
+  }
+  .doc-caption {
+    margin-top: 0.6rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--ph-muted);
+  }
+  @media (max-width: 640px) {
+    .doc {
+      --doc-gap: 2.25rem;
+      font-size: 1rem;
+    }
+    .doc .md {
+      font-size: 1rem !important;
+    }
+    .doc .md h1 {
+      font-size: 1.875rem;
+    }
+    .doc .md h2,
+    .doc-heading {
+      font-size: 1.3125rem;
+    }
+  }
+}

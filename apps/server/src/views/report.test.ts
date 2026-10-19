@@ -105,10 +105,10 @@ describe('report pages in the store and view service (R13)', () => {
     expect(getView(store, view.id).board.widgets).toEqual([]);
   });
 
-  it('needs widgets or page, one of the two, and checks the page', () => {
+  it('needs one of widgets, doc or page, and checks the page', () => {
     const { store, projectId } = setup();
     expect(() => createView(store, agent, { projectId, name: 'x', message: 'm' })).toThrow(
-      /one of the two/,
+      /Give one of widgets/,
     );
     expect(() =>
       createView(store, agent, {
@@ -118,7 +118,7 @@ describe('report pages in the store and view service (R13)', () => {
         widgets: [],
         page: { html: HTML },
       }),
-    ).toThrow(/one of the two/);
+    ).toThrow(/Give one of widgets/);
     expect(() =>
       createView(store, agent, { projectId, name: 'x', message: 'm', page: { html: '' } }),
     ).toThrow(/Invalid page/);

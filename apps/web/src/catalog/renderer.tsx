@@ -10,6 +10,7 @@ import clsx from 'clsx';
 import { Component, useState, type ReactNode } from 'react';
 import { COMPONENTS } from './components';
 import { Panel } from './ui';
+import { useInDocument } from './variant';
 
 const COLS: Record<number, string> = {
   1: 'md:grid-cols-1',
@@ -43,11 +44,14 @@ class NodeErrorBoundary extends Component<
 }
 
 function Heading({ title, description }: { title?: string; description?: string }) {
+  const inDocument = useInDocument();
   if (!title && !description) return null;
   return (
-    <header className="space-y-0.5">
-      {title && <h2 className="text-base font-semibold">{title}</h2>}
-      {description && <p className="text-sm text-muted">{description}</p>}
+    <header className={inDocument ? 'space-y-1' : 'space-y-0.5'}>
+      {title && <h2 className={inDocument ? 'doc-heading' : 'text-base font-semibold'}>{title}</h2>}
+      {description && (
+        <p className={inDocument ? 'text-base text-muted' : 'text-sm text-muted'}>{description}</p>
+      )}
     </header>
   );
 }
@@ -57,10 +61,17 @@ function Children({ nodes }: { nodes: ViewNode[] }) {
 }
 
 function Grid({ node }: { node: NodeOf<'Grid'> }) {
+  const inDocument = useInDocument();
   return (
     <div className="space-y-3">
       <Heading title={node.title} />
-      <div className={clsx('grid grid-cols-1 gap-4', COLS[node.columns ?? 2])}>
+      <div
+        className={clsx(
+          'grid grid-cols-1',
+          inDocument ? 'gap-8' : 'gap-4',
+          COLS[node.columns ?? 2],
+        )}
+      >
         {node.children.map((child, i) => (
           // Children stretch to the row's height so neighbouring panels line up.
           <div
@@ -123,6 +134,7 @@ function Tabs({ node }: { node: NodeOf<'Tabs'> }) {
 const LAYOUTS = { Grid, Section, Tabs } as const;
 
 export function Node({ node }: { node: ViewNode }) {
+  const inDocument = useInDocument();
   const name = node.component as ComponentName;
   let content: ReactNode;
   if (name in LAYOUTS) {
@@ -140,7 +152,9 @@ export function Node({ node }: { node: ViewNode }) {
     const Render = def.render as (p: { node: ViewNode }) => ReactNode;
     content = def.bare ? (
       <div className="flex flex-col gap-2">
-        {node.title && !def.ownTitle && <h3 className="text-sm font-semibold">{node.title}</h3>}
+        {node.title && !def.ownTitle && (
+          <h3 className={inDocument ? 'doc-block-title' : 'text-sm font-semibold'}>{node.title}</h3>
+        )}
         <div className="flex flex-1 flex-col *:flex-1">
           <Render node={node} />
         </div>

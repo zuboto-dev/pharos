@@ -281,7 +281,7 @@ export function agentVersion(agent) {
 }
 
 /** Runs one agent process in its own group and directory; kills the group on timeout. */
-function runProcess({ command, args }, dir, timeoutMs) {
+export function runProcess({ command, args }, dir, timeoutMs) {
   return new Promise((resolveRun) => {
     const started = Date.now();
     const child = spawn(command, args, {

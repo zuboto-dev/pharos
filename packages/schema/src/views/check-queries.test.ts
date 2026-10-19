@@ -209,4 +209,13 @@ describe('query checks', () => {
       expect.stringMatching(/^"stage.nam" isn't a field of stage \(did you mean "stage.name"\?\)/),
     ]);
   });
+
+  it('group by a name across a reference without calling it unique', () => {
+    expect(check({ component: 'CountChart', query: { type: 'task' }, by: 'stage.name' })).toEqual(
+      [],
+    );
+    expect(check({ component: 'CountChart', query: { type: 'task' }, by: 'title' })).toMatchObject([
+      { code: 'group-by-unique' },
+    ]);
+  });
 });

@@ -32,17 +32,153 @@ import { isExpired, requestContext } from './views/service.js';
 export const MCP_ASSET_NOTE =
   'Over MCP keep each file under 3 MB: a request carries at most 4 MB and base64 adds a third. Upload a larger file (up to 10 MB) over REST instead: PUT /api/views/<viewId>/page/<path> on this Pharos server (the host and port of /mcp), the raw file as the body, with the header X-Pharos-Author: agent:<your name>.';
 
-export const REPORT_GUIDE = `# Writing a Pharos report page
+/**
+ * The worked example in the report guide's "Report documents" section (R14). Kept as data so a
+ * test can check it is a valid document that previews without warnings.
+ */
+export const DOC_EXAMPLE = {
+  summary: 'Groceries rose every month from July to September while rent stayed the same.',
+  data: { spend: { type: 'record', filter: { where: { recordType: 'spending' } } } },
+  blocks: [
+    {
+      kind: 'block',
+      id: 'lead',
+      node: {
+        component: 'Text',
+        content:
+          '# Groceries climbed every month\n\nWe spent **${total}** across ${count} receipts; groceries were ${groceries} of it.',
+        values: {
+          total: {
+            sum: {
+              query: { type: 'record', where: { recordType: 'spending' } },
+              field: 'fields.amount',
+            },
+          },
+          count: { count: { type: 'record', where: { recordType: 'spending' } } },
+          groceries: {
+            sum: {
+              query: {
+                type: 'record',
+                where: { recordType: 'spending', 'fields.category': 'Groceries' },
+              },
+              field: 'fields.amount',
+            },
+          },
+        },
+      },
+    },
+    {
+      kind: 'columns',
+      id: 'numbers',
+      columns: [
+        [
+          {
+            kind: 'block',
+            id: 'spent',
+            node: {
+              component: 'Stat',
+              label: 'Spent',
+              query: { type: 'record', where: { recordType: 'spending' } },
+              sum: 'fields.amount',
+            },
+          },
+        ],
+        [
+          {
+            kind: 'block',
+            id: 'receipts',
+            node: {
+              component: 'Stat',
+              label: 'Receipts',
+              query: { type: 'record', where: { recordType: 'spending' } },
+            },
+          },
+        ],
+      ],
+    },
+    {
+      kind: 'block',
+      id: 'by-month',
+      node: {
+        component: 'CountChart',
+        title: 'Spending by month',
+        query: { type: 'record', where: { recordType: 'spending' } },
+        by: 'fields.date',
+        bucket: 'month',
+        sum: 'fields.amount',
+      },
+    },
+    {
+      kind: 'drawing',
+      id: 'dots',
+      reads: ['spend'],
+      height: 120,
+      caption: 'Each receipt as a dot, by day',
+      html: '<!doctype html><style>:root{--dot:#c2410c}[data-theme=dark]{--dot:#fb923c}body{margin:0}</style><svg id="s" width="100%" height="110"></svg><script>pharos.data("spend").then((rows) => { const s = document.getElementById("s"); s.innerHTML = rows.map((r, i) => `<circle cx="${8 + i * 14}" cy="55" r="5" fill="var(--dot)"/>`).join(""); });</script>',
+    },
+    {
+      kind: 'block',
+      id: 'honest',
+      node: {
+        component: 'Callout',
+        tone: 'info',
+        body: "**What this doesn't say:** cash isn't recorded, and three months is too short to call a trend.",
+      },
+    },
+  ],
+};
 
-A report page is a whole HTML document you write, with its own look, story and interactives.
-Pharos shows it in a locked frame beside the project, keeps every version, gives it live data
-through named reads, and marks it out of date when that data changes.
+export const REPORT_GUIDE = `# Writing a Pharos report
 
-## When to write one
+Two ways to write a report, both read live data and are marked out of date when it changes:
 
-- A report page is for reading: an explanation, research, a story with its evidence, "what we
-  found". Use a board (widgets) for a live working page the owner uses day to day (tasks, money
-  this month, files, quick answers).
+- **A report document** (\`doc\`): the default for a report. You write the structure (blocks in
+  reading order); Pharos draws it as a well-set document in its own style, light and dark, at any
+  width. Use it for an explanation, research, a summary of work, "what we found".
+- **A report page** (\`page\`): a whole HTML page you design yourself. Only when the whole page
+  needs a design no document can give (a bespoke interactive, its own visual world).
+- For one visual no component can draw (a map, a custom diagram), use a drawing block inside a
+  document, not a whole page.
+- Use a board (widgets) for a live working page the owner uses day to day (tasks, money this
+  month, files, quick answers).
+
+## Report documents
+
+- view_create {projectId, name, doc: {blocks, data?, summary}, message}. view_update {viewId,
+  expectedRevision, doc, message} replaces the whole document (send it whole); view_get shows it.
+- Blocks, in reading order, each with a stable \`id\`:
+  - \`{kind: "block", id, node}\`: any catalog component. Prose is a Text node: Markdown with
+    live values (\`\${total}\` from \`values\`: count, sum, percent, bar), so numbers stay right.
+    Headings are Markdown headings in Text. Callout for the honesty box or a key message; Stat
+    for one number; CountChart, DataTable, Timeline and the rest read data with queries.
+  - \`{kind: "columns", id, columns: [[blocks], [blocks]], widths?: [2, 1]}\`: 2–4 columns side by
+    side (one column on a phone), e.g. a row of Stats. No columns inside columns.
+  - \`{kind: "drawing", id, html, reads: ["spend"], height, caption?}\`: HTML for one section,
+    in the same locked frame as a report page; \`pharos.data(name)\` gives only the named reads
+    it lists (from doc.data). Use colour tokens with a [data-theme=dark] set.
+  - \`{kind: "embed", id, url: "https://…", caption?, height?}\`: another site shown in place,
+    with a link to open it (many sites refuse to be framed).
+- \`width\`: "text" (the reading column; default for Text, Markdown, Callout), "wide" (charts and
+  tables; default for the rest) or "full".
+- \`data\`: named reads for drawings only: {"spend": {"type": "record", "filter": {"where": {…}}}}.
+- No titles on every block, no cards, no grid: it reads top to bottom like an article. Open with
+  the claim in a Text heading and its key numbers; headings are claims; a source for every number
+  (say what each counts); an honesty Callout; a summary of one or two sentences.
+- view_preview {projectId, doc} checks a draft: what each block shows now (empty ones, unknown
+  fields, query problems), each drawing (files, blocked hosts, navigation, reads), embeds that
+  aren't https, and reads missing from data. Fix every warning before you say it is ready.
+- Example (made-up spending records):
+
+\`\`\`json
+${JSON.stringify(DOC_EXAMPLE)}
+\`\`\`
+
+## Report pages: when to write one
+
+- A report page is a whole HTML document you write, with its own look, story and
+  interactives, shown in a locked frame beside the project with live data through named reads.
+  Write one only when the whole page needs a design a document can't give; otherwise write a
+  document.
 
 ## How it fits
 
@@ -627,9 +763,11 @@ function text(uri: string, body: string, mimeType = 'text/markdown') {
   return { contents: [{ uri, mimeType, text: body }] };
 }
 
-const isReportPage = (store: Store, viewId: string | undefined) => {
+/** What kind of report a view is (R13 page, R14 document), or null for a board. */
+const reportKind = (store: Store, viewId: string | undefined) => {
   const view = viewId ? store.get(viewId) : null;
-  return view?.type === 'view' && !!(view as Entity<'view'>).data.page;
+  const data = view?.type === 'view' ? (view as Entity<'view'>).data : null;
+  return data?.page ? 'report page' : data?.doc ? 'report document' : null;
 };
 
 /** For a refresh request (R11): what changed in the data since the answer was written. */
@@ -683,8 +821,8 @@ export function answerBrief(
         r.data.about ? `  Asked from: ${r.data.about}` : '',
         r.data.mode === 'block' ? '  Change this block (mode "block")' : '',
         r.data.mode === 'refresh'
-          ? isReportPage(store, r.data.viewId)
-            ? '  Refresh this report page (mode "refresh")'
+          ? reportKind(store, r.data.viewId)
+            ? `  Refresh this ${reportKind(store, r.data.viewId)} (mode "refresh")`
             : '  Refresh this answer (mode "refresh")'
           : '',
         ...requestContext(store, r).map((line) => `  ${line}`),
@@ -736,6 +874,11 @@ export function answerBrief(
     'each named read selects now, and view_update with expectedRevision, the requestId and the',
     'whole page as page: new html and summary worked out from the data now, the same page.data.',
     'Its assets stay. Never send widgets for a report page.',
+    'When the view is a report document (the request says "Refresh this report document"), write',
+    'the document again the same way: report_guide ("Report documents"), view_get it (its doc),',
+    'view_preview it to see what every block shows now, and view_update with expectedRevision, the',
+    'requestId and the whole document as doc: the same blocks and ids, words and summary from the',
+    'data now, the same doc.data. Never send widgets or page for a report document.',
     '',
     'People use Ask for three things. Work out which one each request is:',
     '- A question about the project: answer it with view_answer (pass the requestId).',
@@ -806,9 +949,9 @@ export function registerGuidance(server: McpServer, store: Store): void {
     'report-guide',
     'pharos://guide/reports',
     {
-      title: 'Writing a report page',
+      title: 'Writing a report',
       description:
-        'Report pages (R13): a whole HTML page with its own look, live data through pharos.data, assets and the frame’s limits',
+        'Report documents (R14, the default for a report) and report pages (R13): blocks Pharos draws, or a whole HTML page with live data through pharos.data; assets and the frame’s limits',
       mimeType: 'text/markdown',
     },
     (uri) => text(uri.href, REPORT_GUIDE),

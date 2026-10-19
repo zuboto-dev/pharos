@@ -18,6 +18,7 @@ import { useOpenItem } from '../open-item';
 import { firstUses, TermText, useTermMatcher } from '../terms';
 import { Badge, isHttp, Uri, type Tone } from '../ui';
 import { CertaintyMark } from './knowledge';
+import { useInDocument } from '../variant';
 
 /**
  * The opening of a report page (docs/reframe/start-here.md): what the page is for, why the work
@@ -205,6 +206,7 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
   const data = useViewData();
   const done = useAnsweredPart(node.yourPartTarget);
   const matcher = useTermMatcher(node.terms);
+  const inDocument = useInDocument();
   const purpose = PURPOSE[node.purpose];
   const claim = node.claim ? runQuery(data, 'claim', { where: { id: node.claim } })[0] : undefined;
   const headline = claim?.data.statement ?? node.headline;
@@ -221,7 +223,9 @@ export function StartHere({ node }: { node: NodeOf<'StartHere'> }) {
     <section
       aria-label={`${purpose.label}: start here`}
       className={clsx(
-        '@container space-y-3 rounded-block border border-l-4 border-line bg-surface p-4',
+        inDocument
+          ? '@container space-y-3 border-l-4 pl-4'
+          : '@container space-y-3 rounded-block border border-l-4 border-line bg-surface p-4',
         purpose.bar,
       )}
     >

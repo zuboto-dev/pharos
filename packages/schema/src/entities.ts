@@ -5,6 +5,7 @@ import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from '.
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
 import { ViewSpec } from './views/board.js';
 import { GALLERY, ImageRef } from './views/pictures.js';
+import { ReportDoc } from './views/doc.js';
 import { ReportPage } from './views/report.js';
 
 export {
@@ -169,6 +170,9 @@ export const ViewData = z.strictObject({
   ),
   page: ReportPage.optional().describe(
     'A report page (R13): the whole page as HTML the agent wrote; spec and template are ignored when set',
+  ),
+  doc: ReportDoc.optional().describe(
+    'A report document (R14): blocks in reading order that Pharos draws in its own style; never with spec or page',
   ),
   pinned: z.boolean().describe('Pinned views are shown first'),
   archived: z.boolean().optional().describe('Archived views are hidden from the tabs'),

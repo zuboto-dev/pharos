@@ -32,9 +32,38 @@ const VIEW_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * origin, allowed). Null when the Host or the id isn't one Pharos would serve: then the page
  * loads no files of its own rather than trusting a host it was given.
  */
-export function pageSource(host: string | undefined, viewId: string | undefined): string | null {
+export function pageSource(
+  host: string | undefined,
+  viewId: string | undefined,
+  /** A drawing of a report document (R14): its own path, `…/doc/<blockId>/`, instead. */
+  blockId?: string,
+): string | null {
   if (!host || !viewId || !LOCAL_HOST.test(host) || !VIEW_ID.test(viewId)) return null;
-  return `http://${host.toLowerCase()}/api/views/${viewId}/page/`;
+  if (blockId === undefined) return `http://${host.toLowerCase()}/api/views/${viewId}/page/`;
+  if (!BLOCK_ID.test(blockId)) return null;
+  return `http://${host.toLowerCase()}/api/views/${viewId}/doc/${blockId}/`;
+}
+
+const BLOCK_ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/;
+
+/** The sandbox an embedded site runs in (R14): as itself, popups allowed, never top navigation. */
+export const EMBED_SANDBOX =
+  'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox';
+
+/**
+ * The Content-Security-Policy of an embed's wrapper page (R14): no script of its own, and one
+ * frame, of the embed's origin only. Without an origin (a 404) it frames nothing.
+ */
+export function embedCsp(origin: string | null): string {
+  return [
+    `sandbox ${EMBED_SANDBOX}`,
+    "default-src 'none'",
+    "style-src 'unsafe-inline'",
+    `frame-src ${origin ?? "'none'"}`,
+    "form-action 'none'",
+    "base-uri 'none'",
+    "frame-ancestors 'self'",
+  ].join('; ');
 }
 
 /**
@@ -230,10 +259,11 @@ export function reportView(store: Store, viewId: string, author?: Author): Entit
   const found = store.get(viewId);
   if (found?.type !== 'view') throw new PharosError('not_found', `view ${viewId} not found`);
   const view = found as Entity<'view'>;
-  if (!pageOf(view))
+  // Report documents (R14) have assets too: their drawings use them.
+  if (!pageOf(view) && !view.data.doc)
     throw new PharosError(
       'invalid',
-      `View "${view.data.name}" is a board, not a report page: assets belong to report pages (view_create or view_update with page)`,
+      `View "${view.data.name}" is a board, not a report page or document: assets belong to report pages and documents (view_create or view_update with page or doc)`,
     );
   store.getOfType('project', view.data.projectId);
   if (author?.kind === 'agent' && openBlockRequests(store, view).length)

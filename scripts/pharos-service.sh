@@ -199,9 +199,9 @@ loaded() { launchctl print "$DOMAIN/${1:-$LABEL}" >/dev/null 2>&1; }
 # bootout returns before launchd has finished removing the job; a bootstrap in that window fails
 # with "5: Input/output error". Wait for the job to go, and retry a few times.
 bootstrap() { # [label plist]
-  local label="${1:-$LABEL}" plist="${2:-$PLIST}" i
-  for i in $(seq 1 20); do loaded "$label" || break; sleep 0.25; done
-  for i in 1 2 3 4 5; do
+  local label="${1:-$LABEL}" plist="${2:-$PLIST}" _
+  for _ in $(seq 1 20); do loaded "$label" || break; sleep 0.25; done
+  for _ in 1 2 3 4 5; do
     if launchctl bootstrap "$DOMAIN" "$plist" 2>/dev/null; then return 0; fi
     sleep 1
   done
@@ -211,8 +211,8 @@ bootstrap() { # [label plist]
 healthy() { curl -sf -m 1 "$HEALTH" >/dev/null 2>&1; }
 
 wait_healthy() { # [seconds]
-  local i
-  for i in $(seq 1 $(( ${1:-10} * 4 ))); do
+  local _
+  for _ in $(seq 1 $(( ${1:-10} * 4 ))); do
     if healthy; then return 0; fi
     sleep 0.25
   done
@@ -288,7 +288,7 @@ backup_db() { # sha
   # Keep the last 5.
   local old
   # shellcheck disable=SC2012 # names are ours: no spaces or newlines
-  for old in $(ls -t "$BACKUPS"/pharos-*.db 2>/dev/null | tail -n +6); do rm -f "$old"; done
+  for old in $(ls -t "$BACKUPS"/pharos-*.db 2>/dev/null | tail -n +6); do rm -f "$old" "$old-wal" "$old-shm"; done
 }
 
 # One update or install at a time. A lock left by a process that is gone is taken over.
@@ -423,7 +423,7 @@ do_update() {
   if [ -n "$old_slot" ] && slot_built "$old_slot"; then
     use_slot "$old_slot"
   else
-    build_slot "$old_slot" "$old" && use_slot "$old_slot" || log "update: could not rebuild $(short "$old")"
+    if build_slot "$old_slot" "$old"; then use_slot "$old_slot"; else log "update: could not rebuild $(short "$old")"; fi
   fi
   launchctl kickstart -k "$DOMAIN/$LABEL"
   if wait_started 20; then
@@ -443,7 +443,7 @@ do_uninstall() {
   local slot
   for slot in a b; do
     if [ -e "$SLOTS/$slot" ]; then
-      git -C "$SOURCE" worktree remove --force "$SLOTS/$slot" 2>/dev/null || rm -rf "$SLOTS/$slot"
+      git -C "$SOURCE" worktree remove --force "$SLOTS/$slot" 2>/dev/null || rm -rf "${SLOTS:?}/$slot"
     fi
   done
   git -C "$SOURCE" worktree prune 2>/dev/null || true

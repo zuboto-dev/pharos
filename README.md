@@ -54,10 +54,17 @@ run the built app as a launchd service instead:
 pnpm service install
 ```
 
-That builds Pharos, then starts the server at <http://localhost:4300>, which also serves the web
+That builds your local `main` in a copy of its own (`~/.pharos/app`, so edits in your checkout
+never affect it), then starts the server at <http://localhost:4300>, which also serves the web
 app, at login and restarts it if it ever exits. Its log is `~/.pharos/server.log`. Use
-`pnpm service status`, `stop`, `start`, `restart`, `log`, and `uninstall` to manage it, and re-run
-`install` after pulling changes so it runs the latest build. `install` stores only `PORT`,
+`pnpm service status`, `stop`, `start`, `restart`, `log`, and `uninstall` to manage it.
+
+It also keeps itself up to date: whenever `main` moves (a commit, merge or pull), it builds the
+new `main` in a second copy, backs up the database to `~/.pharos/backups` (the last 5 are kept),
+switches to it and restarts, and goes back to the previous version if the new one doesn't start.
+A build that fails leaves the running version alone, and it waits while an agent is answering a
+question. `~/.pharos/update.log` says what it did; `pnpm service autoupdate off` stops it, and
+`pnpm service update` deploys `main` by hand. `install` stores only `PORT`,
 `PHAROS_DB`, `PHAROS_AGENT_COMMAND`, `PHAROS_AGENT_LOG`, and `PHAROS_WEB_URL` from its environment
 (any other variable your command needs must be set by the command itself), and links that agents
 share point at the service's own address unless `PHAROS_WEB_URL` says otherwise. Stop the service

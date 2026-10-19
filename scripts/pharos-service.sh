@@ -447,7 +447,8 @@ do_uninstall() {
     fi
   done
   git -C "$SOURCE" worktree prune 2>/dev/null || true
-  rm -f "$APP" "$DEPLOYED" "$FAILED"
+  rmdir "$SLOTS" 2>/dev/null || true
+  rm -f "$APP" "$DEPLOYED" "$FAILED" "$PHAROS_HOME/.pharos-update.sh"
   echo "Removed the $LABEL service, the $UPDATER_LABEL updater and the deploy copies."
   echo "Your data stays: $DB, backups in $BACKUPS."
 }

@@ -413,6 +413,8 @@ export function previewDoc(
   const widgetWarnings = board.widgets.reduce((n, w) => n + w.warnings.length, 0);
   const empty = board.widgets.filter((w) => w.empty).map((w) => w.id);
   const rejects = [...board.findings, ...readFindings].filter((f) => f.level === 'reject').length;
+  const sheetCount = docSheets(doc).length;
+  const figureCount = leaves.filter((b) => b.kind === 'figure').length;
   return {
     kind: 'report document' as const,
     widgets: board.widgets,
@@ -444,6 +446,8 @@ export function previewDoc(
     assets: { count: assets.length, bytes: assets.reduce((n, a) => n + a.size, 0) },
     summary:
       `report document, ${leaves.length} block${leaves.length === 1 ? '' : 's'} (${board.widgets.length} component${board.widgets.length === 1 ? '' : 's'}, ${drawings.length} drawing${drawings.length === 1 ? '' : 's'}, ${embeds.length} embed${embeds.length === 1 ? '' : 's'})` +
+      (sheetCount ? `, ${sheetCount} sheet${sheetCount === 1 ? '' : 's'}` : '') +
+      (figureCount ? `, ${figureCount} figure${figureCount === 1 ? '' : 's'}` : '') +
       (empty.length ? `; ${empty.length} show an empty state (${empty.join(', ')})` : '') +
       (rejects
         ? `; ${rejects} query problem${rejects === 1 ? '' : 's'} would refuse the save`

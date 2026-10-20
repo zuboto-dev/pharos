@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -750,5 +752,71 @@ describe('the review desk over MCP and in the guide (R15)', () => {
     expect(tool('report_guide')).toContain('review desk');
     expect(tool('report_asset_put')).toContain('mp3 m4a ogg wav');
     expect(client.getInstructions()).toMatch(/figures of screenshots.*sheets/);
+  });
+});
+
+describe('the "Review desk (sample)" install step (R15)', () => {
+  it('installs on made-up data with no preview warnings, uploads its files, and re-runs as a no-op', async () => {
+    const repo = fileURLToPath(new URL('../../../../', import.meta.url));
+    const step = (await import(
+      pathToFileURL(join(repo, 'samples/install/steps/r15-review-desk.mjs')).href
+    )) as {
+      run: (ctx: Record<string, unknown>) => Promise<{ viewId: string; made: boolean }[]>;
+    };
+    const store = new Store(openDatabase(':memory:'));
+    const { created } = store.apply(agent, {
+      message: 'samples',
+      operations: [{ op: 'create', type: 'project', ref: 'p', data: { name: 'Pharos samples' } }],
+    });
+    const client = new Client({ name: 'Opus 5.5', version: '1.0.0' });
+    const app = createApp(store);
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL('http://localhost:4300/mcp'), {
+        fetch: async (url, init) => app.fetch(new Request(url, init)),
+      }),
+    );
+    const call = Object.assign(
+      async (name: string, args: Record<string, unknown> = {}) => {
+        const result = (await client.callTool({ name, arguments: args })) as CallToolResult;
+        const text = result.content.map((c) => (c.type === 'text' ? c.text : '')).join('\n');
+        if (result.isError) throw new Error(`${name} failed: ${text}`);
+        try {
+          return JSON.parse(text) as unknown;
+        } catch {
+          return text;
+        }
+      },
+      { tools: async () => (await client.listTools()).tools },
+    );
+    const samples = { id: created.p!, name: 'Pharos samples' };
+    const lines: string[] = [];
+    const ctx = { call, samples, repo, log: (l: string) => lines.push(l) };
+    const [row] = await step.run(ctx);
+    expect(row!.made).toBe(true);
+    expect(lines.at(-1)).toMatch(/^Review desk made/);
+    const view = getView(store, row!.viewId);
+    expect(view.sheets!.map((s) => [s.id, s.state ?? null])).toEqual([
+      ['banner', 'open'],
+      ['import', null],
+      ['chime', null],
+    ]);
+    expect(view.sheets![2]!.tasks).toHaveLength(2);
+    expect(view.assets!.map((a) => a.path)).toEqual([
+      'audio/reminder-chime.wav',
+      'shots/banner-after.png',
+      'shots/banner-before.png',
+      'shots/import-after.png',
+    ]);
+    const preview = previewAny(store, { viewId: row!.viewId }) as unknown as ReturnType<
+      typeof previewDoc
+    >;
+    expect(allDocWarnings(preview)).toEqual([]);
+    const blocks = JSON.stringify(view.doc);
+    for (const kind of ['"details"', '"pair"', '"steps"', '"command"', 'TaskChecklist', '.wav'])
+      expect(blocks).toContain(kind);
+    const again: string[] = [];
+    const [second] = await step.run({ ...ctx, log: (l: string) => again.push(l) });
+    expect(second).toMatchObject({ viewId: row!.viewId, made: false });
+    expect(again).toEqual([]);
   });
 });

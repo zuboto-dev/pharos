@@ -14,6 +14,8 @@ export const DOC_LIMITS = {
   drawingChars: 300_000,
   drawings: 12,
   embeds: 6,
+  figureItems: 80,
+  sheets: 20,
 } as const;
 
 const BlockId = z
@@ -72,10 +74,93 @@ export const DocEmbedBlock = z.strictObject({
   caption: z.string().max(300).optional(),
 });
 
+/** Report asset paths a figure may show, by what they are (R15). */
+export const FIGURE_MEDIA = {
+  image: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg'],
+  video: ['mp4', 'webm'],
+  audio: ['mp3', 'm4a', 'ogg', 'wav'],
+} as const;
+
+/** What a figure item is, from its file extension. */
+export function figureMedia(src: string): keyof typeof FIGURE_MEDIA | undefined {
+  const ext = (src.split('.').pop() ?? '').toLowerCase();
+  for (const [kind, exts] of Object.entries(FIGURE_MEDIA))
+    if ((exts as readonly string[]).includes(ext)) return kind as keyof typeof FIGURE_MEDIA;
+  return undefined;
+}
+
+const AssetSrc = z
+  .string()
+  .max(200)
+  .regex(/^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[A-Za-z0-9._\-/]+$/)
+  .refine((p) => figureMedia(p) !== undefined, {
+    message: `A picture, video or sound: ${Object.values(FIGURE_MEDIA).flat().join(', ')}`,
+  })
+  .describe('Path of a file uploaded to this view with report_asset_put, e.g. "shots/offline.png"');
+
+/**
+ * Pictures, clips or sounds the agent uploaded (R15): screenshots before and after, a phone
+ * shot, a recording to listen to. Pictures open full size when clicked.
+ */
+export const DocFigureBlock = z.strictObject({
+  kind: z.literal('figure'),
+  id: BlockId,
+  width,
+  layout: z
+    .enum(['single', 'pair', 'grid', 'phone', 'compare'])
+    .optional()
+    .describe(
+      'single (default for one item); pair (two side by side, e.g. before and after); grid (three or more); phone (narrow phone-sized shots side by side); compare (two pictures of the same size with a slider between them)',
+    ),
+  items: z
+    .array(
+      z.strictObject({
+        src: AssetSrc,
+        alt: z.string().min(1).max(300).describe('What the picture shows, for screen readers'),
+        caption: z
+          .string()
+          .max(400)
+          .optional()
+          .describe('Markdown under the item, e.g. "**Before.** The list scrolled sideways."'),
+      }),
+    )
+    .min(1)
+    .max(12),
+  caption: z.string().max(600).optional().describe('Markdown under the whole figure'),
+});
+
+/** Numbered steps the reader follows; a step can carry a command with a copy button (R15). */
+export const DocStepsBlock = z.strictObject({
+  kind: z.literal('steps'),
+  id: BlockId,
+  width,
+  title: z.string().max(200).optional(),
+  items: z
+    .array(
+      z.strictObject({
+        text: z.string().min(1).max(2000).describe('Markdown: what to do'),
+        command: z
+          .string()
+          .max(2000)
+          .optional()
+          .describe('A command to paste in a terminal, shown with a copy button'),
+        expect: z
+          .string()
+          .max(600)
+          .optional()
+          .describe('Markdown: what the reader should see when it worked'),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+
 export const DocLeafBlock = z.discriminatedUnion('kind', [
   DocNodeBlock,
   DocDrawingBlock,
   DocEmbedBlock,
+  DocFigureBlock,
+  DocStepsBlock,
 ]);
 export type DocLeafBlock = z.infer<typeof DocLeafBlock>;
 
@@ -91,17 +176,72 @@ export const DocColumnsBlock = z.strictObject({
   columns: z.array(z.array(DocLeafBlock).max(20)).min(2).max(4),
 });
 
+/** Closed by default: the reasoning, the full list, the raw numbers (R15). */
+export const DocDetailsBlock = z.strictObject({
+  kind: z.literal('details'),
+  id: BlockId,
+  width,
+  summary: z.string().min(1).max(200).describe('The line the reader clicks to open it'),
+  open: z.boolean().optional().describe('Open at first (default closed)'),
+  blocks: z
+    .array(z.discriminatedUnion('kind', [...DocLeafBlock.options, DocColumnsBlock]))
+    .min(1)
+    .max(40),
+});
+
+/**
+ * One thing for the reader to review or act on (R15): a titled sheet with its time, its
+ * pictures, how to check it and the answer. When it names decisions, its state comes from them
+ * (answered once each has a choice or an answer), and the document shows a list of sheets with
+ * progress at the top.
+ */
+export const DocSheetBlock = z.strictObject({
+  kind: z.literal('sheet'),
+  id: BlockId,
+  width,
+  title: z.string().min(1).max(200),
+  time: z.string().max(40).optional().describe('How long it takes the reader, e.g. "10 min"'),
+  tags: z.array(z.string().min(1).max(40)).max(4).optional().describe('e.g. ["review"]'),
+  decisions: z
+    .array(z.string().min(1))
+    .max(5)
+    .optional()
+    .describe(
+      'Ids of decisions with options this sheet asks the reader to answer (show each with a DecisionBlock inside); the sheet counts as answered once all have an answer',
+    ),
+  blocks: z
+    .array(
+      z.discriminatedUnion('kind', [...DocLeafBlock.options, DocColumnsBlock, DocDetailsBlock]),
+    )
+    .min(1)
+    .max(60),
+});
+
 export const DocBlock = z.discriminatedUnion('kind', [
-  DocNodeBlock,
-  DocDrawingBlock,
-  DocEmbedBlock,
+  ...DocLeafBlock.options,
   DocColumnsBlock,
+  DocDetailsBlock,
+  DocSheetBlock,
 ]);
 export type DocBlock = z.infer<typeof DocBlock>;
 
-/** Every block in reading order, columns opened up. */
-export function docLeaves(blocks: DocBlock[]): DocLeafBlock[] {
-  return blocks.flatMap((b) => (b.kind === 'columns' ? b.columns.flat() : [b]));
+type AnyDocBlock = DocBlock;
+
+/** Every block at every depth, containers included, in reading order. */
+export function docBlocks(blocks: AnyDocBlock[]): AnyDocBlock[] {
+  return blocks.flatMap((b): AnyDocBlock[] => {
+    if (b.kind === 'columns') return [b, ...b.columns.flat()];
+    if (b.kind === 'details' || b.kind === 'sheet')
+      return [b, ...docBlocks(b.blocks as AnyDocBlock[])];
+    return [b];
+  });
+}
+
+/** Every leaf block in reading order, containers opened up. */
+export function docLeaves(blocks: AnyDocBlock[]): DocLeafBlock[] {
+  return docBlocks(blocks).filter(
+    (b): b is DocLeafBlock => b.kind !== 'columns' && b.kind !== 'details' && b.kind !== 'sheet',
+  );
 }
 
 export const ReportDoc = z
@@ -117,7 +257,7 @@ export const ReportDoc = z
     summary: z.string().max(400).optional().describe('One or two sentences: what the report says'),
   })
   .superRefine((doc, ctx) => {
-    const all = [...doc.blocks, ...docLeaves(doc.blocks).filter((b) => !doc.blocks.includes(b))];
+    const all = docBlocks(doc.blocks);
     if (all.length > DOC_LIMITS.blocks)
       ctx.addIssue({
         code: 'custom',
@@ -131,6 +271,19 @@ export const ReportDoc = z
       seen.add(b.id);
     }
     const leaves = docLeaves(doc.blocks);
+    const items = leaves.reduce((n, b) => n + (b.kind === 'figure' ? b.items.length : 0), 0);
+    if (items > DOC_LIMITS.figureItems)
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${DOC_LIMITS.figureItems} pictures, clips and sounds`,
+        path: ['blocks'],
+      });
+    if (doc.blocks.filter((b) => b.kind === 'sheet').length > DOC_LIMITS.sheets)
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${DOC_LIMITS.sheets} sheets`,
+        path: ['blocks'],
+      });
     const drawings = leaves.filter((b) => b.kind === 'drawing');
     if (drawings.length > DOC_LIMITS.drawings)
       ctx.addIssue({

@@ -33,6 +33,10 @@ export const REPORT_ASSET_TYPES: Record<string, string> = {
   otf: 'font/otf',
   mp4: 'video/mp4',
   webm: 'video/webm',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
 };
 
 /** A named read: rows the page gets through `pharos.data(name)`. */

@@ -519,7 +519,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
               id={task.id}
               className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken"
             >
-              <TaskCheck task={task} />
+              <TaskCheck task={task} answer />
               <span
                 className={clsx(
                   'min-w-0 flex-1 truncate text-sm',

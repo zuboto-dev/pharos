@@ -188,6 +188,17 @@ Settings page (`/settings`) can only pause or resume it, saved with `Store.setSe
   there (the save refuses them). `report_guide` leads with "Report documents" (`DOC_EXAMPLE` in
   `guidance.ts`, tested to preview clean). `node eval/report-doc/run.mjs --agent claude|codex`
   checks that a real agent writes one (own server on a temp database, port 4394 by default).
+- R15 (docs/reframe/r15-review-documents.md) adds `figure`, `steps`, `details` and `sheet`
+  blocks: leaves go anywhere, columns hold leaves, details hold leaves and columns, sheets (top
+  level only) hold all of those. Walk blocks with `docBlocks`/`docLeaves` (schema) or
+  `mapDocLeaves` (server `views/doc.ts`), never by hand. `docReads` adds sheet decisions to ids.
+  `view_get` on a document returns `sheets` (`sheetSummaries`: state, each decision's answer, the
+  ticks of TaskChecklists inside it). Freshness drops the reader's answers (`withoutAnswers` in
+  `freshness.ts`: owner-only decision fields plus status/decidedById/decisionDate, and status-only
+  changes of tasks a TaskChecklist in the document shows). A document's pictures, clips and sounds
+  are served at `/api/views/:id/assets/<path>` (`ASSET_CSP`, Range); `REVIEW_EXAMPLE` in
+  `guidance.ts` is the guide's review desk, tested to preview clean. Sample media:
+  `samples/make-review-desk-media.mjs` (headless Chrome screenshots of a made-up app, a WAV).
 
 ## Files
 

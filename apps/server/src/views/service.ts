@@ -3,6 +3,7 @@ import {
   ENTITIES,
   ReportPage,
   TEMPLATES,
+  type DocBlock,
   type DocLeafBlock,
   type ReportDoc,
   toBoard,
@@ -17,7 +18,15 @@ import type { ApplyResult, Store } from '../store/store.js';
 import { askedBlocks, blockChangeIssue } from './block-ask.js';
 import { WidgetOp, applyWidgetOps, summarizeBoard } from './board-ops.js';
 import { previewBoard } from './preview.js';
-import { allDocWarnings, docReadsNothing, lenientDoc, parseDoc, previewDoc } from './doc.js';
+import {
+  allDocWarnings,
+  docReadsNothing,
+  lenientDoc,
+  mapDocLeaves,
+  parseDoc,
+  previewDoc,
+  sheetSummaries,
+} from './doc.js';
 import { ReportAssets, previewPage } from './report.js';
 
 /**
@@ -89,30 +98,44 @@ export const PAGE_HTML_SHOWN = 50_000;
 
 /** A document's blocks in one line each: id, kind and what it is (for view lists). */
 function docOutline(doc: ReportDoc): string[] {
-  const line = (b: DocLeafBlock) =>
-    b.kind === 'block'
-      ? `${b.id}: ${b.node.component}${b.node.title ? ` "${b.node.title}"` : ''}`
-      : b.kind === 'drawing'
-        ? `${b.id}: drawing${b.caption ? ` "${b.caption}"` : ''}`
-        : `${b.id}: embed ${b.url}`;
-  return doc.blocks.map((b) =>
-    b.kind === 'columns'
-      ? `${b.id}: columns [${b.columns.map((c) => c.map(line).join('; ')).join(' | ')}]`
-      : line(b),
-  );
+  const line = (b: DocLeafBlock) => {
+    switch (b.kind) {
+      case 'block':
+        return `${b.id}: ${b.node.component}${b.node.title ? ` "${b.node.title}"` : ''}`;
+      case 'drawing':
+        return `${b.id}: drawing${b.caption ? ` "${b.caption}"` : ''}`;
+      case 'embed':
+        return `${b.id}: embed ${b.url}`;
+      case 'figure':
+        return `${b.id}: figure${b.layout ? ` ${b.layout}` : ''} (${b.items.map((i) => i.src).join(', ')})`;
+      case 'steps':
+        return `${b.id}: steps${b.title ? ` "${b.title}"` : ''} (${b.items.length})`;
+    }
+  };
+  const inner = (blocks: DocBlock[]): string => blocks.map(outer).join('; ');
+  const outer = (b: DocBlock): string => {
+    switch (b.kind) {
+      case 'columns':
+        return `${b.id}: columns [${b.columns.map((c) => c.map(line).join('; ')).join(' | ')}]`;
+      case 'details':
+        return `${b.id}: details "${b.summary}" [${inner(b.blocks as DocBlock[])}]`;
+      case 'sheet':
+        return `${b.id}: sheet "${b.title}"${b.time ? ` (${b.time})` : ''} [${inner(b.blocks as DocBlock[])}]`;
+      default:
+        return line(b);
+    }
+  };
+  return doc.blocks.map(outer);
 }
 
 /** A document with each drawing's HTML cut to PAGE_HTML_SHOWN characters, saying so. */
 function docShown(doc: ReportDoc): ReportDoc & { htmlTruncated?: string } {
   const cut: string[] = [];
-  const leaf = (b: DocLeafBlock): DocLeafBlock => {
-    if (b.kind !== 'drawing' || b.html.length <= PAGE_HTML_SHOWN) return b;
+  const blocks = mapDocLeaves(doc.blocks, (b) => {
+    if (b.kind !== 'drawing' || b.html.length <= PAGE_HTML_SHOWN) return [b];
     cut.push(b.id);
-    return { ...b, html: b.html.slice(0, PAGE_HTML_SHOWN) };
-  };
-  const blocks = doc.blocks.map((b) =>
-    b.kind === 'columns' ? { ...b, columns: b.columns.map((c) => c.map(leaf)) } : leaf(b),
-  );
+    return [{ ...b, html: b.html.slice(0, PAGE_HTML_SHOWN) }];
+  });
   return {
     ...doc,
     blocks,
@@ -154,9 +177,11 @@ export function getView(store: Store, viewId: string) {
           : {}),
       },
       doc: undefined,
+      sheets: undefined,
       assets: new ReportAssets(store).list(view.id),
     };
   }
+  const sheets = view.data.doc ? sheetSummaries(store, view.data.projectId, view.data.doc) : [];
   if (view.data.doc)
     return {
       ...summary(view),
@@ -166,6 +191,11 @@ export function getView(store: Store, viewId: string) {
       board: effectiveBoard(view),
       page: undefined,
       doc: docShown(view.data.doc),
+      /**
+       * Its sheets (R15): each with its state and the reader's answers (the option chosen, their
+       * own words, a later date; checklist ticks), so one call reads them all.
+       */
+      sheets: sheets.length ? sheets : undefined,
       assets: new ReportAssets(store).list(view.id),
     };
   return {
@@ -175,6 +205,7 @@ export function getView(store: Store, viewId: string) {
     board: effectiveBoard(view),
     page: undefined,
     doc: undefined,
+    sheets: undefined,
     assets: undefined,
   };
 }
@@ -204,7 +235,7 @@ const DocInput = z
   .unknown()
   .optional()
   .describe(
-    'A report document (R14), the way to write a report: {blocks: [{kind: "block", id, node: {component: "Text", content, values}} | {kind: "columns", id, columns: [[blocks], [blocks]]} | {kind: "drawing", id, html, reads?, height} | {kind: "embed", id, url}], data?: {name: {type, filter?}} for drawings, summary}. Pharos draws it in its own style; a drawing is for one visual no component can draw. Call report_guide first ("Report documents").',
+    'A report document (R14), the way to write a report: {blocks: [{kind: "block", id, node: {component: "Text", content, values}} | {kind: "columns", id, columns: [[blocks], [blocks]]} | {kind: "drawing", id, html, reads?, height} | {kind: "embed", id, url} | {kind: "figure", id, layout?, items: [{src, alt, caption?}]} | {kind: "steps", id, items: [{text, command?, expect?}]} | {kind: "details", id, summary, blocks} | {kind: "sheet", id, title, time?, decisions?, blocks}], data?: {name: {type, filter?}} for drawings, summary}. Pharos draws it in its own style; figures show screenshots you upload, sheets are items for the owner to review or answer; a drawing is for one visual no component can draw. Call report_guide first ("Report documents", "Rich documents and the review desk").',
   );
 
 function parseWidgets(widgets: unknown): Board {

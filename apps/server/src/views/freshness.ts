@@ -1,9 +1,11 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
   ENTITIES,
+  OWNER_DECISION_FIELDS,
   SEEN_SETTING,
   boardReads,
   changeTouches,
+  docLeaves,
   docReads,
   dueOf,
   filterMatcher,
@@ -25,6 +27,7 @@ import {
   type PageChanges,
   type ProjectDataset,
   type ProjectFreshness,
+  type ReportDoc,
   type SeenMarks,
   type ViewFreshness,
 } from '@pharos/schema';
@@ -341,6 +344,78 @@ export function projectFreshness(
   return { projectId, latest, views: out };
 }
 
+/** The data fields a change sets differently. */
+function changedFields(change: ChangeLike): string[] {
+  const before = change.before ?? {};
+  const after = change.after ?? {};
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+    (k) => !isDeepStrictEqual(before[k], after[k]),
+  );
+}
+
+const OWNER_FIELDS = new Set<string>(OWNER_DECISION_FIELDS);
+/** What answering a decision writes besides the owner's fields: accepted, by whom, on which day. */
+const ANSWER_FIELDS = new Set<string>([
+  ...OWNER_DECISION_FIELDS,
+  'status',
+  'decidedById',
+  'decisionDate',
+]);
+
+/**
+ * A decision answered, changed or reopened: a change that sets the owner-only fields (the choice,
+ * an answer of their own, a deferral) and nothing else but the status, who decided and when.
+ */
+function isAnswer(change: ChangeLike): boolean {
+  if (change.type !== 'decision' || !change.before || !change.after) return false;
+  const fields = changedFields(change);
+  return fields.some((f) => OWNER_FIELDS.has(f)) && fields.every((f) => ANSWER_FIELDS.has(f));
+}
+
+/** The tasks a document shows in its TaskChecklists, where the reader ticks them (R15). */
+function checklistReads(doc: ReportDoc): BoardReads {
+  const widgets = docLeaves(doc.blocks).flatMap((b) =>
+    b.kind === 'block' && b.node.component === 'TaskChecklist' ? [{ id: b.id, node: b.node }] : [],
+  );
+  return boardReads({ component: 'Board', widgets });
+}
+
+/**
+ * The revisions without the reader's own answers on a document (R15): a decision answered (and
+ * the person recorded as deciding it, made in the same revision) and a task's status ticked in one
+ * of its TaskChecklists. Answers are what the document asks for, not news that makes its words
+ * out of date; anything else in those revisions (an agent changing the decision's title) still
+ * counts.
+ */
+function withoutAnswers(
+  revisions: LoggedRevision[],
+  docs: ReportDoc[],
+  matcherOn: (day: string) => FilterMatcher,
+): LoggedRevision[] {
+  const ticks = docs.map(checklistReads).reduce(mergeReads);
+  const ticked = (change: ChangeLike, day: string) =>
+    change.type === 'task' &&
+    !!change.before &&
+    !!change.after &&
+    ticks.queries.length > 0 &&
+    isDeepStrictEqual(changedFields(change), ['status']) &&
+    changeTouches(ticks, change, matcherOn(day), { everything: false });
+  return revisions.map((revision) => {
+    const answers = revision.changes.filter(isAnswer);
+    const deciders = new Set(answers.map((c) => c.after?.decidedById).filter(Boolean));
+    const day = localToday(revision.at);
+    return {
+      ...revision,
+      changes: revision.changes.filter(
+        (c) =>
+          !isAnswer(c) &&
+          !(c.op === 'create' && c.type === 'assignee' && deciders.has(c.id)) &&
+          !ticked(c, day),
+      ),
+    };
+  });
+}
+
 /**
  * Whether what an agent wrote on a page still matches the data it was written from. The page's
  * dependencies are what it read when it was built together with what it reads now, so removing
@@ -363,7 +438,10 @@ function evidenceOf(
   const reads = built ? mergeReads(viewReads(built.view), current) : current;
   if (readsNothing(reads))
     return view.data.kind === 'answer' ? { unknown: true, reason: 'no_data' } : null;
-  let stale = pageChanges(revisions, view, reads, matcherOn, {
+  // A document asks the reader for answers (R15): giving them doesn't make it out of date.
+  const docs = [view.data.doc, built?.view.data.doc].filter((d): d is ReportDoc => !!d);
+  const counted = docs.length ? withoutAnswers(revisions, docs, matcherOn) : revisions;
+  let stale = pageChanges(counted, view, reads, matcherOn, {
     since: evidenceRevision,
     page: false,
     everything: false,

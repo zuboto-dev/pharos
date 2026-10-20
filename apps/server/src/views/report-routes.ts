@@ -1,4 +1,10 @@
-import { REPORT_LIMITS, type Author, type Entity } from '@pharos/schema';
+import {
+  REPORT_LIMITS,
+  ReportAssetPath,
+  figureMedia,
+  type Author,
+  type Entity,
+} from '@pharos/schema';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
@@ -7,6 +13,7 @@ import { docBlock } from './doc.js';
 import {
   EMBED_SANDBOX,
   ReportAssets,
+  assetMime,
   assetPath,
   embedCsp,
   pageOf,
@@ -207,6 +214,78 @@ export function embedWrapper(url: string, caption?: string): string {
   ].join('');
 }
 
+/** A document's uploaded file (R15): /api/views/:id/assets/<path>. */
+const ASSETS_PREFIX = /^\/api\/views\/([^/]+)\/assets\/(.+)$/;
+
+/**
+ * The CSP of a document's file (R15): nothing runs and nothing loads, whatever the file says. A
+ * picture or clip in the app's own <img>, <video> or <audio> isn't affected; an SVG opened on its
+ * own is a sandboxed document with no scripts.
+ */
+export const ASSET_CSP =
+  "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'self'";
+
+const ASSET_HEADERS = {
+  'Content-Security-Policy': ASSET_CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cache-Control': 'no-cache',
+};
+
+function assetNotFound(): Response {
+  return new Response('No such file in this document.', {
+    status: 404,
+    headers: { ...ASSET_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
+
+/**
+ * One byte range of a file from a Range header (`bytes=a-b`, `bytes=a-`, `bytes=-n`), null for
+ * none or one this server doesn't serve (several ranges: the whole file instead), or
+ * 'unsatisfiable'.
+ */
+export function byteRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | 'unsatisfiable' | null {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header?.trim() ?? '');
+  if (!m || (!m[1] && !m[2])) return null;
+  if (!m[1]) {
+    const n = Number(m[2]);
+    if (!n || !size) return 'unsatisfiable';
+    return { start: Math.max(0, size - n), end: size - 1 };
+  }
+  const start = Number(m[1]);
+  const end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  if (start >= size || end < start) return 'unsatisfiable';
+  return { start, end };
+}
+
+/** A file with its type, served whole or as the one range asked for (206). */
+export function mediaResponse(bytes: Uint8Array, mime: string, range?: string): Response {
+  const size = bytes.byteLength;
+  const headers = { ...ASSET_HEADERS, 'Content-Type': mime, 'Accept-Ranges': 'bytes' };
+  const part = byteRange(range, size);
+  if (part === 'unsatisfiable')
+    return new Response(null, {
+      status: 416,
+      headers: { ...headers, 'Content-Range': `bytes */${size}` },
+    });
+  if (!part)
+    return new Response(bytes as Uint8Array<ArrayBuffer>, {
+      headers: { ...headers, 'Content-Length': String(size) },
+    });
+  const slice = bytes.subarray(part.start, part.end + 1);
+  return new Response(slice as Uint8Array<ArrayBuffer>, {
+    status: 206,
+    headers: {
+      ...headers,
+      'Content-Length': String(slice.byteLength),
+      'Content-Range': `bytes ${part.start}-${part.end}/${size}`,
+    },
+  });
+}
+
 export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
   const routes = new Hono();
   const assets = new ReportAssets(store);
@@ -315,6 +394,20 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
     const view = viewWithPage(c.req.param('id'));
     if (!view) throw new PharosError('not_found', `view ${c.req.param('id')} not found`);
     return c.json(assets.list(view.id));
+  });
+
+  // A document's pictures, clips and sounds (R15), for the app's own <img>, <video> and <audio>
+  // (figure blocks). Only those types; each with a CSP that runs nothing (an SVG opened on its own
+  // stays inert), and Range requests so video and audio can seek. Only while the view exists.
+  routes.get('/views/:id/assets/*', (c) => {
+    const view = viewWithPage(c.req.param('id'));
+    const raw = ASSETS_PREFIX.exec(new URL(c.req.url).pathname)?.[2];
+    const path = raw === undefined ? null : decoded(raw);
+    if (!view?.data.doc || !path || !figureMedia(path) || !ReportAssetPath.safeParse(path).success)
+      return assetNotFound();
+    const asset = assets.get(view.id, path);
+    if (!asset) return assetNotFound();
+    return mediaResponse(asset.bytes, assetMime(path), c.req.header('range'));
   });
 
   return routes;

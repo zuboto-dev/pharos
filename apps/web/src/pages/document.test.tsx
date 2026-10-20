@@ -573,7 +573,7 @@ describe('project page with a report document (R14)', () => {
   });
 });
 
-describe('a document is read-only', () => {
+describe('a document is read-only but for answers (R14, R15)', () => {
   const readOnly = (variant: 'board' | 'document', node: ViewNode) => {
     const { container, unmount } = inVariant(node, variant);
     const found = {
@@ -612,10 +612,10 @@ describe('a document is read-only', () => {
     });
   });
 
-  it('TaskChecklist: no Start buttons or quick add', () => {
+  it('TaskChecklist: ticks are answers (R15); no Start buttons or quick add', () => {
     const node: ViewNode = { component: 'TaskChecklist', hideDone: false };
-    expect(readOnly('board', node)).toMatchObject({ add: true, start: true });
-    expect(readOnly('document', node)).toMatchObject({ add: false, start: false, check: false });
+    expect(readOnly('board', node)).toMatchObject({ add: true, start: true, check: true });
+    expect(readOnly('document', node)).toMatchObject({ add: false, start: false, check: true });
   });
 
   it('ScopeBoard, GoalTree, MilestoneList, DecisionLog: no quick add or group editing', () => {

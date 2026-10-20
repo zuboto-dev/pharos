@@ -6,7 +6,7 @@ import {
   type Widget,
 } from '@pharos/schema';
 import { ExternalLink } from 'lucide-react';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useId, useMemo, useState, type CSSProperties } from 'react';
 import { BoardActionsProvider } from '../catalog/action-board';
 import { BoardFilesProvider, WidgetIdProvider } from '../catalog/board-files';
 import { Node } from '../catalog/renderer';
@@ -22,6 +22,18 @@ import {
   useBridgeFrame,
   type FrameReads,
 } from './frame-bridge';
+import {
+  FigureView,
+  figureLayout,
+  ReviewDeskHeader,
+  SheetHead,
+  StepsView,
+  deskSheets,
+  sheetAnchor,
+  sheetState,
+  useDecisions,
+  type Sheet,
+} from './document-rich';
 
 // Report documents (R14, docs/reframe/r14-report-documents.md): blocks in reading order that
 // Pharos lays out as an article in its own style. Components come from the board renderer with
@@ -30,6 +42,8 @@ import {
 
 type Drawing = Extract<DocLeafBlock, { kind: 'drawing' }>;
 type Embed = Extract<DocLeafBlock, { kind: 'embed' }>;
+type Columns = Extract<DocBlock, { kind: 'columns' }>;
+type Details = Extract<DocBlock, { kind: 'details' }>;
 export type DocWidth = 'text' | 'wide' | 'full';
 
 /** Whether a view is a report document. */
@@ -92,6 +106,7 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
         : [],
     [doc],
   );
+  const sheets = useMemo(() => (doc ? deskSheets(doc.blocks) : []), [doc]);
   if (!doc) return null;
   return (
     <VariantProvider variant="document">
@@ -104,7 +119,13 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
               className="doc doc-flow pt-2 pb-16"
             >
               {doc.blocks.map((block) => (
-                <DocBlockView key={block.id} view={view} block={block} />
+                <DocTopBlock
+                  key={block.id}
+                  view={view}
+                  block={block}
+                  // The review desk (R15) sits above the first sheet.
+                  desk={sheets[0] === block ? sheets : undefined}
+                />
               ))}
             </article>
           </BoardActionsProvider>
@@ -114,31 +135,119 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
   );
 }
 
-function DocBlockView({ view, block }: { view: Entity<'view'>; block: DocBlock }) {
+/** A top-level block, with the review desk header before it when it is the first sheet. */
+function DocTopBlock({
+  view,
+  block,
+  desk,
+}: {
+  view: Entity<'view'>;
+  block: DocBlock;
+  desk?: Sheet[];
+}) {
+  if (block.kind !== 'sheet') return <DocBlockView view={view} block={block} />;
+  return (
+    <>
+      {desk && <ReviewDeskHeader sheets={desk} />}
+      <SheetView view={view} block={block} />
+    </>
+  );
+}
+
+/** Any block but a sheet, in the flow of the document, a sheet or a details block. */
+function DocBlockView({ view, block }: { view: Entity<'view'>; block: Exclude<DocBlock, Sheet> }) {
   const width = docWidth(block);
-  if (block.kind === 'columns')
-    return (
-      <div
-        data-doc-block={block.id}
-        data-doc-columns={block.columns.length}
-        data-width={width}
-        className="doc-block doc-columns"
-        style={
-          {
-            '--doc-cols': columnTemplate(block.columns.length, block.widths),
-          } as CSSProperties
-        }
-      >
-        {block.columns.map((column, i) => (
-          <div key={i} data-doc-column={i} className="doc-column">
-            {column.map((leaf) => (
-              <Leaf key={leaf.id} view={view} block={leaf} />
-            ))}
-          </div>
+  if (block.kind === 'columns') return <ColumnsView view={view} block={block} width={width} />;
+  if (block.kind === 'details') return <DetailsView view={view} block={block} width={width} />;
+  return <Leaf view={view} block={block} width={width} />;
+}
+
+function ColumnsView({
+  view,
+  block,
+  width,
+}: {
+  view: Entity<'view'>;
+  block: Columns;
+  width: DocWidth;
+}) {
+  return (
+    <div
+      data-doc-block={block.id}
+      data-doc-columns={block.columns.length}
+      data-width={width}
+      className="doc-block doc-columns"
+      style={
+        {
+          '--doc-cols': columnTemplate(block.columns.length, block.widths),
+        } as CSSProperties
+      }
+    >
+      {block.columns.map((column, i) => (
+        <div key={i} data-doc-column={i} className="doc-column">
+          {column.map((leaf) => (
+            <Leaf key={leaf.id} view={view} block={leaf} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Closed by default (R15): the reasoning, the full list, the raw numbers. */
+function DetailsView({
+  view,
+  block,
+  width,
+}: {
+  view: Entity<'view'>;
+  block: Details;
+  width: DocWidth;
+}) {
+  return (
+    <details
+      data-doc-block={block.id}
+      data-doc-details=""
+      data-width={width}
+      open={block.open || undefined}
+      className="doc-block doc-details"
+    >
+      <summary className="doc-details-summary">{block.summary}</summary>
+      <div className="doc-stack doc-details-body">
+        {block.blocks.map((inner) => (
+          <DocBlockView key={inner.id} view={view} block={inner} />
         ))}
       </div>
-    );
-  return <Leaf view={view} block={block} width={width} />;
+    </details>
+  );
+}
+
+/**
+ * One item to review or act on (R15): a quiet frame with its title and pills, its blocks, and a
+ * state from its decisions that changes as the reader answers them.
+ */
+function SheetView({ view, block }: { view: Entity<'view'>; block: Sheet }) {
+  const titleId = useId();
+  const state = sheetState(block, useDecisions());
+  return (
+    <section
+      id={sheetAnchor(block.id)}
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      data-doc-block={block.id}
+      data-doc-sheet=""
+      data-state={state}
+      data-width={docWidth(block)}
+      className="doc-block doc-sheet"
+    >
+      <SheetHead sheet={block} state={state} titleId={titleId} />
+      <div className="doc-stack">
+        {block.blocks.map((inner) => (
+          <DocBlockView key={inner.id} view={view} block={inner} />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /** One block in the flow (with its width) or in a column (filling it). */
@@ -169,6 +278,18 @@ function Leaf({
       <figure {...common} data-doc-embed="">
         <EmbedFrame view={view} block={block} />
       </figure>
+    );
+  if (block.kind === 'figure')
+    return (
+      <figure {...common} data-doc-figure={figureLayout(block)}>
+        <FigureView view={view} block={block} />
+      </figure>
+    );
+  if (block.kind === 'steps')
+    return (
+      <div {...common} data-doc-steps="">
+        <StepsView block={block} />
+      </div>
     );
   return (
     <div {...common}>

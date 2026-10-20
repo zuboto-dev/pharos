@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Agent compatibility runner (eval/compat): runs the five scenarios in scenarios.mjs with a real
+// Agent compatibility runner (eval/compat): runs the six scenarios in scenarios.mjs with a real
 // agent CLI connected only to one isolated Pharos server, and checks the end state over REST.
 //
 //   node eval/compat/run.mjs --agent claude|codex|opencode --url http://127.0.0.1:<port>

@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
+import { DOC_EXAMPLE } from './guidance.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 
@@ -74,6 +75,7 @@ type ChecksModule = {
   meaningOf: (project: unknown, key: string, value: string) => string;
   componentsOf: (view: unknown) => string[];
   previewProblems: (preview: unknown) => string[];
+  docLiveReads: (doc: unknown) => string[];
 };
 
 const compat = resolve(process.cwd(), '../../eval/compat');
@@ -299,6 +301,89 @@ describe('compat checks on hand-made states', () => {
     ).toEqual(['query: unknown field', 'no StartHere']);
   });
 
+  it('passes a report question only with a report document that reads live data (R4)', () => {
+    const reportAnswer = scenario('report-answer');
+    const ctx = { tag: 't', ids: { project: 'p', request: 'q' } };
+    const asked = { id: 'q', type: 'request', data: { projectId: 'p', status: 'open' } };
+    const answered = (viewId: string) => ({
+      ...asked,
+      data: { ...asked.data, status: 'answered', answerViewId: viewId },
+    });
+    const view = (id: string, layout: Record<string, unknown>): Entity => ({
+      id,
+      type: 'view',
+      data: { projectId: 'p', name: 'Why', kind: 'answer', ...layout },
+    });
+    const live = view('v1', {
+      doc: {
+        summary: 'Groceries rose.',
+        blocks: [
+          {
+            kind: 'block',
+            id: 'lead',
+            node: {
+              component: 'Text',
+              content: 'We spent ${total}.',
+              values: { total: { count: { type: 'record' } } },
+            },
+          },
+          {
+            kind: 'columns',
+            id: 'nums',
+            columns: [
+              [{ kind: 'block', id: 'n', node: { component: 'Stat', query: { type: 'record' } } }],
+            ],
+          },
+        ],
+      },
+    });
+    const ok = state({
+      before: [project('p'), asked],
+      after: [project('p'), answered('v1'), live],
+      revisions: [rev(3)],
+      previews: { v1: { warnings: [], findings: [] } },
+    });
+    expect(failed(reportAnswer.check(ok, ctx))).toEqual([]);
+    expect(checks.docLiveReads(live.data.doc)).toEqual(['lead: Text values', 'n: Stat query']);
+    expect(reportAnswer.previewIds!(ok, ctx)).toEqual(['v1']);
+
+    // Typed-in numbers: a document that reads nothing, with a preview warning.
+    const typed = view('v2', {
+      doc: {
+        blocks: [{ kind: 'block', id: 'lead', node: { component: 'Text', content: '€640.' } }],
+      },
+    });
+    const flat = state({
+      before: [project('p'), asked],
+      after: [project('p'), answered('v2'), typed],
+      revisions: [rev(3)],
+      previews: { v2: { warnings: ['No summary'], findings: [] } },
+    });
+    expect(failed(reportAnswer.check(flat, ctx))).toEqual([
+      'reads-live-data',
+      'passes-view-checks',
+    ]);
+
+    // A board answer to a "why … compare" question is the wrong kind.
+    const board = view('v3', {
+      spec: {
+        component: 'Board',
+        widgets: [{ id: 't', node: { component: 'TaskTable', filter: { where: {} } } }],
+      },
+    });
+    const wrongKind = state({
+      before: [project('p'), asked],
+      after: [project('p'), answered('v3'), board],
+      revisions: [rev(3)],
+      previews: { v3: { warnings: [], findings: [] } },
+    });
+    expect(failed(reportAnswer.check(wrongKind, ctx))).toEqual([
+      'is-report-document',
+      'reads-live-data',
+    ]);
+    expect(checks.docLiveReads(undefined)).toEqual([]);
+  });
+
   it('fails a folder scenario where the agent asked for nothing or did not stop', () => {
     const folder = scenario('folder-request');
     const ctx = { tag: 't', ids: { project: 'p' }, folderPath: '/made/up/papers' };
@@ -521,6 +606,30 @@ describe('compat scenarios against a real server', () => {
     );
     expect(results.filter((c) => !c.pass)).toEqual([]);
     expect(results.find((c) => c.id === 'requested-by-agent')?.note).toBe('scripted-agent');
+  });
+
+  it('f) report answer: passes with a report document, fails with a board (R4)', async () => {
+    const ctx = await begin('report-answer');
+    const question = 'Why did our spending go up from July to September? Compare the months.';
+    await call('view_answer', {
+      projectId: ctx.ids.project,
+      requestId: ctx.ids.request,
+      question,
+      doc: DOC_EXAMPLE,
+    });
+    expect(failed(await finish('report-answer', ctx))).toEqual([]);
+
+    const board = await begin('report-answer');
+    await call('view_answer', {
+      projectId: board.ids.project,
+      requestId: board.ids.request,
+      question,
+      widgets: [{ id: 'note', node: { component: 'Callout', body: 'Groceries went up.' } }],
+    });
+    expect(failed(await finish('report-answer', board))).toEqual([
+      'is-report-document',
+      'reads-live-data',
+    ]);
   });
 
   it('left the bystander project alone throughout', async () => {

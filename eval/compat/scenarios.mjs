@@ -1,4 +1,4 @@
-// The agent-compatibility scenarios (eval/compat): five small jobs any agent connected to Pharos
+// The agent-compatibility scenarios (eval/compat): six small jobs any agent connected to Pharos
 // over MCP should manage. Each one is data: an optional seed (applied through REST as a person
 // before the agent starts), a prompt for the agent, and a checker that asserts the end state (see
 // checks.mjs for the state's shape). All names and data are made up; `ctx.tag` keeps one run's
@@ -9,6 +9,7 @@ import {
   commonChecks,
   componentsOf,
   createdProject,
+  docLiveReads,
   inProject,
   meaningOf,
   previewProblems,
@@ -203,6 +204,112 @@ const answer = {
   },
 };
 
+/**
+ * f) Answer a question that asks to explain and compare with a report document (R14), read live
+ * from the data. The prompt doesn't say which kind of view: the agent picks it from what the
+ * Pharos tools and guides say about such questions.
+ */
+const reportAnswer = {
+  id: 'report-answer',
+  title: 'Answer an explain-and-compare question with a report document',
+  projectName: (ctx) => `Made-up household money ${ctx.tag}`,
+  seed: (ctx) => ({
+    message: 'Compatibility test setup: made-up household spending with an open question',
+    operations: [
+      {
+        op: 'create',
+        type: 'project',
+        ref: 'project',
+        data: {
+          name: reportAnswer.projectName(ctx),
+          status: 'active',
+          recordTypes: [
+            {
+              key: 'spending',
+              name: 'Spending',
+              plural: 'Spending',
+              fields: [
+                { key: 'date', label: 'Date', kind: 'date' },
+                { key: 'amount', label: 'Amount', kind: 'money', currency: 'EUR' },
+                { key: 'category', label: 'Category', kind: 'text' },
+              ],
+            },
+          ],
+        },
+      },
+      ...[
+        ['Corner Market', '2026-07-06', 18450, 'Groceries'],
+        ['Rent July', '2026-07-01', 95000, 'Rent'],
+        ['Corner Market', '2026-08-05', 21230, 'Groceries'],
+        ['Rent August', '2026-08-01', 95000, 'Rent'],
+        ['Corner Market', '2026-09-04', 24610, 'Groceries'],
+        ['Rent September', '2026-09-01', 95000, 'Rent'],
+      ].map(([title, date, cents, category]) => ({
+        op: 'create',
+        type: 'record',
+        data: {
+          projectId: '$project',
+          recordType: 'spending',
+          title,
+          fields: { date, amount: { amount: cents, currency: 'EUR' }, category },
+        },
+      })),
+      {
+        op: 'create',
+        type: 'request',
+        ref: 'request',
+        data: {
+          projectId: '$project',
+          question: 'Why did our spending go up from July to September? Compare the months.',
+          status: 'open',
+        },
+      },
+    ],
+  }),
+  prompt: (ctx) =>
+    [
+      `In the Pharos project "${reportAnswer.projectName(ctx)}" the owner asked a question (an open request).`,
+      'Answer it in Pharos, passing its requestId, with the kind of view the Pharos tools and guides say such a question gets.',
+      'Use live numbers from the data, not numbers typed in by hand. Check the saved view with its preview and fix any warnings before you finish.',
+      ONLY_PHAROS,
+    ].join('\n'),
+  /** The views the runner previews (view_preview) for this checker. */
+  previewIds(state, ctx) {
+    const request = state.after.find((e) => e.id === ctx.ids.request);
+    return request?.data.answerViewId ? [request.data.answerViewId] : [];
+  },
+  check(state, ctx) {
+    const request = state.after.find((e) => e.id === ctx.ids.request);
+    const view = state.after.find((e) => e.id === request?.data.answerViewId);
+    const created = view && !state.before.some((e) => e.id === view.id);
+    const doc = view?.data.doc;
+    const reads = docLiveReads(doc);
+    const problems = view ? previewProblems(state.previews?.[view.id]) : ['no view'];
+    return [
+      check('request-answered', request?.data.status === 'answered', request?.data.status),
+      check(
+        'answer-view',
+        view && created && view.data.kind === 'answer' && view.data.projectId === ctx.ids.project,
+        view ? `${view.id} (${view.data.kind})` : 'none',
+      ),
+      check(
+        'is-report-document',
+        doc && Array.isArray(doc.blocks),
+        !view
+          ? 'none'
+          : doc
+            ? `doc, ${doc.blocks?.length ?? 0} block(s)`
+            : view.data.page
+              ? 'a report page'
+              : 'a board',
+      ),
+      check('reads-live-data', reads.length > 0, reads.join(', ')),
+      check('passes-view-checks', problems.length === 0, problems.join(' | ')),
+      ...commonChecks(state, ctx.ids.project),
+    ];
+  },
+};
+
 /** d) Start a project from a pack and add one record. */
 const pack = {
   id: 'pack',
@@ -283,4 +390,4 @@ const folder = {
   },
 };
 
-export const SCENARIOS = [setup, markDone, answer, pack, folder];
+export const SCENARIOS = [setup, markDone, answer, pack, folder, reportAnswer];

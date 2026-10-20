@@ -834,6 +834,20 @@ function refreshContext(store: Store, request: Entity<'request'>): string[] {
   ].filter(Boolean);
 }
 
+/** Words that ask to explain, report on or compare something, rather than look a status up. */
+const REPORT_WORDS =
+  /\b(why|explain\w*|report\w*|compar\w*|comparison|versus|vs\.?|how (did|has|have|was|were)\b|went|summar\w*|walk me through|what happened|breakdown|analy[sz]\w*|retrospective)\b/i;
+
+/**
+ * The kind of answer a question gets (R4): a report document when it asks to explain, report on
+ * or compare something ("why …", "how did … go", "compare …"), a board for a quick status lookup
+ * ("what's blocked?", "what's due this week?"). A first guess written into the brief; the agent
+ * reads the question and may know better.
+ */
+export function answerKind(question: string): 'report' | 'board' {
+  return REPORT_WORDS.test(question) ? 'report' : 'board';
+}
+
 /**
  * Everything an agent needs to answer the open questions in some projects in one go: the
  * questions, the guidelines, the catalog, and worked examples. Given to the question-answering
@@ -858,6 +872,11 @@ export function answerBrief(
       [
         `- requestId ${r.id} in project "${project.data.name}" (${projectId}): ${r.data.question}`,
         r.data.about ? `  Asked from: ${r.data.about}` : '',
+        r.data.mode === 'block' || r.data.mode === 'refresh'
+          ? ''
+          : answerKind(r.data.question) === 'report'
+            ? '  Kind: a report document (it asks to explain, report on or compare)'
+            : '  Kind: a board (a quick lookup)',
         r.data.mode === 'block' ? '  Change this block (mode "block")' : '',
         r.data.mode === 'refresh'
           ? reportKind(store, r.data.viewId)
@@ -930,6 +949,13 @@ export function answerBrief(
     "  not this project's data, so don't rearrange their view to work around it. If a project",
     '  tracks Pharos itself, add a task there for it; then answer with view_answer in one or two',
     '  sentences: what you understood and what you recorded.',
+    '',
+    'Pick the kind of answer by the question ("Kind" above is a first guess; the question wins):',
+    '- Asked to explain, report on or compare something ("why …", "how did … go", "compare …"):',
+    '  a report document. Call report_guide first and follow it, then view_answer with doc, not',
+    '  widgets. A report page (page) only when the person asks for a whole bespoke design.',
+    '- A quick status lookup ("what\'s blocked?", "what\'s due this week?"): a board, view_answer',
+    '  with widgets, as below.',
     '',
     'For each request: call project_snapshot for its project (once per project), use get or list',
     'only for details the snapshot lacks, then do the above. view_answer returns a preview; fix',

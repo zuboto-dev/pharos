@@ -1,6 +1,6 @@
 import type { Entity, EntityType } from '../entities.js';
 import type { Board } from './board.js';
-import { docLeaves, type DocBlock } from './doc.js';
+import { docBlocks, docLeaves, type DocBlock } from './doc.js';
 import { QueryableType, type Filter } from './query.js';
 import type { FilterMatcher } from './run-query.js';
 
@@ -167,8 +167,9 @@ export function pageReads(page: { data?: Record<string, ReadQuery> }): BoardRead
 }
 
 /**
- * What a report document reads (R14): its components' queries (as a board of them would) plus
- * the named reads its drawings get.
+ * What a report document reads (R14): its components' queries (as a board of them would, inside
+ * columns, details and sheets too), the named reads its drawings get, and its sheets' decisions
+ * (R15).
  */
 export function docReads(doc: {
   blocks: DocBlock[];
@@ -177,7 +178,11 @@ export function docReads(doc: {
   const widgets = docLeaves(doc.blocks).flatMap((b, i) =>
     b.kind === 'block' ? [{ id: `d${i}`, node: b.node }] : [],
   );
-  return mergeReads(boardReads({ component: 'Board', widgets }), pageReads(doc));
+  const reads = mergeReads(boardReads({ component: 'Board', widgets }), pageReads(doc));
+  // A sheet (R15) asks the reader to answer its decisions: their answers are what it shows.
+  for (const b of docBlocks(doc.blocks))
+    if (b.kind === 'sheet') for (const id of b.decisions ?? []) reads.ids.add(id);
+  return reads;
 }
 
 /** Whether a page reads nothing from the project's data (only what its agent wrote). */

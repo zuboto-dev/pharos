@@ -243,14 +243,25 @@ export function useTaskActions() {
 }
 
 /** A round checkbox that marks a task done (or reopens it). */
-export function TaskCheck({ task, className }: { task: Entity<'task'>; className?: string }) {
+export function TaskCheck({
+  task,
+  className,
+  answer = false,
+}: {
+  task: Entity<'task'>;
+  className?: string;
+  /** A tick the reader may make in a report document too (TaskChecklist, R15). */
+  answer?: boolean;
+}) {
   const { setStatus } = useTaskActions();
   const { project } = useViewData();
   const meaning = meaningOf(project, 'task.status', task.data.status);
   const done = meaning === 'done';
   const Icon = done ? Check : meaning === 'in_progress' ? CircleDot : Circle;
-  // In a report document (R14), read-only: the same mark, not a button.
-  if (useInDocument())
+  // In a report document (R14), read-only: the same mark, not a button, except where ticking is
+  // the reader's answer (a TaskChecklist, R15).
+  const readOnly = useInDocument() && !answer;
+  if (readOnly)
     return (
       <span
         aria-hidden

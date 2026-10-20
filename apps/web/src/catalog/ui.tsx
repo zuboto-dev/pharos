@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { glanceName } from '../files/files';
 import { Bar } from './chart';
 import { humanize } from '../lib/format';
+import { CopyablePre, hastText } from './copy';
 import { useInDocument } from './variant';
 
 export type Tone = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'violet' | 'muted';
@@ -156,14 +157,24 @@ export function Markdown({
   remarkPlugins,
   components,
 }: { children: string; className?: string } & MarkdownExtras) {
+  // In a report document (R15) a code block has a copy button.
+  const inDocument = useInDocument();
+  const all = inDocument ? { pre: CodePre, ...components } : components;
   return (
     <div className={clsx('md', className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, ...(remarkPlugins ?? [])]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, ...(remarkPlugins ?? [])]} components={all}>
         {children}
       </ReactMarkdown>
     </div>
   );
 }
+
+/** A Markdown code block with its copy button (documents only). */
+const CodePre: NonNullable<Components['pre']> = ({ node, children, ...props }) => (
+  <CopyablePre text={hastText(node).replace(/\n$/, '')}>
+    <pre {...props}>{children}</pre>
+  </CopyablePre>
+);
 
 /** Only http(s) addresses open as links; anything else (a path, a file name) is shown as text. */
 export function isHttp(uri: string | undefined): uri is string {

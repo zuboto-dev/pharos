@@ -128,6 +128,117 @@ export const DOC_EXAMPLE = {
   ],
 };
 
+/** The made-up decision the review-desk example asks about (a test creates it). */
+export const REVIEW_EXAMPLE_DECISION = 'dec_5f2c9a01b7e4';
+
+/**
+ * The worked example in the report guide's "Rich documents and the review desk" section (R15):
+ * two sheets, a figure, steps, a decision and details. Kept as data so a test can check it is a
+ * valid document that previews without warnings once its decision and pictures exist.
+ */
+export const REVIEW_EXAMPLE = {
+  summary:
+    'Two things need you: approve the offline banner fix (before and after shots) and try the new import.',
+  blocks: [
+    {
+      kind: 'block',
+      id: 'lead',
+      node: {
+        component: 'Text',
+        content:
+          '# Two things need you today\n\nThe offline banner no longer covers the list, and import now skips rows it already has. Each sheet says what changed, why, the evidence, how to check it, and what I need from you.',
+      },
+    },
+    {
+      kind: 'sheet',
+      id: 'banner',
+      title: 'Approve the offline banner fix',
+      time: '5 min',
+      tags: ['review'],
+      decisions: [REVIEW_EXAMPLE_DECISION],
+      blocks: [
+        {
+          kind: 'block',
+          id: 'banner-what',
+          node: {
+            component: 'Text',
+            content:
+              '**What changed.** The offline banner sits above the list instead of over it.\n\n**Why.** On a phone it hid the first two rows, so new items went unnoticed.',
+          },
+        },
+        {
+          kind: 'figure',
+          id: 'banner-shots',
+          layout: 'pair',
+          items: [
+            {
+              src: 'shots/banner-before.png',
+              alt: 'The list on a phone with the offline banner covering its first two rows',
+              caption: '**Before.** The banner covers the first two rows.',
+            },
+            {
+              src: 'shots/banner-after.png',
+              alt: 'The same list with the banner above it and every row visible',
+              caption: '**After.** Every row shows; the banner pushes the list down.',
+            },
+          ],
+          caption: 'Taken at 390 px wide, offline.',
+        },
+        {
+          kind: 'block',
+          id: 'banner-ask',
+          node: { component: 'DecisionBlock', decision: REVIEW_EXAMPLE_DECISION },
+        },
+        {
+          kind: 'details',
+          id: 'banner-how',
+          summary: 'How it was done',
+          blocks: [
+            {
+              kind: 'block',
+              id: 'banner-how-text',
+              node: {
+                component: 'Markdown',
+                content:
+                  'The banner moved out of the overlay into the page flow. Tried a smaller banner first; it still covered a row at 320 px.',
+              },
+            },
+          ],
+        },
+      ],
+    },
+    {
+      kind: 'sheet',
+      id: 'import',
+      title: 'Try the new import',
+      time: '2 min',
+      blocks: [
+        {
+          kind: 'block',
+          id: 'import-what',
+          node: {
+            component: 'Text',
+            content:
+              '**What changed.** Importing the same file twice no longer doubles the list: rows already there are skipped.',
+          },
+        },
+        {
+          kind: 'steps',
+          id: 'import-check',
+          title: 'How to check',
+          items: [
+            { text: 'Start the app.', command: 'pnpm dev', expect: 'It opens on port 5173.' },
+            {
+              text: 'Import `samples/groceries.csv` twice from **Settings → Import**.',
+              expect: 'The list still has 12 items, not 24.',
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const REPORT_GUIDE = `# Writing a Pharos report
 
 Two ways to write a report, both read live data and are marked out of date when it changes:
@@ -173,6 +284,51 @@ Two ways to write a report, both read live data and are marked out of date when 
 ${JSON.stringify(DOC_EXAMPLE)}
 \`\`\`
 
+## Rich documents and the review desk
+
+A report explains; it doesn't only list data. Say what was done, why, the evidence as pictures,
+how the reader can check it, and what you need from them. Anything that needs the owner's review
+or feedback comes as a document like this: pictures and the steps to proceed, and the questions
+they answer in place.
+
+- \`{kind: "figure", id, layout?, items: [{src, alt, caption?}], caption?}\`: pictures, clips
+  (mp4, webm) or sounds (mp3, m4a, ogg, wav) you uploaded to the view. layout: single, pair
+  (before and after side by side), grid (three or more), phone (narrow phone shots side by side)
+  or compare (two pictures of the same size with a slider between them). Every item has alt
+  text; a caption in Markdown says what to look at ("**Before.** The banner covers two rows.").
+  Pictures open full size when clicked; clips and sounds never autoplay.
+- \`{kind: "steps", id, title?, items: [{text, command?, expect?}]}\`: numbered steps the reader
+  follows to check the work; a command gets a copy button; expect says what they should see.
+- \`{kind: "details", id, summary, open?, blocks}\`: closed by default. The reasoning, what you
+  tried first, the full list, the raw numbers: there for whoever wants them, out of the way.
+- \`{kind: "sheet", id, title, time?, tags?, decisions?, blocks}\`: one thing for the reader to
+  review or act on. time says how long it takes ("5 min"); decisions lists the ids of decisions
+  with options it asks them to answer, each shown by a DecisionBlock inside the sheet. A sheet is
+  open until each decision has a choice or an answer. With two or more sheets Pharos shows "Needs
+  you: N items, about M min", a progress bar and a list of the sheets at the top.
+- Nesting: figures, steps and component blocks go anywhere; columns hold those; details hold those
+  and columns; sheets hold all of them and details, and sit at the top level only.
+- Screenshots: take them with your own tools (a headless browser, the simulator, the screen),
+  save the view, upload each with report_asset_put {viewId, path: "shots/after.png", base64},
+  then refer to that path in a figure. Show a change as before and after: a pair, or compare when
+  both are the same size. Record a clip or a sound the same way.
+- Decisions: create each with apply first (title, 2–5 options, your recommendedOptionId and
+  recommendationReason, status proposed), then list it in the sheet and put a DecisionBlock for
+  it inside. The owner chooses, writes their own answer or defers in Pharos; you never set those.
+  A TaskChecklist inside a sheet lets them tick tasks off.
+- Reading the answers: view_get on the document lists each sheet with its state (open or
+  answered) and each decision's answer (the option chosen, their own words, or the date it was
+  put off), and the tasks its checklists show; one call. Their answers and ticks don't make the
+  document out of date.
+- view_preview warns about figure files not uploaded yet (upload them, then preview again), a
+  compare figure that isn't two pictures, sheet decisions that don't exist, have no options or no
+  DecisionBlock in their sheet, and sheets with no time.
+- Example (made-up; create the decision ${REVIEW_EXAMPLE_DECISION} and upload both shots first):
+
+\`\`\`json
+${JSON.stringify(REVIEW_EXAMPLE)}
+\`\`\`
+
 ## Report pages: when to write one
 
 - A report page is a whole HTML document you write, with its own look, story and
@@ -193,7 +349,7 @@ ${JSON.stringify(DOC_EXAMPLE)}
   also sets data-theme on <html>. \`pharos.openFile(fileId)\` opens a project file in the viewer.
 - Pictures, fonts and scripts you ship are assets: report_asset_put {viewId, path, base64} after
   the page is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif webp avif
-  svg css js json woff woff2 ttf otf mp4 webm; 10 MB each, 64 MB per page. ${MCP_ASSET_NOTE}
+  svg css js json woff woff2 ttf otf mp4 webm mp3 m4a ogg wav; 10 MB each, 64 MB per page. ${MCP_ASSET_NOTE}
 - The frame has no network: no fetch, no forms, no other sites. Allowed: scripts from
   cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts.
 - Sources are plain links, \`<a href="https://…">\`: they open through Pharos in a new tab (a link

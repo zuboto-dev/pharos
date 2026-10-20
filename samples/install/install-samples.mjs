@@ -5,9 +5,9 @@
 // Made-up data only (samples/files/ in the repo, the packs' own examples). It works as agent
 // "Opus 5.5" over MCP, never the owner's routes, and only on a Pharos on this computer. In order:
 //  0. finds (or creates) the project "Pharos samples" and makes ONE folder request: <repo>/samples/
-//     files, level Details (it holds business-registration/, ui-examples/, music/, car/ and money/). While the
-//     request waits, it prints what the owner clicks and exits 2 having changed nothing else; run it
-//     again after approving and it continues.
+//     files, level Details (it holds business-registration/, ui-examples/, music/, car/, money/
+//     and review-desk/). While the request waits, it prints what the owner clicks and exits 2
+//     having changed nothing else; run it again after approving and it continues.
 //  1. runs the samples in feature order (steps/): R7.12 business registration papers (supersedes
 //     R7.11), R7.13 UI examples gallery, B1 look and motion, A1 Car and Money packs, A2 decision
 //     block, B2 visual system, A3 Music/Study/Company packs, B3 empty and loading, A4 actions on the
@@ -15,7 +15,9 @@
 //     (a FileList that opens the file viewer), R13 a report page ("Spending story": HTML with live
 //     numbers from made-up spending records, a what-if slider, an SVG chart and one asset), R14 a
 //     report document ("Spending story (document)": the same story as blocks Pharos draws itself,
-//     with live numbers in prose, stats, charts, one drawing and an example.com embed).
+//     with live numbers in prose, stats, charts, one drawing and an example.com embed), R15 a
+//     review desk ("Review desk (sample)": three sheets of a made-up app's work to review, with
+//     before/after screenshots and a decision, steps with a command, a sound and a checklist).
 //  2. prints a table (sample → project → view → URL path) and writes samples.json beside this file.
 //
 // Idempotent: every step checks what's there by name and only makes what's missing, so a re-run
@@ -51,8 +53,9 @@ import * as a5 from './steps/a5-r11.mjs';
 import * as a6 from './steps/a6-file-viewer.mjs';
 import * as r13 from './steps/r13-report-page.mjs';
 import * as r14 from './steps/r14-report-document.mjs';
+import * as r15 from './steps/r15-review-desk.mjs';
 
-const STEPS = [r712, r713, b1, a1, a2, b2, a3, b3, a4, a5, a6, r13, r14];
+const STEPS = [r712, r713, b1, a1, a2, b2, a3, b3, a4, a5, a6, r13, r14, r15];
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Every project the installer may change: "Pharos samples" and the pack samples. */

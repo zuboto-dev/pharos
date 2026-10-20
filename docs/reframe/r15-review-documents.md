@@ -65,6 +65,38 @@ as an item but not in the progress.
   report_asset_put, show before/after as a pair or compare; a complete review-desk example (two
   sheets, one figure, one steps block, one decision). Tool descriptions mention figures and
   sheets.
+- As built (server):
+  - Assets route: serves only pictures, clips and sounds (`FIGURE_MEDIA`: what a figure can show),
+    with the type from `REPORT_ASSET_TYPES`; anything else (css, js, fonts, json) is a 404, since
+    the app never loads those from a document. Only for a view with `doc`. Every response, the
+    404s included, carries `ASSET_CSP` (`sandbox; default-src 'none'; img-src data:; style-src
+'unsafe-inline'; frame-ancestors 'self'`), `nosniff` and `no-referrer`; `Cache-Control:
+no-cache`. Range: one range (`bytes=a-b`, `a-`, `-n`) answers 206 with `Content-Range`; past
+    the end 416 (`bytes */size`); several ranges get the whole file. `Accept-Ranges: bytes` on
+    every file. `GET /api/views/:id/assets` (no path) still lists the files.
+  - Freshness: an answer is a decision change that sets an owner-only field and otherwise only
+    `status`, `decidedById` and `decisionDate` (what the DecisionBlock writes); the assignee the
+    same revision creates as `decidedById` is ignored too. A tick is a change of a task's `status`
+    alone, for a task a TaskChecklist in the document (as it is now or as it was built) selects,
+    whoever made it. Both are dropped only from the evidence check of documents; any other field
+    in the same change (an agent's new title, a new body) still makes the document out of date.
+  - `view_get` on a document adds `sheets`: `{id, title, time?, tags?, state?, decisions, tasks?}`.
+    `state` is `open` or `answered` and only set when the sheet has decisions (a deferral keeps it
+    open). Each decision: `{id, title, state: chosen | answered | deferred | open | missing,
+chosen?: {id, label}, answer?, deferredUntil?, decidedOn?}` (`missing`: not a decision of this
+    project). `tasks`: every task the sheet's TaskChecklists select (done ones too, at most 50),
+    `{id, title, status, done}`.
+  - `view_preview` also returns `figures` (each item's media kind and whether it is uploaded) and
+    `sheets`. A draft's figure warning says to upload "after saving". A decision of another
+    project counts as missing. The draft leniency of R14 (http embeds, missing drawing reads)
+    reaches inside details and sheets.
+  - The guide's example is `REVIEW_EXAMPLE` with the made-up decision id
+    `REVIEW_EXAMPLE_DECISION`; a test creates that decision, uploads both shots and checks it
+    previews with no warnings.
+  - Sample: `samples/install/steps/r15-review-desk.mjs`; its media are committed in
+    `samples/files/review-desk/` (about 280 KB) and made by `samples/make-review-desk-media.mjs`:
+    phone screens of an invented list app ("Pantry", marked SAMPLE) rendered from HTML in headless
+    Chrome, and a 1.6 s two-note chime synthesized as WAV.
 
 ## Web
 

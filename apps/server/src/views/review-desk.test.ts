@@ -379,7 +379,9 @@ describe('view_preview on rich documents (R15)', () => {
       'Figure "shots": "shots/before.png", "shots/after.png" aren\'t uploaded yet: upload them with report_asset_put, then preview again',
       'Figure "sound": "audio/alert.wav" isn\'t uploaded yet: upload it with report_asset_put, then preview again',
     ]);
-    const preview = previewAny(ctx.store, { viewId: ctx.viewId }) as unknown as ReturnType<typeof previewDoc>;
+    const preview = previewAny(ctx.store, { viewId: ctx.viewId }) as unknown as ReturnType<
+      typeof previewDoc
+    >;
     expect(preview.figures[0]).toMatchObject({
       id: 'shots',
       layout: 'pair',

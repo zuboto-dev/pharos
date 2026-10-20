@@ -46,7 +46,7 @@ export const DOC_EXAMPLE = {
       node: {
         component: 'Text',
         content:
-          '# Groceries climbed every month\n\nWe spent **${total}** across ${count} receipts; groceries were ${groceries} of it.',
+          '# Groceries climbed every month\n\nWe spent **${total}** across ${count} receipts; groceries were ${groceries} of it. (Source: the spending records in this project.)',
         values: {
           total: {
             sum: {
@@ -80,6 +80,23 @@ export const DOC_EXAMPLE = {
               label: 'Spent',
               query: { type: 'record', where: { recordType: 'spending' } },
               sum: 'fields.amount',
+              caption: 'All spending records',
+            },
+          },
+        ],
+        [
+          {
+            kind: 'block',
+            id: 'groceries',
+            node: {
+              component: 'Stat',
+              label: 'Groceries',
+              query: {
+                type: 'record',
+                where: { recordType: 'spending', 'fields.category': 'Groceries' },
+              },
+              sum: 'fields.amount',
+              caption: 'Records in Groceries',
             },
           },
         ],
@@ -91,6 +108,7 @@ export const DOC_EXAMPLE = {
               component: 'Stat',
               label: 'Receipts',
               query: { type: 'record', where: { recordType: 'spending' } },
+              caption: 'One record per receipt',
             },
           },
         ],
@@ -101,8 +119,11 @@ export const DOC_EXAMPLE = {
       id: 'by-month',
       node: {
         component: 'CountChart',
-        title: 'Spending by month',
-        query: { type: 'record', where: { recordType: 'spending' } },
+        title: 'Groceries cost more each month',
+        query: {
+          type: 'record',
+          where: { recordType: 'spending', 'fields.category': 'Groceries' },
+        },
         by: 'fields.date',
         bucket: 'month',
         sum: 'fields.amount',
@@ -122,7 +143,7 @@ export const DOC_EXAMPLE = {
       node: {
         component: 'Callout',
         tone: 'info',
-        body: "**What this doesn't say:** cash isn't recorded, and three months is too short to call a trend.",
+        body: "**What this doesn't say:** cash isn't recorded, and three months is too short to call a trend; an October below September would undo the claim.",
       },
     },
   ],
@@ -141,6 +162,27 @@ Two ways to write a report, both read live data and are marked out of date when 
   document, not a whole page.
 - Use a board (widgets) for a live working page the owner uses day to day (tasks, money this
   month, files, quick answers).
+
+## The glance test
+
+The reader should know where they stand in one glance. Check every report against these five:
+
+1. **Its own visual world**: a palette, a type pairing and one motif that fit the subject, not
+   the Pharos look. For a report page and a drawing; a document is drawn in Pharos's style, so
+   it gets its look from the other four.
+2. **The claim and 3–5 key numbers first**: a heading that states the claim, then the numbers.
+3. **Headings are claims, not topics**: "Groceries climbed every month", not "Spending".
+4. **Interactives only where they answer the reader's question**: a slider, a toggle, a filter,
+   a simulator (in a document, a drawing). Never one for show.
+5. **A source on every number, and an honesty box**: say what each number counts and where it
+   comes from; then what the evidence doesn't show, and what would change the conclusion.
+
+It fails if it is either of these:
+
+- **A results view that proves what the workers did**: logs, scoreboards, who did what. That is
+  a pile of words about the work; explain the subject to the reader instead.
+- **A three-column table of full sentences with no TLDR at the top**. Lead with the claim and
+  numbers; keep cells short.
 
 ## Report documents
 
@@ -161,9 +203,10 @@ Two ways to write a report, both read live data and are marked out of date when 
 - \`width\`: "text" (the reading column; default for Text, Markdown, Callout), "wide" (charts and
   tables; default for the rest) or "full".
 - \`data\`: named reads for drawings only: {"spend": {"type": "record", "filter": {"where": {…}}}}.
-- No titles on every block, no cards, no grid: it reads top to bottom like an article. Open with
-  the claim in a Text heading and its key numbers; headings are claims; a source for every number
-  (say what each counts); an honesty Callout; a summary of one or two sentences.
+- No titles on every block, no cards, no grid: it reads top to bottom like an article. For the
+  glance test: the claim in a Text heading, its key numbers as a row of Stats (a caption says
+  what each counts), claim headings and chart titles, an honesty Callout; and a summary of one
+  or two sentences.
 - view_preview {projectId, doc} checks a draft: what each block shows now (empty ones, unknown
   fields, query problems), each drawing (files, blocked hosts, navigation, reads), embeds that
   aren't https, and reads missing from data. Fix every warning before you say it is ready.
@@ -206,14 +249,10 @@ ${JSON.stringify(DOC_EXAMPLE)}
 
 ## Write it well
 
-- One subject, one visual world: pick a palette, a type pairing and one motif that fit the
-  subject, not the Pharos look.
-- Open with the claim, then 3–5 key numbers. Headings are claims, not topics.
-- A source on every number. Live numbers come from pharos.data, never typed into the HTML when
-  the project has them; say what each number counts.
-- An honesty box: what the evidence doesn't say, and what would change the conclusion.
-- Interactives only where they answer the reader's question: a slider, a toggle, a filter, a
-  simulator. Charts drawn in SVG or canvas from the rows.
+- Pass the glance test (above): its own visual world, the claim and 3–5 key numbers first,
+  claim headings, a source on every number, an honesty box, interactives only where they answer.
+- Live numbers come from pharos.data, never typed into the HTML when the project has them.
+  Charts drawn in SVG or canvas from the rows.
 - Real pictures with credits (as assets, or data: URLs).
 - Colour tokens on :root with a dark set under [data-theme=dark]; check both.
 - Works at 390 px wide: one column, no horizontal scroll, tap targets of 44 px.

@@ -4,6 +4,7 @@ import { Board, toBoard } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import {
+  DOC_EXAMPLE,
   EXAMPLES,
   EXPLAIN_EXAMPLE,
   REPORT_GUIDE,
@@ -33,6 +34,64 @@ describe('guidance', () => {
     ])
       expect(REPORT_GUIDE).toContain(part);
     expect(REPORT_GUIDE.split('\n').length).toBeLessThan(180);
+  });
+
+  it('puts the glance test in the report guide: five traits and two anti-examples (R3)', () => {
+    const start = REPORT_GUIDE.indexOf('## The glance test');
+    expect(start).toBeGreaterThan(-1);
+    // Before the how-to sections, so an agent reads the bar first.
+    expect(start).toBeLessThan(REPORT_GUIDE.indexOf('## Report documents'));
+    const glance = REPORT_GUIDE.slice(start, REPORT_GUIDE.indexOf('## Report documents'));
+    for (const part of [
+      // The five traits.
+      'Its own visual world',
+      'a palette, a type pairing and one motif',
+      'a document is drawn in Pharos',
+      'The claim and 3–5 key numbers first',
+      'Headings are claims, not topics',
+      'Interactives only where they answer the reader',
+      'a slider, a toggle, a filter',
+      'a simulator',
+      'A source on every number',
+      'an honesty box',
+      "what the evidence doesn't show",
+      // The two anti-examples.
+      'proves what the workers did',
+      'logs, scoreboards, who did what',
+      'pile of words',
+      'three-column table of full sentences with no TLDR',
+    ])
+      expect(glance, part).toContain(part);
+  });
+
+  it('keeps the report document example to its own glance test (R3)', () => {
+    type Block = {
+      id: string;
+      node?: {
+        component: string;
+        content?: string;
+        caption?: string;
+        title?: string;
+        body?: string;
+      };
+      columns?: Block[][];
+    };
+    const blocks = DOC_EXAMPLE.blocks as Block[];
+    const [lead, numbers, chart] = blocks;
+    // Opens with the claim as a heading, then a row of 3–5 key numbers that say what they count.
+    expect(lead?.node?.content).toMatch(/^# Groceries climbed/);
+    const stats = numbers?.columns?.flat() ?? [];
+    expect(stats.length).toBeGreaterThanOrEqual(3);
+    expect(stats.length).toBeLessThanOrEqual(5);
+    for (const s of stats) {
+      expect(s.node?.component, s.id).toBe('Stat');
+      expect(s.node?.caption, s.id).toBeTruthy();
+    }
+    // The chart title is a claim, not a topic.
+    expect(chart?.node?.title).toBe('Groceries cost more each month');
+    const honest = blocks.at(-1);
+    expect(honest?.node?.component).toBe('Callout');
+    expect(honest?.node?.body).toContain("What this doesn't say");
   });
 
   it('keeps cancelled tasks out of the blocked-or-overdue example', () => {

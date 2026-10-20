@@ -309,8 +309,8 @@ good view replaces a paragraph you would otherwise write.
 
 ## Shape
 1. **Lead with the answer.** The first widget says it in one or two sentences: a Text with live
-   numbers, or a Callout when it is a warning, blocker, or recommendation. (Explaining something?
-   See "Explanation views" below.)
+   numbers, or a Callout when it is a warning, blocker, or recommendation. (Asked to explain or
+   compare? Write a report document instead: report_guide, then view_answer with doc.)
 2. **Then the evidence**, most important first: the table, chart, or list that proves the answer.
 3. **One question per view, 3–8 widgets.** If you need more, it is two questions.
 4. **Widths in a row add up to 12.** Typical rows: 12 · 6+6 · 4+8 · 3+3+3+3 (stats).

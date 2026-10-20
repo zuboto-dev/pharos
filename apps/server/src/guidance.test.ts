@@ -162,6 +162,8 @@ describe('guidance', () => {
       'Compare July and September spending',
       'Explain what changed in the budget',
       'Write a report on the move',
+      'What changed since Monday?',
+      "What's changed in the budget since last week?",
     ])
       expect(answerKind(question), question).toBe('report');
     for (const question of [
@@ -170,6 +172,8 @@ describe('guidance', () => {
       'What is late?',
       'Who is on what?',
       'Which tasks are left in Build?',
+      'Which reports are due?',
+      'List the reports delivered this month',
     ])
       expect(answerKind(question), question).toBe('board');
   });

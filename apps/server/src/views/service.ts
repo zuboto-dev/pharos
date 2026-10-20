@@ -311,11 +311,19 @@ export function answerView(
 ) {
   const found = input.requestId ? store.get(input.requestId) : null;
   const request = found?.type === 'request' ? (found as Entity<'request'>) : null;
-  if (request?.data.mode === 'refresh')
+  if (request?.data.mode === 'refresh') {
+    const target = request.data.viewId ? store.get(request.data.viewId) : null;
+    const data = target?.type === 'view' ? (target as Entity<'view'>).data : null;
+    const again = data?.page
+      ? 'the whole page as page'
+      : data?.doc
+        ? 'the whole document as doc'
+        : 'the whole page as widgets';
     throw new PharosError(
       'invalid',
-      `Request ${request.id} asks to refresh view ${request.data.viewId}: answer again in that same view with view_update (its revision as expectedRevision, the requestId and the whole page as widgets), not in a new one`,
+      `Request ${request.id} asks to refresh ${data?.page ? 'report page' : data?.doc ? 'report document' : 'view'} ${request.data.viewId}: answer again in that same view with view_update (its revision as expectedRevision, the requestId and ${again}), not in a new one`,
     );
+  }
   const layout = layoutOf(input);
   const name =
     input.name ??

@@ -834,9 +834,13 @@ function refreshContext(store: Store, request: Entity<'request'>): string[] {
   ].filter(Boolean);
 }
 
-/** Words that ask to explain, report on or compare something, rather than look a status up. */
+/**
+ * Words that ask to explain, report on or compare something, rather than look a status up. A
+ * report is asked for by "report on" or "write a report": "which reports are due?" is a lookup
+ * of report records (R4 review).
+ */
 const REPORT_WORDS =
-  /\b(why|explain\w*|report\w*|compar\w*|comparison|versus|vs\.?|how (did|has|have|was|were)\b|went|summar\w*|walk me through|what happened|breakdown|analy[sz]\w*|retrospective)\b/i;
+  /\b(why|explain\w*|report (on|about)|(write|make|prepare|draft|give me) (me )?an? (short |quick |full )?report|compar\w*|comparison|versus|vs\.?|how (did|has|have|was|were)\b|went|summar\w*|walk me through|what happened|what('s| has| is)? changed|breakdown|analy[sz]\w*|retrospective)\b/i;
 
 /**
  * The kind of answer a question gets (R4): a report document when it asks to explain, report on

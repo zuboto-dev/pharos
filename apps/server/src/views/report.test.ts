@@ -15,6 +15,7 @@ import {
 } from './report.js';
 import {
   PAGE_HTML_SHOWN,
+  answerView,
   createView,
   getView,
   listViews,
@@ -289,6 +290,15 @@ describe('report pages in the store and view service (R13)', () => {
     expect(() =>
       updateView(store, agent, { viewId: id, message: 'r', name: 'n', requestId: created.q }),
     ).toThrow(/whole page as page/);
+    // A new answer view doesn't answer it either: the refusal names the page, not widgets (R4 review).
+    expect(() =>
+      answerView(store, agent, {
+        projectId,
+        question: 'Refresh',
+        requestId: created.q,
+        widgets: [{ id: 't', node: { component: 'Text', content: 'Hi' } }],
+      }),
+    ).toThrow(/refresh report page .*the whole page as page\), not in a new one/);
     updateView(store, agent, {
       viewId: id,
       message: 'refreshed',

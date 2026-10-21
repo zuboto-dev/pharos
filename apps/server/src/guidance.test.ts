@@ -64,7 +64,8 @@ describe('guidance', () => {
       'interactive drawing where the reader would',
       'a section of words only',
       'workers did',
-      'a table of full sentences with no TLDR',
+      'a table of full sentences',
+      'a still is no evidence',
     ])
       expect(glance, part).toContain(part);
   });

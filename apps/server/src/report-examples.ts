@@ -188,7 +188,24 @@ not their words. Every report is checked by view_preview ("Reader check: …" wa
 | A diagram whose connector lines run through its labels | Lines between boxes, or around them; check the drawing at 390 px |
 | Links to \`http://localhost:4300/projects/…\` | Links to \`/projects/…\` (they work wherever Pharos is hosted) |
 | A sheet asking "Mark this done" with no other way to answer | A decision with options (one tap), or a task (the reader can also say won't do, later, or reply) |
+| A still of something that moves (a shader, an animation, a sound) | It running in a drawing, or before and after clips |
 | No word on what is unknown | An honesty box: what this doesn't show, and what would change the conclusion |
+
+## Results that move: show them running
+
+A still of an animation, a shader, a transition or a sound proves nothing; the reader can't
+review motion from it. Pick one, best first:
+
+- **Run the real thing in a drawing.** Upload the built piece as one script asset (report_asset_put,
+  e.g. \`live/scene.js\`) and load it at the end of the drawing's body (\`<body></body><script src="live/scene.js">\`).
+  The frame can't \`fetch\` and WebGL refuses images from another origin, so put textures, depth
+  maps and data inside that script as \`data:\` URLs (or build them with code). For a change,
+  one canvas with an A/B switch (same camera, same seed) beats two canvases: the reader flips and
+  sees the difference. Add pause and a reset; keep it light (a few MB) and test it at 390 px.
+- **Clips.** 5–10 seconds of each, before and after, same camera and timing, as mp4 or webm
+  (≤ 10 MB each) in a figure \`layout: "pair"\`; captions say what to watch for.
+- **Plus the live preview link** when one exists (a pull request's preview site), for the full
+  piece in its own tab.
 
 ## 1 · A status report with asks
 

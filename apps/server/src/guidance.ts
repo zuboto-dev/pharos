@@ -291,11 +291,11 @@ by side: pharos://examples/reports). Check every report against these five:
    comes from; then what the evidence doesn't show, and what would change the conclusion.
 
 **Show, don't tell.** Every section leads with something to see: Stats or a chart for numbers, a
-table for a comparison, a figure for anything visual (screenshots, photos, before and after), a
-drawing for a diagram, a flow or an infographic, an interactive drawing where the reader would
-explore (a slider, a filter, a what-if). Words carry the claim and the "so what" in a sentence
-or two; detail goes in details blocks. It fails as a section of words only, a log of what the
-workers did, or a table of full sentences with no TLDR at the top.
+table to compare, a figure for anything visual, a drawing for a diagram or an infographic, an
+interactive drawing where the reader would explore. Anything that moves (animation, a shader,
+sound) is shown running or as a clip; a still is no evidence (how: pharos://examples/reports).
+Words carry the claim and the so-what in a sentence or two; details go in details blocks. It
+fails as a section of words only, a log of what the workers did, or a table of full sentences.
 
 ## Report documents
 

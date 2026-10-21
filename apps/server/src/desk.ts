@@ -20,6 +20,7 @@ import {
   type RunReport,
 } from '@pharos/schema';
 import { PharosError } from './store/errors.js';
+import { perProject } from './store/project-cache.js';
 import type { Store } from './store/store.js';
 import { sheetSummaries } from './views/doc.js';
 
@@ -229,96 +230,108 @@ export function deskOf(
     });
 
   for (const project of projects) {
-    const data = store.dataset(project.id);
-    const covered = new Set<string>();
-    for (const view of data.views) {
-      // An archived report was handed back: its sheets no longer wait on the owner.
-      if (!view.data.doc || view.data.archived) continue;
-      for (const sheet of sheetSummaries(store, project.id, view.data.doc, today)) {
-        for (const d of sheet.decisions) covered.add(d.id);
-        for (const t of sheet.tasks ?? []) covered.add(t.id);
-        if (sheet.state !== 'open') continue;
-        const openDecisions = sheet.decisions.filter(
-          (d) => d.state === 'open' || d.state === 'deferred',
-        );
-        const left = (sheet.tasks ?? []).filter((t) => t.state === 'open');
-        const started = [
-          ...openDecisions.map((d) => store.get(d.id)?.createdAt),
-          ...left.map((t) => store.get(t.id)?.createdAt),
-        ].filter((at): at is string => !!at);
-        const parts = [
-          openDecisions.length &&
-            `${openDecisions.length} ${openDecisions.length === 1 ? 'choice' : 'choices'}`,
-          left.length && `${left.length} ${left.length === 1 ? 'task' : 'tasks'} to tick`,
-        ].filter(Boolean);
+    // A project's items are reused until it changes (or the day turns: deferrals come back, due
+    // dates arrive); overdue and old are worked out fresh below.
+    const projectItems = perProject(store, 'desk', project.id, `${today}|${tomorrow}`, () => {
+      const local: Omit<DeskItem, 'overdue' | 'old'>[] = [];
+      const add = (item: Omit<DeskItem, 'overdue' | 'old'>) => local.push(item);
+      const data = store.dataset(project.id);
+      const covered = new Set<string>();
+      for (const view of data.views) {
+        // An archived report was handed back: its sheets no longer wait on the owner.
+        if (!view.data.doc || view.data.archived) continue;
+        for (const sheet of sheetSummaries(store, project.id, view.data.doc, today)) {
+          for (const d of sheet.decisions) covered.add(d.id);
+          for (const t of sheet.tasks ?? []) covered.add(t.id);
+          if (sheet.state !== 'open') continue;
+          const openDecisions = sheet.decisions.filter(
+            (d) => d.state === 'open' || d.state === 'deferred',
+          );
+          const left = (sheet.tasks ?? []).filter((t) => t.state === 'open');
+          const started = [
+            ...openDecisions.map((d) => store.get(d.id)?.createdAt),
+            ...left.map((t) => store.get(t.id)?.createdAt),
+          ].filter((at): at is string => !!at);
+          const parts = [
+            openDecisions.length &&
+              `${openDecisions.length} ${openDecisions.length === 1 ? 'choice' : 'choices'}`,
+            left.length && `${left.length} ${left.length === 1 ? 'task' : 'tasks'} to tick`,
+          ].filter(Boolean);
+          add({
+            id: `${view.id}#${sheet.id}`,
+            kind: 'sheet',
+            projectId: project.id,
+            project: project.data.name,
+            title: sheet.title,
+            ...(parts.length ? { ask: `${parts.join(', ')} · in “${view.data.name}”` } : {}),
+            ...(minutesIn(sheet.time) ? { minutes: minutesIn(sheet.time) } : {}),
+            since: started.sort()[0] ?? view.createdAt,
+            gate: !!sheet.tags?.includes('gate'),
+            href: `/projects/${project.id}/views/${view.id}#sheet-${sheet.id}`,
+          });
+        }
+      }
+      for (const d of data.decisions) {
+        if (covered.has(d.id) || !d.data.options?.length) continue;
+        const meaning = meaningOf(project, 'decision.status', d.data.status);
+        if (meaning === 'superseded' || meaning === 'rejected') continue;
+        const state = decisionState(d.data);
+        const back = state.kind === 'deferred' && state.until <= today;
+        if (state.kind !== 'open' && !back) continue;
         add({
-          id: `${view.id}#${sheet.id}`,
-          kind: 'sheet',
+          id: d.id,
+          kind: 'decision',
           projectId: project.id,
           project: project.data.name,
-          title: sheet.title,
-          ...(parts.length ? { ask: `${parts.join(', ')} · in “${view.data.name}”` } : {}),
-          ...(minutesIn(sheet.time) ? { minutes: minutesIn(sheet.time) } : {}),
-          since: started.sort()[0] ?? view.createdAt,
-          gate: !!sheet.tags?.includes('gate'),
-          href: `/projects/${project.id}/views/${view.id}#sheet-${sheet.id}`,
+          title: d.data.title,
+          ...(firstLine(d.data.body) ? { ask: firstLine(d.data.body) } : {}),
+          ...(d.data.minutes ? { minutes: d.data.minutes } : {}),
+          since: back ? `${state.until}T00:00:00.000Z` : d.createdAt,
+          gate: !!d.data.gate,
+          href: decisionHref(data.views, project.id, d.id),
+          options: d.data.options.map((o) => ({
+            id: o.id,
+            label: o.label,
+            ...(o.asks ? { asks: o.asks } : {}),
+          })),
+          ...(d.data.recommendedOptionId
+            ? { recommendedOptionId: d.data.recommendedOptionId }
+            : {}),
         });
       }
-    }
-    for (const d of data.decisions) {
-      if (covered.has(d.id) || !d.data.options?.length) continue;
-      const meaning = meaningOf(project, 'decision.status', d.data.status);
-      if (meaning === 'superseded' || meaning === 'rejected') continue;
-      const state = decisionState(d.data);
-      const back = state.kind === 'deferred' && state.until <= today;
-      if (state.kind !== 'open' && !back) continue;
-      add({
-        id: d.id,
-        kind: 'decision',
-        projectId: project.id,
-        project: project.data.name,
-        title: d.data.title,
-        ...(firstLine(d.data.body) ? { ask: firstLine(d.data.body) } : {}),
-        ...(d.data.minutes ? { minutes: d.data.minutes } : {}),
-        since: back ? `${state.until}T00:00:00.000Z` : d.createdAt,
-        gate: !!d.data.gate,
-        href: decisionHref(data.views, project.id, d.id),
-        options: d.data.options.map((o) => ({
-          id: o.id,
-          label: o.label,
-          ...(o.asks ? { asks: o.asks } : {}),
-        })),
-        ...(d.data.recommendedOptionId ? { recommendedOptionId: d.data.recommendedOptionId } : {}),
-      });
-    }
-    const people = new Set(data.assignees.filter((a) => a.data.kind === 'human').map((a) => a.id));
-    for (const t of data.tasks) {
-      if (covered.has(t.id) || !people.has(t.data.assigneeId ?? '')) continue;
-      // Done, won't do and replied are answered; a later one waits until its day.
-      const meaning = meaningOf(project, 'task.status', t.data.status);
-      const state = taskAnswerState(t.data, meaning, today);
-      if (state !== 'open') continue;
-      // A person's plan tasks stay in their projects: only what an agent asked of them, or what
-      // is due by tomorrow, waits on the desk.
-      const due = t.data.dueDate && t.data.dueDate <= tomorrow;
-      if (!t.data.desk && !due) continue;
-      add({
-        id: t.id,
-        kind: 'task',
-        projectId: project.id,
-        project: project.data.name,
-        title: t.data.title,
-        ...(firstLine(t.data.description) ? { ask: firstLine(t.data.description) } : {}),
-        ...(minutesIn(t.data.estimate) ? { minutes: minutesIn(t.data.estimate) } : {}),
-        // Back from "later": it has waited since its day, like a decision's deferral.
-        since: t.data.deferredUntil ? `${t.data.deferredUntil}T00:00:00.000Z` : t.createdAt,
-        // ask_owner makes a gate a high-priority desk task.
-        gate:
-          !!t.data.desk &&
-          ['high', 'urgent'].includes(meaningOf(project, 'task.priority', t.data.priority) ?? ''),
-        href: projectHref(project.id, t.id),
-      });
-    }
+      const people = new Set(
+        data.assignees.filter((a) => a.data.kind === 'human').map((a) => a.id),
+      );
+      for (const t of data.tasks) {
+        if (covered.has(t.id) || !people.has(t.data.assigneeId ?? '')) continue;
+        // Done, won't do and replied are answered; a later one waits until its day.
+        const meaning = meaningOf(project, 'task.status', t.data.status);
+        const state = taskAnswerState(t.data, meaning, today);
+        if (state !== 'open') continue;
+        // A person's plan tasks stay in their projects: only what an agent asked of them, or what
+        // is due by tomorrow, waits on the desk.
+        const due = t.data.dueDate && t.data.dueDate <= tomorrow;
+        if (!t.data.desk && !due) continue;
+        add({
+          id: t.id,
+          kind: 'task',
+          projectId: project.id,
+          project: project.data.name,
+          title: t.data.title,
+          ...(firstLine(t.data.description) ? { ask: firstLine(t.data.description) } : {}),
+          ...(minutesIn(t.data.estimate) ? { minutes: minutesIn(t.data.estimate) } : {}),
+          // Back from "later": it has waited since its day, like a decision's deferral.
+          since: t.data.deferredUntil ? `${t.data.deferredUntil}T00:00:00.000Z` : t.createdAt,
+          // ask_owner makes a gate a high-priority desk task.
+          gate:
+            !!t.data.desk &&
+            ['high', 'urgent'].includes(meaningOf(project, 'task.priority', t.data.priority) ?? ''),
+          href: projectHref(project.id, t.id),
+        });
+      }
+      return local;
+    });
+    for (const item of projectItems) add(item);
   }
 
   const latest = runs.latest();

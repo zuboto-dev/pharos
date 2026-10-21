@@ -35,6 +35,7 @@ import {
 } from '@pharos/schema';
 import { AgentFiles } from '../store/agent-files.js';
 import { PharosError } from '../store/errors.js';
+import { perProject } from '../store/project-cache.js';
 import type { Store } from '../store/store.js';
 import { effectiveBoard, isExpired } from './service.js';
 
@@ -485,9 +486,13 @@ function evidenceOf(
 /** Every project's views that changed since the reader looked (for the sidebar and tabs). */
 export function changedViews(store: Store): ChangedViews {
   const projects: Record<string, string[]> = {};
+  const marksKey = `${JSON.stringify(store.setting<unknown>(SEEN_SETTING) ?? null)}|${localToday()}`;
   for (const project of store.list('project')) {
     if (project.data.status === 'archived') continue;
-    const { views } = projectFreshness(store, project.id);
+    // Reused until this project changes, the seen marks move or the day turns.
+    const { views } = perProject(store, 'freshness', project.id, marksKey, () =>
+      projectFreshness(store, project.id),
+    );
     const changed = Object.values(views)
       .filter((v) => v.changed)
       .map((v) => v.viewId);

@@ -22,36 +22,44 @@ export type Landed = {
   }[];
 };
 
-/** At most this many revisions are read; older news is folded into the counts it already has. */
-const READ_LIMIT = 2000;
-
 export function landedSince(store: Store, now = new Date()): Landed {
   const seen = store.setting<number>(DESK_SEEN_SETTING);
   const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
-  const rows = store
-    .revisionsSince(seen ?? 0)
-    .slice(-READ_LIMIT)
-    .map((r) => ({ ...r, revision: store.revision(r.id) }));
+  // One query: agents' revisions after the mark (or in the last day), with the projects each one
+  // changed, oldest first.
+  const rows = store.database
+    .prepare(
+      `SELECT r.id AS id, r.author_name AS agent, r.message AS message, r.created_at AS at,
+              c.project_id AS projectId
+         FROM revisions r JOIN changes c ON c.revision_id = r.id
+        WHERE r.id > ? AND r.author_kind = 'agent' AND c.project_id IS NOT NULL
+          AND (? IS NOT NULL OR r.created_at >= ?)
+        GROUP BY r.id, c.project_id
+        ORDER BY r.id`,
+    )
+    .all(seen ?? 0, seen ?? null, dayAgo) as {
+    id: number;
+    agent: string;
+    message: string;
+    at: string;
+    projectId: string;
+  }[];
+  const names = new Map(store.list('project').map((p) => [p.id, p.data.name]));
   const byProject = new Map<string, Landed['projects'][number]>();
-  for (const { projectIds, revision } of rows) {
-    if (!revision || revision.author.kind !== 'agent') continue;
-    if (seen === undefined && revision.createdAt < dayAgo) continue;
-    for (const projectId of projectIds) {
-      const project = store.get(projectId);
-      if (project?.type !== 'project') continue;
-      const entry = byProject.get(projectId) ?? {
-        projectId,
-        project: (project.data as { name: string }).name,
-        revisions: 0,
-        agents: [],
-        latest: { message: revision.message, at: revision.createdAt },
-      };
-      entry.revisions += 1;
-      if (!entry.agents.includes(revision.author.name)) entry.agents.push(revision.author.name);
-      if (revision.createdAt >= entry.latest.at)
-        entry.latest = { message: revision.message, at: revision.createdAt };
-      byProject.set(projectId, entry);
-    }
+  for (const row of rows) {
+    const project = names.get(row.projectId);
+    if (project === undefined) continue;
+    const entry = byProject.get(row.projectId) ?? {
+      projectId: row.projectId,
+      project,
+      revisions: 0,
+      agents: [],
+      latest: { message: row.message, at: row.at },
+    };
+    entry.revisions += 1;
+    if (!entry.agents.includes(row.agent)) entry.agents.push(row.agent);
+    if (row.at >= entry.latest.at) entry.latest = { message: row.message, at: row.at };
+    byProject.set(row.projectId, entry);
   }
   return {
     since: seen ?? 0,

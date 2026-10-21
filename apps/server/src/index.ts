@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { WebSocketServer } from 'ws';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -15,6 +16,8 @@ import { Store } from './store/store.js';
 import { seenMarks } from './views/freshness.js';
 import { scheduleAssetPurge } from './views/report.js';
 import { webBuildId } from './version.js';
+import { loadPty } from './terminal/pty.js';
+import { TerminalService } from './terminal/service.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
 // `pnpm dev` waits for a file change). A stray rejection is logged and doesn't end it.
@@ -50,15 +53,20 @@ const serveWeb = /[\\/]dist[\\/]/.test(here) && existsSync(join(webDir, 'index.h
 if (serveWeb) process.env.PHAROS_WEB_URL ??= serverUrl;
 const agentLog = process.env.PHAROS_AGENT_LOG ?? join(homedir(), '.pharos', 'agent.log');
 const mcpConfigPath = join(dirname(agentLog), 'agent-mcp.json');
-const installed = (name: string) =>
-  spawnSync('sh', ['-c', `command -v ${name}`], { stdio: 'ignore' }).status === 0;
+/** Where an agent CLI is installed (its absolute path), or '' when it isn't. */
+const whereIs = (name: string) => {
+  const found = spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' });
+  return found.status === 0 ? found.stdout.trim() : '';
+};
+const cli = { claude: whereIs('claude'), codex: whereIs('codex') };
 const setup = agentSetup(process.env.PHAROS_AGENT_COMMAND, {
-  hasClaude: installed('claude'),
-  hasCodex: installed('codex'),
+  hasClaude: Boolean(cli.claude),
+  hasCodex: Boolean(cli.codex),
   mcpConfigPath,
   serverUrl,
 });
-if (setup.mode === 'default' && setup.commands.claude) {
+// The answering agent and the agent terminal (R17) both use it.
+if (cli.claude) {
   mkdirSync(dirname(mcpConfigPath), { recursive: true });
   writeFileSync(mcpConfigPath, agentMcpConfig(serverUrl));
 }
@@ -83,6 +91,23 @@ const agent = new AgentRunner(store, {
 });
 if (agent.configured) agent.watch(feed);
 const files = new FileService(store);
+// The agent terminal (R17): the owner's agent CLI in a panel beside a project, on this computer.
+const terminal = new TerminalService({
+  store,
+  installed: cli,
+  mcpConfigPath,
+  serverUrl,
+  home: process.env.PHAROS_HOME ?? join(homedir(), '.pharos'),
+  pty: await loadPty(),
+});
+terminal.startSweeping();
+// No agent outlives the server: its sessions go (whole process groups) when it stops.
+process.on('exit', () => terminal.stop());
+for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
+  process.on(signal, () => {
+    terminal.stop();
+    process.exit(0);
+  });
 const app = createApp(store, feed, agent, {
   dataPath: dbPath,
   port,
@@ -94,29 +119,39 @@ const app = createApp(store, feed, agent, {
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
   // Behind a tunnel with a login in front, the browser's host and origin are this address.
   webUrl: process.env.PHAROS_WEB_URL,
+  terminal,
 });
 
-const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {
-  console.log(
-    `${new Date().toISOString()} Pharos server listening on http://localhost:${info.port} (db: ${dbPath})`,
-  );
-  console.log(`MCP endpoint: http://localhost:${info.port}/mcp`);
-  if (serveWeb) console.log(`Web app: http://localhost:${info.port}`);
-  console.log(
-    {
-      default: `Answering questions with ${agent.agentName} (change it in Settings); each answer counts toward its usage (log: ${agentLog}; PHAROS_AGENT_COMMAND=off to stop)`,
-      custom: `Answering questions with: ${setup.command} (log: ${agentLog})`,
-      off: 'Not answering questions automatically (PHAROS_AGENT_COMMAND=off)',
-      unavailable:
-        'Not answering questions automatically: install Claude Code or Codex, or set PHAROS_AGENT_COMMAND',
-    }[setup.mode],
-  );
-  // Find files moved while Pharos was off: rescan the folders in Settings in the background, a
-  // moment after start, one at a time (R7.9). It logs its own errors and never stops the server.
-  setTimeout(() => {
-    files.rescanAll().catch((error: unknown) => console.error('[pharos] rescan failed:', error));
-  }, 3000);
-});
+const server = serve(
+  {
+    fetch: app.fetch,
+    port,
+    hostname: '127.0.0.1',
+    // The agent terminal's socket; small messages only (typed input, a size).
+    websocket: { server: new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 }) },
+  },
+  (info) => {
+    console.log(
+      `${new Date().toISOString()} Pharos server listening on http://localhost:${info.port} (db: ${dbPath})`,
+    );
+    console.log(`MCP endpoint: http://localhost:${info.port}/mcp`);
+    if (serveWeb) console.log(`Web app: http://localhost:${info.port}`);
+    console.log(
+      {
+        default: `Answering questions with ${agent.agentName} (change it in Settings); each answer counts toward its usage (log: ${agentLog}; PHAROS_AGENT_COMMAND=off to stop)`,
+        custom: `Answering questions with: ${setup.command} (log: ${agentLog})`,
+        off: 'Not answering questions automatically (PHAROS_AGENT_COMMAND=off)',
+        unavailable:
+          'Not answering questions automatically: install Claude Code or Codex, or set PHAROS_AGENT_COMMAND',
+      }[setup.mode],
+    );
+    // Find files moved while Pharos was off: rescan the folders in Settings in the background, a
+    // moment after start, one at a time (R7.9). It logs its own errors and never stops the server.
+    setTimeout(() => {
+      files.rescanAll().catch((error: unknown) => console.error('[pharos] rescan failed:', error));
+    }, 3000);
+  },
+);
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
     console.error(

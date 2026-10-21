@@ -11,6 +11,7 @@ import {
   type HealthResponse,
 } from '@pharos/schema';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { upgradeWebSocket } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { ActionService } from './actions/service.js';
@@ -46,8 +47,24 @@ import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { VERSION } from './version.js';
+import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
+import type { TerminalService, TerminalStatus } from './terminal/service.js';
+import type { TerminalClient } from './terminal/sessions.js';
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** What the panel sends: typed input, its size, or a restart. Never a command. */
+const TerminalClientMessage = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('i'), d: z.string().max(65_536) }),
+  z.object({ t: z.literal('r'), cols: z.number(), rows: z.number() }),
+  z.object({ t: z.literal('restart') }),
+]);
+
+function terminalSize(cols: unknown, rows: unknown): { cols: number; rows: number } {
+  const clamp = (value: unknown, min: number, max: number, fallback: number) => {
+    const n = Math.floor(Number(value));
+    return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
+  };
+  return { cols: clamp(cols, 20, 500, 100), rows: clamp(rows, 5, 200, 30) };
+}
 
 function isLocal(value: string | undefined, parse: (v: string) => string): boolean {
   if (!value) return true;
@@ -169,6 +186,8 @@ export type ServerInfo = {
    * accepts that host and that exact origin.
    */
   webUrl?: string;
+  /** The agent terminal (R17); without it the panel says it is unavailable. */
+  terminal?: TerminalService;
 };
 
 export function createApp(
@@ -417,6 +436,95 @@ export function createApp(
   });
 
   api.get('/projects/:id/snapshot', (c) => c.json(projectSnapshot(store, c.req.param('id'))));
+
+  // The agent terminal (R17): the owner's own agent CLI in a panel beside the project, only on
+  // this computer (terminal/guard.ts). Agents, the hosted address and other sites are refused.
+  const header = (c: Context) => (name: string) =>
+    c.req.header(name) ?? (name === 'host' ? new URL(c.req.url).host : undefined);
+  const terminalStatus = (c: Context, projectId: string): TerminalStatus => {
+    const place = terminalPlaceRefusal(header(c));
+    if (place)
+      return { available: false, reason: 'hosted', message: place.message, running: false };
+    return (
+      info.terminal?.status(projectId) ?? {
+        available: false,
+        reason: 'unsupported',
+        message: 'This server has no agent terminal',
+        running: false,
+      }
+    );
+  };
+  const projectOrThrow = (id: string) => {
+    if (store.get(id)?.type !== 'project') throw new PharosError('not_found', 'project not found');
+  };
+  api.get('/projects/:id/terminal', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Agents can’t open the owner’s terminal');
+    projectOrThrow(c.req.param('id'));
+    return c.json(terminalStatus(c, c.req.param('id')));
+  });
+  api.get(
+    '/projects/:id/terminal/socket',
+    async (c, next) => {
+      const refusal = terminalSocketRefusal(header(c));
+      if (refusal) return forbidden(c, refusal.message);
+      projectOrThrow(c.req.param('id'));
+      const status = terminalStatus(c, c.req.param('id'));
+      if (!status.available)
+        return c.json({ error: { code: 'unavailable', message: status.message } }, 409);
+      await next();
+    },
+    upgradeWebSocket((c) => {
+      const projectId = c.req.param('id')!;
+      const terminal = info.terminal!;
+      let size = terminalSize(c.req.query('cols'), c.req.query('rows'));
+      let client: TerminalClient | undefined;
+      return {
+        onOpen(_event, ws) {
+          client = {
+            send: (message) => {
+              try {
+                ws.send(JSON.stringify(message));
+              } catch (error) {
+                console.error('[pharos] Could not write to a terminal panel:', error);
+              }
+            },
+            close: (code, reason) => ws.close(code, reason),
+          };
+          try {
+            terminal.attach(projectId, client, size);
+          } catch (error) {
+            console.error('[pharos] Could not start the agent terminal:', error);
+            client.send({ t: 'error', message: 'The agent could not start' });
+            ws.close(1011, 'could not start');
+          }
+        },
+        onMessage(event, ws) {
+          try {
+            const message = TerminalClientMessage.parse(JSON.parse(String(event.data)));
+            if (message.t === 'i') terminal.sessions?.input(projectId, message.d);
+            else if (message.t === 'r') {
+              size = terminalSize(message.cols, message.rows);
+              terminal.sessions?.resize(projectId, size);
+            } else if (message.t === 'restart') terminal.restart(projectId, size);
+          } catch (error) {
+            console.error('[pharos] A terminal message failed:', error);
+            if (error instanceof SyntaxError || error instanceof z.ZodError)
+              ws.close(1003, 'bad message');
+          }
+        },
+        onClose() {
+          try {
+            if (client) terminal.sessions?.detach(projectId, client);
+          } catch (error) {
+            console.error('[pharos] Could not detach a terminal panel:', error);
+          }
+        },
+        onError(error) {
+          console.error('[pharos] A terminal connection failed:', error);
+        },
+      };
+    }),
+  );
 
   // Freshness (R11): what changed on each page since the reader last looked, and which agent-built
   // pages are stale. The reader's own marks (app settings, never revisions): not for agents.

@@ -215,7 +215,8 @@ gets its data only through `window.pharos`: `pharos.data(name)` resolves to the 
 | `PHAROS_AGENT_LOG`     | `~/.pharos/agent.log`    | Log for that command                                    |
 
 Set configuration variables in the environment before starting Pharos; it does not automatically
-load a root `.env` file. The server only accepts requests from localhost. Keep the web app and
+load a root `.env` file. The server only accepts requests from localhost, plus the host of a
+non-local `PHAROS_WEB_URL` (a tunnel with a login in front, see SECURITY.md). Keep the web app and
 server local: v0.2 has no authentication. See [SECURITY.md](SECURITY.md) for the trust model and
 vulnerability reporting.
 

@@ -19,6 +19,12 @@ The HTTP server binds to `127.0.0.1` and checks local hosts and origins. Keep bo
 server and web app on your own machine; do not expose them through public tunnels or reverse
 proxies. A local process or connected MCP client can read and modify your project data.
 
+The one exception is a tunnel with a login in front of it (for example Cloudflare Tunnel with
+Cloudflare Access). Set `PHAROS_WEB_URL` to that address (`https://pharos.example.com`) and the
+server also accepts that host and that exact origin; nothing else is added, and a local or
+invalid `PHAROS_WEB_URL` adds nothing. Pharos itself still checks no identity: everyone the login
+admits, and every service token it accepts, is the owner. Never point it at a tunnel without one.
+
 The optional answering agent receives project context and runs with your operating-system
 permissions. Only configure agent commands you trust. `PHAROS_AGENT_COMMAND=off` disables
 automatic answering; connected MCP clients remain independent of that setting.

@@ -49,6 +49,18 @@ function isLocal(value: string | undefined, parse: (v: string) => string): boole
   }
 }
 
+/** The owner's address for Pharos when it isn't a local one (see `ServerInfo.webUrl`). */
+function webAddress(webUrl: string | undefined): URL | undefined {
+  if (!webUrl) return undefined;
+  try {
+    const url = new URL(webUrl);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
+    return LOCAL_HOSTS.has(url.hostname) ? undefined : url;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The acting author for REST writes: `X-Pharos-Author: human:me` or `agent:<name>` (only Pharos
  * itself writes as `system`).
@@ -142,6 +154,12 @@ export type ServerInfo = {
   service?: boolean;
   /** Who is working where (v0.2 B5); shared with the answering agent. Made here when absent. */
   presence?: Presence;
+  /**
+   * The address the owner opens Pharos at (`PHAROS_WEB_URL`). When it isn't a local one (Pharos
+   * behind a tunnel with a login in front, e.g. https://pharos.example.com), the local-only guard also
+   * accepts that host and that exact origin.
+   */
+  webUrl?: string;
 };
 
 export function createApp(
@@ -162,15 +180,17 @@ export function createApp(
 
   // Pharos is local-only: refuse requests that didn't come from a localhost page or client,
   // which also blocks DNS-rebinding attacks from websites.
+  const web = webAddress(info.webUrl);
   app.use(async (c, next) => {
     // The node adapter builds the request URL from the Host header.
     const url = new URL(c.req.url);
-    const hostOk = LOCAL_HOSTS.has(url.hostname);
+    const hostOk = LOCAL_HOSTS.has(url.hostname) || url.hostname === web?.hostname;
     // A report page runs in a sandboxed frame with an opaque origin: its fonts and module scripts
     // come with "Origin: null" (R13). Only reads of the page and its assets accept it.
     const origin = c.req.header('origin');
     const originOk =
       isLocal(origin, (o) => new URL(o).hostname) ||
+      (web !== undefined && origin === web.origin) ||
       (origin === 'null' && isPageRead(c.req.method, url.pathname));
     if (!hostOk || !originOk)
       return c.json({ error: { code: 'forbidden', message: 'Non-local request' } }, 403);

@@ -572,6 +572,48 @@ describe('REST', () => {
     ).toBe(403);
     expect((await app.request('http://localhost:4300/api/health')).status).toBe(200);
   });
+
+  it('also trusts the host and exact origin of a non-local web address, and nothing else', async () => {
+    const hosted = createApp(new Store(openDatabase(':memory:')), undefined, undefined, {
+      webUrl: 'https://pharos.example.com',
+    });
+    const status = async (url: string, origin?: string, method = 'GET') =>
+      (
+        await hosted.request(url, {
+          method,
+          headers: { 'content-type': 'application/json', ...(origin ? { origin } : {}) },
+          ...(method === 'POST' ? { body: '{}' } : {}),
+        })
+      ).status;
+    expect(await status('https://pharos.example.com/api/health')).toBe(200);
+    expect(await status('http://localhost:4300/api/health', 'https://pharos.example.com')).toBe(
+      200,
+    );
+    // A browser write from that page reaches the route (400: the empty body is invalid), not 403.
+    expect(
+      await status('https://pharos.example.com/api/apply', 'https://pharos.example.com', 'POST'),
+    ).toBe(400);
+    expect(await status('http://evil.example/api/health')).toBe(403);
+    expect(await status('https://pharos.example.com/api/health', 'https://evil.example')).toBe(403);
+    // The origin must match exactly: another scheme or port is a different site.
+    expect(await status('https://pharos.example.com/api/health', 'http://pharos.example.com')).toBe(
+      403,
+    );
+    expect(
+      await status('https://pharos.example.com/api/health', 'https://pharos.example.com:8443'),
+    ).toBe(403);
+    expect(await status('https://sub.pharos.example.com/api/health')).toBe(403);
+  });
+
+  it('adds nothing when the web address is local or not a web address', async () => {
+    for (const webUrl of ['http://localhost:4300', 'not a url', 'file:///tmp/x']) {
+      const local = createApp(new Store(openDatabase(':memory:')), undefined, undefined, {
+        webUrl,
+      });
+      expect((await local.request('http://evil.example/api/health')).status).toBe(403);
+      expect((await local.request('http://localhost:4300/api/health')).status).toBe(200);
+    }
+  });
 });
 
 describe('serving the built web app', () => {

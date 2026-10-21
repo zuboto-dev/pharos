@@ -86,6 +86,8 @@ const app = createApp(store, feed, agent, {
   service:
     process.env.PHAROS_SERVICE === '1' || process.env.XPC_SERVICE_NAME === 'dev.pharos.server',
   ...(serveWeb ? { webDir, buildId: webBuildId(webDir) } : {}),
+  // Behind a tunnel with a login in front, the browser's host and origin are this address.
+  webUrl: process.env.PHAROS_WEB_URL,
 });
 
 const server = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' }, (info) => {

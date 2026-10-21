@@ -45,7 +45,12 @@ export function askInPanel(
   let target: PickTarget | undefined = el ? describeTarget(el) : undefined;
   const type = about.aboutId ? entityType(about.aboutId) : undefined;
   if (!target && about.aboutId && type)
-    target = { kind: kindLabel(type), title: about.label, entity: { type, id: about.aboutId } };
+    // The drawer's label already says the kind ("Task “Build a raised bed”"): keep the name only.
+    target = {
+      kind: kindLabel(type),
+      title: about.label.replace(/^[^“]*“(.*)”$/, '$1'),
+      entity: { type, id: about.aboutId },
+    };
   return (
     referenceText(view ? { id: view.id, name: view.data.name } : undefined, target) +
     (about.question ?? '')
@@ -94,6 +99,14 @@ export function AgentDock({
   );
   const stop = useCallback(() => setPicking(false), []);
   const box = usePicker(picking, onPick, stop);
+
+  // While the panel is docked, its width is a CSS variable, so a details drawer opens beside it
+  // instead of under it (asking about the details needs both in view).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--agent-panel-w', open && !narrow ? `${width}px` : '0px');
+    return () => root.style.setProperty('--agent-panel-w', '0px');
+  }, [open, narrow, width]);
 
   // ⌘J (Ctrl+J elsewhere) shows or hides the panel.
   useEffect(() => {

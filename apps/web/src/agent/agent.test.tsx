@@ -90,6 +90,16 @@ function Picker({ onPick, onExit }: { onPick: (el: Element) => void; onExit: () 
 }
 
 describe('picker mode', () => {
+  it('names a record from the details once, without repeating its kind', () => {
+    const text = askInPanel(
+      { label: 'Task “Build a raised bed”', aboutId: 'task_1' },
+      [],
+      () => 'task',
+    );
+    expect(text).toContain('“Build a raised bed”');
+    expect(text).not.toContain('Task “Task');
+  });
+
   it('picks what is clicked instead of opening it, and Escape leaves', () => {
     page();
     const opened = vi.fn();

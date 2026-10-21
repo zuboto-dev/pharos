@@ -185,6 +185,24 @@ describe('detail drawer', () => {
     );
   }
 
+  it('opens beside the agent panel, and leaves Escape in the panel to the agent', () => {
+    const onClose = vi.fn();
+    render(
+      <ViewDataProvider data={data} version={1} actions={{ apply, open }}>
+        <DetailDrawer target={{ entity: task('Default Overview view').id }} onClose={onClose} />
+        <div data-agent-panel="">
+          <textarea aria-label="terminal input" />
+        </div>
+      </ViewDataProvider>,
+    );
+    // The drawer keeps the panel's width free on the right (--agent-panel-w, set by the dock).
+    expect(screen.getByRole('dialog').className).toContain('sm:pr-(--agent-panel-w)');
+    fireEvent.keyDown(screen.getByLabelText('terminal input'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a task with its references and edits fields as revisions', () => {
     const t = task('Default Overview view');
     renderDrawer(t);

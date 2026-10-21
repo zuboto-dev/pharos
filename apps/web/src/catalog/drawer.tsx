@@ -569,7 +569,11 @@ export function DetailDrawer({
   const data = useViewData();
   useEffect(() => {
     if (leaving) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      // Escape in the agent panel is the agent's (it stops Claude Code), not the drawer's.
+      if ((e.target as Element | null)?.closest?.('[data-agent-panel]')) return;
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, leaving]);
@@ -591,7 +595,8 @@ export function DetailDrawer({
   return (
     <div
       className={clsx(
-        'fixed inset-0 z-40 flex items-end justify-end sm:items-stretch',
+        // Beside the agent panel when it is open (its width is --agent-panel-w), never under it.
+        'fixed inset-0 z-40 flex items-end justify-end sm:items-stretch sm:pr-(--agent-panel-w)',
         leaving && 'pointer-events-none',
       )}
       role="dialog"

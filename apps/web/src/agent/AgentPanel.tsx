@@ -202,7 +202,7 @@ export function AgentPanel({
       data-agent-panel=""
       aria-label={`${label} terminal`}
       className={clsx(
-        'fixed z-40 flex flex-col border-line bg-surface shadow-overlay',
+        'fixed z-50 flex flex-col border-line bg-surface shadow-overlay',
         narrow ? 'inset-0' : 'top-0 right-0 bottom-0 border-l',
         hidden && 'hidden',
       )}

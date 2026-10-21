@@ -35,7 +35,10 @@ describe('getting started', () => {
   it('offers the MCP command and a planning prompt naming the project, and stays hidden once dismissed', () => {
     render(<GetStarted projectId="p1" name="Atlas" />);
     const panel = screen.getByRole('region', { name: 'Get started' });
-    expect(panel.textContent).toContain('claude mcp add --transport http pharos');
+    expect(panel.textContent).toContain(
+      'claude mcp add --transport http pharos http://localhost:4300/mcp',
+    );
+    expect(screen.getByRole('button', { name: /Other agents/ })).toBeTruthy();
     expect(panel.textContent).toContain('Set up the "Atlas" project in Pharos');
     fireEvent.click(screen.getByRole('button', { name: 'Hide getting started' }));
     expect(screen.queryByRole('region', { name: 'Get started' })).toBeNull();

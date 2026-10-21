@@ -191,9 +191,13 @@ describe('settings', () => {
     const data = await screen.findByRole('region', { name: 'Data and connection' });
     await within(data).findByText('/home/me/.pharos/pharos.db');
     expect(data.textContent).toContain('3 projects · 140 revisions');
-    expect(data.textContent).toContain(
+    expect(data.textContent).toContain('http://localhost:4300/mcp');
+    const connect = screen.getByRole('region', { name: 'Connect an agent' });
+    expect(connect.textContent).toContain(
       'claude mcp add --transport http pharos http://localhost:4300/mcp',
     );
+    fireEvent.click(within(connect).getByRole('tab', { name: 'Codex CLI' }));
+    expect(connect.textContent).toContain('codex mcp add pharos --url http://localhost:4300/mcp');
   });
 });
 

@@ -128,6 +128,30 @@ describe('catalog components', () => {
     }
   });
 
+  it('shows every item of every list on the overview, with nothing to click to load more', () => {
+    const many = <T extends { id: string; data: object }>(list: T[], n: number, title: string) =>
+      Array.from({ length: n }, (_, i) => ({
+        ...list[0]!,
+        id: `${list[0]!.id}_${i}`,
+        createdRev: 200 + i,
+        updatedRev: 200 + i,
+        data: { ...list[0]!.data, title: `${title} ${i + 1}` },
+      }));
+    const big = {
+      ...data,
+      decisions: many(data.decisions, 14, 'Decision'),
+      scopeItems: many(data.scopeItems, 12, 'Scope item'),
+      goals: many(data.goals, 11, 'Goal'),
+    } as ProjectDataset;
+    const { container } = renderSpec(TEMPLATES.overview, big);
+    const text = container.textContent ?? '';
+    for (let i = 1; i <= 14; i++) expect(text).toContain(`Decision ${i}`);
+    for (let i = 1; i <= 12; i++) expect(text).toContain(`Scope item ${i}`);
+    for (let i = 1; i <= 11; i++) expect(text).toContain(`Goal ${i}`);
+    const buttons = [...container.querySelectorAll('button')].map((b) => b.textContent ?? '');
+    expect(buttons.filter((b) => /^Show |more$|finished$/.test(b))).toEqual([]);
+  });
+
   it('draws the R4 picture stubs from stored claims', () => {
     const claim = (id: string, extra: Record<string, unknown>) => ({
       id,

@@ -19,6 +19,7 @@ import { AgentFiles } from '../store/agent-files.js';
 import { PharosError, formatPath } from '../store/errors.js';
 import type { Store } from '../store/store.js';
 import { previewBoard } from './preview.js';
+import { readerChecks } from './reader-checks.js';
 import {
   ReportAssets,
   blockedExternals,
@@ -398,6 +399,8 @@ export function previewDoc(
   }));
   warnings.push(...drawingChecks.flatMap((d) => d.warnings));
   warnings.push(...reviewWarnings(store, projectId, doc, have, !!viewId));
+  // The reader's bar, whichever agent wrote it (REVIEW.md, PRODUCT's glance test).
+  warnings.push(...readerChecks(doc));
   const readByDrawings = new Set(drawings.flatMap((d) => d.reads ?? []));
   for (const name of Object.keys(doc.data ?? {}))
     if (!readByDrawings.has(name))

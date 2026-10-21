@@ -1,10 +1,9 @@
 import type { ProjectDataset } from '@pharos/schema';
-import { Check, Copy, Sparkles, X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { useState } from 'react';
 import { Loading, SkeletonShape, SkeletonBlock, SkeletonRows } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
-
-const MCP_COMMAND = 'claude mcp add --transport http pharos http://localhost:4300/mcp';
+import { ConnectAgent, CopyLine, useMcpUrl } from './ConnectAgent';
 
 /**
  * True for a project with nothing planned yet: no goals, stages, tasks, or scope. A project that
@@ -27,28 +26,10 @@ function readDismissed(projectId: string): boolean {
   }
 }
 
-function CopyLine({ label, text }: { label: string; text: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className="flex items-start gap-2 rounded-tile bg-neutral-900 p-3 text-sm text-neutral-100 dark:bg-neutral-800">
-      <code className="min-w-0 flex-1 break-words whitespace-pre-wrap">{text}</code>
-      <button
-        type="button"
-        aria-label={`Copy ${label}`}
-        onClick={() => {
-          void navigator.clipboard?.writeText(text).then(() => setCopied(true));
-        }}
-        className="shrink-0 rounded p-1 text-faint hover:bg-neutral-700 hover:text-white"
-      >
-        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-      </button>
-    </div>
-  );
-}
-
 /** Shown on a new, empty project: how to get it planned, by an agent or by hand. */
 export function GetStarted({ projectId, name }: { projectId: string; name: string }) {
   const [dismissed, setDismissed] = useState(() => readDismissed(projectId));
+  const mcpUrl = useMcpUrl();
   if (dismissed) return null;
   const prompt = `Set up the "${name}" project in Pharos from my notes (or this repo's docs): write its description, then add goals, scope, stages with dates, and tasks.`;
   return (
@@ -83,7 +64,7 @@ export function GetStarted({ projectId, name }: { projectId: string; name: strin
       <ol className="space-y-3 text-sm">
         <li className="space-y-1.5">
           <div className="font-medium">1. Connect your agent (once)</div>
-          <CopyLine label="MCP command" text={MCP_COMMAND} />
+          <ConnectAgent mcpUrl={mcpUrl} compact />
         </li>
         <li className="space-y-1.5">
           <div className="font-medium">2. Ask it to plan the project</div>

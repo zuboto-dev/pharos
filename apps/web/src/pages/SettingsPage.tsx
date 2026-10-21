@@ -20,6 +20,7 @@ import {
 } from '../lib/events';
 import { plural, timeAgo } from '../lib/format';
 import { useTheme, type Theme } from '../lib/theme';
+import { ConnectAgent } from './ConnectAgent';
 import { LoadError } from './onboarding';
 
 type ServerSettings = {
@@ -713,7 +714,6 @@ export function SettingsPage() {
   if (settings.status === 'error' && !settings.data)
     return <LoadError notFound={false} what="Settings" />;
   const s = settings.data;
-  const mcpCommand = s ? `claude mcp add --transport http pharos ${s.mcpUrl}` : '';
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
@@ -754,14 +754,17 @@ export function SettingsPage() {
             <Row label="MCP endpoint">
               <Copyable label="MCP endpoint" text={s.mcpUrl} />
             </Row>
-            <Row label="Connect Claude Code">
-              <Copyable label="MCP command" text={mcpCommand} />
-            </Row>
             <Row label="Version">{s.version}</Row>
           </dl>
         ) : (
           <Skeleton lines={4} label="Loading settings" />
         )}
+      </Section>
+      <Section
+        title="Connect an agent"
+        description="Pick your agent and paste the snippet. Each one connects to the MCP endpoint above."
+      >
+        {s ? <ConnectAgent mcpUrl={s.mcpUrl} /> : <Skeleton lines={3} label="Loading connection" />}
       </Section>
     </div>
   );

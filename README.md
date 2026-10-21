@@ -73,7 +73,9 @@ under your own supervisor; the built server serves the web app too.
 
 ## Connect your agent
 
-The server must be running (`pnpm dev`) for the HTTP connection.
+The server must be running (`pnpm dev` or the service) for the HTTP connection. Settings →
+**Connect an agent** in the web app shows each of these with your server's own MCP URL, ready to
+copy.
 
 **Claude Code**
 
@@ -81,7 +83,23 @@ The server must be running (`pnpm dev`) for the HTTP connection.
 claude mcp add --transport http pharos http://localhost:4300/mcp
 ```
 
-**Codex**
+**Claude Desktop** reads local servers from `claude_desktop_config.json` (Settings → Developer →
+Edit Config; `~/Library/Application Support/Claude/` on macOS, `%APPDATA%\Claude\` on Windows),
+which runs stdio servers only. Bridge it to the HTTP server with `mcp-remote` (needs Node.js), then
+quit and reopen Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "pharos": { "command": "npx", "args": ["-y", "mcp-remote", "http://localhost:4300/mcp"] }
+  }
+}
+```
+
+Custom connectors (Settings → Connectors) connect from Anthropic's cloud and need a public HTTPS
+address, so they can't reach a Pharos on localhost.
+
+**Codex** (CLI, IDE extension and the ChatGPT desktop app share this config)
 
 ```sh
 codex mcp add pharos --url http://localhost:4300/mcp
@@ -98,6 +116,12 @@ For non-interactive runs (`codex exec`), which can't ask you to approve a tool c
 runs approved Pharos's tools per run with
 `-c 'mcp_servers.pharos.default_tools_approval_mode="approve"'`.
 
+**ChatGPT desktop app**: Settings → MCP servers → Add server, name it `pharos`, choose
+Streamable HTTP, enter `http://localhost:4300/mcp`, save and restart. That is the same list Codex
+uses. Chats on chatgpt.com can't use a local Pharos: custom MCP servers there connect from
+OpenAI's servers, so they need a public HTTPS address (or OpenAI's Secure MCP Tunnel) and a plan
+with developer mode.
+
 **Cursor** (`~/.cursor/mcp.json`) and other clients that support streamable HTTP
 
 ```json
@@ -108,7 +132,7 @@ runs approved Pharos's tools per run with
 }
 ```
 
-**Clients that need stdio** (for example Claude Desktop). Run `pnpm build` once, then:
+**Clients that need stdio, without the HTTP server.** Run `pnpm build` once, then:
 
 ```json
 {

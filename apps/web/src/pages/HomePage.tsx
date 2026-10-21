@@ -2,6 +2,7 @@ import { FolderGit2, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { BUTTON, StatusBadge } from '../catalog/ui';
+import { ConnectAgent, useMcpUrl } from './ConnectAgent';
 import { NewProjectDialog } from './NewProjectDialog';
 import { HomeSkeleton, LoadError } from './onboarding';
 import { useWorkspace } from './projects';
@@ -36,6 +37,16 @@ function homeGroups(tree: import('./sidebar-model').SidebarTree): Group[] {
   return groups;
 }
 
+function NoProjectsConnect() {
+  const mcpUrl = useMcpUrl();
+  return (
+    <section aria-label="Connect an agent" className="space-y-2 pt-2">
+      <h2 className="text-sm font-medium">Connect an agent</h2>
+      <ConnectAgent mcpUrl={mcpUrl} compact />
+    </section>
+  );
+}
+
 export function HomePage() {
   const ws = useWorkspace();
   const status = ws.status;
@@ -57,9 +68,7 @@ export function HomePage() {
           Create one yourself, or connect your AI agent over MCP and ask it to set one up.
         </p>
         {newButton}
-        <pre className="overflow-x-auto rounded-tile bg-neutral-900 p-4 text-sm text-neutral-100 dark:bg-neutral-800">
-          claude mcp add --transport http pharos http://localhost:4300/mcp
-        </pre>
+        <NoProjectsConnect />
         {dialog}
       </div>
     );

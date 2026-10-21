@@ -1,9 +1,10 @@
-// R7.14: hide and show the sidebar from a button or ⌘\ / Ctrl+\, remembered per browser · Opus 5.5
+// The sidebar on wide screens (the owner, 10-21): collapsed to a rail by default, sliding out on
+// hover or focus; a button keeps it open, and the same button (or ⌘\ / Ctrl+\) collapses it.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from './AppShell';
-import { SIDEBAR_HIDDEN_KEY, SIDEBAR_ID } from './sidebar-toggle';
+import { SIDEBAR_ID, SIDEBAR_PINNED_KEY } from './sidebar-toggle';
 
 beforeEach(() => {
   vi.stubGlobal('fetch', async () => Response.json([]));
@@ -12,6 +13,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
   localStorage.clear();
 });
 
@@ -28,78 +30,82 @@ function renderShell() {
   return document.getElementById(SIDEBAR_ID)!;
 }
 
-const isHidden = (aside: HTMLElement) => aside.className.split(/\s+/).includes('md:hidden');
+const state = () => document.getElementById(SIDEBAR_ID)!.dataset.sidebar;
+const rail = () => document.querySelector<HTMLElement>('[data-sidebar-rail]');
 
-describe('sidebar toggle', () => {
-  it('hides and shows the sidebar from the header button, with an accessible name and state', () => {
-    const aside = renderShell();
-    expect(isHidden(aside)).toBe(false);
-    const hide = screen.getByRole('button', { name: 'Hide sidebar' });
-    expect(hide.getAttribute('aria-expanded')).toBe('true');
-    expect(hide.getAttribute('aria-controls')).toBe(SIDEBAR_ID);
-    expect(hide.getAttribute('aria-keyshortcuts')).toBe('Meta+Backslash Control+Backslash');
-    // Its tooltip names it and shows the shortcut, on keyboard focus at once.
-    act(() => hide.focus());
-    expect(document.querySelector('[data-tip]')?.textContent).toMatch(/^Hide sidebar(⌘|Ctrl\+)\\$/);
-    act(() => hide.blur());
-    fireEvent.click(hide);
-    expect(isHidden(aside)).toBe(true);
-    const show = screen.getByRole('button', { name: 'Show sidebar' });
-    expect(show.getAttribute('aria-expanded')).toBe('false');
-    // The pressed button went away; focus moves to the one that brings the sidebar back.
-    expect(document.activeElement).toBe(show);
-    fireEvent.click(show);
-    expect(isHidden(aside)).toBe(false);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hide sidebar' }));
-    // The page itself stays.
-    expect(screen.getByText('Home page')).toBeTruthy();
-  });
-
-  it('toggles with ⌘\\ and Ctrl+\\, but not with other keys', () => {
-    const aside = renderShell();
-    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true });
-    expect(isHidden(aside)).toBe(true);
-    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', ctrlKey: true });
-    expect(isHidden(aside)).toBe(false);
-    fireEvent.keyDown(window, { key: '\\', code: 'Backslash' });
-    fireEvent.keyDown(window, { key: 'b', metaKey: true });
-    fireEvent.keyDown(window, { key: '\\', code: 'Backslash', metaKey: true, shiftKey: true });
-    expect(isHidden(aside)).toBe(false);
-  });
-
-  it('remembers the choice in this browser', () => {
+describe('sidebar on wide screens', () => {
+  it('starts collapsed to a rail with no toggle button, and slides out while hovered', () => {
+    vi.useFakeTimers();
     renderShell();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
-    expect(localStorage.getItem(SIDEBAR_HIDDEN_KEY)).toBe('1');
-    cleanup();
-    const aside = renderShell();
-    expect(isHidden(aside)).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }));
-    expect(localStorage.getItem(SIDEBAR_HIDDEN_KEY)).toBeNull();
+    expect(state()).toBe('collapsed');
+    expect(rail()).toBeTruthy();
+    expect(rail()!.querySelector('button')).toBeNull();
+    fireEvent.mouseEnter(rail()!);
+    expect(state()).toBe('peek');
+    // Moving from the rail onto the sidebar keeps it out.
+    fireEvent.mouseLeave(rail()!);
+    fireEvent.mouseEnter(document.getElementById(SIDEBAR_ID)!);
+    act(() => vi.advanceTimersByTime(400));
+    expect(state()).toBe('peek');
+    fireEvent.mouseLeave(document.getElementById(SIDEBAR_ID)!);
+    act(() => vi.advanceTimersByTime(400));
+    expect(state()).toBe('collapsed');
   });
 
-  it('still toggles when storage is unavailable', () => {
+  it('opens on keyboard focus too', () => {
+    renderShell();
+    fireEvent.focus(screen.getByRole('link', { name: 'Pharos home' }));
+    expect(state()).toBe('peek');
+  });
+
+  it('keeps it open from the button, and the same button collapses it again', () => {
+    renderShell();
+    fireEvent.mouseEnter(rail()!);
+    const keep = screen.getByRole('button', { name: 'Keep the sidebar open' });
+    expect(keep.getAttribute('aria-pressed')).toBe('false');
+    expect(keep.getAttribute('aria-controls')).toBe(SIDEBAR_ID);
+    fireEvent.click(keep);
+    expect(state()).toBe('open');
+    expect(rail()).toBeNull();
+    expect(localStorage.getItem(SIDEBAR_PINNED_KEY)).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse the sidebar' }));
+    expect(state()).toBe('collapsed');
+    expect(localStorage.getItem(SIDEBAR_PINNED_KEY)).toBeNull();
+  });
+
+  it('switches with ⌘\\ and Ctrl+\\, but not with other keys', () => {
+    renderShell();
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+    expect(state()).toBe('open');
+    fireEvent.keyDown(window, { key: '\\', ctrlKey: true });
+    expect(state()).toBe('collapsed');
+    fireEvent.keyDown(window, { key: 'b', metaKey: true });
+    expect(state()).toBe('collapsed');
+  });
+
+  it('remembers kept open in this browser', () => {
+    localStorage.setItem(SIDEBAR_PINNED_KEY, '1');
+    renderShell();
+    expect(state()).toBe('open');
+  });
+
+  it('still works when storage is unavailable', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    const aside = renderShell();
-    expect(isHidden(aside)).toBe(false);
-    act(() => {
-      fireEvent.keyDown(window, { key: '\\', code: 'Backslash', ctrlKey: true });
-    });
-    expect(isHidden(aside)).toBe(true);
+    renderShell();
+    expect(state()).toBe('collapsed');
+    fireEvent.keyDown(window, { key: '\\', metaKey: true });
+    expect(state()).toBe('open');
   });
 
-  it('keeps phones as they were: the toggles show on wide screens only', () => {
-    const aside = renderShell();
-    // Hidden applies from the md breakpoint up; below it the sidebar stays above the page.
-    fireEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
-    expect(aside.className).not.toMatch(/(^|\s)hidden(\s|$)/);
-    const show = screen.getByRole('button', { name: 'Show sidebar' });
-    expect(show.className).toMatch(/(^|\s)hidden(\s|$)/);
-    expect(show.className).toContain('md:inline-flex');
+  it('keeps phones as they were: the rail and the button show on wide screens only', () => {
+    renderShell();
+    expect(rail()!.className).toContain('hidden');
+    expect(rail()!.className).toContain('md:flex');
+    expect(document.getElementById(SIDEBAR_ID)!.className).toContain('md:hidden');
   });
 });

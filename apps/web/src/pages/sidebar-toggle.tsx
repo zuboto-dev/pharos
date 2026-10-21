@@ -2,27 +2,31 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip } from '../catalog/tooltip';
 
-// R7.14: hide and show the app's left sidebar on wide screens, from a button or ⌘\ (Ctrl+\ off
-// a Mac). The choice is remembered in this browser. Phones keep the sidebar above the page.
+// The app's left sidebar on wide screens (the owner, 10-21): collapsed to a slim rail by default,
+// sliding out over the page while hovered or focused; a button in it keeps it open, and the same
+// button (or ⌘\, Ctrl+\ off a Mac) collapses it again. Kept open is remembered in this browser.
+// Phones keep the sidebar above the page.
 
+export const SIDEBAR_PINNED_KEY = 'pharos-sidebar-pinned';
+/** The old hide/show setting (R7.14), no longer read. */
 export const SIDEBAR_HIDDEN_KEY = 'pharos-sidebar-hidden';
 /** The sidebar's element id, named by the toggles' aria-controls. */
 export const SIDEBAR_ID = 'app-sidebar';
 
-function readHidden(): boolean {
+function readPinned(): boolean {
   try {
-    return localStorage.getItem(SIDEBAR_HIDDEN_KEY) === '1';
+    return localStorage.getItem(SIDEBAR_PINNED_KEY) === '1';
   } catch {
     return false;
   }
 }
 
-function saveHidden(hidden: boolean) {
+function savePinned(pinned: boolean) {
   try {
-    if (hidden) localStorage.setItem(SIDEBAR_HIDDEN_KEY, '1');
-    else localStorage.removeItem(SIDEBAR_HIDDEN_KEY);
+    if (pinned) localStorage.setItem(SIDEBAR_PINNED_KEY, '1');
+    else localStorage.removeItem(SIDEBAR_PINNED_KEY);
   } catch {
-    // Storage may be unavailable; the sidebar still toggles for this page.
+    // Storage may be unavailable; the choice lasts for this page.
   }
 }
 
@@ -43,21 +47,13 @@ const isMac = () =>
 /** The shortcut as this computer writes it. */
 export const shortcutLabel = () => (isMac() ? '⌘\\' : 'Ctrl+\\');
 
-/**
- * Whether the sidebar is hidden, a toggle, and the toggle's focus target: after a button hides or
- * shows the sidebar, focus moves to the button that shows or hides it again.
- */
-export function useSidebarHidden() {
-  const [hidden, setHidden] = useState(readHidden);
-  // Toggled since the page loaded: the sidebar (or its rail) fades in as it comes back.
-  const [toggled, setToggled] = useState(false);
-  const moveFocus = useRef(false);
-  const toggle = useCallback((fromButton = false) => {
-    moveFocus.current = fromButton;
-    setToggled(true);
-    setHidden((h) => {
-      saveHidden(!h);
-      return !h;
+/** Whether the sidebar is kept open, and the switch between kept open and collapsed. */
+export function useSidebarPinned() {
+  const [pinned, setPinned] = useState(readPinned);
+  const toggle = useCallback(() => {
+    setPinned((p) => {
+      savePinned(!p);
+      return !p;
     });
   }, []);
   useEffect(() => {
@@ -69,36 +65,42 @@ export function useSidebarHidden() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toggle]);
-  return { hidden, toggle, moveFocus, toggled };
+  return { pinned, toggle };
+}
+
+/**
+ * While collapsed: whether the sidebar is sliding out over the page (hovered or focused). It
+ * opens at once and closes a moment after the pointer and focus leave, so passing over the edge
+ * doesn't flicker.
+ */
+export function usePeek() {
+  const [peek, setPeek] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = useCallback(() => {
+    clearTimeout(timer.current);
+    setPeek(true);
+  }, []);
+  const hide = useCallback(() => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setPeek(false), 250);
+  }, []);
+  return { peek, show, hide, setPeek };
 }
 
 const BUTTON =
   'hidden size-8 shrink-0 items-center justify-center rounded-control text-muted hover:bg-subtle hover:text-ink focus-visible:outline-2 focus-visible:outline-sky-400 md:inline-flex';
 
-/** The button that hides or shows the sidebar (wide screens only; phones don't need it). */
-export function SidebarToggle({
-  hidden,
-  onToggle,
-  focusOnMount,
-}: {
-  hidden: boolean;
-  onToggle: () => void;
-  /** Take focus when shown, because the button that was pressed just went away. */
-  focusOnMount?: boolean;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (focusOnMount) ref.current?.focus();
-  }, [focusOnMount]);
-  const label = hidden ? 'Show sidebar' : 'Hide sidebar';
-  const Icon = hidden ? PanelLeftOpen : PanelLeftClose;
+/** The button in the open sidebar: keep it open, or collapse it back to the rail. */
+export function SidebarToggle({ pinned, onToggle }: { pinned: boolean; onToggle: () => void }) {
+  const label = pinned ? 'Collapse the sidebar' : 'Keep the sidebar open';
+  const Icon = pinned ? PanelLeftClose : PanelLeftOpen;
   return (
     <Tooltip label={label} shortcut={shortcutLabel()}>
       <button
-        ref={ref}
         type="button"
         aria-label={label}
-        aria-expanded={!hidden}
+        aria-pressed={pinned}
         aria-controls={SIDEBAR_ID}
         aria-keyshortcuts="Meta+Backslash Control+Backslash"
         onClick={onToggle}

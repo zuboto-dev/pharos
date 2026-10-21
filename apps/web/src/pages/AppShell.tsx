@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { Settings } from 'lucide-react';
+import type { FocusEvent } from 'react';
 import { Link, NavLink, Outlet, useMatch } from 'react-router';
 import { Tooltip } from '../catalog/tooltip';
 import { FolderRequestNotice } from '../files/FolderRequests';
@@ -7,7 +8,7 @@ import { useAgentStatus } from '../lib/events';
 import { useTheme } from '../lib/theme';
 import { PharosLogo } from './Logo';
 import { Sidebar } from './Sidebar';
-import { SIDEBAR_ID, SidebarToggle, useSidebarHidden } from './sidebar-toggle';
+import { SIDEBAR_ID, SidebarToggle, usePeek, useSidebarPinned } from './sidebar-toggle';
 import { UpdateNotice } from './UpdateNotice';
 
 /** Opens Settings; a dot shows when automatic answering is paused. */
@@ -52,34 +53,48 @@ function ShellFolderRequests() {
 export function AppShell() {
   // Keeps the chosen theme applied (and "system" following the OS) on every page.
   useTheme();
-  // R7.14: wide screens can hide the sidebar (a button or ⌘\); phones keep it above the page.
-  const { hidden, toggle, moveFocus, toggled } = useSidebarHidden();
-  const fromButton = () => toggle(true);
+  // Wide screens: a slim rail that slides the sidebar out on hover or focus, unless kept open.
+  // Phones keep the sidebar above the page.
+  const { pinned, toggle } = useSidebarPinned();
+  const { peek, show, hide, setPeek } = usePeek();
+  const open = pinned || peek;
+  const peekHandlers = pinned
+    ? {}
+    : {
+        onMouseEnter: show,
+        onMouseLeave: hide,
+        onFocus: show,
+        onBlur: (e: FocusEvent) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hide();
+        },
+      };
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      {hidden && (
-        // The logo keeps the exact spot it has in the sidebar, so hiding the sidebar doesn't move it.
+      {!pinned && (
+        // The rail: the logo in the exact spot it has in the sidebar, no buttons. Hovering or
+        // focusing it slides the sidebar out over the page.
         <div
-          className={clsx(
-            'hidden shrink-0 flex-col items-center gap-2 border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen',
-            toggled && 'animate-fade-in',
-          )}
+          data-sidebar-rail=""
+          className="hidden shrink-0 flex-col items-center border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen"
+          {...peekHandlers}
+          onClick={() => setPeek(true)}
         >
           <Link to="/" aria-label="Pharos home" className="flex px-4 pt-4 pb-2">
             <span className="flex h-6 items-center">
               <PharosLogo className="size-5 text-amber-500" />
             </span>
           </Link>
-          <SidebarToggle hidden onToggle={fromButton} focusOnMount={moveFocus.current} />
         </div>
       )}
       <aside
         id={SIDEBAR_ID}
+        data-sidebar={pinned ? 'open' : peek ? 'peek' : 'collapsed'}
+        {...peekHandlers}
         className={clsx(
-          'flex max-h-[60vh] shrink-0 flex-col border-b border-line bg-surface md:sticky md:top-0 md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0',
-          hidden && 'md:hidden',
-          // Coming back after a hide: a short slide and fade (opacity only with reduced motion).
-          toggled && !hidden && 'md:animate-side-in',
+          'flex max-h-[60vh] shrink-0 flex-col border-b border-line bg-surface md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0',
+          pinned ? 'md:sticky md:top-0' : 'md:fixed md:top-0 md:left-0 md:z-30 md:shadow-overlay',
+          !open && 'md:hidden',
+          peek && !pinned && 'md:animate-side-in',
         )}
       >
         <div className="flex items-center justify-between gap-2 pr-2">
@@ -92,9 +107,13 @@ export function AppShell() {
             </span>{' '}
             Pharos
           </Link>
-          {!hidden && (
-            <SidebarToggle hidden={false} onToggle={fromButton} focusOnMount={moveFocus.current} />
-          )}
+          <SidebarToggle
+            pinned={pinned}
+            onToggle={() => {
+              toggle();
+              setPeek(false);
+            }}
+          />
         </div>
         <Sidebar />
         <div className="border-t border-line-soft p-3">

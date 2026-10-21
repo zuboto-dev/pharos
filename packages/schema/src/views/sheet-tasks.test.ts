@@ -59,6 +59,37 @@ describe('sheetTasks (R15)', () => {
     ]);
   });
 
+  it("gives each task the owner's answer: won't do, a reply, later until its day", () => {
+    const answers: ProjectDataset = {
+      ...data,
+      tasks: [
+        ...data.tasks,
+        entity('task', 'task_4', { projectId: P, title: 'Four', status: 'todo', reply: 'Ask Ana' }),
+        entity('task', 'task_5', {
+          projectId: P,
+          title: 'Five',
+          status: 'todo',
+          deferredUntil: '2026-10-27',
+        }),
+      ],
+    };
+    const on = (today: string) =>
+      sheetTasks(answers, { blocks: [checklist({})] }, today).map((r) => [
+        r.task.id,
+        r.state,
+        r.answered,
+      ]);
+    expect(on('2026-10-21')).toEqual([
+      ['task_1', 'done', true],
+      ['task_2', 'wontDo', true],
+      ['task_3', 'open', false],
+      ['task_4', 'replied', true],
+      ['task_5', 'later', true],
+    ]);
+    // On its day a deferred task is open again.
+    expect(on('2026-10-27').at(-1)).toEqual(['task_5', 'open', false]);
+  });
+
   it("applies the checklist's assigneeKind", () => {
     const rows = sheetTasks(data, { blocks: [checklist({ assigneeKind: 'human' })] });
     expect(rows.map((r) => r.task.id)).toEqual(['task_1', 'task_2']);

@@ -465,6 +465,9 @@ export function createApp(
         chosenOptionId: z.string().optional(),
         note: z.string().max(2000).optional(),
         done: z.boolean().optional(),
+        wontDo: z.boolean().optional(),
+        later: z.string().optional(),
+        reply: z.string().max(4000).optional(),
       })
       .parse(await c.req.json().catch(() => ({})));
     return c.json(deskAnswer(store, authorOf(c), body));

@@ -13,6 +13,7 @@ import {
   FolderRequestInput,
   ActionSubmission,
   applyInputFor,
+  OWNER_TASK_FIELDS,
   type ApplyInput,
   type Author,
   PACK_GUIDE,
@@ -60,6 +61,8 @@ const AgentApplyInput = applyInputFor(
   ENTITY_TYPES.filter((t) => t !== 'view'),
   { file: AGENT_READONLY_FILE_FIELDS },
   { file: AGENT_FILE_CREATE_FIELDS },
+  // Only the owner replies to a task or puts it off; the store refuses an agent's anyway.
+  { task: OWNER_TASK_FIELDS },
 );
 
 const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions, claims) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.

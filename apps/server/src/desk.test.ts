@@ -1,9 +1,17 @@
-import { valueFor, type Author, type Entity } from '@pharos/schema';
+import {
+  addDays,
+  localToday,
+  valueFor,
+  type Author,
+  type Entity,
+  type ReportDoc,
+} from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { RunLog, answersSince, askOwner, deskOf, minutesIn } from './desk.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
+import { sheetSummaries } from './views/doc.js';
 import { createView } from './views/service.js';
 
 const me: Author = { kind: 'human', name: 'me' };
@@ -368,5 +376,139 @@ describe('the desk (R16)', () => {
     });
     expect((await post({ id: mine, done: true })).status).toBe(200);
     expect(deskOf(store, runs).items).toEqual([]);
+  });
+
+  it("a task's other answers: won't do, later (back on its day) and a reply, one revision each", async () => {
+    const { store, runs, mine } = setup();
+    const app = createApp(store);
+    const post = async (body: unknown, who = 'human:me') => {
+      const res = await app.request('/api/desk/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': who },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json()) as { revision?: { message: string } } };
+    };
+    const task = () => store.getOfType('task', mine).data;
+    const desk = (day: string) => ids(store, runs, new Date(`${day}T12:00:00Z`));
+    const today = localToday();
+    const tomorrow = addDays(today, 1);
+
+    // Validation: one answer, a later day after today, a reply with words; agents can't.
+    expect((await post({ id: mine, wontDo: true }, 'agent:x')).status).toBe(403);
+    expect((await post({ id: mine })).status).toBe(400);
+    expect((await post({ id: mine, wontDo: true, reply: 'No' })).status).toBe(400);
+    expect((await post({ id: mine, later: today })).status).toBe(400);
+    expect((await post({ id: mine, later: '2026-02-30' })).status).toBe(400);
+    expect((await post({ id: mine, reply: '   ' })).status).toBe(400);
+    expect((await post({ id: mine, reply: 'x'.repeat(2001) })).status).toBe(400);
+    expect(task().reply).toBeUndefined();
+
+    const later = await post({ id: mine, later: tomorrow });
+    expect(later.body.revision?.message).toBe(`Later (${tomorrow}): “Buy compost”`);
+    expect(task().deferredUntil).toBe(tomorrow);
+    expect(desk(today)).toEqual([['decision', 'Which seeds?']]);
+    expect(desk(tomorrow)).toContainEqual(['task', 'Buy compost']);
+
+    const reply = await post({ id: mine, reply: ' Sam buys it on Saturday ' });
+    expect(reply.body.revision?.message).toBe('Reply on “Buy compost”: Sam buys it on Saturday');
+    expect(task()).toMatchObject({ reply: 'Sam buys it on Saturday', status: 'todo' });
+    expect(task().deferredUntil).toBeUndefined();
+    expect(desk(tomorrow)).toEqual([['decision', 'Which seeds?']]);
+
+    const wont = await post({ id: mine, wontDo: true });
+    expect(wont.body.revision?.message).toBe("Won't do “Buy compost”");
+    expect(task().status).toBe('cancelled');
+    expect(task().reply).toBeUndefined();
+    expect(desk(tomorrow)).toEqual([['decision', 'Which seeds?']]);
+  });
+
+  it("a sheet counts won't do, a reply and later (until its day) as answers, and says which", () => {
+    const { store, runs, p, mine } = setup();
+    const doc = {
+      blocks: [
+        {
+          kind: 'sheet',
+          id: 'buy',
+          title: 'Shopping',
+          blocks: [
+            {
+              kind: 'block',
+              id: 'l',
+              node: { component: 'TaskChecklist', filter: { where: { title: 'Buy compost' } } },
+            },
+          ],
+        },
+      ],
+    } as ReportDoc;
+    createView(store, agent, { projectId: p, name: 'Review', message: 'm', doc });
+    const project = store.get(p) as Entity<'project'>;
+    const answer = (data: Record<string, unknown>) =>
+      store.apply(me, {
+        message: 'Answer',
+        operations: [{ op: 'update', type: 'task', id: mine, data }],
+      });
+    const sheet = (today = '2026-10-21') => sheetSummaries(store, p, doc, today)[0]!;
+    const onDesk = (day: string) =>
+      deskOf(store, runs, { now: new Date(`${day}T12:00:00Z`) }).items.some(
+        (i) => i.kind === 'sheet',
+      );
+    expect(sheet()).toMatchObject({ state: 'open', tasks: [{ id: mine, state: 'open' }] });
+
+    answer({ reply: 'Sam has some' });
+    expect(sheet()).toMatchObject({
+      state: 'answered',
+      tasks: [{ state: 'replied', reply: 'Sam has some', done: false }],
+    });
+    expect(onDesk('2026-10-21')).toBe(false);
+
+    answer({ reply: null, deferredUntil: '2026-10-26' });
+    expect(sheet()).toMatchObject({
+      state: 'answered',
+      tasks: [{ state: 'later', deferredUntil: '2026-10-26' }],
+    });
+    expect(onDesk('2026-10-21')).toBe(false);
+    expect(sheet('2026-10-26')).toMatchObject({ state: 'open', tasks: [{ state: 'open' }] });
+    expect(onDesk('2026-10-26')).toBe(true);
+
+    answer({ deferredUntil: null, status: valueFor(project, 'task.status', 'cancelled') });
+    expect(sheet()).toMatchObject({ state: 'answered', tasks: [{ state: 'wontDo' }] });
+  });
+
+  it("only the owner writes a task's reply or later day", () => {
+    const { store, p, mine } = setup();
+    expect(() =>
+      store.apply(agent, {
+        message: 'Answer for them',
+        operations: [{ op: 'update', type: 'task', id: mine, data: { reply: 'Done already' } }],
+      }),
+    ).toThrow(/only the owner replies to a task or puts it off \(reply\)/);
+    expect(() =>
+      store.apply(agent, {
+        message: 'Ask later',
+        operations: [
+          {
+            op: 'create',
+            type: 'task',
+            data: { projectId: p, title: 'Later', deferredUntil: '2027-01-01' },
+          },
+        ],
+      }),
+    ).toThrow(/deferredUntil/);
+    store.apply(me, {
+      message: 'Reply',
+      operations: [{ op: 'update', type: 'task', id: mine, data: { reply: 'Ask Ana' } }],
+    });
+    // An agent may still change the rest, but not delete the owner's answer.
+    store.apply(agent, {
+      message: 'Rename',
+      operations: [{ op: 'update', type: 'task', id: mine, data: { title: 'Buy compost (40 l)' } }],
+    });
+    expect(() =>
+      store.apply(agent, {
+        message: 'Drop it',
+        operations: [{ op: 'delete', type: 'task', id: mine }],
+      }),
+    ).toThrow(/already answered it \(reply\)/);
   });
 });

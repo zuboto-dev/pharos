@@ -7,6 +7,7 @@ import {
   docLeaves,
   docReads,
   figureMedia,
+  localToday,
   readsNothing,
   runQuery,
   sheetTasks,
@@ -14,6 +15,7 @@ import {
   type DocBlock,
   type DocLeafBlock,
   type Entity,
+  type TaskAnswerState,
 } from '@pharos/schema';
 import { AgentFiles } from '../store/agent-files.js';
 import { PharosError, formatPath } from '../store/errors.js';
@@ -279,21 +281,38 @@ export type SheetSummary = {
   time?: string;
   tags?: string[];
   /**
-   * Open until each decision has a choice or an answer and each checklist task is finished (done
-   * or cancelled); none for a sheet with neither.
+   * Open until each decision has a choice or an answer and each checklist task is answered (done,
+   * won't do, replied, or later until its day); none for a sheet with neither.
    */
   state?: 'open' | 'answered';
   decisions: SheetDecision[];
-  /** Tasks its TaskChecklists show, with their status (the reader ticks them). */
-  tasks?: { id: string; title: string; status: string; done: boolean }[];
+  /**
+   * Tasks its TaskChecklists show, with their status and the reader's answer on each: done,
+   * won't do, a reply in their words, later (until `deferredUntil`), or open.
+   */
+  tasks?: {
+    id: string;
+    title: string;
+    status: string;
+    done: boolean;
+    state: TaskAnswerState;
+    reply?: string;
+    deferredUntil?: string;
+  }[];
 };
 
 /**
  * Each sheet of a document with its state and the owner's answers (R15), so an agent reads them
  * in one call (view_get). A sheet is answered once each of its decisions has a choice or an
- * answer and each task its TaskChecklists show is done; a deferral keeps it open.
+ * answer and each task its TaskChecklists show is answered (done, won't do, a reply, or later
+ * until that day); a decision's deferral keeps it open.
  */
-export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc): SheetSummary[] {
+export function sheetSummaries(
+  store: Store,
+  projectId: string,
+  doc: ReportDoc,
+  today: string = localToday(),
+): SheetSummary[] {
   const sheets = docSheets(doc);
   if (!sheets.length) return [];
   const data = new AgentFiles(store).dataset(store.dataset(projectId));
@@ -323,12 +342,15 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
     const hasChecklist = sheetLeaves(sheet).some(
       (b) => b.kind === 'block' && b.node.component === 'TaskChecklist',
     );
-    const shown = sheetTasks(data, sheet as { blocks: DocBlock[] });
-    const tasks = shown.map(({ task, done }) => ({
+    const shown = sheetTasks(data, sheet as { blocks: DocBlock[] }, today);
+    const tasks = shown.map(({ task, done, state }) => ({
       id: task.id,
       title: task.data.title,
       status: task.data.status,
       done,
+      state,
+      ...(state === 'replied' ? { reply: task.data.reply } : {}),
+      ...(state === 'later' ? { deferredUntil: task.data.deferredUntil } : {}),
     }));
     return {
       id: sheet.id,
@@ -339,7 +361,7 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
         ? {
             state:
               decisions.every((d) => d.state === 'chosen' || d.state === 'answered') &&
-              shown.every((t) => t.finished)
+              shown.every((t) => t.answered)
                 ? ('answered' as const)
                 : ('open' as const),
           }

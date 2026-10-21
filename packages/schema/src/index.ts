@@ -1,6 +1,7 @@
 export * from './health.js';
 export * from './entities.js';
 export * from './decisions.js';
+export * from './task-answers.js';
 export * from './files.js';
 export * from './records.js';
 export * from './actions.js';

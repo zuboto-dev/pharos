@@ -15,6 +15,7 @@ import {
   formatMinutes,
   parseMinutes,
   sheetState,
+  ZoomDialog,
   type Figure,
   type Sheet,
 } from './document-rich';
@@ -602,6 +603,40 @@ describe('figures (R15)', () => {
     );
     fireEvent.click(screen.getByRole('dialog'));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it("full size slides between a figure's pictures: arrows, ← → and a swipe; clips are skipped", () => {
+    showDoc();
+    fireEvent.click(within(block('many')).getByRole('button', { name: 'A: open full size' }));
+    const shownAlt = () => screen.getByRole('dialog').querySelector('img')?.getAttribute('alt');
+    const count = () => document.querySelector('[data-zoom-count]')?.textContent;
+    expect(shownAlt()).toBe('A');
+    expect(count()).toBe('1 / 2');
+    expect(screen.getByRole('button', { name: 'Previous picture' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(shownAlt()).toBe('B');
+    expect(count()).toBe('2 / 2');
+    // The clip after B isn't a picture: B is the last one.
+    expect(screen.getByRole('button', { name: 'Next picture' })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous picture' }));
+    expect(shownAlt()).toBe('A');
+    // A swipe to the left shows the next one, and the click that ends it doesn't close.
+    const dialog = screen.getByRole('dialog');
+    fireEvent.pointerDown(dialog, { clientX: 300, clientY: 200 });
+    fireEvent.pointerUp(dialog, { clientX: 180, clientY: 210 });
+    fireEvent.click(dialog);
+    expect(shownAlt()).toBe('B');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('a picture alone opens without arrows', () => {
+    render(<ZoomDialog shown={{ src: '/x.png', alt: 'X' }} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Next picture' })).toBeNull();
+    expect(document.querySelector('[data-zoom-count]')).toBeNull();
   });
 
   it('compare: two pictures with an accessible slider between them', () => {

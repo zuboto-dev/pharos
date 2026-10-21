@@ -9,7 +9,7 @@ import {
   type Filter,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { Check, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useViewData } from '../catalog/context';
@@ -69,43 +69,118 @@ export function CodeBox({ text }: { text: string }) {
 /** The picture open full size: one at a time, in a dark dialog over the page. */
 type Zoomed = { src: string; alt: string; caption?: string };
 
+/** Where the shown picture is among its figure's pictures, and how to move to the next one. */
+type ZoomPaging = { at: number; of: number; onStep: (delta: 1 | -1) => void };
+
+/** How far a finger moves sideways before it counts as a swipe to the next picture. */
+const SWIPE_PX = 50;
+
 /**
  * A picture full size in a dark dialog with its caption. Escape, the close button or a click
- * anywhere closes it, and focus goes back to the picture the reader opened.
+ * anywhere closes it, and focus goes back to the picture the reader opened. With `paging` (a
+ * figure with more pictures), the arrows, ← → and a sideways swipe move between them.
  */
-export function ZoomDialog({ shown, onClose }: { shown: Zoomed; onClose: () => void }) {
+export function ZoomDialog({
+  shown,
+  onClose,
+  paging,
+}: {
+  shown: Zoomed;
+  onClose: () => void;
+  paging?: ZoomPaging;
+}) {
+  const dialog = useRef<HTMLDivElement>(null);
   const close = useRef<HTMLButtonElement>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
   const captionId = useId();
+  const step = paging?.onStep;
+  const first = paging ? paging.at === 0 : true;
+  const last = paging ? paging.at === paging.of - 1 : true;
   useEffect(() => {
     close.current?.focus();
+  }, []);
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         onClose();
-      } else if (e.key === 'Tab') {
-        // One thing to focus: the close button.
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
-        close.current?.focus();
+        e.stopPropagation();
+        if (e.key === 'ArrowLeft' && !first) step?.(-1);
+        if (e.key === 'ArrowRight' && !last) step?.(1);
+      } else if (e.key === 'Tab') {
+        // Focus stays on the dialog's own buttons.
+        e.preventDefault();
+        const buttons = [
+          ...(dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? []),
+        ];
+        const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next = buttons[(i + (e.shiftKey ? -1 : 1) + buttons.length) % buttons.length];
+        (next ?? close.current)?.focus();
       }
     };
     window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose, step, first, last]);
+  useEffect(() => {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey, true);
       document.body.style.overflow = overflow;
     };
-  }, [onClose]);
+  }, []);
+  const arrow = (delta: 1 | -1) => {
+    const off = delta < 0 ? first : last;
+    const Icon = delta < 0 ? ChevronLeft : ChevronRight;
+    return (
+      <button
+        type="button"
+        aria-label={delta < 0 ? 'Previous picture' : 'Next picture'}
+        disabled={off}
+        onClick={(e) => {
+          e.stopPropagation();
+          step?.(delta);
+        }}
+        className={clsx(
+          'absolute top-1/2 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-sky-400 disabled:invisible',
+          delta < 0 ? 'left-2 sm:left-4' : 'right-2 sm:right-4',
+        )}
+      >
+        <Icon aria-hidden className="size-6" />
+      </button>
+    );
+  };
   return createPortal(
     <div
+      ref={dialog}
       role="dialog"
       aria-modal="true"
       aria-label={shown.alt}
       aria-describedby={shown.caption ? captionId : undefined}
       data-doc-zoom=""
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex animate-fade-in flex-col items-center justify-center gap-3 bg-neutral-950/90 p-4 sm:p-8"
+      onClick={() => {
+        // The click that ends a swipe doesn't close the picture.
+        if (swiped.current) swiped.current = false;
+        else onClose();
+      }}
+      onPointerDown={(e) => {
+        swipe.current = { x: e.clientX, y: e.clientY };
+        swiped.current = false;
+      }}
+      onPointerUp={(e) => {
+        const from = swipe.current;
+        swipe.current = null;
+        if (!from || !step) return;
+        const dx = e.clientX - from.x;
+        if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(e.clientY - from.y)) return;
+        swiped.current = true;
+        if (dx < 0 && !last) step(1);
+        if (dx > 0 && !first) step(-1);
+      }}
+      className="fixed inset-0 z-50 flex animate-fade-in touch-pan-y flex-col items-center justify-center gap-3 bg-neutral-950/90 p-4 select-none sm:p-8"
     >
       <button
         ref={close}
@@ -117,10 +192,21 @@ export function ZoomDialog({ shown, onClose }: { shown: Zoomed; onClose: () => v
         <X aria-hidden className="size-5" />
       </button>
       <img
+        key={shown.src}
         src={shown.src}
         alt={shown.alt}
-        className="max-h-[82dvh] max-w-full rounded-tile object-contain shadow-overlay"
+        draggable={false}
+        className="max-h-[78dvh] max-w-full rounded-tile object-contain shadow-overlay"
       />
+      {paging && (
+        <>
+          {arrow(-1)}
+          {arrow(1)}
+          <p data-zoom-count="" aria-live="polite" className="text-xs text-white/70 tabular-nums">
+            {paging.at + 1} / {paging.of}
+          </p>
+        </>
+      )}
       {shown.caption && (
         <div id={captionId} className="doc-zoom-caption">
           <Markdown>{shown.caption}</Markdown>
@@ -260,6 +346,20 @@ export function FigureView({ view, block }: { view: Entity<'view'>; block: Figur
     requestAnimationFrame(() => opener.current?.focus());
   };
   const shown = zoomed !== null ? block.items[zoomed] : undefined;
+  // The pictures (not clips or sounds) the full-size view moves between.
+  const pictures = block.items.flatMap((item, i) => (figureMedia(item.src) === 'image' ? [i] : []));
+  const at = zoomed === null ? -1 : pictures.indexOf(zoomed);
+  const paging =
+    pictures.length > 1 && at >= 0
+      ? {
+          at,
+          of: pictures.length,
+          onStep: (delta: 1 | -1) => {
+            const next = pictures[at + delta];
+            if (next !== undefined) setZoomed(next);
+          },
+        }
+      : undefined;
   return (
     <>
       {layout === 'compare' ? (
@@ -289,6 +389,7 @@ export function FigureView({ view, block }: { view: Entity<'view'>; block: Figur
         <ZoomDialog
           shown={{ src: urls[zoomed]!, alt: shown.alt, caption: shown.caption }}
           onClose={closeZoom}
+          paging={paging}
         />
       )}
     </>

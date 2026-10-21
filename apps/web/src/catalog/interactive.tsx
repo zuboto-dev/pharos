@@ -64,6 +64,14 @@ function isPlainClick(e: MouseEvent): boolean {
  * Makes a block open an entity's details on click or Enter. Nested buttons and links keep
  * working; the block itself isn't a link so it can contain them.
  */
+/** A record's name for the agent picker (R17): its title, name or question. */
+function entityTitle(entity: { data: unknown } | undefined): string | undefined {
+  const data = (entity?.data ?? {}) as Record<string, unknown>;
+  for (const key of ['title', 'name', 'question', 'label'])
+    if (typeof data[key] === 'string' && data[key]) return data[key];
+  return undefined;
+}
+
 export function Clickable({
   id,
   children,
@@ -88,6 +96,8 @@ export function Clickable({
   // v0.2 A6, `useOpenItem`).
   const openItem = useOpenItem({ fileItself: true });
   const open = () => (onOpen ? onOpen() : openItem(id, list));
+  // What the agent picker (R17) says this row is.
+  const entity = useViewData().entityById.get(id);
   const onClick = (e: MouseEvent<HTMLDivElement>) => {
     const nested = (e.target as HTMLElement).closest('button, a, select, input, [data-no-open]');
     if (nested && nested !== e.currentTarget) return;
@@ -101,6 +111,9 @@ export function Clickable({
       role="button"
       tabIndex={0}
       title={title}
+      data-entity={id}
+      data-entity-type={entity?.type}
+      data-pick-title={entityTitle(entity)}
       aria-pressed={pressed}
       onClick={onClick}
       onKeyDown={onKeyDown}

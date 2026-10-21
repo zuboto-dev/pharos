@@ -425,6 +425,9 @@ function TaskRow({ task, title, children }: { task: Task; title: ReactNode; chil
   const meaning = useOptions().meaning('task.status', task.data.status);
   return (
     <tr
+      data-entity={task.id}
+      data-entity-type="task"
+      data-pick-title={task.data.title}
       onClick={(e) => {
         if (!(e.target as HTMLElement).closest('button, a, select'))
           actions.open({ entity: task.id });

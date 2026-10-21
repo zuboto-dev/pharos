@@ -215,6 +215,7 @@ function ColumnsView({
   return (
     <div
       data-doc-block={block.id}
+      data-doc-kind="columns"
       data-doc-columns={block.columns.length}
       data-width={width}
       className="doc-block doc-columns"
@@ -248,6 +249,7 @@ function DetailsView({
   return (
     <details
       data-doc-block={block.id}
+      data-doc-kind="details"
       data-doc-details=""
       data-width={width}
       open={block.open || undefined}
@@ -281,6 +283,7 @@ function SheetView({ view, block }: { view: Entity<'view'>; block: Sheet }) {
     id: sheetAnchor(block.id),
     tabIndex: -1,
     'data-doc-block': block.id,
+    'data-doc-kind': 'sheet',
     'data-doc-sheet': '',
     'data-state': state,
     'data-width': docWidth(block),
@@ -317,6 +320,7 @@ function Leaf({
 }) {
   const common = {
     'data-doc-block': block.id,
+    'data-doc-kind': block.kind === 'block' ? block.node.component : block.kind,
     'data-width': width,
     'data-prose': isProse(block) ? '' : undefined,
     className: 'doc-block',

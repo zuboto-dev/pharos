@@ -323,6 +323,7 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
               else elements.current.delete(widget.id);
             }}
             data-widget={widget.id}
+            data-component={widget.node.component}
             style={placement(widget, preview)}
             onDragOver={(e) => {
               if (!editing || !e.dataTransfer.types.includes(DRAG_TYPE)) return;

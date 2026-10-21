@@ -40,7 +40,8 @@ export default defineConfig({
       'X-Frame-Options': 'SAMEORIGIN',
     },
     proxy: {
-      '/api': serverUrl,
+      // `ws`: the agent panel's terminal socket (R17) goes through too.
+      '/api': { target: serverUrl, ws: true },
     },
   },
 });

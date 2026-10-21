@@ -258,7 +258,13 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
   );
 
   return (
-    <section aria-labelledby={titleId} className="space-y-4">
+    <section
+      aria-labelledby={titleId}
+      data-entity={decision.id}
+      data-entity-type="decision"
+      data-pick-title={question}
+      className="space-y-4"
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">

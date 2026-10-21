@@ -29,6 +29,7 @@ import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
 import { RunLog, deskAnswer, deskOf } from './desk.js';
+import { landedSince, markDeskSeen } from './landed.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -467,6 +468,12 @@ export function createApp(
       })
       .parse(await c.req.json().catch(() => ({})));
     return c.json(deskAnswer(store, authorOf(c), body));
+  });
+  // What agents landed since the owner last looked at the desk; opening the desk moves the mark.
+  api.get('/desk/landed', (c) => c.json(landedSince(store)));
+  api.put('/desk/seen', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Only the owner marks the desk seen');
+    return c.json({ seen: markDeskSeen(store) });
   });
   api.get('/runs', (c) => {
     const q = c.req.query();

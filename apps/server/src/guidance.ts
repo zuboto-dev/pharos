@@ -290,12 +290,12 @@ by side: pharos://examples/reports). Check every report against these five:
 5. **A source on every number, and an honesty box**: say what each number counts and where it
    comes from; then what the evidence doesn't show, and what would change the conclusion.
 
-It fails if it is either of these:
-
-- **A results view that proves what the workers did**: logs, scoreboards, who did what. That is
-  a pile of words about the work; explain the subject to the reader instead.
-- **A three-column table of full sentences with no TLDR at the top**. Lead with the claim and
-  numbers; keep cells short.
+**Show, don't tell.** Every section leads with something to see: Stats or a chart for numbers, a
+table for a comparison, a figure for anything visual (screenshots, photos, before and after), a
+drawing for a diagram, a flow or an infographic, an interactive drawing where the reader would
+explore (a slider, a filter, a what-if). Words carry the claim and the "so what" in a sentence
+or two; detail goes in details blocks. It fails as a section of words only, a log of what the
+workers did, or a table of full sentences with no TLDR at the top.
 
 ## Report documents
 

@@ -101,6 +101,16 @@ export function readerChecks(doc: ReportDoc): string[] {
     warnings.push(
       'Reader check: no key numbers: put 3–5 in the lead (bold) or as Stat/StatCards blocks, each with its source',
     );
+  const wordy = wordOnlySections(doc);
+  if (wordy.length)
+    warnings.push(
+      `Reader check: ${wordy.length === 1 ? 'section' : 'sections'} ${wordy
+        .slice(0, 4)
+        .map((h) => `"${h}"`)
+        .join(', ')} ${wordy.length === 1 ? 'is' : 'are'} words only; show ${
+        wordy.length === 1 ? 'it' : 'each'
+      } with Stats or a chart, a table, a figure, or a drawing (interactive where the reader would explore)`,
+    );
   if (prose > PROSE_CHARS && !seeable)
     warnings.push(
       `Reader check: ${prose} characters of text and nothing to see; show it with a chart, a table, a figure or a drawing`,
@@ -186,4 +196,63 @@ export function drawingOverlaps(id: string, html: string): string[] {
           .join(', ')}); route them around the labels or between the boxes`,
       ]
     : [];
+}
+
+/** Text that is itself something to see: a Markdown table. */
+const TABLE = /^\s*\|.*\|\s*$\n^\s*\|?\s*:?-{3,}/m;
+
+/**
+ * The "## " sections of a document (outside review sheets, which hold asks) with nothing to see
+ * before the next heading: only Text, Markdown and Callouts. The lead ("# ") is the claim and
+ * its numbers, checked on its own.
+ */
+export function wordOnlySections(doc: ReportDoc): string[] {
+  const out: string[] = [];
+  let current: { heading: string; seen: boolean } | null = null;
+  const close = () => {
+    if (current && !current.seen) out.push(current.heading);
+    current = null;
+  };
+  const visit = (b: {
+    kind: string;
+    node?: unknown;
+    blocks?: unknown[];
+    columns?: unknown[][];
+  }) => {
+    // A heading that introduces review sheets has them to look at.
+    if (b.kind === 'sheet') {
+      if (current) current.seen = true;
+      return close();
+    }
+    if (b.kind === 'columns') return (b.columns ?? []).flat().forEach((c) => visit(c as never));
+    if (b.kind === 'details') return;
+    if (b.kind === 'block') {
+      const node = b.node as { component: string; content?: unknown };
+      const text =
+        node.component === 'Text' || node.component === 'Markdown'
+          ? typeof node.content === 'string'
+            ? node.content
+            : ''
+          : undefined;
+      if (node.component === 'Callout') return;
+      if (text !== undefined) {
+        for (const line of text.split('\n')) {
+          const h = /^##\s+(.+)$/.exec(line.trim());
+          if (h) {
+            close();
+            const heading = h[1]!.trim();
+            // A number set as a heading ("## 10 / 10") is a stat card itself.
+            const stat = heading.length <= 16 && /\d/.test(heading) && !/[a-z]{4,}/i.test(heading);
+            current = { heading: heading.slice(0, 60), seen: stat };
+          }
+        }
+        if (current && TABLE.test(text)) current.seen = true;
+        return;
+      }
+    }
+    if (current) current.seen = true;
+  };
+  for (const b of doc.blocks) visit(b as never);
+  close();
+  return out;
 }

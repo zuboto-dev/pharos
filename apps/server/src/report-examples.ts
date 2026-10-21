@@ -145,6 +145,16 @@ export const FINDING_EXAMPLE = {
     },
     {
       kind: 'block',
+      id: 'by-item',
+      node: {
+        component: 'CountChart',
+        title: 'Jackets bring half of the size returns',
+        query: { type: 'record', where: { recordType: 'return', 'fields.reason': 'size' } },
+        by: 'fields.item',
+      },
+    },
+    {
+      kind: 'block',
       id: 'honest',
       node: {
         component: 'Callout',

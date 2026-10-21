@@ -39,7 +39,7 @@ describe('guidance', () => {
     expect(REPORT_GUIDE.split('\n').length).toBeLessThan(200);
   });
 
-  it('puts the glance test in the report guide: five traits and two anti-examples (R3)', () => {
+  it("puts the glance test in the report guide: five traits, show don't tell, and what fails (R3)", () => {
     const start = REPORT_GUIDE.indexOf('## The glance test');
     expect(start).toBeGreaterThan(-1);
     // Before the how-to sections, so an agent reads the bar first.
@@ -58,11 +58,13 @@ describe('guidance', () => {
       'A source on every number',
       'an honesty box',
       "what the evidence doesn't show",
-      // The two anti-examples.
-      'proves what the workers did',
-      'logs, scoreboards, who did what',
-      'pile of words',
-      'three-column table of full sentences with no TLDR',
+      // Show, don't tell, and what fails.
+      "Show, don't tell",
+      'Every section leads with something to see',
+      'interactive drawing where the reader would',
+      'a section of words only',
+      'workers did',
+      'a table of full sentences with no TLDR',
     ])
       expect(glance, part).toContain(part);
   });

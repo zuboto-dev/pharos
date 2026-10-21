@@ -15,9 +15,29 @@ const GOOD = text(
 
 describe('reader checks on report documents', () => {
   it('passes a report that leads with its claim and key numbers', () => {
+    const chart = { kind: 'block', id: 'c', node: { component: 'CountChart', title: 'Beds' } };
     expect(
-      readerChecks(doc(GOOD, text('a', '## Two beds are ready for planting\n\nShort.'))),
+      readerChecks(doc(GOOD, text('a', '## Two beds are ready for planting\n\nShort.'), chart)),
     ).toEqual([]);
+  });
+
+  it('flags sections of words only; a chart, a figure or a table in the section passes', () => {
+    const fig = { kind: 'figure', id: 'f', items: [{ src: 'shots/a.png', alt: 'A bed' }] };
+    const w = readerChecks(
+      doc(
+        GOOD,
+        text('a', '## Two beds are ready\n\nShort.'),
+        text('b', '## Water use fell by a third\n\nShort.'),
+        fig,
+        text('c', '## Costs by month\n\n| Month | Cost |\n|---|---|\n| Jul | 4 |'),
+        text('d', '## 10 / 10'),
+        text('e', '## Two questions for you'),
+        { kind: 'sheet', id: 's', title: 'Pick', blocks: [text('t', 'Which?')] },
+      ),
+    );
+    expect(w.filter((x) => x.includes('words only'))).toEqual([
+      'Reader check: section "Two beds are ready" is words only; show it with Stats or a chart, a table, a figure, or a drawing (interactive where the reader would explore)',
+    ]);
   });
 
   it('asks for the claim first and for key numbers', () => {

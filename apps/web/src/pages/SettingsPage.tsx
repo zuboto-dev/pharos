@@ -6,9 +6,28 @@ import {
   type FolderStatus,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { Check, Copy, Folder, Monitor, Moon, Sun } from 'lucide-react';
+import {
+  Bot,
+  Cable,
+  Check,
+  Copy,
+  Database,
+  EyeOff,
+  BookOpen,
+  FolderOpen,
+  Monitor,
+  Moon,
+  Palette,
+  Pencil,
+  ShieldAlert,
+  Sun,
+  Tags,
+  Trash2,
+  type LucideIcon,
+} from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Skeleton, SkeletonRows } from '../catalog/skeleton';
+import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { FolderRequestCard, useFolderRequests } from '../files/FolderRequests';
 import { ApiError, postJson, useResource } from '../lib/api';
@@ -41,12 +60,15 @@ const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: 'System', icon: Monitor },
 ];
 
+/** A settings card: its symbol and title lead; what it's for waits behind the (i). */
 function Section({
   title,
+  icon: Icon,
   description,
   children,
 }: {
   title: string;
+  icon: LucideIcon;
   description?: string;
   children: ReactNode;
 }) {
@@ -55,19 +77,23 @@ function Section({
       aria-label={title}
       className="space-y-4 rounded-block border border-line bg-surface p-5"
     >
-      <div className="space-y-1">
-        <h2 className="text-base font-semibold">{title}</h2>
-        {description && <p className="text-sm text-muted">{description}</p>}
-      </div>
+      <h2 className="flex items-center gap-2 text-base font-semibold">
+        <Icon className="size-4 text-faint" aria-hidden />
+        {title}
+        {description && <InfoTip label={`About ${title.toLowerCase()}`} detail={description} />}
+      </h2>
       {children}
     </section>
   );
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({ label, info, children }: { label: string; info?: string; children: ReactNode }) {
   return (
     <div className="grid gap-1 py-2 text-sm sm:grid-cols-[10rem_1fr] sm:gap-4">
-      <dt className="text-muted">{label}</dt>
+      <dt className="flex items-center gap-1 self-start text-muted">
+        {label}
+        {info && <InfoTip label={`About ${label.toLowerCase()}`} detail={info} />}
+      </dt>
       <dd className="min-w-0">{children}</dd>
     </div>
   );
@@ -76,14 +102,20 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 function CopyButton({ label, text }: { label: string; text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
-      type="button"
-      aria-label={`Copy ${label}`}
-      onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
-      className="shrink-0 rounded p-1 text-faint hover:bg-subtle hover:text-ink-soft"
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
+    <Tooltip label={copied ? 'Copied' : `Copy ${label}`}>
+      <button
+        type="button"
+        aria-label={`Copy ${label}`}
+        onClick={() => void navigator.clipboard?.writeText(text).then(() => setCopied(true))}
+        className="shrink-0 rounded p-1 text-faint hover:bg-subtle hover:text-ink-soft"
+      >
+        {copied ? (
+          <Check className="size-3.5" aria-hidden />
+        ) : (
+          <Copy className="size-3.5" aria-hidden />
+        )}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -256,14 +288,13 @@ function AgentChoice({
     >
       {agent.presets.map(({ id, label, installed }) => {
         const chosen = agent.preset === id;
-        return (
+        const radio = (
           <button
             key={id}
             type="button"
             role="radio"
             aria-checked={chosen}
             disabled={!installed}
-            title={installed ? undefined : `${label} isn't installed on this computer`}
             onClick={() => !chosen && onChoose(id)}
             className={clsx(
               'tap-area rounded-md px-2.5 py-1 whitespace-nowrap',
@@ -277,6 +308,13 @@ function AgentChoice({
             {!installed && <span className="ml-1 text-xs text-muted">not installed</span>}
           </button>
         );
+        return installed ? (
+          radio
+        ) : (
+          <Tooltip key={id} label={`${label} isn't installed on this computer`}>
+            {radio}
+          </Tooltip>
+        );
       })}
     </div>
   );
@@ -287,6 +325,8 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const summary = agentSummary(agent);
+  const [lead, ...after] = summary.text.split(': ');
+  const rest = after.join(': ');
   const hint = switchHint(agent);
   const report = (err: unknown) =>
     setError(err instanceof ApiError ? err.message : 'Couldn’t reach the server');
@@ -320,13 +360,19 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
   return (
     <Section
       title="Answering questions"
+      icon={Bot}
       description="When someone uses Ask in a view, an agent on this computer answers with a view. Each answer uses that agent's model and counts toward its usage; the cost depends on the agent and model."
     >
       <div className="flex items-start justify-between gap-4">
-        <p className="flex items-center gap-2 text-sm" role="status" aria-live="polite">
-          <span className={clsx('size-2 shrink-0 rounded-full', TONES[summary.tone])} />
-          {summary.text}
-        </p>
+        {/* Its key words lead ("Paused"); the reason waits behind the (i). */}
+        <div className="flex min-w-0 items-center gap-1.5 text-sm">
+          <p className="flex items-center gap-2 font-medium" role="status" aria-live="polite">
+            <span className={clsx('size-2 shrink-0 rounded-full', TONES[summary.tone])} />
+            {lead}
+            {rest && <span className="sr-only">: {rest}</span>}
+          </p>
+          {rest && <InfoTip label="Why" detail={rest} />}
+        </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <AgentChoice agent={agent} onChoose={(preset) => void change({ preset })} />
           {hint && (
@@ -362,12 +408,12 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
           {agent.mode === 'default' ? (
             `${agent.agent ?? 'Claude Code'} (found on this computer), connected only to Pharos`
           ) : agent.mode === 'custom' && agent.command ? (
-            <span className="flex flex-col gap-1">
+            <span className="flex items-start gap-1">
               <Copyable label="command" text={agent.command} />
-              <span className="text-xs text-muted">
-                Set by <code>PHAROS_AGENT_COMMAND</code> on the server, so it decides which agent
-                answers.
-              </span>
+              <InfoTip
+                label="About the command"
+                detail="Set by PHAROS_AGENT_COMMAND on the server, so it decides which agent answers."
+              />
             </span>
           ) : (
             'None'
@@ -384,14 +430,11 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
             <Copyable label="log path" text={agent.logPath} />
           </Row>
         )}
-        <Row label="Change the agent">
-          <span className="text-muted">
-            {agent.mode === 'default' &&
-              'Pick Claude Code or Codex above; a change applies from the next run. '}
-            For another agent, set <code>PHAROS_AGENT_COMMAND</code> to your own command (or{' '}
-            <code>off</code>) and restart the server. For safety, the command can only be set on the
-            server, not from this page.
-          </span>
+        <Row
+          label="Change the agent"
+          info={`${agent.mode === 'default' ? 'Pick Claude Code or Codex above; a change applies from the next run. ' : ''}For another agent, set PHAROS_AGENT_COMMAND to your own command (or off) and restart the server. For safety, the command can only be set on the server, not from this page.`}
+        >
+          <code className="text-muted">PHAROS_AGENT_COMMAND</code>
         </Row>
       </dl>
     </Section>
@@ -401,6 +444,12 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
 // ------------------------------------------------------------------ folders (R7.3)
 
 const LEVEL_ORDER: FolderLevel[] = ['hidden', 'details', 'contents'];
+/** Hidden: nothing; Details: names and tags; Contents: the text itself. */
+const LEVEL_ICONS: Record<FolderLevel, LucideIcon> = {
+  hidden: EyeOff,
+  details: Tags,
+  contents: BookOpen,
+};
 
 /** Sends a change to the folder routes; the server explains refusals in plain words. */
 async function sendFolder<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -430,14 +479,17 @@ function LevelSelect({
   value,
   label,
   onChange,
+  ...rest
 }: {
   value: FolderLevel;
   label: string;
   onChange: (level: FolderLevel) => void;
+  'aria-describedby'?: string;
 }) {
   return (
     <select
       aria-label={label}
+      aria-describedby={rest['aria-describedby']}
       value={value}
       onChange={(e) => onChange(e.target.value as FolderLevel)}
       className="rounded-control border border-line-strong bg-surface px-2 py-1 text-sm focus:border-sky-500 focus:outline-none"
@@ -519,7 +571,7 @@ function FolderRow({
             </form>
           ) : (
             <p className="flex items-center gap-2 text-sm font-medium">
-              <Folder className="size-4 shrink-0 text-faint" />
+              <FolderOpen className="size-4 shrink-0 text-faint" aria-hidden />
               {folder.label}
             </p>
           )}
@@ -534,24 +586,39 @@ function FolderRow({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <LevelSelect
-            label={`What agents see in ${folder.label}`}
-            value={folder.level}
-            onChange={(level) => void send('PATCH', { level })}
-          />
+          <Tooltip label="What agents see" detail={FOLDER_LEVELS[folder.level].agents}>
+            <LevelSelect
+              label={`What agents see in ${folder.label}`}
+              value={folder.level}
+              onChange={(level) => void send('PATCH', { level })}
+            />
+          </Tooltip>
           {!renaming && (
-            <button type="button" className={BUTTON.secondary} onClick={() => setRenaming(true)}>
-              Rename
-            </button>
+            <Tooltip label="Rename">
+              <button
+                type="button"
+                aria-label="Rename"
+                className={ICON_GHOST}
+                onClick={() => setRenaming(true)}
+              >
+                <Pencil className="size-4" aria-hidden />
+              </button>
+            </Tooltip>
           )}
           {!confirming && (
-            <button type="button" className={BUTTON.secondary} onClick={() => setConfirming(true)}>
-              Remove
-            </button>
+            <Tooltip label="Remove">
+              <button
+                type="button"
+                aria-label="Remove"
+                className={clsx(ICON_GHOST, 'hover:text-danger')}
+                onClick={() => setConfirming(true)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </button>
+            </Tooltip>
           )}
         </div>
       </div>
-      <p className="text-xs text-ink-soft">{FOLDER_LEVELS[folder.level].agents}</p>
       {confirming && (
         <div className="flex flex-wrap items-center gap-3 rounded-tile bg-sunken px-3 py-2 text-sm">
           <span className="min-w-0 flex-1">
@@ -623,10 +690,10 @@ function AddFolder({ onAdded, onError }: { onAdded: () => void; onError: (err: u
         <button type="submit" disabled={busy || !path.trim()} className={BUTTON.primary}>
           Add folder
         </button>
-        <span className="text-xs text-muted">
-          Type or paste the full path. In Finder, Option-right-click a folder and choose Copy as
-          Pathname.
-        </span>
+        <InfoTip
+          label="About the folder path"
+          detail="Type or paste the full path. In Finder, Option-right-click a folder and choose Copy as Pathname."
+        />
       </div>
     </form>
   );
@@ -639,17 +706,17 @@ function DenyRules({ folders }: { folders: FolderStatus[] }) {
   const snippet = JSON.stringify({ permissions: { deny: rules } }, null, 2);
   return (
     <div className="space-y-2 border-t border-line-soft pt-4">
-      <h3 className="text-sm font-semibold">Keep Claude Code out of these folders</h3>
+      <h3 className="flex items-center gap-1 text-sm font-semibold">
+        Keep Claude Code out of these folders
+        {rules.length > 0 && (
+          <InfoTip
+            label="About these rules"
+            detail={`Claude Code can read your disk directly, without going through Pharos. Add these rules to the permissions.deny list in ~/.claude/settings.json, and it won’t open files in folders set to Hidden or Details. They stop its file tools and commands like cat, but not a script that opens files itself; to stop those too, turn on Claude Code’s sandbox ("sandbox": { "enabled": true }), which applies these rules to every shell command.`}
+          />
+        )}
+      </h3>
       {rules.length ? (
         <>
-          <p className="text-sm text-muted">
-            Claude Code can read your disk directly, without going through Pharos. Add these rules
-            to the <code>permissions.deny</code> list in <code>~/.claude/settings.json</code>, and
-            it won’t open files in folders set to Hidden or Details. They stop its file tools and
-            commands like <code>cat</code>, but not a script that opens files itself; to stop those
-            too, turn on Claude Code’s sandbox (<code>"sandbox": {'{ "enabled": true }'}</code>),
-            which applies these rules to every shell command.
-          </p>
           <div className="relative">
             <pre
               aria-label="Claude Code deny rules"
@@ -685,7 +752,8 @@ function Folders() {
   return (
     <Section
       title="Folders"
-      description="Folders on this computer you can add files from. Files stay where they are: Pharos only reads them, and never moves, renames or deletes anything."
+      icon={FolderOpen}
+      description="Folders on this computer you can add files from. Files stay where they are: Pharos only reads them, and never moves, renames or deletes anything. Agents can ask for a folder when they need one; nothing is shared until you approve it here or on the project page."
     >
       {requests.pending.length > 0 && (
         <div className="space-y-2" aria-label="Waiting for you">
@@ -721,28 +789,34 @@ function Folders() {
           {error}
         </p>
       )}
-      <dl aria-label="Levels" className="divide-y divide-line-soft">
-        {LEVEL_ORDER.map((level) => (
-          <Row key={level} label={FOLDER_LEVELS[level].label}>
-            <span className="text-muted">
-              {FOLDER_LEVELS[level].agents}
-              {level === 'details' && ' The default.'}
-            </span>
-          </Row>
-        ))}
-      </dl>
-      <p className="text-sm text-muted">
-        Agents can ask for a folder when they need one. Nothing is shared until you approve it here
-        or on the project page.
-      </p>
+      {/* The three levels, one symbol each; what agents see at each waits behind its (i). */}
+      <ul aria-label="Levels" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
+        {LEVEL_ORDER.map((level) => {
+          const Icon = LEVEL_ICONS[level];
+          return (
+            <li key={level} className="flex items-center gap-1">
+              <Icon className="size-3.5" aria-hidden />
+              {FOLDER_LEVELS[level].label}
+              <InfoTip
+                label={`About ${FOLDER_LEVELS[level].label}`}
+                detail={`${FOLDER_LEVELS[level].agents}${level === 'details' ? ' The default.' : ''}`}
+              />
+            </li>
+          );
+        })}
+      </ul>
       <DenyRules folders={list} />
-      <div
+      {/* Details behind a click: the symbol and title say there are limits. */}
+      <details
         role="note"
         aria-label="What Pharos can and can’t enforce"
-        className="space-y-1.5 rounded-tile bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+        className="rounded-tile bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
       >
-        <p className="font-medium">What Pharos can and can’t enforce</p>
-        <ul className="list-disc space-y-1 pl-5">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium [&::-webkit-details-marker]:hidden">
+          <ShieldAlert className="size-4 shrink-0" aria-hidden />
+          What Pharos can and can’t enforce
+        </summary>
+        <ul className="mt-1.5 list-disc space-y-1 pl-5">
           <li>
             Pharos enforces these levels for agents that connect over MCP, and only you, on this
             page, can add folders or give agents more access.
@@ -757,7 +831,7 @@ function Folders() {
             fully tell a local program from this page.
           </li>
         </ul>
-      </div>
+      </details>
     </Section>
   );
 }
@@ -773,39 +847,37 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-8">
       <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-      <Section title="Appearance" description="Saved in this browser.">
+      <Section title="Appearance" icon={Palette} description="Saved in this browser.">
         <ThemeChoice />
       </Section>
       <AnsweringAgent waiting={requests.data?.length ?? 0} />
       <Folders />
       <Section
         title="Data and connection"
+        icon={Database}
         description="Pharos keeps everything in one file on this computer. Agents connect over MCP."
       >
         {s ? (
           <dl className="divide-y divide-line-soft">
-            <Row label="Database">
+            <Row
+              label="Database"
+              info="Move it with PHAROS_DB; back it up by copying the file while the server is stopped."
+            >
               {s.dataPath ? <Copyable label="database path" text={s.dataPath} /> : 'In memory'}
               <p className="mt-1 text-xs text-muted">
-                {plural(s.projects, 'project')} · {plural(s.revisions, 'revision')}. Move it with{' '}
-                <code>PHAROS_DB</code>; back it up by copying the file while the server is stopped.
+                {plural(s.projects, 'project')} · {plural(s.revisions, 'revision')}
               </p>
             </Row>
-            <Row label="Server">
+            <Row
+              label="Server"
+              info={
+                s.service
+                  ? 'Running as the background service: change the port with PORT and run pnpm service install again.'
+                  : 'Change the port with PORT when starting the server.'
+              }
+            >
               <span className="tabular-nums">Port {s.port}</span>
-              {s.service ? (
-                <span className="text-muted">
-                  {' '}
-                  · running as the background service: change it with <code>PORT</code> and run{' '}
-                  <code>pnpm service install</code> again
-                </span>
-              ) : (
-                <>
-                  <span className="text-muted"> · change it with </span>
-                  <code>PORT</code>
-                  <span className="text-muted"> when starting the server</span>
-                </>
-              )}
+              {s.service && <span className="text-muted"> · background service</span>}
             </Row>
             <Row label="MCP endpoint">
               <Copyable label="MCP endpoint" text={s.mcpUrl} />
@@ -818,6 +890,7 @@ export function SettingsPage() {
       </Section>
       <Section
         title="Connect an agent"
+        icon={Cable}
         description="Pick your agent and paste the snippet. Each one connects to the MCP endpoint above."
       >
         {s ? <ConnectAgent mcpUrl={s.mcpUrl} /> : <Skeleton lines={3} label="Loading connection" />}

@@ -178,7 +178,10 @@ describe('settings', () => {
   it('explains when no agent is set up', async () => {
     agent = { ...agent, configured: false, mode: 'unavailable' };
     render(<SettingsPage />);
-    await screen.findByText(/Not set up: install Claude Code/);
+    // "Not set up" leads; the how-to is the status's hidden rest and the (i)'s description.
+    await screen.findByText('Not set up');
+    expect(screen.getByRole('status').textContent).toMatch(/^Not set up: install Claude Code/);
+    expect(screen.getByRole('button', { name: 'Why' })).toBeTruthy();
     expect(
       screen
         .getByRole('switch', { name: 'Answer questions automatically' })

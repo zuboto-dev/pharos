@@ -37,7 +37,11 @@ describe('sidebar toggle', () => {
     const hide = screen.getByRole('button', { name: 'Hide sidebar' });
     expect(hide.getAttribute('aria-expanded')).toBe('true');
     expect(hide.getAttribute('aria-controls')).toBe(SIDEBAR_ID);
-    expect(hide.getAttribute('title')).toMatch(/Hide sidebar \((⌘|Ctrl\+)\\\)/);
+    expect(hide.getAttribute('aria-keyshortcuts')).toBe('Meta+Backslash Control+Backslash');
+    // Its tooltip names it and shows the shortcut, on keyboard focus at once.
+    act(() => hide.focus());
+    expect(document.querySelector('[data-tip]')?.textContent).toMatch(/^Hide sidebar(⌘|Ctrl\+)\\$/);
+    act(() => hide.blur());
     fireEvent.click(hide);
     expect(isHidden(aside)).toBe(true);
     const show = screen.getByRole('button', { name: 'Show sidebar' });

@@ -20,6 +20,7 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
+import { Tooltip } from '../catalog/tooltip';
 import { AUTHOR_ICONS } from '../catalog/history';
 import { PresenceDot, viewsWithPresence, workingLine } from '../catalog/presence';
 import { usePresence } from '../lib/events';
@@ -56,20 +57,25 @@ export function ViewUpdated({ view }: { view: Entity<'view'> }) {
   );
   const rev = latest.data?.[0];
   const Icon = rev ? AUTHOR_ICONS[rev.author.kind] : null;
+  // The line says when and who; what changed waits in its tooltip (and its description).
   return (
-    <button
-      type="button"
-      onClick={() => actions.open({ entity: view.id })}
-      title={rev ? `#${rev.id} · ${rev.message}` : 'Show this view’s history'}
-      className="inline-flex max-w-full items-center gap-1.5 text-xs text-muted hover:text-ink"
+    <Tooltip
+      label="Details and history"
+      detail={rev ? `#${rev.id} · ${rev.message}` : undefined}
+      className="max-w-full"
     >
-      {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
-      <span className="truncate">
-        Updated {timeAgo(view.updatedAt)}
-        {rev && ` by ${rev.author.name}`}
-        {rev && <span className="hidden sm:inline"> · {rev.message}</span>}
-      </span>
-    </button>
+      <button
+        type="button"
+        onClick={() => actions.open({ entity: view.id })}
+        className="inline-flex max-w-full items-center gap-1.5 text-xs text-muted hover:text-ink"
+      >
+        {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
+        <span className="truncate">
+          Updated {timeAgo(view.updatedAt)}
+          {rev && ` by ${rev.author.name}`}
+        </span>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -298,7 +304,7 @@ export function ViewTabs({
           <Plus className="size-4" />
         </span>
         <span data-measure="more" className={clsx(ICON, 'gap-1 px-2 text-xs')}>
-          More <span className="px-1.5">{visible.length}</span>
+          <span className="px-1.5">{visible.length}</span>
           <ChevronDown className="size-3.5" />
         </span>
       </div>
@@ -343,73 +349,84 @@ export function ViewTabs({
                 />
               </form>
             ) : (
-              <Link
-                to={`/projects/${projectId}/views/${view.id}`}
-                title={tabTitle(view)}
-                data-tabstop
-                aria-current={isActive ? 'page' : undefined}
-                onDoubleClick={() => isActive && setRenaming(true)}
-                className={clsx(
-                  TAB,
-                  isActive
-                    ? 'border-inverse pr-1 text-ink'
-                    : 'border-transparent pr-3 text-muted hover:text-ink',
-                )}
-              >
-                <TabLabel view={view} />
-                {working.has(view.id) ? (
-                  <>
-                    <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
-                    <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
-                  </>
-                ) : (
-                  changed.has(view.id) && (
+              <Tooltip label={view.data.name} detail={tabTitle(view)} className="min-w-0">
+                <Link
+                  to={`/projects/${projectId}/views/${view.id}`}
+                  data-tabstop
+                  aria-current={isActive ? 'page' : undefined}
+                  onDoubleClick={() => isActive && setRenaming(true)}
+                  className={clsx(
+                    TAB,
+                    isActive
+                      ? 'border-inverse pr-1 text-ink'
+                      : 'border-transparent pr-3 text-muted hover:text-ink',
+                  )}
+                >
+                  <TabLabel view={view} />
+                  {working.has(view.id) ? (
                     <>
-                      <ChangedDot className="absolute top-1.5 right-0.5" />
-                      <span className="sr-only"> ({CHANGED_TEXT})</span>
+                      <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
+                      <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
                     </>
-                  )
-                )}
-              </Link>
+                  ) : (
+                    changed.has(view.id) && (
+                      <>
+                        <ChangedDot className="absolute top-1.5 right-0.5" />
+                        <span className="sr-only"> ({CHANGED_TEXT})</span>
+                      </>
+                    )
+                  )}
+                </Link>
+              </Tooltip>
             )}
             {!renaming && !isAnswer(view) && (
               // Pin or unpin from the tab on hover, as well as from its ⋯ menu; a touch screen keeps
               // it in the menu. It sits in the tab's corner, so the tabs never shift.
-              <button
-                type="button"
-                aria-label={`${view.data.pinned ? 'Unpin' : 'Pin'} ${view.data.name}`}
-                title={view.data.pinned ? 'Unpin' : 'Pin'}
-                aria-pressed={!!view.data.pinned}
-                data-tab-pin=""
-                onClick={() =>
-                  void update(
-                    view,
-                    { pinned: !view.data.pinned },
-                    `${view.data.pinned ? 'Unpin' : 'Pin'} view “${view.data.name}”`,
-                  )
-                }
-                className={clsx(
-                  'absolute top-1/2 left-2 z-10 mt-[-1px] inline-flex size-5.5 -translate-y-1/2 items-center justify-center rounded-control bg-surface text-ink-soft opacity-0 hover:bg-subtle focus:opacity-100 group-hover/tab:opacity-100 pointer-coarse:hidden',
-                )}
+              <Tooltip
+                label={view.data.pinned ? 'Unpin' : 'Pin'}
+                className="absolute top-1/2 left-2 z-10 mt-[-1px] -translate-y-1/2 pointer-coarse:hidden"
               >
-                {view.data.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-              </button>
+                <button
+                  type="button"
+                  aria-label={`${view.data.pinned ? 'Unpin' : 'Pin'} ${view.data.name}`}
+                  aria-pressed={!!view.data.pinned}
+                  data-tab-pin=""
+                  onClick={() =>
+                    void update(
+                      view,
+                      { pinned: !view.data.pinned },
+                      `${view.data.pinned ? 'Unpin' : 'Pin'} view “${view.data.name}”`,
+                    )
+                  }
+                  className="inline-flex size-5.5 items-center justify-center rounded-control bg-surface text-ink-soft opacity-0 hover:bg-subtle focus:opacity-100 group-hover/tab:opacity-100"
+                >
+                  {view.data.pinned ? (
+                    <PinOff className="size-3.5" aria-hidden />
+                  ) : (
+                    <Pin className="size-3.5" aria-hidden />
+                  )}
+                </button>
+              </Tooltip>
             )}
             {isActive && !renaming && (
-              <button
-                type="button"
-                aria-label={`Options for ${view.data.name}`}
-                aria-haspopup="menu"
-                aria-expanded={menu?.kind === 'view'}
-                onClick={(e) =>
-                  setMenu(
-                    menu ? null : { kind: 'view', anchor: e.currentTarget.getBoundingClientRect() },
-                  )
-                }
-                className="mb-0.5 shrink-0 rounded-control p-1 text-faint hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
+              <Tooltip label="Options">
+                <button
+                  type="button"
+                  aria-label={`Options for ${view.data.name}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menu?.kind === 'view'}
+                  onClick={(e) =>
+                    setMenu(
+                      menu
+                        ? null
+                        : { kind: 'view', anchor: e.currentTarget.getBoundingClientRect() },
+                    )
+                  }
+                  className="mb-0.5 shrink-0 rounded-control p-1 text-faint hover:bg-subtle hover:text-ink-soft focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-400"
+                >
+                  <MoreHorizontal className="size-4" aria-hidden />
+                </button>
+              </Tooltip>
             )}
             {isActive && menu?.kind === 'view' && isAnswer(view) && (
               <Menu anchor={menu.anchor} onClose={close} label={`Options for ${view.data.name}`}>
@@ -502,53 +519,57 @@ export function ViewTabs({
         );
       })}
       {(overflow.length > 0 || archived.length > 0) && (
-        <button
-          type="button"
-          data-tabstop
-          aria-haspopup="menu"
-          aria-expanded={menu?.kind === 'more'}
-          aria-label={
-            overflow.length
-              ? `More views (${overflow.length}${archived.length ? `, ${archived.length} archived` : ''})`
-              : `Archived (${archived.length})`
-          }
-          onClick={(e) =>
-            setMenu(menu ? null : { kind: 'more', anchor: e.currentTarget.getBoundingClientRect() })
-          }
-          className={clsx(ICON, 'relative gap-1 px-2 text-xs text-muted')}
-        >
-          {overflow.some((v) => working.has(v.id)) ? (
-            <PresenceDot className="absolute top-0.5 right-0.5 size-1.5" />
-          ) : (
-            overflow.some((v) => changed.has(v.id)) && (
+        <Tooltip label={overflow.length ? 'More views' : 'Archived views'}>
+          <button
+            type="button"
+            data-tabstop
+            aria-haspopup="menu"
+            aria-expanded={menu?.kind === 'more'}
+            aria-label={
+              overflow.length
+                ? `More views (${overflow.length}${archived.length ? `, ${archived.length} archived` : ''})`
+                : `Archived (${archived.length})`
+            }
+            onClick={(e) =>
+              setMenu(
+                menu ? null : { kind: 'more', anchor: e.currentTarget.getBoundingClientRect() },
+              )
+            }
+            className={clsx(ICON, 'relative gap-1 px-2 text-xs text-muted')}
+          >
+            {overflow.some((v) => working.has(v.id)) ? (
+              <PresenceDot className="absolute top-0.5 right-0.5 size-1.5" />
+            ) : (
+              overflow.some((v) => changed.has(v.id)) && (
+                <>
+                  <ChangedDot className="absolute top-0.5 right-0.5" />
+                  <span className="sr-only"> (some {CHANGED_TEXT})</span>
+                </>
+              )
+            )}
+            {overflow.length ? (
               <>
-                <ChangedDot className="absolute top-0.5 right-0.5" />
-                <span className="sr-only"> (some {CHANGED_TEXT})</span>
+                <span className="rounded-full bg-subtle px-1.5 text-ink-soft">
+                  {overflow.length}
+                </span>
+                <ChevronDown className="size-3.5" aria-hidden />
               </>
-            )
-          )}
-          {overflow.length ? (
-            <>
-              More
-              <span className="rounded-full bg-subtle px-1.5 text-ink-soft">{overflow.length}</span>
-              <ChevronDown className="size-3.5" aria-hidden />
-            </>
-          ) : (
-            <>
-              <Archive className="size-3.5" aria-hidden /> Archived ({archived.length})
-            </>
-          )}
-        </button>
+            ) : (
+              <>
+                <Archive className="size-3.5" aria-hidden />
+                <span className="rounded-full bg-subtle px-1.5 text-ink-soft">
+                  {archived.length}
+                </span>
+              </>
+            )}
+          </button>
+        </Tooltip>
       )}
-      <button
-        type="button"
-        aria-label="New view"
-        title="New view"
-        onClick={() => void create()}
-        className={ICON}
-      >
-        <Plus className="size-4" />
-      </button>
+      <Tooltip label="New view">
+        <button type="button" aria-label="New view" onClick={() => void create()} className={ICON}>
+          <Plus className="size-4" aria-hidden />
+        </button>
+      </Tooltip>
       {menu?.kind === 'more' && (
         <Menu anchor={menu.anchor} onClose={close} label="More views">
           {overflow.map((view) => (

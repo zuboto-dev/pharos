@@ -8,12 +8,14 @@ import {
   FileText,
   Inbox,
   ListChecks,
+  Loader2,
   Lock,
   Moon,
   Scale,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink } from 'react-router';
+import { Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
@@ -206,32 +208,46 @@ function RunChip({ run }: { run: DeskRun }) {
         : run.outcome === 'partial'
           ? 'partly done'
           : 'failed';
+  // The symbol says how it went; the word and the run's summary wait in the tooltip.
+  const when = ago(run.endedAt ?? run.startedAt);
   const body = (
     <>
-      {bad ? (
+      {run.outcome === 'running' ? (
+        <Loader2 aria-hidden className="size-3.5 text-muted" />
+      ) : bad ? (
         <AlertTriangle aria-hidden className="size-3.5 text-warn" />
       ) : (
         <CircleCheck aria-hidden className="size-3.5 text-ok" />
       )}
       <span className="font-medium text-ink-soft">{run.name}</span>
-      <span>
-        {label} · {ago(run.endedAt ?? run.startedAt)}
-      </span>
+      <span className="sr-only">{label} · </span>
+      <span>{when}</span>
     </>
   );
   const className =
     'inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted';
+  const tip = { label: `${run.name}: ${label}`, detail: run.summary };
   return (
-    <li title={run.summary}>
+    <li>
       {run.viewId && run.projectId ? (
-        <Link
-          to={`/projects/${run.projectId}/views/${run.viewId}`}
-          className={clsx(className, 'hover:bg-sunken')}
-        >
-          {body}
-        </Link>
+        <Tooltip {...tip}>
+          <Link
+            to={`/projects/${run.projectId}/views/${run.viewId}`}
+            className={clsx(className, 'hover:bg-sunken')}
+          >
+            {body}
+          </Link>
+        </Tooltip>
       ) : (
-        <span className={className}>{body}</span>
+        // Not a link, so it takes focus to show its words too.
+        <Tooltip {...tip}>
+          <span
+            tabIndex={0}
+            className={clsx(className, 'focus-visible:outline-2 focus-visible:outline-sky-400')}
+          >
+            {body}
+          </span>
+        </Tooltip>
       )}
     </li>
   );
@@ -274,7 +290,9 @@ export function DeskPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-8">
       <header className="space-y-1">
-        <p className="text-xs font-semibold tracking-wide text-faint uppercase">Desk</p>
+        <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-faint uppercase">
+          <Inbox aria-hidden className="size-3.5" /> Desk
+        </p>
         {data ? (
           <h1 data-needs-you="" className="text-2xl font-semibold tracking-tight">
             {fresh.length ? (
@@ -290,7 +308,9 @@ export function DeskPage() {
           <div className="h-8 w-64 animate-pulse rounded bg-sunken" />
         )}
         {overdue.length > 0 && (
-          <p className="text-sm text-warn">{overdue.length} waiting more than two days</p>
+          <p className="flex items-center gap-1 text-sm text-warn">
+            <Clock aria-hidden className="size-3.5" /> {overdue.length} waiting more than two days
+          </p>
         )}
       </header>
       {notice && (

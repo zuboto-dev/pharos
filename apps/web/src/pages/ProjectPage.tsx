@@ -57,7 +57,7 @@ import { notifyProjectsChanged } from './projects';
 import { archiveChange, isArchived } from './sidebar-model';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
-import { ICON_BUTTON, Tip } from '../catalog/tip';
+import { ICON_BUTTON, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, getJson, postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
@@ -495,7 +495,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                 {editing ? (
                   <>
                     {canReset && (
-                      <Tip label="Reset layout" align="end">
+                      <Tooltip label="Reset layout">
                         <button
                           type="button"
                           onClick={() => void resetToTemplate()}
@@ -504,7 +504,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                         >
                           <RotateCcw className="size-4" aria-hidden />
                         </button>
-                      </Tip>
+                      </Tooltip>
                     )}
                     <button
                       type="button"
@@ -529,7 +529,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                   </>
                 ) : (
                   <>
-                    <Tip label={filesPage ? 'Files (open now)' : 'Files'} align="end">
+                    <Tooltip label={filesPage ? 'Files (open now)' : 'Files'}>
                       <Link
                         to={`/projects/${projectId}/files`}
                         aria-current={filesPage ? 'page' : undefined}
@@ -538,13 +538,13 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                       >
                         <FolderOpen className="size-4" aria-hidden />
                       </Link>
-                    </Tip>
+                    </Tooltip>
                     <RequestsButton
                       projectId={projectId!}
                       requests={dataset.data.requests ?? []}
                       apply={apply}
                     />
-                    <Tip label="History" align="end">
+                    <Tooltip label="History">
                       <button
                         type="button"
                         onClick={() => open({ history: true })}
@@ -553,9 +553,9 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                       >
                         <History className="size-4" aria-hidden />
                       </button>
-                    </Tip>
+                    </Tooltip>
                     {!filesPage && !report && (
-                      <Tip label="Customize" align="end">
+                      <Tooltip label="Customize">
                         <button
                           type="button"
                           onClick={() => setEditing(true)}
@@ -564,7 +564,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                         >
                           <LayoutGrid className="size-4" aria-hidden />
                         </button>
-                      </Tip>
+                      </Tooltip>
                     )}
                   </>
                 )}
@@ -579,16 +579,13 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           {active && !report && !editing && <ViewUpdated view={active} />}
           {active && !editing && <WhatChanged freshness={freshness} />}
           {editing && (
-            <p className="text-xs text-muted">
-              <span className="hidden md:inline">
-                Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize
-                (double-click the bottom edge to fit content), use the gear for its settings, or
-                remove it with the cross.
-              </span>
-              <span className="md:hidden">
-                Use ↑ ↓ to move widgets, the gear for settings, and the cross to remove them.
-              </span>{' '}
-              Changes are saved as revisions.
+            // The how-to waits behind the (i): the grips, gears and crosses say it on the blocks.
+            <p className="flex items-center gap-1 text-xs text-muted">
+              <LayoutGrid className="size-3.5" aria-hidden /> Editing layout
+              <InfoTip
+                label="How to edit the layout"
+                detail="Drag a widget’s grip (or use ↑ ↓) to move it, drag its edges or corner to resize (double-click the bottom edge to fit content), use the gear for its settings, or remove it with the cross. Changes are saved as revisions."
+              />
             </p>
           )}
           {active?.data.kind === 'answer' && <AnswerHeader view={active} />}

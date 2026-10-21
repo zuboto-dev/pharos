@@ -148,7 +148,7 @@ describe('Sidebar', () => {
 
   it('creates folders and sections from the New menu', async () => {
     await renderSidebar();
-    fireEvent.click(screen.getByRole('button', { name: /New…/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'New project, folder or section' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /New section/ }));
     const dialog = screen.getByRole('dialog', { name: 'New section' });
     // Rendered at the top of the page, not inside the (sticky) sidebar where it would sit behind the main view.

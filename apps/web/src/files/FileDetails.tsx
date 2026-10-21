@@ -31,7 +31,7 @@ import {
 import { EntityRef, TYPE_LABELS, labelOf } from '../catalog/interactive';
 import { EditOptionsButton, useOptions } from '../catalog/options';
 import { Select } from '../catalog/select';
-import { ICON_BUTTON, Tip } from '../catalog/tip';
+import { ICON_BUTTON, Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, postJson, useResource } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -101,7 +101,7 @@ export function FileActions({
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div role="group" aria-label="File actions" className="flex items-center gap-1">
-          <Tip label="Download">
+          <Tooltip label="Download">
             {available ? (
               <a
                 href={fileUrl('download', file.id)}
@@ -121,9 +121,9 @@ export function FileActions({
                 <Download className="size-4" aria-hidden />
               </button>
             )}
-          </Tip>
+          </Tooltip>
           {type.open && (
-            <Tip label="Open in its app">
+            <Tooltip label="Open in its app">
               <button
                 type="button"
                 disabled={!available}
@@ -133,9 +133,9 @@ export function FileActions({
               >
                 <AppWindow className="size-4" aria-hidden />
               </button>
-            </Tip>
+            </Tooltip>
           )}
-          <Tip label="Reveal in Finder">
+          <Tooltip label="Reveal in Finder">
             <button
               type="button"
               disabled={!available}
@@ -145,8 +145,8 @@ export function FileActions({
             >
               <FolderOpen className="size-4" aria-hidden />
             </button>
-          </Tip>
-          <Tip label="Copy path">
+          </Tooltip>
+          <Tooltip label="Copy path">
             <button
               type="button"
               disabled={!info?.absolutePath}
@@ -156,9 +156,9 @@ export function FileActions({
             >
               <Copy className="size-4" aria-hidden />
             </button>
-          </Tip>
+          </Tooltip>
           {available && type.preview !== 'none' && (
-            <Tip label="Open in a new tab">
+            <Tooltip label="Open in a new tab">
               <a
                 href={fileUrl('content', file.id)}
                 target="_blank"
@@ -168,7 +168,7 @@ export function FileActions({
               >
                 <ExternalLink className="size-4" aria-hidden />
               </a>
-            </Tip>
+            </Tooltip>
           )}
         </div>
         <ActionFeedback feedback={feedback} />

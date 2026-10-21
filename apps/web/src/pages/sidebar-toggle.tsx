@@ -1,5 +1,6 @@
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Tooltip } from '../catalog/tooltip';
 
 // R7.14: hide and show the app's left sidebar on wide screens, from a button or ⌘\ (Ctrl+\ off
 // a Mac). The choice is remembered in this browser. Phones keep the sidebar above the page.
@@ -92,18 +93,19 @@ export function SidebarToggle({
   const label = hidden ? 'Show sidebar' : 'Hide sidebar';
   const Icon = hidden ? PanelLeftOpen : PanelLeftClose;
   return (
-    <button
-      ref={ref}
-      type="button"
-      aria-label={label}
-      aria-expanded={!hidden}
-      aria-controls={SIDEBAR_ID}
-      aria-keyshortcuts="Meta+Backslash Control+Backslash"
-      title={`${label} (${shortcutLabel()})`}
-      onClick={onToggle}
-      className={BUTTON}
-    >
-      <Icon className="size-4" aria-hidden />
-    </button>
+    <Tooltip label={label} shortcut={shortcutLabel()}>
+      <button
+        ref={ref}
+        type="button"
+        aria-label={label}
+        aria-expanded={!hidden}
+        aria-controls={SIDEBAR_ID}
+        aria-keyshortcuts="Meta+Backslash Control+Backslash"
+        onClick={onToggle}
+        className={BUTTON}
+      >
+        <Icon className="size-4" aria-hidden />
+      </button>
+    </Tooltip>
   );
 }

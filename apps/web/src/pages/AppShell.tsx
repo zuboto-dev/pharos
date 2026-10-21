@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { Settings } from 'lucide-react';
 import { Link, NavLink, Outlet, useMatch } from 'react-router';
+import { Tooltip } from '../catalog/tooltip';
 import { FolderRequestNotice } from '../files/FolderRequests';
 import { useAgentStatus } from '../lib/events';
 import { useTheme } from '../lib/theme';
@@ -25,11 +26,9 @@ function SettingsLink() {
     >
       <Settings className="size-4" /> Settings
       {paused && (
-        <span
-          title="Answering questions is paused"
-          aria-label="Answering paused"
-          className="ml-auto size-2 rounded-full bg-amber-500"
-        />
+        <Tooltip label="Answering questions is paused" className="ml-auto">
+          <span aria-label="Answering paused" className="size-2 rounded-full bg-amber-500" />
+        </Tooltip>
       )}
     </NavLink>
   );

@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router';
 import type { AskAbout, ViewActions } from '../catalog/context';
 import { MENU_PANEL } from '../catalog/select';
-import { ICON_BUTTON, Tip } from '../catalog/tip';
+import { ICON_BUTTON, Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { postJson } from '../lib/api';
 import { useAgentStatus, type AgentStatus } from '../lib/events';
@@ -269,7 +269,7 @@ export function RequestsButton({
   const waiting = open.length > 0 && agent.enabled && agent.queued.includes(projectId) && !working;
   return (
     <>
-      <Tip label="Questions" align="end">
+      <Tooltip label="Questions">
         <button
           type="button"
           onClick={(e) => setAnchor(anchor ? null : e.currentTarget.getBoundingClientRect())}
@@ -287,7 +287,7 @@ export function RequestsButton({
             <span className="rounded-full bg-sky-500 px-1.5 text-xs text-white">{open.length}</span>
           )}
         </button>
-      </Tip>
+      </Tooltip>
       {anchor &&
         createPortal(
           <>

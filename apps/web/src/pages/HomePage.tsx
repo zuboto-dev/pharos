@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { BUTTON, StatusBadge } from '../catalog/ui';
 import { ConnectAgent, useMcpUrl } from './ConnectAgent';
+import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
 import { HomeSkeleton, LoadError } from './onboarding';
 import { useWorkspace } from './projects';
@@ -60,6 +61,21 @@ export function HomePage() {
   );
   if (status === 'loading') return <HomeSkeleton />;
   if (status === 'error') return <LoadError notFound={false} what="Workspace" />;
+  // Archived projects aren't listed here; they're under Archived at the bottom of the sidebar.
+  const archived = ws.workspace?.tree.archived.length ?? 0;
+  if (!groups.length && archived) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 p-8">
+        <h1 className="text-2xl font-semibold tracking-tight">No active projects</h1>
+        <p className="text-muted">
+          {plural(archived, 'archived project')} {archived === 1 ? 'is' : 'are'} under Archived in
+          the sidebar.
+        </p>
+        {newButton}
+        {dialog}
+      </div>
+    );
+  }
   if (!groups.length) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-8">

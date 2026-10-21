@@ -56,6 +56,41 @@ describe('ProjectPage', () => {
     await screen.findByText('Keep as a view');
   });
 
+  it('shows an archived project with a small notice that restores it', async () => {
+    const archived: ProjectDataset = {
+      ...base,
+      project: { ...base.project, data: { ...base.project.data, status: 'archived' } },
+    };
+    const posted: { message: string; operations: unknown[] }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posted.push(JSON.parse(init.body as string));
+        return Response.json({ revision: { id: 7 }, created: {} });
+      }
+      return Response.json(url.includes('/data') ? archived : []);
+    });
+    render(
+      <MemoryRouter initialEntries={[`/projects/${base.project.id}`]}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    // It still opens and shows its views.
+    await screen.findByRole('link', { name: /Overview/ });
+    const notice = screen.getByText(/Archived ·/);
+    await act(async () => fireEvent.click(within(notice).getByRole('button', { name: 'Restore' })));
+    expect(posted).toEqual([
+      {
+        message: `Restore project “${base.project.data.name}”`,
+        operations: [
+          { op: 'update', type: 'project', id: base.project.id, data: { status: 'active' } },
+        ],
+      },
+    ]);
+    expect(await screen.findByRole('button', { name: /Undo/ })).toBeTruthy();
+  });
+
   describe('acting in place (R10.13)', () => {
     const TODAY = '2026-10-13';
 

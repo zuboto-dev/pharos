@@ -87,7 +87,7 @@ describe('task interactions', () => {
 });
 
 describe('kanban size', () => {
-  it('collapses a long finished column to its latest cards', () => {
+  it('shows every card of a long finished column, newest first, with nothing to click', () => {
     const done = Array.from({ length: 9 }, (_, i) => ({
       ...data.tasks[0]!,
       id: `task_done_${i}`,
@@ -103,13 +103,10 @@ describe('kanban size', () => {
         <ViewRenderer spec={{ component: 'KanbanBoard' }} />
       </ViewDataProvider>,
     );
-    // 3 done in the fixture + 9 more: the latest 5 show, newest first.
-    expect(screen.getByText('Finished 8')).toBeTruthy();
-    expect(screen.getByText('Finished 4')).toBeTruthy();
-    expect(screen.queryByText('Finished 3')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show 7 more' }));
-    expect(screen.getByText('Finished 0')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Show fewer' })).toBeTruthy();
+    // 3 done in the fixture + 9 more: all 12 show, the latest first.
+    const titles = screen.getAllByText(/^Finished \d$/).map((el) => el.textContent);
+    expect(titles).toEqual([8, 7, 6, 5, 4, 3, 2, 1, 0].map((i) => `Finished ${i}`));
+    expect(screen.queryByRole('button', { name: /more|fewer/ })).toBeNull();
   });
 });
 

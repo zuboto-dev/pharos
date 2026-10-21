@@ -170,10 +170,10 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
   },
   DecisionLog: {
     category: 'outputs',
-    use: 'Recent decisions and their status; the reasoning opens on click.',
+    use: 'Decisions and their status, newest first, all of them unless `filter.limit` says otherwise; the reasoning opens on click.',
     minColumns: 3,
     suggestedColumns: 6,
-    example: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
+    example: { component: 'DecisionLog', title: 'Decisions' },
   },
   DecisionBlock: {
     category: 'outputs',

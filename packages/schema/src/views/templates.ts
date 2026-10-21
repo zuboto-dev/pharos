@@ -43,7 +43,13 @@ export const TEMPLATES = {
       {
         id: 'people',
         w: 8,
-        node: { component: 'TaskChecklist', title: 'Assigned to people', assigneeKind: 'human' },
+        // Every list here shows all its items from the start: finished tasks stay, struck through.
+        node: {
+          component: 'TaskChecklist',
+          title: 'Assigned to people',
+          assigneeKind: 'human',
+          hideDone: false,
+        },
       },
       {
         id: 'tasks',
@@ -58,7 +64,7 @@ export const TEMPLATES = {
       {
         id: 'decisions',
         w: 6,
-        node: { component: 'DecisionLog', title: 'Decisions', filter: { limit: 5 } },
+        node: { component: 'DecisionLog', title: 'Decisions' },
       },
       {
         id: 'activity',

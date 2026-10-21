@@ -141,12 +141,9 @@ function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: 
   );
 }
 
-/** Finished columns show this many cards (most recently finished first) until expanded. */
-const FINISHED_PREVIEW = 5;
-
 /**
- * A column's cards. Columns scroll inside a fixed maximum height so one busy column can't stretch
- * the whole board; finished columns also collapse to their latest few cards.
+ * A column's cards, all of them. Columns scroll inside a fixed maximum height so one busy column
+ * can't stretch the whole board; finished columns put the most recently finished first.
  */
 function ColumnCards({
   tasks,
@@ -157,26 +154,14 @@ function ColumnCards({
   finished: boolean;
   show: { stage: boolean; status: boolean };
 }) {
-  const [expanded, setExpanded] = useState(false);
   const ordered = finished ? [...tasks].sort((a, b) => b.updatedRev - a.updatedRev) : tasks;
-  const hidden = finished && !expanded ? Math.max(0, ordered.length - FINISHED_PREVIEW) : 0;
-  const visible = hidden ? ordered.slice(0, FINISHED_PREVIEW) : ordered;
   return (
     <div className="min-h-12 flex-1">
       <div className="max-h-[32rem] space-y-2 overflow-y-auto">
-        {visible.map((task) => (
+        {ordered.map((task) => (
           <TaskCard key={task.id} task={task} show={show} />
         ))}
       </div>
-      {finished && ordered.length > FINISHED_PREVIEW && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-2 w-full rounded-control px-2 py-1 text-left text-xs text-muted hover:bg-subtle hover:text-ink"
-        >
-          {expanded ? 'Show fewer' : `Show ${hidden} more`}
-        </button>
-      )}
     </div>
   );
 }

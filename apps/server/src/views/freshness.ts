@@ -476,7 +476,7 @@ function evidenceOf(
 export function changedViews(store: Store): ChangedViews {
   const projects: Record<string, string[]> = {};
   for (const project of store.list('project')) {
-    if ((project.data as { archived?: boolean }).archived) continue;
+    if (project.data.status === 'archived') continue;
     const { views } = projectFreshness(store, project.id);
     const changed = Object.values(views)
       .filter((v) => v.changed)

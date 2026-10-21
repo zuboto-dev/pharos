@@ -203,11 +203,14 @@ export function NewProjectDialog({
                 label="Status"
                 value={status}
                 onChange={setStatus}
-                options={ProjectStatus.options.map((s) => ({
-                  value: s,
-                  label: humanize(s),
-                  color: toneOf(s),
-                }))}
+                // A new project isn't archived: that's done from the sidebar once it's finished with.
+                options={ProjectStatus.options
+                  .filter((s) => s !== 'archived')
+                  .map((s) => ({
+                    value: s,
+                    label: humanize(s),
+                    color: toneOf(s),
+                  }))}
               />
             </Label>
             <Label text="Repository">

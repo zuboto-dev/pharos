@@ -271,6 +271,13 @@ describe('custom options', () => {
     expect(snap.options).not.toHaveProperty('task.priority');
   });
 
+  it('tells agents in the snapshot that a project is archived', () => {
+    const ids = seedProject();
+    expect(projectSnapshot(store, ids.p).project).not.toHaveProperty('archived');
+    apply('Archive', { op: 'update', type: 'project', id: ids.p, data: { status: 'archived' } });
+    expect(projectSnapshot(store, ids.p).project.archived).toMatch(/archived this project/);
+  });
+
   it('sorts scope items by meaning when the project has custom scope options', () => {
     const ids = seedProject();
     apply(

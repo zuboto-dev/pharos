@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HomePage } from './HomePage';
 import { Sidebar } from './Sidebar';
 
 const entity = (type: string, id: string, data: Record<string, unknown>) => ({
@@ -22,6 +23,13 @@ const data = {
     entity('project', 'p1', { name: 'Alpha', status: 'active', order: 0, repositoryId: 'repo_a' }),
     entity('project', 'p2', { name: 'Beta', status: 'active', order: 1, repositoryId: 'repo_a' }),
     entity('project', 'p3', { name: 'Loose', status: 'planning', order: 0 }),
+    entity('project', 'p4', {
+      name: 'Old site',
+      status: 'archived',
+      order: 2,
+      repositoryId: 'repo_a',
+    }),
+    entity('project', 'p5', { name: 'Old notes', status: 'archived', order: 1 }),
   ],
 };
 
@@ -133,6 +141,7 @@ describe('Sidebar', () => {
     expect(last().operations).toEqual([
       { op: 'update', type: 'project', id: 'p1', data: { sectionId: null } },
       { op: 'update', type: 'project', id: 'p2', data: { sectionId: null } },
+      { op: 'update', type: 'project', id: 'p4', data: { sectionId: null } },
       { op: 'delete', type: 'repository', id: 'repo_a' },
     ]);
   });
@@ -198,5 +207,65 @@ describe('Sidebar', () => {
         },
       ],
     });
+  });
+
+  it('keeps archived projects in a closed Archived group at the bottom, remembered per browser', async () => {
+    await renderSidebar();
+    const nav = screen.getByRole('navigation', { name: 'Projects' });
+    expect(nav.textContent).not.toContain('Old site');
+    const group = screen.getByRole('button', { name: 'Archived (2)' });
+    expect(group.getAttribute('aria-expanded')).toBe('false');
+    expect(nav.textContent).toMatch(/Work.*Archived \(2\)$/);
+    fireEvent.click(group);
+    expect(nav.textContent).toMatch(/Archived \(2\)Old notes.*Old site$/);
+    // An archived project still opens.
+    expect(screen.getByRole('link', { name: /Old site/ }).getAttribute('href')).toBe(
+      '/projects/p4',
+    );
+    cleanup();
+    await renderSidebar();
+    expect(screen.getByRole('button', { name: 'Archived (2)' }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('archives and restores a project in one revision each, with Undo', async () => {
+    await renderSidebar();
+    expect(within(menuFor('Beta')).queryByRole('menuitem', { name: 'Restore' })).toBeNull();
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Archive' }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(last()).toEqual({
+      message: 'Archive project “Beta”',
+      operations: [{ op: 'update', type: 'project', id: 'p2', data: { status: 'archived' } }],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Undo/ }));
+    await waitFor(() => expect(posted.at(-1)!.url).toBe('/api/revisions/42/revert'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archived (2)' }));
+    const menu = menuFor('Old site');
+    expect(within(menu).queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    expect(within(menu).queryByRole('menuitem', { name: /Move up/ })).toBeNull();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Restore' }));
+    await waitFor(() => expect(posted).toHaveLength(3));
+    expect(last()).toEqual({
+      message: 'Restore project “Old site”',
+      operations: [{ op: 'update', type: 'project', id: 'p4', data: { status: 'active' } }],
+    });
+  });
+
+  it('leaves archived projects off the home page', async () => {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Alpha');
+    expect(screen.queryByText('Old site')).toBeNull();
+    expect(screen.queryByText('Old notes')).toBeNull();
+    expect(screen.getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual([
+      '/projects/p1',
+      '/projects/p2',
+      '/projects/p3',
+    ]);
   });
 });

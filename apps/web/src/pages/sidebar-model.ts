@@ -13,7 +13,33 @@ export type SidebarTree = {
   /** Folders and loose projects outside any section. */
   root: Item[];
   sections: { section: Section; items: Item[] }[];
+  /** Archived projects, out of every list above and kept together at the bottom, by name. */
+  archived: Project[];
 };
+
+/** Archived projects leave the sidebar's lists, the home page and pickers; they still open. */
+export const isArchived = (project: Project): boolean => project.data.status === 'archived';
+
+/** The status a restored project gets back (archiving doesn't keep the one it had). */
+const RESTORED_STATUS = 'active';
+
+/** One revision archiving or restoring a project, as the sidebar and the project page send it. */
+export function archiveChange(
+  project: Project,
+  archive: boolean,
+): { message: string; operations: Operation[] } {
+  return {
+    message: `${archive ? 'Archive' : 'Restore'} project “${project.data.name}”`,
+    operations: [
+      {
+        op: 'update',
+        type: 'project',
+        id: project.id,
+        data: { status: archive ? 'archived' : RESTORED_STATUS },
+      },
+    ],
+  };
+}
 
 /** Where an item lives: a folder (projects only), a section, or the top level. */
 export type Container = { repositoryId?: string; sectionId?: string };
@@ -30,7 +56,8 @@ export function buildTree(
   const repositoryIds = new Set(repositories.map((r) => r.id));
   const sectionOf = (e: Project | Repository) =>
     e.data.sectionId && sectionIds.has(e.data.sectionId) ? e.data.sectionId : undefined;
-  const unpinned = projects.filter((p) => !p.data.pinned);
+  const live = projects.filter((p) => !isArchived(p));
+  const unpinned = live.filter((p) => !p.data.pinned);
   const loose = unpinned.filter(
     (p) => !p.data.repositoryId || !repositoryIds.has(p.data.repositoryId),
   );
@@ -49,15 +76,19 @@ export function buildTree(
       .map((project) => ({ kind: 'project' as const, project })),
   ];
   return {
-    pinned: projects.filter((p) => p.data.pinned).sort(byOrder),
+    pinned: live.filter((p) => p.data.pinned).sort(byOrder),
     root: itemsIn(undefined),
     sections: [...sections]
       .sort(byOrder)
       .map((section) => ({ section, items: itemsIn(section.id) })),
+    archived: projects.filter(isArchived).sort((a, b) => a.data.name.localeCompare(b.data.name)),
   };
 }
 
-/** The projects sharing a container (pinned ones included, since pinning doesn't change their place). */
+/**
+ * The projects sharing a container (pinned ones included, since pinning doesn't change their place;
+ * archived ones left out, since they aren't shown there).
+ */
 export function projectSiblings(
   projects: Project[],
   repositories: Repository[],
@@ -65,6 +96,7 @@ export function projectSiblings(
 ): Project[] {
   const repositoryIds = new Set(repositories.map((r) => r.id));
   return projects
+    .filter((p) => !isArchived(p))
     .filter((p) =>
       container.repositoryId
         ? p.data.repositoryId === container.repositoryId

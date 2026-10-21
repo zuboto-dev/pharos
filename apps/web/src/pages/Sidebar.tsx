@@ -1,6 +1,8 @@
 import type { Entity, Operation } from '@pharos/schema';
 import clsx from 'clsx';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowUp,
   ChevronRight,
@@ -39,6 +41,8 @@ import {
   moveProjectOps,
   nudgeOps,
   placeOps,
+  archiveChange,
+  isArchived,
   projectSiblings,
   type Container,
   type Item,
@@ -56,6 +60,8 @@ type Notice = { kind: 'undo' | 'error'; text: string; revision?: number };
 
 const DRAG_TYPE = 'application/x-pharos-sidebar';
 const COLLAPSED_KEY = 'pharos-sidebar-collapsed';
+/** The Archived group is closed by default, so the remembered set holds it while it's open. */
+const ARCHIVED_OPEN = 'archived-open';
 
 function readCollapsed(): Set<string> {
   try {
@@ -281,6 +287,7 @@ export function Sidebar() {
   const w: Workspace = ws.workspace;
   const repositoryById = new Map(w.repositories.map((r) => [r.id, r]));
   const sectionById = new Map(w.sections.map((s) => [s.id, s]));
+  const archivedOpen = collapsed.has(ARCHIVED_OPEN);
 
   const apply = async (message: string, operations: Operation[]) => {
     if (!operations.length) return;
@@ -301,6 +308,8 @@ export function Sidebar() {
       notifyProjectsChanged();
     }
   };
+  const send = (change: { message: string; operations: Operation[] }) =>
+    apply(change.message, change.operations);
   const undo = async (revision: number, text: string) => {
     setNotice(null);
     try {
@@ -430,7 +439,13 @@ export function Sidebar() {
   const openMenu = (target: Target | 'add', e: { currentTarget: HTMLElement }) =>
     setMenu({ target, anchor: e.currentTarget.getBoundingClientRect() });
 
-  const projectRow = (project: Project, depth: number, inPinned = false) => {
+  /** A project row; pinned and archived rows are fixed in place (no drag, no drop). */
+  const projectRow = (
+    project: Project,
+    depth: number,
+    place: 'list' | 'pinned' | 'archived' = 'list',
+  ) => {
+    const inPinned = place !== 'list';
     const target: Target = { type: 'project', entity: project };
     const agents = [
       ...new Set(presence.filter((e) => e.projectId === project.id).map((e) => e.agent)),
@@ -499,7 +514,7 @@ export function Sidebar() {
                   </span>
                 </>
               ) : null}
-              {inPinned && project.data.repositoryId && (
+              {place === 'pinned' && project.data.repositoryId && (
                 <span className="ml-auto truncate text-xs text-faint">
                   {repositoryById.get(project.data.repositoryId)?.data.name}
                 </span>
@@ -646,7 +661,27 @@ export function Sidebar() {
         )}
       </>
     );
-    if (target.type === 'project') {
+    if (target.type === 'project' && isArchived(target.entity)) {
+      const p = target.entity;
+      menuContent = (
+        <>
+          <MenuItem icon={ArchiveRestore} onClick={() => void send(archiveChange(p, false))}>
+            Restore
+          </MenuItem>
+          <MenuItem icon={Pencil} onClick={() => (close(), setRenaming(p.id))}>
+            Rename
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            icon={Trash2}
+            danger
+            onClick={() => (close(), setDialog({ kind: 'delete', project: p }))}
+          >
+            Delete project…
+          </MenuItem>
+        </>
+      );
+    } else if (target.type === 'project') {
       const p = target.entity;
       const here = containerOf(p);
       menuContent = (
@@ -703,6 +738,9 @@ export function Sidebar() {
             </MenuItem>
           )}
           <MenuSeparator />
+          <MenuItem icon={Archive} onClick={() => void send(archiveChange(p, true))}>
+            Archive
+          </MenuItem>
           <MenuItem
             icon={Trash2}
             danger
@@ -852,7 +890,7 @@ export function Sidebar() {
             <div className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold tracking-wide text-faint uppercase">
               <Pin className="size-3" /> Pinned
             </div>
-            <ul>{w.tree.pinned.map((p) => projectRow(p, 0, true))}</ul>
+            <ul>{w.tree.pinned.map((p) => projectRow(p, 0, 'pinned'))}</ul>
           </div>
         )}
         <ul>{items(w.tree.root, 0)}</ul>
@@ -889,6 +927,26 @@ export function Sidebar() {
             )}
           >
             Drop here for the top level
+          </div>
+        )}
+        {w.tree.archived.length > 0 && (
+          <div className="pt-2">
+            <div
+              className={clsx(ROW, 'text-[11px] font-semibold tracking-wide text-faint uppercase')}
+            >
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(ARCHIVED_OPEN)}
+                aria-expanded={archivedOpen}
+                className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-left hover:text-ink-soft"
+              >
+                <ChevronRight
+                  className={clsx('size-3 shrink-0 transition', archivedOpen && 'rotate-90')}
+                />
+                <span className="truncate">Archived ({w.tree.archived.length})</span>
+              </button>
+            </div>
+            {archivedOpen && <ul>{w.tree.archived.map((p) => projectRow(p, 0, 'archived'))}</ul>}
           </div>
         )}
       </nav>

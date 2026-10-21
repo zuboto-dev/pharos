@@ -76,6 +76,28 @@ describe('buildTree', () => {
     });
     expect(buildTree([orphan], [], []).root).toEqual([{ kind: 'project', project: orphan }]);
   });
+
+  it('keeps archived projects out of every list and together at the bottom', () => {
+    const old = e('project', 'p7', {
+      name: 'Old',
+      status: 'archived',
+      order: 0,
+      repositoryId: 'repo_a',
+      pinned: true,
+    });
+    const older = e('project', 'p8', { name: 'Ancient', status: 'archived', order: 1 });
+    const tree = buildTree([...projects, old, older], repositories, [work]);
+    expect(tree.pinned.map((p) => p.id)).toEqual(['p4']);
+    expect(tree.root.map((i) => (i.kind === 'folder' ? i.projects.length : i.project.id))).toEqual([
+      2,
+      'p3',
+    ]);
+    expect(tree.archived.map((p) => p.id)).toEqual(['p8', 'p7']);
+    expect(projectSiblings([...projects, old], repositories, { repositoryId: 'repo_a' })).toEqual([
+      p2,
+      p1,
+    ]);
+  });
 });
 
 describe('ordering ops', () => {

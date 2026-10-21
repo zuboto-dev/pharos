@@ -16,6 +16,7 @@ import {
 } from '@pharos/schema';
 import clsx from 'clsx';
 import {
+  Archive,
   BookmarkPlus,
   Check,
   FolderOpen,
@@ -51,6 +52,8 @@ import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
 import { DocumentView, isDocument } from './document';
+import { notifyProjectsChanged } from './projects';
+import { archiveChange, isArchived } from './sidebar-model';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
@@ -451,12 +454,33 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   const report = isReport(active) ? active : docView;
   // A report has no board to customize: leave layout editing when one opens.
   if (report && editing) setEditing(false);
+  // An archived project still opens and works; a small notice at the top can restore it.
+  const archivedProject =
+    dataset.data && isArchived(dataset.data.project) ? dataset.data.project : null;
 
   return (
     <ViewDataProvider data={dataset.data} version={dataset.version} actions={actions}>
       {/* One file viewer for the page, its Files page and the drawer (v0.2 A6). */}
       <FileViewerProvider>
         <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
+          {archivedProject && (
+            <p className="-mb-2 flex items-center gap-1.5 text-sm text-muted">
+              <Archive className="size-3.5" aria-hidden />
+              Archived ·
+              <button
+                type="button"
+                onClick={() => {
+                  const change = archiveChange(archivedProject, false);
+                  void apply(change.message, change.operations, { undoable: true }).then(
+                    notifyProjectsChanged,
+                  );
+                }}
+                className="font-medium text-accent hover:underline"
+              >
+                Restore
+              </button>
+            </p>
+          )}
           {/* One line at every width (v0.2 B1): the tabs give way (into More), never the icons. */}
           <div className="flex flex-nowrap items-end gap-2 border-b border-line">
             <ViewTabs

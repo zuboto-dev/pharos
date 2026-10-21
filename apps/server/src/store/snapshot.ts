@@ -134,6 +134,13 @@ export function projectSnapshot(store: Store, projectId: string) {
       summary: project.data.summary,
       description: project.data.description,
       status: project.data.status,
+      // The owner archived it: agents shouldn't plan new work there unless asked.
+      ...(project.data.status === 'archived'
+        ? {
+            archived:
+              'The owner archived this project. Answer questions about it, but don’t plan or add new work here unless they ask.',
+          }
+        : {}),
       currentStageId: project.data.currentStageId,
       repository: repository && {
         id: repository.id,

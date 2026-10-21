@@ -272,6 +272,7 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
         id: 'try',
         title: 'Try it',
         time: '2 min',
+        state: 'open',
         decisions: [],
         tasks: [
           { id: ctx.t1, title: 'Try it', status: 'todo', done: false },
@@ -290,6 +291,10 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
       ],
     });
     expect(after.sheets![1]!.tasks![0]).toMatchObject({ id: ctx.t1, done: true });
+    // A checklist sheet is done once every task it shows is.
+    expect(after.sheets![1]!.state).toBe('open');
+    tick(ctx, ctx.t2);
+    expect(getView(ctx.store, ctx.viewId).sheets![1]!.state).toBe('answered');
     choose(ctx, { chosenOptionId: 'ship', note: 'Step 2: the banner overlaps the menu' });
     expect(getView(ctx.store, ctx.viewId).sheets![0]!.decisions[0]).toMatchObject({
       state: 'chosen',
@@ -805,7 +810,7 @@ describe('the "Review desk (sample)" install step (R15)', () => {
     expect(view.sheets!.map((s) => [s.id, s.state ?? null])).toEqual([
       ['banner', 'open'],
       ['import', null],
-      ['chime', null],
+      ['chime', 'open'],
     ]);
     expect(view.sheets![2]!.tasks).toHaveLength(2);
     expect(view.assets!.map((a) => a.path)).toEqual([

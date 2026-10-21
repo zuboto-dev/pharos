@@ -286,6 +286,21 @@ describe('review desk maths', () => {
     expect(sheetState(two, [decision('dec_layout', 'q', { chosenOptionId: 'keep' })])).toBe('open');
   });
 
+  it('a sheet with a checklist is done once each of its tasks is done', () => {
+    const [layout, check] = sheets;
+    expect(sheetState(check!, DECISIONS, [false, true])).toBe('open');
+    expect(sheetState(check!, DECISIONS, [true, true])).toBe('answered');
+    // With decisions too, both have to be answered.
+    const chosen = [decision('dec_layout', 'q', { chosenOptionId: 'keep' })];
+    expect(sheetState(layout!, chosen, [false])).toBe('open');
+    expect(sheetState(layout!, DECISIONS, [true])).toBe('open');
+    expect(sheetState(layout!, chosen, [true])).toBe('answered');
+    expect(deskSummary(sheets, DECISIONS, (s) => (s === check ? [true] : []))).toMatchObject({
+      asked: 3,
+      answered: 1,
+    });
+  });
+
   it('sums the times it can read and counts progress over sheets with decisions', () => {
     const desk = deskSummary(sheets, DECISIONS);
     expect(desk).toMatchObject({ items: 3, minutes: 100, asked: 2, answered: 0 });
@@ -403,6 +418,19 @@ describe('review desk in a document (R15)', () => {
         <DocumentView view={docView} />
       </Providers>,
     );
+    // Its checklist still has tasks to do, so the sound sheet stays open until they are done.
+    expect(document.querySelector('[data-progress]')?.textContent).toBe('1 of 2 answered');
+    rerender(
+      <Providers
+        data={{
+          ...dataWith([answered[0]!, decision('dec_sound', 'q', { answer: 'Softer, please' })]),
+          tasks: base.tasks.map((t) => ({ ...t, data: { ...t.data, status: 'done' } })),
+        }}
+        version={4}
+      >
+        <DocumentView view={docView} />
+      </Providers>,
+    );
     expect(document.querySelector('[data-progress]')?.textContent).toBe('2 of 2 answered');
     expect(document.querySelector('.doc-desk-fill')?.classList.contains('is-done')).toBe(true);
   });
@@ -458,6 +486,19 @@ describe('answering in a document (R15)', () => {
     const labels = [...list.querySelectorAll('button')].map((b) => b.textContent?.trim());
     expect(labels).not.toContain('Start');
     expect(labels.some((l) => /^Add /.test(l ?? ''))).toBe(false);
+  });
+
+  it('TaskChecklist: a "Mark done" button says the tick in words', () => {
+    showDoc();
+    const list = block('todo');
+    const buttons = [...list.querySelectorAll('button')].filter((b) =>
+      /^Mark done: /.test(b.textContent?.trim() ?? ''),
+    );
+    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(buttons[0]!);
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![1][0]).toMatchObject({ op: 'update', type: 'task' });
+    expect(JSON.stringify(apply.mock.calls[0]![1][0])).toContain('"status":"done"');
   });
 
   it('structure edits stay hidden in a document; a board keeps them', () => {

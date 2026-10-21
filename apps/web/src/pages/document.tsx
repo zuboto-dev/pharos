@@ -32,6 +32,7 @@ import {
   sheetAnchor,
   sheetState,
   useDecisions,
+  useSheetTasks,
   type Sheet,
 } from './document-rich';
 
@@ -224,11 +225,11 @@ function DetailsView({
 
 /**
  * One item to review or act on (R15): a quiet frame with its title and pills, its blocks, and a
- * state from its decisions that changes as the reader answers them.
+ * state from its decisions and checklist tasks that changes as the reader answers or ticks them.
  */
 function SheetView({ view, block }: { view: Entity<'view'>; block: Sheet }) {
   const titleId = useId();
-  const state = sheetState(block, useDecisions());
+  const state = sheetState(block, useDecisions(), useSheetTasks()(block));
   return (
     <section
       id={sheetAnchor(block.id)}

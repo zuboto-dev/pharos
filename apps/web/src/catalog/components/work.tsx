@@ -1,6 +1,16 @@
 import { runQuery, stripWorkCode, type Entity, type NodeOf } from '@pharos/schema';
 import clsx from 'clsx';
-import { Bot, CircleCheck, GitBranch, ListChecks, ListTodo, Play, User, Users } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  CircleCheck,
+  GitBranch,
+  ListChecks,
+  ListTodo,
+  Play,
+  User,
+  Users,
+} from 'lucide-react';
 import { useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { formatDate, humanize, plural } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
@@ -544,7 +554,25 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
                   <Play className="size-3" /> Start
                 </button>
               ) : meaning(task) !== 'done' ? (
-                <OptionBadge field="task.status" value={task.data.status} />
+                <>
+                  {!(readOnly && meaning(task) === 'todo') && (
+                    <OptionBadge field="task.status" value={task.data.status} />
+                  )}
+                  {/* In a report the tick is the reader's answer: say so in words too (R15). */}
+                  {readOnly && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void setStatus(task, 'done');
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-emerald-500 hover:text-emerald-600"
+                    >
+                      <Check aria-hidden className="size-3" strokeWidth={3} /> Mark done
+                      <span className="sr-only">: {task.data.title}</span>
+                    </button>
+                  )}
+                </>
               ) : null}
             </Clickable>
           </li>

@@ -278,7 +278,10 @@ export type SheetSummary = {
   title: string;
   time?: string;
   tags?: string[];
-  /** Open until each decision has a choice or an answer; none for a sheet without decisions. */
+  /**
+   * Open until each decision has a choice or an answer and each checklist task is done; none for a
+   * sheet with neither.
+   */
   state?: 'open' | 'answered';
   decisions: SheetDecision[];
   /** Tasks its TaskChecklists show, with their status (the reader ticks them). */
@@ -288,7 +291,7 @@ export type SheetSummary = {
 /**
  * Each sheet of a document with its state and the owner's answers (R15), so an agent reads them
  * in one call (view_get). A sheet is answered once each of its decisions has a choice or an
- * answer; a deferral keeps it open.
+ * answer and each task its TaskChecklists show is done; a deferral keeps it open.
  */
 export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc): SheetSummary[] {
   const sheets = docSheets(doc);
@@ -342,11 +345,13 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
       title: sheet.title,
       ...(sheet.time ? { time: sheet.time } : {}),
       ...(sheet.tags?.length ? { tags: sheet.tags } : {}),
-      ...(decisions.length
+      ...(decisions.length || tasks.length
         ? {
-            state: decisions.every((d) => d.state === 'chosen' || d.state === 'answered')
-              ? ('answered' as const)
-              : ('open' as const),
+            state:
+              decisions.every((d) => d.state === 'chosen' || d.state === 'answered') &&
+              tasks.every((t) => t.done)
+                ? ('answered' as const)
+                : ('open' as const),
           }
         : {}),
       decisions,

@@ -1,4 +1,13 @@
-import { figureMedia, type DocBlock, type DocLeafBlock, type Entity } from '@pharos/schema';
+import {
+  docLeaves,
+  figureMedia,
+  meaningOf,
+  runQuery,
+  type DocBlock,
+  type DocLeafBlock,
+  type Entity,
+  type Filter,
+} from '@pharos/schema';
 import clsx from 'clsx';
 import { Check, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
@@ -323,22 +332,56 @@ export function StepsView({ block }: { block: Steps }) {
 // ---------------------------------------------------------------------------------------------
 // The review desk
 
-/** How a sheet stands: answered once every decision it names has a choice or an answer. */
+/**
+ * How a sheet stands: answered once every decision it names has a choice or an answer and every
+ * task its TaskChecklists show is done; none when it asks neither.
+ */
 export type SheetState = 'answered' | 'open' | 'none';
 
 type DecisionLike = Pick<Entity<'decision'>, 'id'> & {
   data: { chosenOptionId?: string | null; answer?: string | null };
 };
 
-export function sheetState(sheet: Sheet, decisions: readonly DecisionLike[]): SheetState {
-  if (!sheet.decisions?.length) return 'none';
+export function sheetState(
+  sheet: Sheet,
+  decisions: readonly DecisionLike[],
+  /** Done or not, for each task the sheet's TaskChecklists show. */
+  tasks: readonly boolean[] = [],
+): SheetState {
+  if (!sheet.decisions?.length && !tasks.length) return 'none';
   const byId = new Map(decisions.map((d) => [d.id, d]));
-  return sheet.decisions.every((id) => {
+  const decided = (sheet.decisions ?? []).every((id) => {
     const d = byId.get(id);
     return Boolean(d && (d.data.chosenOptionId || d.data.answer));
-  })
-    ? 'answered'
-    : 'open';
+  });
+  return decided && tasks.every(Boolean) ? 'answered' : 'open';
+}
+
+/** For each sheet, whether each task its TaskChecklists show is done (the reader ticks them). */
+export function useSheetTasks(): (sheet: Sheet) => boolean[] {
+  const data = useViewData();
+  return (sheet) => {
+    const seen = new Map<string, boolean>();
+    for (const b of docLeaves(sheet.blocks as DocBlock[])) {
+      if (b.kind !== 'block' || b.node.component !== 'TaskChecklist') continue;
+      const node = b.node as { filter?: Filter; assigneeKind?: string };
+      let tasks: Entity<'task'>[];
+      try {
+        tasks = runQuery(data, 'task', node.filter);
+      } catch {
+        tasks = [];
+      }
+      for (const t of tasks) {
+        if (
+          node.assigneeKind &&
+          data.assigneeById.get(t.data.assigneeId ?? '')?.data.kind !== node.assigneeKind
+        )
+          continue;
+        seen.set(t.id, meaningOf(data.project, 'task.status', t.data.status) === 'done');
+      }
+    }
+    return [...seen.values()];
+  };
 }
 
 const TIME_PART = /(\d+(?:[.,]\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)(?![a-z])/gi;
@@ -373,14 +416,21 @@ export type DeskSummary = {
   items: number;
   /** The sheets' times summed, when any could be read. */
   minutes: number | undefined;
-  /** Sheets with decisions: the ones the progress counts. */
+  /** Sheets with decisions or tasks: the ones the progress counts. */
   asked: number;
   answered: number;
   states: { sheet: Sheet; state: SheetState }[];
 };
 
-export function deskSummary(sheets: Sheet[], decisions: readonly DecisionLike[]): DeskSummary {
-  const states = sheets.map((sheet) => ({ sheet, state: sheetState(sheet, decisions) }));
+export function deskSummary(
+  sheets: Sheet[],
+  decisions: readonly DecisionLike[],
+  tasksOf: (sheet: Sheet) => readonly boolean[] = () => [],
+): DeskSummary {
+  const states = sheets.map((sheet) => ({
+    sheet,
+    state: sheetState(sheet, decisions, tasksOf(sheet)),
+  }));
   const times = sheets.map((s) => parseMinutes(s.time)).filter((m) => m !== undefined);
   return {
     items: sheets.length,
@@ -420,7 +470,7 @@ function scrollToSheet(e: MouseEvent<HTMLAnchorElement>, id: string) {
  */
 export function ReviewDeskHeader({ sheets }: { sheets: Sheet[] }) {
   const decisions = useDecisions();
-  const desk = deskSummary(sheets, decisions);
+  const desk = deskSummary(sheets, decisions, useSheetTasks());
   const share = desk.asked ? desk.answered / desk.asked : 0;
   const done = desk.asked > 0 && desk.answered === desk.asked;
   return (
@@ -512,7 +562,7 @@ export function SheetHead({
             className={clsx('doc-pill', state === 'answered' ? 'doc-pill-done' : 'doc-pill-open')}
           >
             {state === 'answered' && <Check aria-hidden className="size-3" />}
-            {state === 'answered' ? 'Answered' : 'Open'}
+            {state === 'open' ? 'Open' : sheet.decisions?.length ? 'Answered' : 'Done'}
           </span>
         )}
       </div>

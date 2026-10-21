@@ -166,6 +166,25 @@ export const MIGRATIONS: string[] = [
   `
   CREATE INDEX report_assets_sizes ON report_assets(view_id, path, size);
   `,
+  // R16: runs that happened without the owner (night runs, routines, the answering agent), for
+  // the desk. An operational log like presence, not project data: no revisions.
+  `
+  CREATE TABLE runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    outcome TEXT NOT NULL,
+    summary TEXT,
+    counts TEXT,
+    view_id TEXT,
+    seen_at TEXT
+  );
+  CREATE INDEX runs_name ON runs(name);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

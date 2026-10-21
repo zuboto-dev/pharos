@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import {
   ACTION_HTTP_STATUS,
   ApplyInput,
+  RunReport,
   Author,
   EntityType,
   agentLabel,
@@ -27,6 +28,7 @@ import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
+import { RunLog, deskOf } from './desk.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -449,6 +451,24 @@ export function createApp(
 
   // Report pages (R13): the page and its assets for the frame; asset uploads and the asset list.
   api.route('/', reportRoutes(store, authorOf));
+
+  // R16: the owner's desk across projects, and the runs it shows. Agents use the MCP tools; a
+  // routine without MCP may report its run here. Only a person marks a run seen.
+  const runs = new RunLog(store);
+  api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
+  api.get('/runs', (c) => {
+    const q = c.req.query();
+    return c.json(
+      runs.list({ limit: q.limit ? IntParam.parse(q.limit) : undefined, projectId: q.projectId }),
+    );
+  });
+  api.post('/runs', async (c) =>
+    c.json(runs.report(authorOf(c), RunReport.parse(await c.req.json().catch(() => ({}))))),
+  );
+  api.post('/runs/:id/seen', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Only the owner marks a run seen');
+    return c.json(runs.markSeen(c.req.param('id')));
+  });
 
   api.get('/history', (c) => {
     const q = c.req.query();

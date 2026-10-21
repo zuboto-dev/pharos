@@ -120,6 +120,10 @@ export const TaskData = z.strictObject({
   assigneeId: Id.optional(),
   dependsOn: z.array(Id).describe('Ids of tasks that must finish first'),
   estimate: z.string().optional().describe('Free-form, e.g. "2h", "3 points"'),
+  desk: z
+    .boolean()
+    .optional()
+    .describe("On the owner's desk: an agent asked them to do it (ask_owner sets it)"),
   dueDate: IsoDate.optional().describe('YYYY-MM-DD'),
   order: Order,
   fileIds: FileIds,
@@ -155,6 +159,18 @@ export const DecisionData = z.strictObject({
   fileIds: FileIds,
   // R10.19: options the owner chooses from on a page.
   ...DECISION_CHOICE_FIELDS,
+  // R16: how it sits on the owner's desk.
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(600)
+    .optional()
+    .describe('About how long the owner needs to answer, in minutes (shown on the desk)'),
+  gate: z
+    .boolean()
+    .optional()
+    .describe('Only the owner can do it (a secret, a payment, a push, personal data)'),
 });
 
 export const ViewData = z.strictObject({

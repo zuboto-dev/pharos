@@ -36,15 +36,20 @@ Order: waiting more than 48 h first (the beta bar), then gates, then oldest. The
 
 ## Runs
 
-New entity `run` (a revision like any other, so it has history):
-`{ projectId?, kind: 'night' | 'routine' | 'answer' | 'other', name, agent, startedAt, endedAt?,
-outcome: 'running' | 'ok' | 'partial' | 'failed', summary (≤ 300), counts?: { done, failed,
-unverified }, viewId?, seenAt? }`. The answering agent's runs are written by Pharos itself
-(`answer`). A routine or night runner writes its own with `run_report`.
+A `runs` table (migration), not an entity: an operational log like presence, with no
+revisions. `{ id run_…, projectId?, kind: night | routine | answer | other, name, agent,
+startedAt, endedAt?, outcome: running | ok | partial | failed, summary?, counts?: { done,
+failed, unverified }, viewId?, seenAt? }`. A runner reports with MCP `run_report` (start, then
+finish with the id) or `POST /api/runs`; only a person marks one seen (`POST /api/runs/:id/seen`).
 
-The desk shows the last night run and each routine's last run in one strip ("Night 10-21: 19
-tasks, 7 could not verify · Morning 08:00 ok · Evening 22:40 ok"), and a failed or partial run as
-an item.
+The desk shows each name's latest run in one strip, and a failed or partial latest run as an
+item until it is seen or a later run of that name is ok.
+
+## Old items
+
+The first run over the owner's data (10-21) found 36 decisions with options never answered,
+20 of them from one project's early-October proposals. They stay on the desk but items waiting
+more than 14 days are `old`: listed after today's, folded under "Older" on the page.
 
 ## MCP
 

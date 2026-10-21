@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   AGENT_FILE_CREATE_FIELDS,
+  AskOwner,
+  RunReport,
   ENTITY_TYPES,
   EntityType,
   FILES_UNADDED_TOOL,
@@ -17,6 +19,7 @@ import {
 } from '@pharos/schema';
 import { z } from 'zod';
 import { VERSION } from './version.js';
+import { RunLog, answersSince, askOwner, deskOf } from './desk.js';
 import { ActionService } from './actions/service.js';
 import { forAgent, requestFolder, savedRequests } from './files/requests.js';
 import {
@@ -222,6 +225,50 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       annotations: { destructiveHint: true },
     },
     (input) => run(() => store.apply(author(), input as ApplyInput)),
+  );
+
+  // R16: the owner's desk. One call puts something on it; the next turn reads the answer.
+  const runs = new RunLog(store);
+  server.registerTool(
+    'ask_owner',
+    {
+      title: 'Ask the owner',
+      description:
+        "Put something on the owner's desk (the one list of everything waiting on them, across projects) in one call. With 2–5 options it is a decision they answer in one tap (mark your pick with recommendedOptionId); without, a task for them. Ask only what needs them: a choice of taste or direction, a secret, a payment, a push, personal data. Give minutes (about how long) and gate for things only they can do. Read the answer on your next turn with desk_list({since}).",
+      inputSchema: AskOwner.shape,
+    },
+    (input) => run(() => askOwner(store, author(), AskOwner.parse(input))),
+  );
+
+  server.registerTool(
+    'desk_list',
+    {
+      title: "The owner's desk",
+      description:
+        'What waits on the owner (open decisions, review sheets, their tasks, runs that need a look), for one project or all, with how long each has waited; and with `since` (a revision id) what people did after it, so you see their answers. latestRevision is the `since` for next time.',
+      inputSchema: {
+        projectId: z.string().optional().describe('One project (yours); omit for every project'),
+        since: z.number().int().nonnegative().optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    ({ projectId, since }) =>
+      run(() => ({
+        ...deskOf(store, runs, { projectId }),
+        ...(since !== undefined ? { answersSince: answersSince(store, since, projectId) } : {}),
+        latestRevision: store.latestRevisionId(),
+      })),
+  );
+
+  server.registerTool(
+    'run_report',
+    {
+      title: 'Report a run',
+      description:
+        "Report a run that happens without the owner (a night run, a routine): call it when it starts (it returns the id) and again with the id and an outcome (ok, partial, failed) when it ends, with a one-line summary and counts. The desk shows each name's latest run; a failed or partial one waits there until the owner has looked.",
+      inputSchema: RunReport.shape,
+    },
+    (input) => run(() => runs.report(author(), RunReport.parse(input))),
   );
 
   server.registerTool(

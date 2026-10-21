@@ -264,6 +264,8 @@ export type SheetDecision = {
   state: 'chosen' | 'answered' | 'deferred' | 'open' | 'missing';
   /** The option chosen: its id and label. */
   chosen?: { id: string; label: string };
+  /** The owner's note with that choice, in their words. */
+  note?: string;
   /** The owner's own answer, in their words. */
   answer?: string;
   /** Decide later: the day it comes back. */
@@ -303,7 +305,10 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
         title: d.title,
         state: state.kind,
         ...(state.kind === 'chosen'
-          ? { chosen: { id: state.option.id, label: state.option.label } }
+          ? {
+              chosen: { id: state.option.id, label: state.option.label },
+              ...(state.note ? { note: state.note } : {}),
+            }
           : {}),
         ...(state.kind === 'answered' ? { answer: state.answer } : {}),
         ...(state.kind === 'deferred' ? { deferredUntil: state.until } : {}),

@@ -163,6 +163,7 @@ describe('decision with options (R10.19)', () => {
     const { id } = propose();
     for (const data of [
       { chosenOptionId: 'a' },
+      { note: 'Looks fine' },
       { answer: 'Neither' },
       { deferredUntil: '2026-11-01' },
       { status: 'accepted' },
@@ -187,6 +188,13 @@ describe('decision with options (R10.19)', () => {
       options: ['a: Picture and one line', 'b: Checklist'],
       ownerAnswer: 'chose "Checklist"',
     });
+    // ... and the owner's note with it.
+    choose(id, human, { note: 'Only on the projects list' });
+    expect(refusal(() => choose(id, agent, { note: 'Changed' })).message).toMatch(/owner/);
+    expect(projectSnapshot(store, projectId).decisions[0]).toMatchObject({
+      ownerAnswer: 'chose "Checklist", with the note: Only on the projects list',
+    });
+    choose(id, human, { note: null });
     // The owner can undo their own choice.
     store.revert(chosen.revision!.id, human);
     expect(decision(id).data.chosenOptionId).toBeUndefined();

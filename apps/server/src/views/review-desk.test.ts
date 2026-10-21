@@ -150,6 +150,7 @@ const choose = ({ store, decision }: Ctx, patch: Record<string, unknown>) =>
         id: decision,
         data: {
           chosenOptionId: null,
+          note: null,
           answer: null,
           deferredUntil: null,
           status: valueFor(
@@ -289,6 +290,12 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
       ],
     });
     expect(after.sheets![1]!.tasks![0]).toMatchObject({ id: ctx.t1, done: true });
+    choose(ctx, { chosenOptionId: 'ship', note: 'Step 2: the banner overlaps the menu' });
+    expect(getView(ctx.store, ctx.viewId).sheets![0]!.decisions[0]).toMatchObject({
+      state: 'chosen',
+      chosen: { id: 'ship' },
+      note: 'Step 2: the banner overlaps the menu',
+    });
     choose(ctx, { answer: 'Only on Android' });
     expect(getView(ctx.store, ctx.viewId).sheets![0]!.decisions[0]).toMatchObject({
       state: 'answered',

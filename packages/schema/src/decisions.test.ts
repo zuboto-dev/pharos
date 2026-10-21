@@ -44,6 +44,18 @@ describe('decision choices (R10.19)', () => {
     expect(decisionState({ options, answer: 'Neither' }).kind).toBe('answered');
     expect(decisionState({ options, deferredUntil: '2026-10-20' }).kind).toBe('deferred');
     expect(decisionState({ options }).kind).toBe('open');
+    expect(decisionState({ options, chosenOptionId: 'b', note: 'Step 3 failed' })).toEqual({
+      kind: 'chosen',
+      option: options[1],
+      note: 'Step 3 failed',
+    });
+  });
+
+  it('takes a note only with a chosen option', () => {
+    expect(decisionIssues({ options, chosenOptionId: 'a', note: 'Step 3 failed' })).toEqual([]);
+    expect(decisionIssues({ options, note: 'Step 3 failed' })).toEqual([
+      'note: a note goes with a chosen option; an answer of their own goes in answer',
+    ]);
   });
 
   it('keeps option text short', () => {

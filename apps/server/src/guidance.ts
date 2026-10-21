@@ -522,9 +522,14 @@ When the reader has to choose, store the choice on a decision and show it in a D
   pros, cons, claimIds}\`: a short label, what it leads to in one line, pros and cons in a few
   words each, and the claims that back it as sources), \`recommendedOptionId\` and
   \`recommendationReason\` (one line). It stays "proposed" until the reader answers.
-- Only the reader chooses, writes another answer or decides later; Pharos refuses
-  \`chosenOptionId\`, \`answer\` and \`deferredUntil\` from agents, and an "accepted" status on a
-  decision with options. Read the answer back from the decision (project_snapshot shows it).
+- When an option needs the reader's words to act on (a QA check: "Something was wrong"), give it
+  \`asks\`: the question they answer when they choose it ("Which steps failed, and what did you
+  see?"). Choosing it then opens a box for the note, and the note is required. The reader can add
+  a note to any choice; never write "say it in your answer" in an option's summary.
+- Only the reader chooses, writes a note or another answer, or decides later; Pharos refuses
+  \`chosenOptionId\`, \`note\`, \`answer\` and \`deferredUntil\` from agents, and an "accepted"
+  status on a decision with options. Read the answer back from the decision (project_snapshot
+  shows it; view_get lists each sheet's choice and note).
 - The page: a StartHere with purpose "needs-you", \`due\`, and \`yourPartTarget\` set to the
   DecisionBlock's widget id ("Choose an empty state by Friday"), then the DecisionBlock, full
   width. The preview warns about fewer than 2 options and a recommendation without a reason.

@@ -135,7 +135,7 @@ function OptionCard({
               'min-h-11 w-full sm:min-h-0 sm:w-auto',
             )}
           >
-            Choose this
+            {option.asks ? 'Choose and explain' : 'Choose this'}
           </button>
         </div>
       )}
@@ -143,7 +143,7 @@ function OptionCard({
   );
 }
 
-type Mode = 'idle' | 'answer' | 'later';
+type Mode = 'idle' | 'answer' | 'later' | 'note';
 
 export function DecisionBlock({ node }: { node: NodeOf<'DecisionBlock'> }) {
   const data = useViewData();
@@ -167,6 +167,8 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
   const [mode, setMode] = useState<Mode>('idle');
   const [busy, setBusy] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  /** The option whose question is open before it's chosen; null when editing the note of a choice. */
+  const [pending, setPending] = useState<DecisionOption | null>(null);
   const titleId = useId();
   const options = decision.data.options ?? [];
   const state = decisionState(decision.data);
@@ -186,12 +188,16 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
   };
   const status = (meaning: string) => valueFor(project, 'decision.status', meaning);
   /** The owner's answer: an option or their own words, decided today by them. */
-  const answer = (patch: { chosenOptionId?: string; answer?: string }, message: string) => {
+  const answer = (
+    patch: { chosenOptionId?: string; note?: string; answer?: string },
+    message: string,
+  ) => {
     const who = decider(data);
     return save(
       message,
       {
         chosenOptionId: patch.chosenOptionId ?? null,
+        note: patch.note ?? null,
         answer: patch.answer ?? null,
         deferredUntil: null,
         status: status('accepted'),
@@ -204,6 +210,7 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
   const reopen = () =>
     save(`Reopen “${question}”`, {
       chosenOptionId: null,
+      note: null,
       answer: null,
       status: status('proposed'),
       decidedById: null,
@@ -214,6 +221,41 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
     ? data.assigneeById.get(decision.data.decidedById)?.data.name
     : undefined;
   const answered = state.kind === 'chosen' || state.kind === 'answered';
+  const choose = (option: DecisionOption) => {
+    if (option.asks) {
+      setPending(option);
+      setMode('note');
+    } else void answer({ chosenOptionId: option.id }, `Choose “${option.label}”: ${question}`);
+  };
+  /** The note with a choice: written when choosing an option that asks, or added afterwards. */
+  const saveNote = (text: string) =>
+    pending
+      ? answer(
+          { chosenOptionId: pending.id, ...(text ? { note: text } : {}) },
+          `Choose “${pending.label}”: ${question}${text ? ` (${text})` : ''}`,
+        )
+      : save(text ? `Note on “${question}”: ${text}` : `Remove the note on “${question}”`, {
+          note: text || null,
+        });
+  const noteOption = pending ?? (state.kind === 'chosen' ? state.option : undefined);
+  const noteForm = mode === 'note' && noteOption && (
+    <NoteForm
+      busy={busy}
+      question={noteOption.asks}
+      required={Boolean(pending?.asks)}
+      initial={pending ? '' : state.kind === 'chosen' ? (state.note ?? '') : ''}
+      submit={pending ? `Choose “${noteOption.label}”` : 'Save note'}
+      onCancel={() => {
+        setPending(null);
+        setMode('idle');
+      }}
+      onSave={async (text) => {
+        const ok = await saveNote(text);
+        if (ok) setPending(null);
+        return ok;
+      }}
+    />
+  );
 
   return (
     <section aria-labelledby={titleId} className="space-y-4">
@@ -251,8 +293,13 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
                 </>
               )}
             </p>
-            {state.kind === 'chosen' && state.option.summary && (
+            {state.kind === 'chosen' && state.option.summary && !state.note && (
               <p className="text-sm text-ink-soft">{state.option.summary}</p>
+            )}
+            {state.kind === 'chosen' && state.note && (
+              <p data-decision-note="" className="text-sm whitespace-pre-wrap text-ink">
+                {state.note}
+              </p>
             )}
             <p className="text-xs text-muted">
               {[decidedBy, decision.data.decisionDate && formatDate(decision.data.decisionDate)]
@@ -261,6 +308,19 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
+            {state.kind === 'chosen' && mode !== 'note' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPending(null);
+                  setMode('note');
+                }}
+                className={BUTTON.secondary}
+              >
+                <PenLine aria-hidden className="size-3.5" />{' '}
+                {state.note ? 'Edit note' : 'Add a note'}
+              </button>
+            )}
             {options.length > 0 && (
               <button
                 type="button"
@@ -283,6 +343,8 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
         </div>
       ) : null}
 
+      {answered && noteForm}
+
       {(!answered || showOptions) &&
         (options.length ? (
           <ul
@@ -300,15 +362,7 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
                 recommended={option.id === recommended?.id}
                 chosen={state.kind === 'chosen' && state.option.id === option.id}
                 busy={busy}
-                onChoose={
-                  answered
-                    ? undefined
-                    : () =>
-                        void answer(
-                          { chosenOptionId: option.id },
-                          `Choose “${option.label}”: ${question}`,
-                        )
-                }
+                onChoose={answered ? undefined : () => choose(option)}
               />
             ))}
           </ul>
@@ -330,7 +384,9 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
       )}
 
       {!answered &&
-        (mode === 'answer' ? (
+        (mode === 'note' ? (
+          noteForm
+        ) : mode === 'answer' ? (
           <AnswerForm
             busy={busy}
             onCancel={() => setMode('idle')}
@@ -437,6 +493,59 @@ function AnswerForm({
             void onSave(text.trim());
         }}
         placeholder="None of these: …"
+        className={INPUT}
+      />
+    </FormShell>
+  );
+}
+
+function NoteForm({
+  busy,
+  question,
+  required,
+  initial,
+  submit,
+  onSave,
+  onCancel,
+}: {
+  busy: boolean;
+  /** What the option asks ("Which steps failed?"); a plain note box without one. */
+  question?: string;
+  required: boolean;
+  initial: string;
+  submit: string;
+  onSave: (text: string) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(initial);
+  const id = useId();
+  const blocked = required && !text.trim();
+  const send = () => {
+    if (!blocked) void onSave(text.trim());
+  };
+  return (
+    <FormShell
+      label="Note"
+      busy={busy || blocked}
+      submit={submit}
+      onCancel={onCancel}
+      onSubmit={send}
+    >
+      <label htmlFor={id} className="block text-sm font-medium">
+        {question ?? 'Your note'}
+        {!required && <span className="font-normal text-muted"> (optional)</span>}
+      </label>
+      <textarea
+        id={id}
+        autoFocus
+        rows={4}
+        maxLength={DECISION.noteChars}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
+        }}
+        placeholder={question ? 'Step 3: …' : 'Anything to add: what you saw, a condition, …'}
         className={INPUT}
       />
     </FormShell>

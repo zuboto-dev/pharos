@@ -118,6 +118,7 @@ describe('DecisionBlock', () => {
           id: 'dec_empty',
           data: {
             chosenOptionId: 'b',
+            note: null,
             answer: null,
             deferredUntil: null,
             status: 'accepted',
@@ -157,6 +158,103 @@ describe('DecisionBlock', () => {
     expect(apply.mock.calls[0]![1][0]).toMatchObject({
       data: { answer: 'Neither: plain text', chosenOptionId: null, status: 'accepted' },
     });
+  });
+
+  it('an option that asks opens its question first, needs the note, and saves both together', () => {
+    const qa = proposal({
+      title: 'Real-phone check result',
+      options: [
+        { id: 'pass', label: 'All steps passed' },
+        {
+          id: 'issues',
+          label: 'Something was wrong',
+          asks: 'Which steps failed, and what did you see?',
+        },
+      ],
+      recommendedOptionId: undefined,
+      recommendationReason: undefined,
+    });
+    const { apply } = setup(qa);
+    const button = screen.getByRole('button', { name: 'Choose Something was wrong' });
+    expect(button.textContent).toBe('Choose and explain');
+    fireEvent.click(button);
+    expect(apply).not.toHaveBeenCalled();
+    const box = screen.getByLabelText('Which steps failed, and what did you see?');
+    const submit = screen.getByRole('button', { name: 'Choose “Something was wrong”' });
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(box, {
+      target: { value: 'Step 3: the sound cut out after locking the phone' },
+    });
+    fireEvent.click(submit);
+    expect(apply).toHaveBeenCalledWith(
+      'Choose “Something was wrong”: Real-phone check result (Step 3: the sound cut out after locking the phone)',
+      [
+        {
+          op: 'update',
+          type: 'decision',
+          id: 'dec_empty',
+          data: expect.objectContaining({
+            chosenOptionId: 'issues',
+            note: 'Step 3: the sound cut out after locking the phone',
+            answer: null,
+            status: 'accepted',
+          }),
+        },
+      ],
+      { undoable: true },
+    );
+  });
+
+  it('cancelling the question chooses nothing; an option without one is chosen at once', () => {
+    const { apply } = setup(
+      proposal({
+        options: [
+          { id: 'pass', label: 'All steps passed' },
+          { id: 'issues', label: 'Something was wrong', asks: 'What went wrong?' },
+        ],
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Something was wrong' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('What went wrong?')).toBeNull();
+    expect(apply).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose All steps passed' }));
+    expect(apply.mock.calls[0]![1][0]).toMatchObject({
+      data: { chosenOptionId: 'pass', note: null },
+    });
+  });
+
+  it('adds, shows and edits a note on a choice already made', () => {
+    const chosen = proposal({
+      status: 'accepted',
+      chosenOptionId: 'a',
+      decidedById: ALEX.id,
+      decisionDate: '2026-10-12',
+    });
+    const { apply, unmount } = setup(chosen);
+    fireEvent.click(screen.getByRole('button', { name: /Add a note/ }));
+    const box = screen.getByLabelText(/Your note/);
+    fireEvent.change(box, { target: { value: 'Only on the projects list' } });
+    fireEvent.keyDown(box, { key: 'Enter', metaKey: true });
+    expect(apply).toHaveBeenCalledWith(
+      'Note on “Which empty state should pages use?”: Only on the projects list',
+      [
+        {
+          op: 'update',
+          type: 'decision',
+          id: 'dec_empty',
+          data: { note: 'Only on the projects list' },
+        },
+      ],
+      { undoable: true },
+    );
+    unmount();
+    setup({ ...chosen, data: { ...chosen.data, note: 'Only on the projects list' } });
+    expect(screen.getByRole('status').textContent).toContain('Only on the projects list');
+    fireEvent.click(screen.getByRole('button', { name: /Edit note/ }));
+    expect((screen.getByLabelText(/Your note/) as HTMLTextAreaElement).value).toBe(
+      'Only on the projects list',
+    );
   });
 
   it('defers to a date the person picks', () => {

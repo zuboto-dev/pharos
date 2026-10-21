@@ -3,8 +3,9 @@ import { z } from 'zod';
 /**
  * A decision the owner makes on a page (R10.19): the question (the decision's title), 2–5
  * options with what each leads to, the agent's recommendation and why, and the owner's answer:
- * one of the options, an answer of their own, or "later". Agents propose; only a person chooses
- * (Store.apply refuses an agent's choice, answer or deferral).
+ * one of the options (with a note of theirs if they like), an answer of their own, or "later".
+ * Agents propose; only a person chooses (Store.apply refuses an agent's choice, note, answer or
+ * deferral). An option can ask for the note when it's chosen ("Which steps failed?").
  */
 
 /** Limits for a decision's options; the schema keeps them short so the apply schema stays small. */
@@ -19,10 +20,13 @@ export const DECISION = {
   maxClaims: 4,
   reasonChars: 200,
   answerChars: 300,
+  /** The question an option asks when it's chosen, and the note that answers it. */
+  asksChars: 160,
+  noteChars: 2000,
 } as const;
 
 /** The fields only a person writes: the choice, an own answer, and a deferral. */
-export const OWNER_DECISION_FIELDS = ['chosenOptionId', 'answer', 'deferredUntil'] as const;
+export const OWNER_DECISION_FIELDS = ['chosenOptionId', 'note', 'answer', 'deferredUntil'] as const;
 
 const Point = z.string().min(1).max(DECISION.pointChars);
 
@@ -37,6 +41,14 @@ export const DecisionOption = z
     claimIds: z.array(z.string().min(1)).max(DECISION.maxClaims).optional().describe('Its sources'),
     pros: z.array(Point).max(DECISION.maxPoints).optional(),
     cons: z.array(Point).max(DECISION.maxPoints).optional(),
+    asks: z
+      .string()
+      .min(1)
+      .max(DECISION.asksChars)
+      .optional()
+      .describe(
+        'Ask the owner to write a note when they choose this option, e.g. "Which steps failed, and what did you see?"; the note is required for it',
+      ),
   })
   .meta({ id: 'DecisionOption' });
 export type DecisionOption = z.infer<typeof DecisionOption>;
@@ -51,6 +63,12 @@ export const DECISION_CHOICE_FIELDS = {
   recommendedOptionId: z.string().min(1).optional().describe('Your pick'),
   recommendationReason: z.string().min(1).max(DECISION.reasonChars).optional(),
   chosenOptionId: z.string().min(1).optional().describe('Set by the owner only'),
+  note: z
+    .string()
+    .min(1)
+    .max(DECISION.noteChars)
+    .optional()
+    .describe('Owner only: their note with the option they chose (what went wrong, a condition)'),
   answer: z
     .string()
     .min(1)
@@ -65,6 +83,7 @@ type DecisionLike = {
   recommendedOptionId?: string;
   recommendationReason?: string;
   chosenOptionId?: string;
+  note?: string;
   answer?: string;
   deferredUntil?: string;
 };
@@ -85,7 +104,11 @@ export function decisionIssues(data: DecisionLike): string[] {
       issues.push(`${field}: "${value}" isn't one of the options${known}`);
   }
   if (data.chosenOptionId !== undefined && data.answer !== undefined)
-    issues.push('chosenOptionId and answer: choose an option or write an answer, not both');
+    issues.push(
+      'chosenOptionId and answer: choose an option or write an answer, not both (a note goes in note)',
+    );
+  if (data.note !== undefined && data.chosenOptionId === undefined)
+    issues.push('note: a note goes with a chosen option; an answer of their own goes in answer');
   return issues;
 }
 
@@ -105,7 +128,7 @@ export function decisionWarnings(data: DecisionLike): string[] {
 }
 
 export type DecisionState =
-  | { kind: 'chosen'; option: DecisionOption }
+  | { kind: 'chosen'; option: DecisionOption; note?: string }
   | { kind: 'answered'; answer: string }
   | { kind: 'deferred'; until: string }
   | { kind: 'open' };
@@ -115,7 +138,7 @@ export function decisionState(data: DecisionLike): DecisionState {
   const option = data.chosenOptionId
     ? data.options?.find((o) => o.id === data.chosenOptionId)
     : undefined;
-  if (option) return { kind: 'chosen', option };
+  if (option) return { kind: 'chosen', option, ...(data.note ? { note: data.note } : {}) };
   if (data.answer) return { kind: 'answered', answer: data.answer };
   if (data.deferredUntil) return { kind: 'deferred', until: data.deferredUntil };
   return { kind: 'open' };

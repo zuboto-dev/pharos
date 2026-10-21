@@ -86,6 +86,17 @@ describe('Sidebar', () => {
     await waitFor(() => expect(posted.at(-1)!.url).toBe('/api/revisions/42/revert'));
   });
 
+  it('pins and unpins from the row itself, without the menu', async () => {
+    await renderSidebar();
+    fireEvent.click(screen.getByRole('button', { name: 'Pin Beta' }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(last()).toEqual({
+      message: 'Pin project “Beta”',
+      operations: [{ op: 'update', type: 'project', id: 'p2', data: { pinned: true } }],
+    });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('moves projects up and into sections', async () => {
     await renderSidebar();
     fireEvent.click(within(menuFor('Beta')).getByRole('menuitem', { name: /Move up/ }));

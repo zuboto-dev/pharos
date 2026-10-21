@@ -232,6 +232,9 @@ function RenameInput({ value, onDone }: { value: string; onDone: (name: string |
 }
 
 const ROW = 'group/row relative flex items-center gap-1 rounded-control pr-1 text-sm';
+/** The row's pin toggle: shown on hover or focus like ⋯, left to the menu on touch screens. */
+const PIN =
+  'shrink-0 rounded p-1 text-faint opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 pointer-coarse:hidden dark:hover:bg-neutral-700';
 const MORE =
   'shrink-0 rounded p-0.5 text-faint opacity-0 hover:bg-neutral-200 hover:text-ink-soft focus:opacity-100 group-hover/row:opacity-100 pointer-coarse:opacity-100 dark:hover:bg-neutral-700';
 
@@ -430,6 +433,11 @@ export function Sidebar() {
   const openMenu = (target: Target | 'add', e: { currentTarget: HTMLElement }) =>
     setMenu({ target, anchor: e.currentTarget.getBoundingClientRect() });
 
+  const togglePin = (p: Project) =>
+    apply(`${p.data.pinned ? 'Unpin' : 'Pin'} project “${p.data.name}”`, [
+      { op: 'update', type: 'project', id: p.id, data: { pinned: p.data.pinned ? null : true } },
+    ]);
+
   const projectRow = (project: Project, depth: number, inPinned = false) => {
     const target: Target = { type: 'project', entity: project };
     const agents = [
@@ -505,6 +513,21 @@ export function Sidebar() {
                 </span>
               )}
             </NavLink>
+          )}
+          {renaming !== project.id && (
+            // Pin or unpin straight from the row on hover, as well as from the ⋯ menu; a touch
+            // screen keeps it in the menu, so the row isn't crowded.
+            <button
+              type="button"
+              aria-label={`${project.data.pinned ? 'Unpin' : 'Pin'} ${project.data.name}`}
+              title={project.data.pinned ? 'Unpin' : 'Pin to top'}
+              data-pin-toggle=""
+              aria-pressed={!!project.data.pinned}
+              className={PIN}
+              onClick={() => void togglePin(project)}
+            >
+              {project.data.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            </button>
           )}
           <button
             type="button"
@@ -651,19 +674,7 @@ export function Sidebar() {
       const here = containerOf(p);
       menuContent = (
         <>
-          <MenuItem
-            icon={p.data.pinned ? PinOff : Pin}
-            onClick={() =>
-              void apply(`${p.data.pinned ? 'Unpin' : 'Pin'} project “${p.data.name}”`, [
-                {
-                  op: 'update',
-                  type: 'project',
-                  id: p.id,
-                  data: { pinned: p.data.pinned ? null : true },
-                },
-              ])
-            }
-          >
+          <MenuItem icon={p.data.pinned ? PinOff : Pin} onClick={() => void togglePin(p)}>
             {p.data.pinned ? 'Unpin' : 'Pin to top'}
           </MenuItem>
           {common}

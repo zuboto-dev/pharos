@@ -303,7 +303,10 @@ export function deskOf(
         ...(firstLine(t.data.description) ? { ask: firstLine(t.data.description) } : {}),
         ...(minutesIn(t.data.estimate) ? { minutes: minutesIn(t.data.estimate) } : {}),
         since: t.createdAt,
-        gate: false,
+        // ask_owner makes a gate a high-priority desk task.
+        gate:
+          !!t.data.desk &&
+          ['high', 'urgent'].includes(meaningOf(project, 'task.priority', t.data.priority) ?? ''),
         href: projectHref(project.id, t.id),
       });
     }
@@ -448,4 +451,71 @@ export function answersSince(store: Store, since: number, projectId?: string) {
   return store
     .history({ after: since, authorKind: 'human', limit: 50, ...(projectId ? { projectId } : {}) })
     .map((r) => ({ revision: r.id, at: r.createdAt, message: r.message }));
+}
+
+/**
+ * The owner answers from the desk (POST /api/desk/answer): choose a decision's option (with the
+ * note an option asks for), or mark a task done. The same change the DecisionBlock and the
+ * checklist make, as one revision with the owner as the decider.
+ */
+export function deskAnswer(
+  store: Store,
+  author: Author,
+  input: { id: string; chosenOptionId?: string; note?: string; done?: boolean },
+) {
+  const found = store.get(input.id);
+  if (!found || (found.type !== 'decision' && found.type !== 'task'))
+    throw new PharosError('not_found', `No decision or task ${input.id}`);
+  const project = store.get((found.data as { projectId: string }).projectId) as Entity<'project'>;
+  if (found.type === 'task') {
+    if (!input.done) throw new PharosError('invalid', 'Send done: true to mark the task done');
+    const task = found as Entity<'task'>;
+    return store.apply(author, {
+      message: `Mark “${task.data.title}” done`,
+      operations: [
+        {
+          op: 'update',
+          type: 'task',
+          id: task.id,
+          data: { status: valueFor(project, 'task.status', 'done') },
+        },
+      ],
+    });
+  }
+  const decision = found as Entity<'decision'>;
+  const option = decision.data.options?.find((o) => o.id === input.chosenOptionId);
+  if (!option) throw new PharosError('invalid', 'chosenOptionId must be one of its options');
+  const note = input.note?.trim();
+  if (option.asks && !note)
+    throw new PharosError('invalid', `“${option.label}” asks for a note: ${option.asks}`);
+  const person = store.list('assignee').find((a) => a.data.kind === 'human');
+  return store.apply(author, {
+    message: `Choose “${option.label}”: ${decision.data.title}${note ? ` (${note})` : ''}`,
+    operations: [
+      ...(person
+        ? []
+        : [
+            {
+              op: 'create' as const,
+              type: 'assignee' as const,
+              ref: 'me',
+              data: { name: 'me', kind: 'human' as const },
+            },
+          ]),
+      {
+        op: 'update',
+        type: 'decision',
+        id: decision.id,
+        data: {
+          chosenOptionId: option.id,
+          note: note || null,
+          answer: null,
+          deferredUntil: null,
+          status: valueFor(project, 'decision.status', 'accepted'),
+          decidedById: person?.id ?? '$me',
+          decisionDate: localToday(),
+        },
+      },
+    ],
+  });
 }

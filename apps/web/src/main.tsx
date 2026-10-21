@@ -1,3 +1,4 @@
+import { DeskPage } from './pages/DeskPage';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router';
@@ -17,6 +18,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="projects/:projectId" element={<ProjectPage />} />
           <Route path="projects/:projectId/views/:viewId" element={<ProjectPage />} />
           <Route path="projects/:projectId/files" element={<ProjectPage page="files" />} />
+          <Route path="desk" element={<DeskPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

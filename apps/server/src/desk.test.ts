@@ -265,7 +265,7 @@ describe('the desk (R16)', () => {
       estimate: '3 min',
       priority: 'high',
     });
-    expect(deskOf(store, runs).items.map((i) => i.title)).toContain('Paste the API key');
+    expect(deskOf(store, runs).items.find((i) => i.id === t.id)).toMatchObject({ gate: true });
     expect(() =>
       askOwner(store, agent, {
         projectId: p,
@@ -334,5 +334,30 @@ describe('the desk (R16)', () => {
       body: JSON.stringify({ outcome: 'great' }),
     });
     expect(bad.status).toBe(400);
+  });
+
+  it('the owner answers from the desk: an option (with the note it asks for) or a task done', async () => {
+    const { store, runs, open, mine } = setup();
+    const app = createApp(store);
+    const post = (body: unknown, who = 'human:me') =>
+      app.request('/api/desk/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': who },
+        body: JSON.stringify(body),
+      });
+    expect((await post({ id: open, chosenOptionId: 'a' }, 'agent:x')).status).toBe(403);
+    expect((await post({ id: open, chosenOptionId: 'b' })).status).toBe(400);
+    expect((await post({ id: open, chosenOptionId: 'z' })).status).toBe(400);
+    const ok = await post({ id: open, chosenOptionId: 'b', note: 'Cheaper' });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { revision: { message: string } }).revision.message).toBe(
+      'Choose “Plan B”: Which seeds? (Cheaper)',
+    );
+    expect(store.getOfType('decision', open).data).toMatchObject({
+      chosenOptionId: 'b',
+      note: 'Cheaper',
+    });
+    expect((await post({ id: mine, done: true })).status).toBe(200);
+    expect(deskOf(store, runs).items).toEqual([]);
   });
 });

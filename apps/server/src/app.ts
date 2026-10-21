@@ -28,7 +28,7 @@ import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
-import { RunLog, deskOf } from './desk.js';
+import { RunLog, deskAnswer, deskOf } from './desk.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -456,6 +456,18 @@ export function createApp(
   // routine without MCP may report its run here. Only a person marks a run seen.
   const runs = new RunLog(store);
   api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
+  api.post('/desk/answer', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Only the owner answers from the desk');
+    const body = z
+      .object({
+        id: z.string(),
+        chosenOptionId: z.string().optional(),
+        note: z.string().max(2000).optional(),
+        done: z.boolean().optional(),
+      })
+      .parse(await c.req.json().catch(() => ({})));
+    return c.json(deskAnswer(store, authorOf(c), body));
+  });
   api.get('/runs', (c) => {
     const q = c.req.query();
     return c.json(

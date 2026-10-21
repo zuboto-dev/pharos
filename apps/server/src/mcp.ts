@@ -80,6 +80,8 @@ Changing data:
 - Records (type "record") are a project's own kinds of things, such as a car service or a bill: recordType (a key of project.recordTypes, listed in project_snapshot.recordTypes), title, fields (by field key: text, number, money {amount in cents, currency}, date, option, reference (a record id), file, meter) and, for record types that repeat, interval {every: {n, unit}, meter: {n, from}, lastDate, lastMeter}. An update's fields are merged into the record's. To set up a project for a kind of life admin (a car, money, music, study, company documents), use pack_list and pack_apply instead of inventing record types; pack_list returns the pack guide (also pharos://guide/packs): follow it step by step, and read the guide pack_apply returns.
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
+- The owner's desk lists everything waiting on them across projects. When you need the owner (a choice of taste or direction, a secret, a payment, a push, personal data), ask with ask_owner in one call (options make it a one-tap decision) instead of writing the question into a page or a file; on your next turn read their answer with desk_list({since}). A routine or night run reports itself with run_report (start, then finish with an outcome).
+
 Generating views (what the user sees):
 - Read the resource pharos://guide/views (design guidelines) and pharos://examples/answers (worked examples) before your first view in a session.
 - A view is a board of widgets; each widget is one catalog component bound to live data. The user's browser updates as soon as you save.

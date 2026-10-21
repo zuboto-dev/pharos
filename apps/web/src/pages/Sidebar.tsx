@@ -1,3 +1,4 @@
+import { DeskLink } from './DeskPage';
 import type { Entity, Operation } from '@pharos/schema';
 import clsx from 'clsx';
 import {
@@ -849,6 +850,7 @@ export function Sidebar() {
   return (
     <>
       <div className="px-2 pb-1">
+        <DeskLink />
         <button
           type="button"
           onClick={(e) => openMenu('add', e)}

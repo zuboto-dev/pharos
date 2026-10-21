@@ -208,6 +208,17 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   `guidance.ts` is the guide's review desk, tested to preview clean. Sample media:
   `samples/make-review-desk-media.mjs` (headless Chrome screenshots of a made-up app, a WAV).
 
+## The desk (R16)
+
+- `/desk` lists everything waiting on the owner across projects (`apps/server/src/desk.ts`,
+  `packages/schema/src/desk.ts`, `apps/web/src/pages/DeskPage.tsx`); docs/reframe/r16-desk.md has
+  the design. Items are derived, never stored: open review sheets, decisions with options nobody
+  answered, tasks for a person that an agent asked for (`task.desk`, set by `ask_owner`) or due by
+  tomorrow, and a failed or partial run nobody has seen. Overdue after 48 h, folded after 14 days.
+- Runs are an operational log in the `runs` table (not revisions); runners report with MCP
+  `run_report` or `POST /api/runs`; only a person marks one seen. Agents ask with MCP `ask_owner`
+  and read answers with `desk_list({since})`; the owner answers in place via `POST /api/desk/answer`.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

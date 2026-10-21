@@ -1,3 +1,4 @@
+import { REPORT_EXAMPLES } from './report-examples.js';
 import {
   BOARD_GUIDE,
   COMPONENT_INFO,
@@ -276,7 +277,8 @@ Two ways to write a report, both read live data and are marked out of date when 
 
 ## The glance test
 
-The reader should know where they stand in one glance. Check every report against these five:
+The reader should know where they stand in one glance (worked examples, weak and strong side
+by side: pharos://examples/reports). Check every report against these five:
 
 1. **Its own visual world**: a palette, a type pairing and one motif that fit the subject, not
    the Pharos look. For a report page and a drawing; a document is drawn in Pharos's style, so
@@ -1191,6 +1193,17 @@ export function registerGuidance(server: McpServer, store: Store): void {
       mimeType: 'text/markdown',
     },
     (uri) => text(uri.href, REPORT_GUIDE),
+  );
+  server.registerResource(
+    'report-examples',
+    'pharos://examples/reports',
+    {
+      title: 'Report examples',
+      description:
+        'Two worked report documents at the owner\u2019s bar (a status report with asks, an explanation of one finding), with weak and strong versions side by side',
+      mimeType: 'text/markdown',
+    },
+    (uri) => text(uri.href, REPORT_EXAMPLES),
   );
   server.registerResource(
     'pack-guide',

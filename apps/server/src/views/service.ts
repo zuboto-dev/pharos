@@ -266,19 +266,23 @@ export const ViewCreateInput = z.object({
   message: z.string().trim().min(1).describe('Why this view is being made'),
 });
 
-export function createView(store: Store, author: Author, input: z.infer<typeof ViewCreateInput>) {
+/** A new view's one layout: a board (widgets), a report document (doc) or a report page (page). */
+function layoutOf(input: { widgets?: unknown; page?: unknown; doc?: unknown }) {
   const given = [input.widgets, input.page, input.doc].filter((x) => x !== undefined).length;
   if (given !== 1)
     throw new PharosError(
       'invalid',
       'Give one of widgets (a working page of blocks), doc (a report document Pharos draws) or page (a whole page written as HTML)',
     );
-  const layout =
-    input.page !== undefined
-      ? { page: parsePage(input.page) }
-      : input.doc !== undefined
-        ? { doc: parseDoc(input.doc) }
-        : { spec: parseWidgets(input.widgets) };
+  return input.page !== undefined
+    ? { page: parsePage(input.page) }
+    : input.doc !== undefined
+      ? { doc: parseDoc(input.doc) }
+      : { spec: parseWidgets(input.widgets) };
+}
+
+export function createView(store: Store, author: Author, input: z.infer<typeof ViewCreateInput>) {
+  const layout = layoutOf(input);
   const result = store.apply(
     author,
     {
@@ -314,9 +318,14 @@ export const ViewAnswerInput = z.object({
     .describe('Short tab label (default: from the question)'),
   widgets: z
     .array(z.unknown())
+    .optional()
     .describe(
-      'Board widgets that answer it; lead with the answer (a Text or Callout, or a headline ClaimCard when explaining)',
+      'Board widgets that answer a quick status question; lead with the answer (a Text or Callout). Or give doc instead',
     ),
+  doc: DocInput.describe(
+    'A report document that answers a question asking to explain, report on or compare something (R14): {blocks, data?, summary}. Call report_guide first ("Report documents")',
+  ),
+  page: PageInput,
   requestId: z
     .string()
     .optional()
@@ -333,12 +342,20 @@ export function answerView(
 ) {
   const found = input.requestId ? store.get(input.requestId) : null;
   const request = found?.type === 'request' ? (found as Entity<'request'>) : null;
-  if (request?.data.mode === 'refresh')
+  if (request?.data.mode === 'refresh') {
+    const target = request.data.viewId ? store.get(request.data.viewId) : null;
+    const data = target?.type === 'view' ? (target as Entity<'view'>).data : null;
+    const again = data?.page
+      ? 'the whole page as page'
+      : data?.doc
+        ? 'the whole document as doc'
+        : 'the whole page as widgets';
     throw new PharosError(
       'invalid',
-      `Request ${request.id} asks to refresh view ${request.data.viewId}: answer again in that same view with view_update (its revision as expectedRevision, the requestId and the whole page as widgets), not in a new one`,
+      `Request ${request.id} asks to refresh ${data?.page ? 'report page' : data?.doc ? 'report document' : 'view'} ${request.data.viewId}: answer again in that same view with view_update (its revision as expectedRevision, the requestId and ${again}), not in a new one`,
     );
-  const board = parseWidgets(input.widgets);
+  }
+  const layout = layoutOf(input);
   const name =
     input.name ??
     (input.question.length > 40 ? `${input.question.slice(0, 39).trimEnd()}…` : input.question);
@@ -359,7 +376,7 @@ export function answerView(
             expiresAt: new Date(
               now + (input.expiresInDays ?? ANSWER_DAYS) * 86_400_000,
             ).toISOString(),
-            spec: board,
+            ...layout,
           },
         },
         ...(input.requestId

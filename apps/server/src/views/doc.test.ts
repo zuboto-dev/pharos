@@ -12,7 +12,7 @@ import { Store } from '../store/store.js';
 import { evidenceState, projectFreshness } from './freshness.js';
 import { APP_PAGE_HEADERS } from './report-routes.js';
 import { ReportAssets, embedCsp, reportCsp } from './report.js';
-import { createView, getView, listViews, previewAny, updateView } from './service.js';
+import { answerView, createView, getView, listViews, previewAny, updateView } from './service.js';
 
 // R14: report documents on the server: the store, the view service, freshness and the refresh
 // loop, the preview, and the drawing and embed routes.
@@ -353,10 +353,14 @@ describe('refreshing a report document (R14 + R11)', () => {
   });
 
   it('refuses a rename, widgets, a page, or a document that reads nothing; a rewrite is fresh', () => {
-    const { store, id, requestId } = staleWithRefresh();
+    const { store, projectId, id, requestId } = staleWithRefresh();
     const expectedRevision = store.getOfType('view', id).updatedRev;
     const base = { viewId: id, message: 'r', expectedRevision, requestId };
     expect(() => updateView(store, agent, { ...base, name: 'n' })).toThrow(/whole document as doc/);
+    // A new answer view doesn't answer it either; the refusal names the document (R4 review).
+    expect(() =>
+      answerView(store, agent, { projectId, question: 'Refresh', requestId, doc: DOC }),
+    ).toThrow(/refresh report document .*the whole document as doc\), not in a new one/);
     expect(() =>
       updateView(store, agent, {
         ...base,

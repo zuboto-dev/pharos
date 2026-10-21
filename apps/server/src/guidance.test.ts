@@ -4,11 +4,13 @@ import { Board, toBoard } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import {
+  DOC_EXAMPLE,
   EXAMPLES,
   EXPLAIN_EXAMPLE,
   REPORT_GUIDE,
   VIEW_GUIDELINES,
   answerBrief,
+  answerKind,
 } from './guidance.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
@@ -33,6 +35,64 @@ describe('guidance', () => {
     ])
       expect(REPORT_GUIDE).toContain(part);
     expect(REPORT_GUIDE.split('\n').length).toBeLessThan(180);
+  });
+
+  it('puts the glance test in the report guide: five traits and two anti-examples (R3)', () => {
+    const start = REPORT_GUIDE.indexOf('## The glance test');
+    expect(start).toBeGreaterThan(-1);
+    // Before the how-to sections, so an agent reads the bar first.
+    expect(start).toBeLessThan(REPORT_GUIDE.indexOf('## Report documents'));
+    const glance = REPORT_GUIDE.slice(start, REPORT_GUIDE.indexOf('## Report documents'));
+    for (const part of [
+      // The five traits.
+      'Its own visual world',
+      'a palette, a type pairing and one motif',
+      'a document is drawn in Pharos',
+      'The claim and 3–5 key numbers first',
+      'Headings are claims, not topics',
+      'Interactives only where they answer the reader',
+      'a slider, a toggle, a filter',
+      'a simulator',
+      'A source on every number',
+      'an honesty box',
+      "what the evidence doesn't show",
+      // The two anti-examples.
+      'proves what the workers did',
+      'logs, scoreboards, who did what',
+      'pile of words',
+      'three-column table of full sentences with no TLDR',
+    ])
+      expect(glance, part).toContain(part);
+  });
+
+  it('keeps the report document example to its own glance test (R3)', () => {
+    type Block = {
+      id: string;
+      node?: {
+        component: string;
+        content?: string;
+        caption?: string;
+        title?: string;
+        body?: string;
+      };
+      columns?: Block[][];
+    };
+    const blocks = DOC_EXAMPLE.blocks as Block[];
+    const [lead, numbers, chart] = blocks;
+    // Opens with the claim as a heading, then a row of 3–5 key numbers that say what they count.
+    expect(lead?.node?.content).toMatch(/^# Groceries climbed/);
+    const stats = numbers?.columns?.flat() ?? [];
+    expect(stats.length).toBeGreaterThanOrEqual(3);
+    expect(stats.length).toBeLessThanOrEqual(5);
+    for (const s of stats) {
+      expect(s.node?.component, s.id).toBe('Stat');
+      expect(s.node?.caption, s.id).toBeTruthy();
+    }
+    // The chart title is a claim, not a topic.
+    expect(chart?.node?.title).toBe('Groceries cost more each month');
+    const honest = blocks.at(-1);
+    expect(honest?.node?.component).toBe('Callout');
+    expect(honest?.node?.body).toContain("What this doesn't say");
   });
 
   it('keeps cancelled tasks out of the blocked-or-overdue example', () => {
@@ -93,6 +153,160 @@ describe('guidance', () => {
     expect(brief).toContain("## What's overdue?");
     expect(brief).toContain('## Explanation views');
     expect(brief).toContain(`## Explaining: ${EXPLAIN_EXAMPLE.question}`);
+  });
+
+  it('picks a report document to explain or compare, a board for a quick lookup (R4)', () => {
+    for (const question of [
+      'Why is the Install stage behind?',
+      'How did the spring planting go?',
+      'Compare July and September spending',
+      'Explain what changed in the budget',
+      'Write a report on the move',
+      'What changed since Monday?',
+      "What's changed in the budget since last week?",
+    ])
+      expect(answerKind(question), question).toBe('report');
+    for (const question of [
+      "What's blocked?",
+      "What's due this week?",
+      'What is late?',
+      'Who is on what?',
+      'Which tasks are left in Build?',
+      'Which reports are due?',
+      'List the reports delivered this month',
+    ])
+      expect(answerKind(question), question).toBe('board');
+  });
+
+  it('tells the answering agent which kind each question gets, and to read report_guide (R4)', () => {
+    const store = new Store(openDatabase(':memory:'));
+    const { created } = store.apply(
+      { kind: 'human', name: 'me' },
+      {
+        message: 'Set up',
+        operations: [
+          { op: 'create', type: 'project', ref: 'p', data: { name: 'Atlas' } },
+          {
+            op: 'create',
+            type: 'request',
+            ref: 'why',
+            data: { projectId: '$p', question: 'Why did the build stage slip?' },
+          },
+          {
+            op: 'create',
+            type: 'request',
+            ref: 'what',
+            data: { projectId: '$p', question: "What's due this week?" },
+          },
+        ],
+      },
+    );
+    const brief = answerBrief(store, [created.p!]);
+    // A request's entry: its line and the indented lines under it.
+    const entry = (id: string) => {
+      const lines = brief.split('\n');
+      const at = lines.findIndex((line) => line.includes(`requestId ${id} `));
+      const end = lines.findIndex((line, i) => i > at && !line.startsWith('  '));
+      return lines.slice(at, end).join('\n');
+    };
+    expect(entry(created.why!)).toContain('Kind: a report document');
+    expect(entry(created.what!)).toContain('Kind: a board');
+    expect(entry(created.what!)).not.toContain('report document');
+    for (const part of [
+      'Pick the kind of answer by the question',
+      'Call report_guide first and follow it, then view_answer with doc',
+      'A report page (page) only when the person asks for a whole bespoke design',
+      'A quick status lookup ("what\'s blocked?", "what\'s due this week?"): a board',
+    ])
+      expect(brief, part).toContain(part);
+    // The glance test lives in report_guide only; the brief points there.
+    expect(brief).not.toContain('## The glance test');
+  });
+
+  it('answers with a report document through view_answer (R4)', () => {
+    const store = new Store(openDatabase(':memory:'));
+    const { created } = store.apply(
+      { kind: 'human', name: 'me' },
+      {
+        message: 'Set up',
+        operations: [
+          {
+            op: 'create',
+            type: 'project',
+            ref: 'p',
+            data: {
+              name: 'Money',
+              recordTypes: [
+                {
+                  key: 'spending',
+                  name: 'Spending',
+                  plural: 'Spending',
+                  fields: [
+                    { key: 'date', label: 'Date', kind: 'date' },
+                    { key: 'amount', label: 'Amount', kind: 'money', currency: 'EUR' },
+                    { key: 'category', label: 'Category', kind: 'text' },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            op: 'create',
+            type: 'record',
+            data: {
+              projectId: '$p',
+              recordType: 'spending',
+              title: 'Groceries',
+              fields: {
+                date: '2026-09-02',
+                amount: { amount: 4210, currency: 'EUR' },
+                category: 'Food',
+              },
+            },
+          },
+          {
+            op: 'create',
+            type: 'record',
+            data: {
+              projectId: '$p',
+              recordType: 'spending',
+              title: 'Corner Market',
+              fields: {
+                date: '2026-08-04',
+                amount: { amount: 6230, currency: 'EUR' },
+                category: 'Groceries',
+              },
+            },
+          },
+          {
+            op: 'create',
+            type: 'request',
+            ref: 'q',
+            data: { projectId: '$p', question: 'Why did groceries go up?' },
+          },
+        ],
+      },
+    );
+    const agent = { kind: 'agent' as const, name: 'a' };
+    const answer = answerView(store, agent, {
+      projectId: created.p!,
+      requestId: created.q!,
+      question: 'Why did groceries go up?',
+      doc: DOC_EXAMPLE,
+    });
+    const view = store.getOfType('view', answer.view.id);
+    expect(view.data).toMatchObject({ kind: 'answer', question: 'Why did groceries go up?' });
+    expect(view.data.doc?.blocks).toHaveLength(DOC_EXAMPLE.blocks.length);
+    expect(answer.preview.warnings).toEqual([]);
+    expect(store.getOfType('request', created.q!).data).toMatchObject({
+      status: 'answered',
+      answerViewId: answer.view.id,
+    });
+    const both = { projectId: created.p!, question: 'Both?', doc: DOC_EXAMPLE, widgets: [] };
+    expect(() => answerView(store, agent, both)).toThrow(/Give one of widgets/);
+    expect(() => answerView(store, agent, { projectId: created.p!, question: 'None?' })).toThrow(
+      /Give one of widgets/,
+    );
   });
 
   it('spells out the widget and item a request was asked about', () => {

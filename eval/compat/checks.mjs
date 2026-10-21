@@ -112,6 +112,29 @@ export function componentsOf(view) {
 }
 
 /**
+ * What a report document (R14, `view.data.doc`) reads live from the project: its named reads
+ * (doc.data) and each component block with a query, a filter or live Text values, inside columns
+ * too. Empty when it reads nothing (every number typed in by hand) or there is no document.
+ */
+export function docLiveReads(doc) {
+  if (!doc || !Array.isArray(doc.blocks)) return [];
+  const leaves = doc.blocks.flatMap((b) =>
+    b?.kind === 'columns' && Array.isArray(b.columns) ? b.columns.flat() : [b],
+  );
+  const reads = Object.keys(doc.data ?? {}).map((name) => `data.${name}`);
+  for (const block of leaves) {
+    const node = block?.kind === 'block' ? block.node : undefined;
+    if (!node || typeof node !== 'object') continue;
+    const live = [
+      ...['query', 'filter'].filter((key) => node[key] && typeof node[key] === 'object'),
+      ...(node.values && Object.keys(node.values).length ? ['values'] : []),
+    ];
+    if (live.length) reads.push(`${block.id}: ${node.component} ${live.join('+')}`);
+  }
+  return reads;
+}
+
+/**
  * Whether a view_preview result passes the view checks: no query finding that would refuse a
  * save, and no view-level warning (report-page opening, point, word budget). Widget warnings are
  * reported but don't fail it.

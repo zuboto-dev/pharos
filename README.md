@@ -134,16 +134,17 @@ Then try asking your agent:
 
 ## Works with
 
-Each agent below passed all five compatibility scenarios in [`eval/compat`](eval/compat)
-(set up a project from a brief, mark a task done, answer a question with a checked view, start
-from a pack and add a record, ask for a folder and wait for the owner), connected over MCP only
-to an isolated Pharos server:
+Each agent below passed the compatibility scenarios in [`eval/compat`](eval/compat) (set up a
+project from a brief, mark a task done, answer a question with a checked view, start from a pack
+and add a record, ask for a folder and wait for the owner, and, since 2026-10-20, answer an
+explain-and-compare question with a report document: six in all), connected over MCP only to an
+isolated Pharos server:
 
-| Agent       | Tested version                  | Date       | Result     |
-| ----------- | ------------------------------- | ---------- | ---------- |
-| Claude Code | 2.1.300 (claude-opus-5-5)       | 2026-10-14 | 5/5 passed |
-| Codex       | codex-cli 0.162.1 (gpt-6.1-sol) | 2026-10-14 | 5/5 passed |
-| OpenCode    | —                               | —          | planned    |
+| Agent       | Tested version                  | Date       | Result                         |
+| ----------- | ------------------------------- | ---------- | ------------------------------ |
+| Claude Code | 2.1.304 (its default model)     | 2026-10-20 | 6/6 passed                     |
+| Codex       | codex-cli 0.162.1 (gpt-6.1-sol) | 2026-10-14 | 5/5 passed (the five of 10-14) |
+| OpenCode    | —                               | —          | planned                        |
 
 To run them yourself, start a separate server on its own port and database with answering off,
 then point the runner at it (it refuses port 4300, so your own data is never touched; each

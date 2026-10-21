@@ -51,6 +51,7 @@ import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
 import { DocumentView, isDocument } from './document';
+import { ArchivedNotice } from './hand-back';
 import { ViewRenderer } from '../catalog/renderer';
 import { findSourceFile } from '../catalog/source-file';
 import { ICON_BUTTON, Tip } from '../catalog/tip';
@@ -567,6 +568,9 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             </p>
           )}
           {active?.data.kind === 'answer' && <AnswerHeader view={active} />}
+          {active?.data.archived && active.data.kind !== 'answer' && (
+            <ArchivedNotice view={active} />
+          )}
           {active && !report && !editing && <EvidenceNote view={active} freshness={freshness} />}
           {report && (
             <ReportBar

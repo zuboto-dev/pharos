@@ -68,6 +68,8 @@ function summary(view: Entity<'view'>) {
     ...(description ? { description } : {}),
     pinned,
     ...(archived ? { archived } : {}),
+    // The owner finished this review document and handed it back: read its sheets' answers.
+    ...(view.data.handedBack ? { handedBack: view.data.handedBack } : {}),
     order,
     layout: view.data.page
       ? 'report page'
@@ -546,6 +548,8 @@ export function updateView(store: Store, author: Author, input: z.infer<typeof V
   for (const key of ['name', 'description', 'pinned', 'archived', 'order'] as const) {
     if (input[key] !== undefined) data[key] = input[key];
   }
+  // Restoring a view ends its hand-back.
+  if (input.archived === false && view.data.handedBack) data.handedBack = null;
   if (input.keep) {
     if (view.data.kind !== 'answer')
       throw new PharosError('invalid', `View "${view.data.name}" is not an answer view`);

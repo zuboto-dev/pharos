@@ -26,6 +26,7 @@ import { useResource } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { useChangedViews } from '../lib/freshness';
 import { dismissAnswer, keepAnswer } from './answers';
+import { canArchive, restoreView } from './hand-back';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
 
 /** Pinned views first, then by order. */
@@ -258,7 +259,10 @@ export function ViewTabs({
     if (isAnswer(view)) {
       const { message, operations } = keepAnswer(view);
       void actions.apply(message, operations, { undoable: true });
-    } else void update(view, { archived: null }, `Restore view “${view.data.name}”`);
+    } else {
+      const { message, operations } = restoreView(view);
+      void actions.apply(message, operations, { undoable: true });
+    }
     navigate(`/projects/${projectId}/views/${view.id}`);
   };
 
@@ -426,16 +430,19 @@ export function ViewTabs({
                 </MenuItem>
                 {visible.length > 1 && (
                   <>
-                    <MenuItem
-                      icon={Archive}
-                      onClick={() => {
-                        close();
-                        void update(view, { archived: true }, `Archive view “${view.data.name}”`);
-                        navigate(`/projects/${projectId}`);
-                      }}
-                    >
-                      Archive
-                    </MenuItem>
+                    {/* Pinned and template (Overview) views stay in the tabs. */}
+                    {canArchive(view) && (
+                      <MenuItem
+                        icon={Archive}
+                        onClick={() => {
+                          close();
+                          void update(view, { archived: true }, `Archive view “${view.data.name}”`);
+                          navigate(`/projects/${projectId}`);
+                        }}
+                      >
+                        Archive
+                      </MenuItem>
+                    )}
                     {confirmDelete ? (
                       <MenuItem
                         icon={Trash2}

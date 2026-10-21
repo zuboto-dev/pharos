@@ -60,3 +60,24 @@ export function unseenCount(store: Store, agent: string, projectId: string): num
     }),
   ).length;
 }
+
+/**
+ * Review documents the owner finished and handed back since this agent last looked: every sheet
+ * answered, then archived with `handedBack` by a person. One line each, for project_snapshot, so
+ * the agent picks the answers up on its next turn without being told.
+ */
+export function handedBackLines(store: Store, agent: string, projectId: string): string[] {
+  const cursor = store.agentCursor(agent, projectId);
+  return store.list('view', { projectId }).flatMap((view) => {
+    const back = view.data.handedBack;
+    if (!view.data.archived || !back) return [];
+    const recent = store
+      .history({ entityId: view.id, after: cursor, authorKind: 'human', limit: 20 })
+      .some((r) => r.changes.some((c) => c.id === view.id && 'handedBack' in c.fields));
+    if (!recent) return [];
+    const whom = !back.to || back.to === agent ? 'you' : back.to;
+    return [
+      `“${view.data.name}” (${view.id}): the owner answered all ${back.answered} and archived it, handed back to ${whom}. Read the answers with view_get.`,
+    ];
+  });
+}

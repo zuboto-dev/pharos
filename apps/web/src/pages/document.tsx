@@ -35,6 +35,7 @@ import {
   useSheetTasks,
   type Sheet,
 } from './document-rich';
+import { HandBackPrompt } from './hand-back';
 
 // Report documents (R14, docs/reframe/r14-report-documents.md): blocks in reading order that
 // Pharos lays out as an article in its own style. Components come from the board renderer with
@@ -108,6 +109,11 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
     [doc],
   );
   const sheets = useMemo(() => (doc ? deskSheets(doc.blocks) : []), [doc]);
+  // Every top-level sheet, for the hand-back once all that ask something are answered.
+  const allSheets = useMemo(
+    () => (doc ? doc.blocks.filter((b): b is Sheet => b.kind === 'sheet') : []),
+    [doc],
+  );
   if (!doc) return null;
   return (
     <VariantProvider variant="document">
@@ -129,6 +135,7 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
                 />
               ))}
             </article>
+            {allSheets.length > 0 && <HandBackPrompt view={view} sheets={allSheets} />}
           </BoardActionsProvider>
         </BoardFilesProvider>
       </FileViewerProvider>

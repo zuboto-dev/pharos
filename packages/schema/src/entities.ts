@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DECISION_CHOICE_FIELDS } from './decisions.js';
+import { TASK_ANSWER } from './task-answers.js';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
@@ -124,6 +125,9 @@ export const TaskData = z.strictObject({
     .boolean()
     .optional()
     .describe("On the owner's desk: an agent asked them to do it (ask_owner sets it)"),
+  // The owner's other answers (won't do is the cancelled status): only a person sets these.
+  reply: z.string().min(1).max(TASK_ANSWER.replyChars).optional().describe('Owner only'),
+  deferredUntil: IsoDate.optional().describe('Owner only'),
   dueDate: IsoDate.optional().describe('YYYY-MM-DD'),
   order: Order,
   fileIds: FileIds,

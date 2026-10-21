@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, NavLink } from 'react-router';
+import { OtherAnswerButton } from '../catalog/components/task-answer';
 import { BUTTON } from '../catalog/ui';
 import { postJson, useResource } from '../lib/api';
 import { useRevisionEvents } from '../lib/events';
@@ -127,14 +128,32 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
   if (item.kind === 'task')
     return (
       <div className="mt-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void send({ id: item.id, done: true })}
-          className="inline-flex items-center gap-1 rounded-control border border-line-strong px-2.5 py-1 text-sm text-ink-soft hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-50"
-        >
-          <Check aria-hidden className="size-3.5" strokeWidth={3} /> Mark done
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void send({ id: item.id, done: true })}
+            className="inline-flex items-center gap-1 rounded-control border border-line-strong px-2.5 py-1 text-sm text-ink-soft hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-50"
+          >
+            <Check aria-hidden className="size-3.5" strokeWidth={3} /> Mark done
+          </button>
+          {/* Or: won't do, later (it comes back on that day), or a reply of their own. */}
+          <OtherAnswerButton
+            title={item.title}
+            busy={busy}
+            onAnswer={(a) =>
+              send(
+                a.kind === 'wontDo'
+                  ? { id: item.id, wontDo: true }
+                  : a.kind === 'later'
+                    ? { id: item.id, later: a.until }
+                    : a.kind === 'reply'
+                      ? { id: item.id, reply: a.text }
+                      : { id: item.id },
+              )
+            }
+          />
+        </div>
         {error && <p className="mt-1 text-sm text-danger">{error}</p>}
       </div>
     );

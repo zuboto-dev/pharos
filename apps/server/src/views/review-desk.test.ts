@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { ReportDoc, valueFor, type Author, type Entity } from '@pharos/schema';
+import { ReportDoc, taskAnswerChange, valueFor, type Author, type Entity } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { REPORT_GUIDE, REVIEW_EXAMPLE, REVIEW_EXAMPLE_DECISION } from '../guidance.js';
@@ -212,6 +212,38 @@ describe("the reader's answers don't make a document out of date (R15)", () => {
     expect(state(ctx)).toBe('fresh');
   });
 
+  it("the reader's other answers on a checklist task (won't do, later, a reply) keep it fresh", () => {
+    const ctx = setup();
+    const project = ctx.store.get(ctx.projectId) as Entity<'project'>;
+    const task = ctx.store.getOfType('task', ctx.t1);
+    for (const answer of [
+      { kind: 'wontDo' },
+      { kind: 'later', until: '2026-11-02' },
+      { kind: 'reply', text: 'Ask Ana to try it' },
+      { kind: 'reopen' },
+    ] as const) {
+      const change = taskAnswerChange(project, ctx.store.getOfType('task', task.id), answer);
+      ctx.store.apply(me, {
+        message: change.message,
+        operations: [{ op: 'update', type: 'task', id: task.id, data: change.data }],
+      });
+      expect(state(ctx)).toBe('fresh');
+    }
+    // Anything else in the same change (a new title) is still news.
+    ctx.store.apply(me, {
+      message: 'Reply and rename',
+      operations: [
+        {
+          op: 'update',
+          type: 'task',
+          id: task.id,
+          data: { reply: 'Later', title: 'Try it twice' },
+        },
+      ],
+    });
+    expect(state(ctx)).toBe('stale');
+  });
+
   it("an agent changing the decision's title, or a checklist task's title, makes it stale", () => {
     const ctx = setup();
     ctx.store.apply(agent, {
@@ -322,8 +354,8 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
         state: 'open',
         decisions: [],
         tasks: [
-          { id: ctx.t1, title: 'Try it', status: 'todo', done: false },
-          { id: ctx.t2, title: 'Listen', status: 'todo', done: false },
+          { id: ctx.t1, title: 'Try it', status: 'todo', done: false, state: 'open' },
+          { id: ctx.t2, title: 'Listen', status: 'todo', done: false, state: 'open' },
         ],
       },
       { id: 'hear', title: 'Listen to the alert', time: '1 min', decisions: [] },
@@ -337,7 +369,7 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
         { state: 'chosen', chosen: { id: 'ship', label: 'Ship it' }, decidedOn: '2026-10-20' },
       ],
     });
-    expect(after.sheets![1]!.tasks![0]).toMatchObject({ id: ctx.t1, done: true });
+    expect(after.sheets![1]!.tasks![0]).toMatchObject({ id: ctx.t1, done: true, state: 'done' });
     // A checklist sheet is done once every task it shows is finished.
     expect(after.sheets![1]!.state).toBe('open');
     tick(ctx, ctx.t2);

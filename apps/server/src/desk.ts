@@ -3,9 +3,14 @@ import {
   DESK_OLD_DAYS,
   DESK_OVERDUE_HOURS,
   decisionState,
+  TASK_ANSWER,
+  isCalendarDate,
   localToday,
   meaningOf,
+  taskAnswerChange,
+  taskAnswerState,
   valueFor,
+  type TaskAnswer,
   type AskOwner,
   type Author,
   type Desk,
@@ -229,14 +234,14 @@ export function deskOf(
     for (const view of data.views) {
       // An archived report was handed back: its sheets no longer wait on the owner.
       if (!view.data.doc || view.data.archived) continue;
-      for (const sheet of sheetSummaries(store, project.id, view.data.doc)) {
+      for (const sheet of sheetSummaries(store, project.id, view.data.doc, today)) {
         for (const d of sheet.decisions) covered.add(d.id);
         for (const t of sheet.tasks ?? []) covered.add(t.id);
         if (sheet.state !== 'open') continue;
         const openDecisions = sheet.decisions.filter(
           (d) => d.state === 'open' || d.state === 'deferred',
         );
-        const left = (sheet.tasks ?? []).filter((t) => !t.done);
+        const left = (sheet.tasks ?? []).filter((t) => t.state === 'open');
         const started = [
           ...openDecisions.map((d) => store.get(d.id)?.createdAt),
           ...left.map((t) => store.get(t.id)?.createdAt),
@@ -289,8 +294,10 @@ export function deskOf(
     const people = new Set(data.assignees.filter((a) => a.data.kind === 'human').map((a) => a.id));
     for (const t of data.tasks) {
       if (covered.has(t.id) || !people.has(t.data.assigneeId ?? '')) continue;
+      // Done, won't do and replied are answered; a later one waits until its day.
       const meaning = meaningOf(project, 'task.status', t.data.status);
-      if (meaning === 'done' || meaning === 'cancelled') continue;
+      const state = taskAnswerState(t.data, meaning, today);
+      if (state !== 'open') continue;
       // A person's plan tasks stay in their projects: only what an agent asked of them, or what
       // is due by tomorrow, waits on the desk.
       const due = t.data.dueDate && t.data.dueDate <= tomorrow;
@@ -303,7 +310,8 @@ export function deskOf(
         title: t.data.title,
         ...(firstLine(t.data.description) ? { ask: firstLine(t.data.description) } : {}),
         ...(minutesIn(t.data.estimate) ? { minutes: minutesIn(t.data.estimate) } : {}),
-        since: t.createdAt,
+        // Back from "later": it has waited since its day, like a decision's deferral.
+        since: t.data.deferredUntil ? `${t.data.deferredUntil}T00:00:00.000Z` : t.createdAt,
         // ask_owner makes a gate a high-priority desk task.
         gate:
           !!t.data.desk &&
@@ -455,22 +463,67 @@ export function answersSince(store: Store, since: number, projectId?: string) {
 }
 
 /**
+ * A task answer other than done, checked: exactly one of won't do, later (a day after today) or
+ * a reply; none when the request marks it done.
+ */
+function taskAnswerOf(
+  input: { done?: boolean; wontDo?: boolean; later?: string; reply?: string },
+  today: string,
+): TaskAnswer | undefined {
+  const given = [input.done, input.wontDo, input.later !== undefined, input.reply !== undefined];
+  if (given.filter(Boolean).length !== 1)
+    throw new PharosError(
+      'invalid',
+      'Send one answer for a task: done: true, wontDo: true, later: "YYYY-MM-DD" or reply: "…"',
+    );
+  if (input.done) return undefined;
+  if (input.wontDo) return { kind: 'wontDo' };
+  if (input.later !== undefined) {
+    if (!isCalendarDate(input.later) || input.later <= today)
+      throw new PharosError('invalid', `later must be a day after today (${today}), as YYYY-MM-DD`);
+    return { kind: 'later', until: input.later };
+  }
+  const text = input.reply?.trim() ?? '';
+  if (!text) throw new PharosError('invalid', 'reply needs some text');
+  if (text.length > TASK_ANSWER.replyChars)
+    throw new PharosError('invalid', `reply is at most ${TASK_ANSWER.replyChars} characters`);
+  return { kind: 'reply', text };
+}
+
+/**
  * The owner answers from the desk (POST /api/desk/answer): choose a decision's option (with the
- * note an option asks for), or mark a task done. The same change the DecisionBlock and the
- * checklist make, as one revision with the owner as the decider.
+ * note an option asks for), or answer a task: done, won't do, later (a day) or a reply of their
+ * own. The same change the DecisionBlock and the checklist make, as one revision with the owner
+ * as the decider.
  */
 export function deskAnswer(
   store: Store,
   author: Author,
-  input: { id: string; chosenOptionId?: string; note?: string; done?: boolean },
+  input: {
+    id: string;
+    chosenOptionId?: string;
+    note?: string;
+    done?: boolean;
+    wontDo?: boolean;
+    later?: string;
+    reply?: string;
+  },
+  now: Date = new Date(),
 ) {
   const found = store.get(input.id);
   if (!found || (found.type !== 'decision' && found.type !== 'task'))
     throw new PharosError('not_found', `No decision or task ${input.id}`);
   const project = store.get((found.data as { projectId: string }).projectId) as Entity<'project'>;
   if (found.type === 'task') {
-    if (!input.done) throw new PharosError('invalid', 'Send done: true to mark the task done');
     const task = found as Entity<'task'>;
+    const answer = taskAnswerOf(input, localToday(now));
+    if (answer) {
+      const change = taskAnswerChange(project, task, answer);
+      return store.apply(author, {
+        message: change.message,
+        operations: [{ op: 'update', type: 'task', id: task.id, data: change.data }],
+      });
+    }
     return store.apply(author, {
       message: `Mark “${task.data.title}” done`,
       operations: [

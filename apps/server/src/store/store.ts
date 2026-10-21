@@ -5,6 +5,7 @@ import {
   ENTITIES,
   ENTITY_TYPES,
   OWNER_DECISION_FIELDS,
+  OWNER_TASK_FIELDS,
   decisionIssues,
   decisionWarnings,
   type ApplyInput,
@@ -651,6 +652,7 @@ export class Store {
         const issue =
           new AgentFiles(this).changesIssue(tx.changes) ??
           agentDecisionIssue(this, tx.changes) ??
+          agentTaskAnswerIssue(tx.changes) ??
           agentOutcomeIssue(tx.changes) ??
           agentBlockScopeIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
@@ -735,6 +737,30 @@ function agentDecisionIssue(store: Store, changes: Change[]): string | undefined
       meaningOf(project, 'decision.status', after.status as string) === 'accepted'
     )
       return `${what}: a decision with options is accepted when the owner chooses one in Pharos; keep its status "proposed"`;
+  }
+  return undefined;
+}
+
+/**
+ * A task the owner was asked to do is theirs to answer: agents never write their reply or their
+ * "later" day, nor delete a task that has one. Checked on everything a revision does, undos
+ * included.
+ */
+function agentTaskAnswerIssue(changes: Change[]): string | undefined {
+  for (const change of changes) {
+    if (change.type !== 'task') continue;
+    if (!change.after) {
+      const set = OWNER_TASK_FIELDS.find((f) => (change.before?.[f] ?? null) !== null);
+      if (set)
+        return `${describe('task', change.id, change.before ?? {})}: the owner already answered it (${set}); only they can remove it, in Pharos`;
+      continue;
+    }
+    const before: Data = change.before ?? {};
+    const owner = OWNER_TASK_FIELDS.find(
+      (f) => !isDeepStrictEqual(before[f] ?? null, change.after?.[f] ?? null),
+    );
+    if (owner)
+      return `${describe('task', change.id, change.after)}: only the owner replies to a task or puts it off (${owner}); they do it in Pharos, on a page with a TaskChecklist or on the desk`;
   }
   return undefined;
 }

@@ -133,6 +133,31 @@ describe('the desk page (R16)', () => {
     expect(posted[2]!.body).toEqual({ id: 'task_1', done: true });
   });
 
+  it("answers a task otherwise: won't do, later, or a reply", async () => {
+    await show();
+    const other = () =>
+      screen.getByRole('button', { name: 'Other answer for “Paste the API key”' });
+    expect(other().getAttribute('title')).toBe('Other answer');
+    fireEvent.click(other());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Won’t do' }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toEqual({ url: '/api/desk/answer', body: { id: 'task_1', wontDo: true } });
+
+    fireEvent.click(other());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Later…' }));
+    const date = screen.getByLabelText(/Later, on/) as HTMLInputElement;
+    fireEvent.click(screen.getByRole('button', { name: 'Later' }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.body).toEqual({ id: 'task_1', later: date.value });
+
+    fireEvent.click(other());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reply…' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ana has the key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    await waitFor(() => expect(posted).toHaveLength(3));
+    expect(posted[2]!.body).toEqual({ id: 'task_1', reply: 'Ana has the key' });
+  });
+
   it('the sidebar link counts what needs you today', async () => {
     render(
       <MemoryRouter>

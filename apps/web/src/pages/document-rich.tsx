@@ -540,7 +540,7 @@ export function StepsView({ block }: { block: Steps }) {
 
 /**
  * How a sheet stands: answered once every decision it names has a choice or an answer and every
- * task its TaskChecklists show is finished; none when it asks neither.
+ * task its TaskChecklists show is answered; none when it asks neither.
  */
 export type SheetState = 'answered' | 'open' | 'none';
 
@@ -551,7 +551,7 @@ type DecisionLike = Pick<Entity<'decision'>, 'id'> & {
 export function sheetState(
   sheet: Sheet,
   decisions: readonly DecisionLike[],
-  /** Finished or not, for each task the sheet's TaskChecklists show. */
+  /** Answered or not, for each task the sheet's TaskChecklists show. */
   tasks: readonly boolean[] = [],
 ): SheetState {
   if (!sheet.decisions?.length && !tasks.length) return 'none';
@@ -564,12 +564,12 @@ export function sheetState(
 }
 
 /**
- * For each sheet, whether each task its TaskChecklists show is finished: done or cancelled, as
- * the list itself counts it (`sheetTasks`, the same rule view_get uses).
+ * For each sheet, whether each task its TaskChecklists show is answered: done, won't do, a reply,
+ * or later until its day (`sheetTasks`, the same rule view_get uses).
  */
 export function useSheetTasks(): (sheet: Sheet) => boolean[] {
   const data = useViewData();
-  return (sheet) => sheetTasks(data, sheet as { blocks: DocBlock[] }).map((t) => t.finished);
+  return (sheet) => sheetTasks(data, sheet as { blocks: DocBlock[] }).map((t) => t.answered);
 }
 
 const TIME_PART = /(\d+(?:[.,]\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)(?![a-z])/gi;

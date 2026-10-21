@@ -31,7 +31,18 @@ export type UpdateOnly = Partial<Record<EntityType, readonly string[]>>;
  */
 export type CreateOnly = Partial<Record<EntityType, readonly string[]>>;
 
-function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}, createOnly: CreateOnly = {}) {
+/**
+ * Fields an author never writes, left out of the schema it sees (agents and a task's owner-only
+ * answers: describing them would only grow the apply tool; the store refuses them anyway).
+ */
+export type Hidden = Partial<Record<EntityType, readonly string[]>>;
+
+function operationsFor(
+  type: EntityType,
+  updateOnly: UpdateOnly = {},
+  createOnly: CreateOnly = {},
+  hidden: Hidden = {},
+) {
   const omit = updateOnly[type];
   if (omit) {
     const mask = Object.fromEntries(omit.map((f) => [f, true as const]));
@@ -60,18 +71,24 @@ function operationsFor(type: EntityType, updateOnly: UpdateOnly = {}, createOnly
       update,
     ]);
   }
+  const left = Object.fromEntries((hidden[type] ?? []).map((f) => [f, true as const])) as Record<
+    string,
+    true
+  >;
   return z.discriminatedUnion('op', [
     z.strictObject({
       op: z.literal('create'),
       type: z.literal(type),
       ref: Ref.optional(),
-      data: createSchema(type),
+      data: createSchema(type).omit(left),
     }),
     z.strictObject({
       op: z.literal('update'),
       type: z.literal(type),
       id: Id,
-      data: patchSchema(type).describe('Fields to change; null clears an optional field'),
+      data: patchSchema(type)
+        .omit(left)
+        .describe('Fields to change; null clears an optional field'),
     }),
     z.strictObject({ op: z.literal('delete'), type: z.literal(type), id: Id }),
   ]);
@@ -81,10 +98,11 @@ function operationUnion(
   types: readonly EntityType[],
   updateOnly?: UpdateOnly,
   createOnly?: CreateOnly,
+  hidden?: Hidden,
 ) {
   return z.discriminatedUnion(
     'type',
-    types.map((t) => operationsFor(t, updateOnly, createOnly)) as unknown as [
+    types.map((t) => operationsFor(t, updateOnly, createOnly, hidden)) as unknown as [
       ReturnType<typeof operationsFor>,
       ...ReturnType<typeof operationsFor>[],
     ],
@@ -102,6 +120,7 @@ export function applyInputFor(
   types: readonly EntityType[],
   updateOnly?: UpdateOnly,
   createOnly?: CreateOnly,
+  hidden?: Hidden,
 ) {
   return z.object({
     message: z
@@ -109,7 +128,7 @@ export function applyInputFor(
       .trim()
       .min(1)
       .describe('Why these changes are being made, like a commit message'),
-    operations: z.array(operationUnion(types, updateOnly, createOnly)).min(1),
+    operations: z.array(operationUnion(types, updateOnly, createOnly, hidden)).min(1),
   });
 }
 

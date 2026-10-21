@@ -358,10 +358,12 @@ they answer in place.
 - Decisions: create each with apply first (title, 2–5 options, your recommendedOptionId and
   recommendationReason, status proposed), then list it in the sheet and put a DecisionBlock for
   it inside. The owner chooses, writes their own answer or defers in Pharos; you never set those.
-  A TaskChecklist inside a sheet lets them tick tasks off.
+  A TaskChecklist inside a sheet lets them tick tasks off, or answer otherwise: won't do, later
+  (a day), or a reply in their own words; you never set reply or deferredUntil.
 - Reading the answers: view_get on the document lists each sheet with its state (open or
   answered) and each decision's answer (the option chosen, their own words, or the date it was
-  put off), and the tasks its checklists show; one call. Their answers and ticks don't make the
+  put off), and the tasks its checklists show with each one's state (done, wontDo, replied with
+  the reply, later with deferredUntil, open); one call. Their answers and ticks don't make the
   document out of date.
 - view_preview warns about figure files not uploaded yet (upload them, then preview again), a
   compare figure that isn't two pictures, sheet decisions that don't exist, have no options or no

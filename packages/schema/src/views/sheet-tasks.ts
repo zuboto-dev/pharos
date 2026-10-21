@@ -1,5 +1,7 @@
 import type { Entity } from '../entities.js';
 import { meaningOf } from '../options.js';
+import { taskAnswerState, type TaskAnswerState } from '../task-answers.js';
+import { localToday } from './dates.js';
 import { docLeaves, type DocBlock, type ReportDoc } from './doc.js';
 import type { Filter, ProjectDataset } from './query.js';
 import { runQuery } from './run-query.js';
@@ -10,14 +12,28 @@ import { runQuery } from './run-query.js';
  * decisions a document asks to be answered.
  */
 
-/** A task a sheet's TaskChecklists show; finished once done or cancelled, as the list counts it. */
-export type SheetTask = { task: Entity<'task'>; done: boolean; finished: boolean };
+/**
+ * A task a sheet's TaskChecklists show: finished once done or cancelled, as the list counts it;
+ * `state` is the owner's answer on it, and `answered` whether the sheet counts it as answered
+ * (done, won't do, a reply, or later until that day).
+ */
+export type SheetTask = {
+  task: Entity<'task'>;
+  done: boolean;
+  finished: boolean;
+  state: TaskAnswerState;
+  answered: boolean;
+};
 
 /**
  * The tasks a sheet's TaskChecklists show, once each, with the list's own `assigneeKind` applied.
  * A checklist whose filter can't run shows none.
  */
-export function sheetTasks(data: ProjectDataset, sheet: { blocks: DocBlock[] }): SheetTask[] {
+export function sheetTasks(
+  data: ProjectDataset,
+  sheet: { blocks: DocBlock[] },
+  today: string = localToday(),
+): SheetTask[] {
   const assignees = new Map(data.assignees.map((a) => [a.id, a]));
   const seen = new Map<string, SheetTask>();
   for (const b of docLeaves(sheet.blocks)) {
@@ -37,10 +53,13 @@ export function sheetTasks(data: ProjectDataset, sheet: { blocks: DocBlock[] }):
       )
         continue;
       const meaning = meaningOf(data.project, 'task.status', task.data.status);
+      const state = taskAnswerState(task.data, meaning, today);
       seen.set(task.id, {
         task,
         done: meaning === 'done',
         finished: meaning === 'done' || meaning === 'cancelled',
+        state,
+        answered: state !== 'open',
       });
     }
   }

@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import {
   ENTITIES,
   OWNER_DECISION_FIELDS,
+  OWNER_TASK_FIELDS,
   SEEN_SETTING,
   boardReads,
   changeTouches,
@@ -373,6 +374,15 @@ function isAnswer(change: ChangeLike): boolean {
   return fields.some((f) => OWNER_FIELDS.has(f)) && fields.every((f) => ANSWER_FIELDS.has(f));
 }
 
+/** What answering a task writes: its status (done, won't do), a reply, a later day. */
+const TASK_ANSWER_FIELDS = new Set<string>(['status', ...OWNER_TASK_FIELDS]);
+
+/** A task ticked or answered otherwise: only its status, the reply or the later day change. */
+function isTaskAnswer(change: ChangeLike): boolean {
+  const fields = changedFields(change);
+  return fields.length > 0 && fields.every((f) => TASK_ANSWER_FIELDS.has(f));
+}
+
 /** The tasks a document shows in its TaskChecklists, where the reader ticks them (R15). */
 function checklistReads(doc: ReportDoc): BoardReads {
   const widgets = docLeaves(doc.blocks).flatMap((b) =>
@@ -384,7 +394,7 @@ function checklistReads(doc: ReportDoc): BoardReads {
 /**
  * The revisions without the reader's own answers on a document (R15): a decision the document
  * asks about answered (and the person recorded as deciding it, made in the same revision) and a
- * task's status ticked by a person in one of its TaskChecklists. Answers are what the document asks for, not news that makes its words
+ * task's status ticked (or its reply or later day set) by a person in one of its TaskChecklists. Answers are what the document asks for, not news that makes its words
  * out of date; anything else in those revisions (an agent changing the decision's title) still
  * counts.
  */
@@ -404,7 +414,7 @@ function withoutAnswers(
     !!change.before &&
     !!change.after &&
     ticks.queries.length > 0 &&
-    isDeepStrictEqual(changedFields(change), ['status']) &&
+    isTaskAnswer(change) &&
     changeTouches(ticks, change, matcherOn(day), { everything: false });
   return revisions.map((revision) => {
     const answers = revision.changes.filter(answer);

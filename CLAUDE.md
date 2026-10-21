@@ -222,6 +222,12 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
 - Runs are an operational log in the `runs` table (not revisions); runners report with MCP
   `run_report` or `POST /api/runs`; only a person marks one seen. Agents ask with MCP `ask_owner`
   and read answers with `desk_list({since})`; the owner answers in place via `POST /api/desk/answer`.
+- A task the owner is asked to do has answers besides done (`packages/schema/src/task-answers.ts`):
+  won't do (the cancelled meaning), later (`deferredUntil`, back on the desk that day) and a reply
+  (`reply`); the last two are owner-only (`OWNER_TASK_FIELDS`, refused for agents like a
+  decision's). `taskAnswerState` drives the sheet state, the desk and view_get's sheet tasks;
+  `taskAnswerChange` is the one update and message (`Won't do “…”`, `Later (day): “…”`, `Reply on
+“…”: …`) the document's TaskChecklist and the desk share. These answers don't make a document stale.
 
 ## Files
 

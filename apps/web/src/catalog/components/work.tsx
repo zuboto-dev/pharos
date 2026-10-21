@@ -1,4 +1,12 @@
-import { runQuery, stripWorkCode, type Entity, type NodeOf } from '@pharos/schema';
+import {
+  runQuery,
+  stripWorkCode,
+  taskAnswerChange,
+  taskAnswerState,
+  type Entity,
+  type NodeOf,
+  type TaskAnswer,
+} from '@pharos/schema';
 import clsx from 'clsx';
 import {
   Bot,
@@ -23,6 +31,7 @@ import { AskAgentButton, EmptyState } from '../empty-state';
 import { ScrollX } from '../scroll-x';
 import { Badge } from '../ui';
 import { useInDocument } from '../variant';
+import { OtherAnswerButton, TaskAnswered } from './task-answer';
 
 type Task = Entity<'task'>;
 type GroupBy = NonNullable<NodeOf<'KanbanBoard'>['groupBy']>;
@@ -457,8 +466,22 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
       (t) => data.assigneeById.get(t.data.assigneeId ?? '')?.data.kind === node.assigneeKind,
     );
   }
-  const finished = tasks.filter((t) => meaning(t) === 'done' || meaning(t) === 'cancelled');
+  // In a report a task the reader answered otherwise (won't do, later, a reply) stays in sight
+  // with its answer, so they can change it; only done ones fold away.
+  const finished = tasks.filter(
+    (t) => meaning(t) === 'done' || (!readOnly && meaning(t) === 'cancelled'),
+  );
   const visible = hideDone && !showDone ? tasks.filter((t) => !finished.includes(t)) : tasks;
+  const today = localToday();
+  const answer = async (task: Task, a: TaskAnswer) => {
+    const change = taskAnswerChange(data.project, task, a);
+    const outcome = await data.actions.apply(
+      change.message,
+      [{ op: 'update', type: 'task', id: task.id, data: change.data }],
+      { undoable: true },
+    );
+    return outcome.ok;
+  };
 
   // New tasks go to the first assignee of the kind this list shows, so they appear in it.
   const assignee = node.assigneeKind
@@ -508,60 +531,80 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
         />
       )}
       <ul className="-mx-2 space-y-0.5">
-        {visible.map((task) => (
-          <li key={task.id}>
-            <Clickable
-              id={task.id}
-              className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken"
-            >
-              <TaskCheck task={task} answer />
-              <span
-                className={clsx(
-                  'min-w-0 flex-1 truncate text-sm',
-                  meaning(task) === 'done' && 'text-faint line-through',
-                )}
+        {visible.map((task) => {
+          const state = taskAnswerState(task.data, meaning(task), today);
+          return (
+            <li key={task.id}>
+              <Clickable
+                id={task.id}
+                className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken"
               >
-                {task.data.title}
-              </span>
-              {task.data.stageId && (
-                <EntityRef id={task.data.stageId} className="hidden sm:inline-flex" />
-              )}
-              {options.meaning('task.priority', task.data.priority) !== 'medium' && (
-                <OptionBadge field="task.priority" value={task.data.priority} />
-              )}
-              <AssigneeLabel id={task.data.assigneeId} />
-              {meaning(task) === 'todo' && !readOnly ? (
-                <button
-                  type="button"
-                  onClick={() => void setStatus(task, 'in_progress')}
-                  className="inline-flex items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-sky-300 hover:text-accent-strong"
+                <TaskCheck task={task} answer />
+                <span
+                  className={clsx(
+                    'min-w-0 flex-1 truncate text-sm',
+                    meaning(task) === 'done' && 'text-faint line-through',
+                    readOnly && state === 'wontDo' && 'text-faint line-through',
+                    readOnly && (state === 'later' || state === 'replied') && 'text-muted',
+                  )}
                 >
-                  <Play className="size-3" /> Start
-                </button>
-              ) : meaning(task) !== 'done' ? (
-                <>
-                  {!(readOnly && meaning(task) === 'todo') && (
-                    <OptionBadge field="task.status" value={task.data.status} />
-                  )}
-                  {/* In a report the tick is the reader's answer: say so in words too (R15). */}
-                  {readOnly && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void setStatus(task, 'done');
-                      }}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-emerald-500 hover:text-emerald-600"
-                    >
-                      <Check aria-hidden className="size-3" strokeWidth={3} /> Mark done
-                      <span className="sr-only">: {task.data.title}</span>
-                    </button>
-                  )}
-                </>
-              ) : null}
-            </Clickable>
-          </li>
-        ))}
+                  {task.data.title}
+                </span>
+                {task.data.stageId && (
+                  <EntityRef id={task.data.stageId} className="hidden sm:inline-flex" />
+                )}
+                {options.meaning('task.priority', task.data.priority) !== 'medium' && (
+                  <OptionBadge field="task.priority" value={task.data.priority} />
+                )}
+                <AssigneeLabel id={task.data.assigneeId} />
+                {readOnly && state !== 'open' && state !== 'done' ? (
+                  <TaskAnswered
+                    title={task.data.title}
+                    state={state}
+                    reply={task.data.reply}
+                    until={task.data.deferredUntil}
+                    onChange={() => void answer(task, { kind: 'reopen' })}
+                  />
+                ) : meaning(task) === 'todo' && !readOnly ? (
+                  <button
+                    type="button"
+                    onClick={() => void setStatus(task, 'in_progress')}
+                    className="inline-flex items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-sky-300 hover:text-accent-strong"
+                  >
+                    <Play className="size-3" /> Start
+                  </button>
+                ) : meaning(task) !== 'done' ? (
+                  <>
+                    {!(readOnly && meaning(task) === 'todo') && (
+                      <OptionBadge field="task.status" value={task.data.status} />
+                    )}
+                    {/* In a report the tick is the reader's answer: say so in words too (R15). */}
+                    {readOnly && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void setStatus(task, 'done');
+                        }}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-control border border-line-strong px-2 py-0.5 text-xs text-ink-soft hover:border-emerald-500 hover:text-emerald-600"
+                      >
+                        <Check aria-hidden className="size-3" strokeWidth={3} /> Mark done
+                        <span className="sr-only">: {task.data.title}</span>
+                      </button>
+                    )}
+                    {/* Or another answer: won't do, later, a reply of their own. */}
+                    {readOnly && (
+                      <OtherAnswerButton
+                        title={task.data.title}
+                        onAnswer={(a) => answer(task, a)}
+                      />
+                    )}
+                  </>
+                ) : null}
+              </Clickable>
+            </li>
+          );
+        })}
       </ul>
       <div className="-mx-2">{addTask()}</div>
       {hideDone && finished.length > 0 && (

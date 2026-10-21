@@ -12,7 +12,12 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { ActionService } from './actions/service.js';
-import type { AgentRunner, AgentStatus } from './agent-runner.js';
+import {
+  AGENT_PRESETS,
+  PRESET_LABELS,
+  type AgentRunner,
+  type AgentStatus,
+} from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
 import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
 import { folderRequestRoutes } from './files/requests.js';
@@ -293,6 +298,7 @@ export function createApp(
       paused: false,
       state: 'unavailable',
       mode: 'unavailable',
+      presets: AGENT_PRESETS.map((id) => ({ id, label: PRESET_LABELS[id], installed: false })),
       running: false,
       answering: [],
       queued: [],
@@ -300,7 +306,8 @@ export function createApp(
   api.get('/agent', (c) => c.json(agentStatus()));
 
   // Settings: what this server uses, and the few things the web app can change. The answering
-  // command itself only comes from the environment; Settings can only pause or resume it.
+  // command itself only comes from the environment; Settings can pause or resume it and pick one
+  // of the installed built-in agents (`preset`), unless PHAROS_AGENT_COMMAND decides.
   api.get('/settings', (c) => {
     const port = info.port ?? 4300;
     return c.json({
@@ -316,10 +323,17 @@ export function createApp(
   });
 
   api.put('/settings/agent', async (c) => {
-    const body = z.object({ enabled: z.boolean() }).parse(await c.req.json());
+    const body = z
+      .object({ enabled: z.boolean().optional(), preset: z.string().optional() })
+      .refine((b) => b.enabled !== undefined || b.preset !== undefined, 'Send enabled or preset')
+      .parse(await c.req.json());
+    // Which agent answers is the owner's choice, never an agent's.
+    if (body.preset !== undefined && declaresAgent(c))
+      return forbidden(c, 'Only the owner chooses which agent answers questions');
     if (!agent?.configured)
       throw new PharosError('invalid', 'No answering agent is set up on this server');
-    agent.setEnabled(body.enabled);
+    if (body.preset !== undefined) agent.setPreset(body.preset);
+    if (body.enabled !== undefined) agent.setEnabled(body.enabled);
     return c.json(agent.status());
   });
 

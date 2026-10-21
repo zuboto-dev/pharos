@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { RevisionEvent, RevisionFeed } from './feed.js';
 import type { Presence } from './presence.js';
+import { PharosError } from './store/errors.js';
 import type { Store } from './store/store.js';
 
 export type RunResult = { exitCode: number | null; timedOut: boolean };
@@ -35,9 +36,15 @@ export type AgentStatus = {
   paused: boolean;
   state: AgentState;
   /** The run in progress: what it answers and since when. */
-  run?: { projectIds: string[]; requestIds: string[]; startedAt: string };
+  run?: { projectIds: string[]; requestIds: string[]; startedAt: string; agent?: string };
   /** Where the command comes from. */
   mode: AgentSetup['mode'];
+  /** The built-in agent that answers (mode `default`): chosen in Settings among the installed. */
+  preset?: AgentPreset;
+  /** The built-in agents and whether each is installed here (Settings offers the installed). */
+  presets: { id: AgentPreset; label: string; installed: boolean }[];
+  /** Who answers, in words: the preset's name, or "Your agent" for PHAROS_AGENT_COMMAND. */
+  agent?: string;
   command?: string;
   logPath?: string;
   running: boolean;
@@ -56,31 +63,84 @@ export type AgentStatus = {
     outcome: RunOutcome;
     requestIds: string[];
     finishedAt: string;
+    /** Which agent ran it (a choice made since applies to the next run). */
+    agent?: string;
   };
 };
 
+/** The built-in answering agents. Their commands are fixed here; the API can only pick one. */
+export const AGENT_PRESETS = ['claude', 'codex'] as const;
+export type AgentPreset = (typeof AGENT_PRESETS)[number];
+export const PRESET_LABELS: Record<AgentPreset, string> = { claude: 'Claude Code', codex: 'Codex' };
+/** The app setting (not project data) holding the chosen preset. */
+export const PRESET_SETTING = 'agent.preset';
+
+export function isAgentPreset(value: unknown): value is AgentPreset {
+  return typeof value === 'string' && (AGENT_PRESETS as readonly string[]).includes(value);
+}
+
+/**
+ * The command for a built-in agent: run once, non-interactively, connected over MCP to this
+ * server only, with the brief in $PHAROS_PROMPT.
+ * - Claude Code: the MCP config file Pharos writes (`agentMcpConfig`), only Pharos's tools.
+ * - Codex: as eval/compat runs it: not the user's config.toml (`--ignore-user-config`), only
+ *   this server over `-c`, its tools approved (exec can't ask), no session kept, a read-only
+ *   sandbox for its own shell.
+ */
+export function presetCommand(
+  preset: AgentPreset,
+  options: { mcpConfigPath: string; serverUrl: string },
+): string {
+  if (preset === 'codex')
+    return [
+      'codex exec --skip-git-repo-check --ignore-user-config --ephemeral --sandbox read-only',
+      '--color never',
+      `-c 'mcp_servers.pharos.url="${options.serverUrl}/mcp"'`,
+      `-c 'mcp_servers.pharos.default_tools_approval_mode="approve"'`,
+      '"$PHAROS_PROMPT"',
+    ].join(' ');
+  return `claude -p "$PHAROS_PROMPT" --mcp-config "${options.mcpConfigPath}" --strict-mcp-config --allowedTools "mcp__pharos__*"`;
+}
+
 /** What the person's environment says to run for new questions. */
 export type AgentSetup =
-  | { mode: 'custom' | 'default'; command: string }
-  | { mode: 'off' | 'unavailable'; command?: undefined };
+  | { mode: 'custom'; command: string; installed: AgentPreset[] }
+  | {
+      mode: 'default';
+      /** The command of the default preset (Settings may choose another installed one). */
+      command: string;
+      preset: AgentPreset;
+      installed: AgentPreset[];
+      /** The command of each installed preset. */
+      commands: Partial<Record<AgentPreset, string>>;
+    }
+  | { mode: 'off' | 'unavailable'; command?: undefined; installed: AgentPreset[] };
 
 /**
  * Picks the question-answering command: PHAROS_AGENT_COMMAND when set ("off" turns it off),
- * otherwise Claude Code when it is installed, talking to this server over MCP. Only the
- * environment decides this; nothing in the API can change it.
+ * otherwise a built-in agent that is installed (Claude Code first, then Codex), talking to this
+ * server over MCP. The environment decides the commands; Settings can only pick an installed
+ * preset, and not at all when PHAROS_AGENT_COMMAND is set.
  */
 export function agentSetup(
   configured: string | undefined,
-  options: { hasClaude: boolean; mcpConfigPath: string },
+  options: { hasClaude: boolean; hasCodex?: boolean; mcpConfigPath: string; serverUrl?: string },
 ): AgentSetup {
+  const installed = AGENT_PRESETS.filter((p) =>
+    p === 'claude' ? options.hasClaude : Boolean(options.hasCodex),
+  );
   const value = configured?.trim();
-  if (value && /^(off|false|0|no|none)$/i.test(value)) return { mode: 'off' };
-  if (value) return { mode: 'custom', command: value };
-  if (!options.hasClaude) return { mode: 'unavailable' };
-  return {
-    mode: 'default',
-    command: `claude -p "$PHAROS_PROMPT" --mcp-config "${options.mcpConfigPath}" --strict-mcp-config --allowedTools "mcp__pharos__*"`,
+  if (value && /^(off|false|0|no|none)$/i.test(value)) return { mode: 'off', installed };
+  if (value) return { mode: 'custom', command: value, installed };
+  const preset = installed[0];
+  if (!preset) return { mode: 'unavailable', installed };
+  const target = {
+    mcpConfigPath: options.mcpConfigPath,
+    serverUrl: options.serverUrl ?? 'http://localhost:4300',
   };
+  const commands: Partial<Record<AgentPreset, string>> = {};
+  for (const p of installed) commands[p] = presetCommand(p, target);
+  return { mode: 'default', command: commands[preset]!, preset, installed, commands };
 }
 
 /** MCP client config pointing the default agent at this server. */
@@ -169,6 +229,11 @@ export class AgentRunner {
     private readonly store: Store,
     private readonly options: {
       command: string | undefined;
+      /**
+       * The installed built-in agents' commands (mode `default`): Settings picks one, saved as
+       * PRESET_SETTING; `command` is then only the fallback.
+       */
+      presets?: Partial<Record<AgentPreset, string>>;
       runner: Runner;
       timeoutMs?: number;
       /** Wait this long after a question so several asked together share one run. */
@@ -186,7 +251,58 @@ export class AgentRunner {
   ) {}
 
   get configured(): boolean {
-    return Boolean(this.options.command?.trim());
+    return Boolean(this.command?.trim());
+  }
+
+  /** The installed built-in agents (only when the environment leaves the choice to Settings). */
+  private get presets(): AgentPreset[] {
+    return this.options.mode === 'default'
+      ? AGENT_PRESETS.filter((p) => this.options.presets?.[p])
+      : [];
+  }
+
+  /** The chosen built-in agent: the saved choice while it is installed, else the first one. */
+  get preset(): AgentPreset | undefined {
+    const installed = this.presets;
+    const saved = this.store.setting<string>(PRESET_SETTING);
+    return isAgentPreset(saved) && installed.includes(saved) ? saved : installed[0];
+  }
+
+  /** What the next run will run. */
+  private get command(): string | undefined {
+    const preset = this.preset;
+    return (preset && this.options.presets?.[preset]) || this.options.command;
+  }
+
+  /** Who answers, in words (presence marks, Settings, the run). */
+  get agentName(): string {
+    if (this.options.agentName) return this.options.agentName;
+    if (this.options.mode === 'custom') return 'Your agent';
+    return PRESET_LABELS[this.preset ?? 'claude'];
+  }
+
+  /**
+   * Picks which installed built-in agent answers (Settings). Refused when the environment sets
+   * the command (PHAROS_AGENT_COMMAND) or the preset isn't installed. A run in progress keeps its
+   * agent; the choice applies from the next run.
+   */
+  setPreset(preset: string): void {
+    if (this.options.mode !== 'default')
+      throw new PharosError(
+        'invalid',
+        this.options.mode === 'custom' || (!this.options.mode && this.configured)
+          ? 'PHAROS_AGENT_COMMAND is set on the server, so it decides which agent answers'
+          : 'No built-in agent can answer on this server',
+      );
+    if (!isAgentPreset(preset))
+      throw new PharosError(
+        'invalid',
+        `Unknown agent "${preset}": use ${AGENT_PRESETS.join(' or ')}`,
+      );
+    if (!this.presets.includes(preset))
+      throw new PharosError('invalid', `${PRESET_LABELS[preset]} isn't installed on this computer`);
+    this.store.setSetting(PRESET_SETTING, preset);
+    this.changed();
   }
 
   /** Settings can pause answering; the command itself only comes from the environment. */
@@ -231,8 +347,11 @@ export class AgentRunner {
   }
 
   status(): AgentStatus {
-    const { mode, command, logPath } = this.options;
+    const { mode, logPath } = this.options;
+    const command = this.command;
     const resolved = mode ?? (this.configured ? 'custom' : 'unavailable');
+    const installed = this.presets;
+    const preset = resolved === 'default' ? this.preset : undefined;
     return {
       configured: this.configured,
       enabled: this.configured && resolved !== 'off' && this.enabled,
@@ -240,6 +359,17 @@ export class AgentRunner {
       state: this.state,
       ...(this.run ? { run: this.run } : {}),
       mode: resolved,
+      ...(preset ? { preset } : {}),
+      presets: AGENT_PRESETS.map((id) => ({
+        id,
+        label: PRESET_LABELS[id],
+        installed: installed.includes(id),
+      })),
+      ...(this.configured
+        ? {
+            agent: resolved === 'custom' && !this.options.agentName ? 'Your agent' : this.agentName,
+          }
+        : {}),
       ...(command ? { command } : {}),
       ...(logPath ? { logPath } : {}),
       running: this.running,
@@ -306,11 +436,17 @@ export class AgentRunner {
     const stop = new AbortController();
     this.stopRun = stop;
     const started = Date.now();
-    this.run = { projectIds, requestIds, startedAt: new Date(started).toISOString() };
+    // The agent chosen now runs this whole batch; a change in Settings applies to the next run.
+    const command = this.command!;
+    const agentName = this.agentName;
+    this.run = {
+      projectIds,
+      requestIds,
+      startedAt: new Date(started).toISOString(),
+      agent: agentName,
+    };
     const presence = this.options.presence;
     const source = `runner:${started}`;
-    const agentName =
-      this.options.agentName ?? (this.options.mode === 'custom' ? 'Your agent' : 'Claude Code');
     try {
       for (const projectId of projectIds) {
         presence?.hold(agentName, { projectId, activity: 'answering' }, source);
@@ -337,7 +473,7 @@ export class AgentRunner {
     this.changed();
     try {
       const result = await this.options.runner(
-        this.options.command!,
+        command,
         {
           PHAROS_PROJECT_IDS: projectIds.join(','),
           PHAROS_REQUEST_IDS: requestIds.join(','),
@@ -353,6 +489,7 @@ export class AgentRunner {
         startedAt: new Date(started).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - started,
+        agent: agentName,
         ...result,
         ...(stop.signal.aborted ? { stopped: true } : {}),
         outcome: stop.signal.aborted
@@ -374,6 +511,7 @@ export class AgentRunner {
         durationMs: Date.now() - started,
         exitCode: null,
         timedOut: false,
+        agent: agentName,
         outcome: stop.signal.aborted ? 'stopped' : 'failed',
         ...(stop.signal.aborted ? { stopped: true } : {}),
       };

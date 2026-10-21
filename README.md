@@ -160,17 +160,21 @@ It prints a pass/fail table and writes the results (with each run's output) unde
 
 ## Answering questions from the web app
 
-Use **Ask** on any widget or item to send your agent a question. If Claude Code (`claude`) is
-installed, the server answers new questions automatically. It runs Claude Code connected only to
-Pharos, and the answer shows up as a new view. Automatic answers use your agent account and may
-incur usage charges. You can pause it, or answer questions that waited, under **Settings**
-(bottom of the sidebar).
+Use **Ask** on any widget or item to send your agent a question. If Claude Code (`claude`) or
+Codex (`codex`) is installed, the server answers new questions automatically. It runs the agent
+connected only to Pharos, and the answer shows up as a new view. Automatic answers use your agent
+account and may incur usage charges. Under **Settings** (bottom of the sidebar) you can choose
+Claude Code or Codex when both are installed, pause answering, or answer questions that waited.
 
-| Setting                               | Effect                                             |
-| ------------------------------------- | -------------------------------------------------- |
-| _(not set)_                           | Claude Code answers, if it is installed            |
-| `PHAROS_AGENT_COMMAND='your command'` | Runs your command instead                          |
-| `PHAROS_AGENT_COMMAND=off`            | Off; your agent sees open questions when it checks |
+Codex runs as `codex exec` with `--ignore-user-config --ephemeral --sandbox read-only`, connected
+to this server with `-c mcp_servers.pharos.url=...` and its tools approved for that run; your
+`~/.codex/config.toml` isn't read or changed.
+
+| Setting                               | Effect                                                        |
+| ------------------------------------- | ------------------------------------------------------------- |
+| _(not set)_                           | Claude Code or Codex answers, if installed (pick in Settings) |
+| `PHAROS_AGENT_COMMAND='your command'` | Runs your command instead (Settings offers no choice)         |
+| `PHAROS_AGENT_COMMAND=off`            | Off; your agent sees open questions when it checks            |
 
 A custom command receives `PHAROS_PROMPT` (the questions plus the view guidelines, catalog, and
 examples, ready to pass to an agent), `PHAROS_PROJECT_IDS`, `PHAROS_REQUEST_IDS`, and `PHAROS_URL`
@@ -206,14 +210,14 @@ gets its data only through `window.pharos`: `pharos.data(name)` resolves to the 
 
 ## Configuration
 
-| Variable               | Default                  | Purpose                                                 |
-| ---------------------- | ------------------------ | ------------------------------------------------------- |
-| `PHAROS_DB`            | `~/.pharos/pharos.db`    | Database file                                           |
-| `PORT`                 | `4300`                   | Server port                                             |
-| `PHAROS_WEB_URL`       | `http://localhost:5173`  | Web app address in shared links (built server: its own) |
-| `PHAROS_SERVER_URL`    | `http://localhost:4300`  | Server the web app's dev proxy talks to                 |
-| `PHAROS_AGENT_COMMAND` | Claude Code if installed | Command that answers questions (`off` disables)         |
-| `PHAROS_AGENT_LOG`     | `~/.pharos/agent.log`    | Log for that command                                    |
+| Variable               | Default                 | Purpose                                                 |
+| ---------------------- | ----------------------- | ------------------------------------------------------- |
+| `PHAROS_DB`            | `~/.pharos/pharos.db`   | Database file                                           |
+| `PORT`                 | `4300`                  | Server port                                             |
+| `PHAROS_WEB_URL`       | `http://localhost:5173` | Web app address in shared links (built server: its own) |
+| `PHAROS_SERVER_URL`    | `http://localhost:4300` | Server the web app's dev proxy talks to                 |
+| `PHAROS_AGENT_COMMAND` | Claude Code or Codex    | Command that answers questions (`off` disables)         |
+| `PHAROS_AGENT_LOG`     | `~/.pharos/agent.log`   | Log for that command                                    |
 
 Set configuration variables in the environment before starting Pharos; it does not automatically
 load a root `.env` file. The server only accepts requests from localhost, plus the host of a
@@ -232,8 +236,8 @@ vulnerability reporting.
   client starts its own process and uses the database that process resolves, so a project that
   seems to be missing usually means a different `PHAROS_DB`.
 - **Questions aren't answered**: **Settings** shows why. Answering is off with
-  `PHAROS_AGENT_COMMAND=off`, unavailable when Claude Code isn't installed (install it or set
-  your own command), or paused (resume it there). Output of the command is in
+  `PHAROS_AGENT_COMMAND=off`, unavailable when neither Claude Code nor Codex is installed (install
+  one or set your own command), or paused (resume it there). Output of the command is in
   `~/.pharos/agent.log` (or `PHAROS_AGENT_LOG`); the service's own log is `~/.pharos/server.log`.
 - **Changes from another process don't appear**: the web app reloads on a server event, and
   changes written by another process (stdio) are noticed by polling about once a second. Reload

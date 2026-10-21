@@ -52,7 +52,9 @@ beforeEach(() => {
       });
     if (url === '/api/agent') return Response.json(agent);
     if (url === '/api/settings/agent') {
-      agent = { ...agent, enabled: (body as { enabled: boolean }).enabled };
+      const change = body as { enabled?: boolean; preset?: string };
+      agent = { ...agent, ...change };
+      if (change.preset) agent.agent = change.preset === 'codex' ? 'Codex' : 'Claude Code';
       return Response.json(agent);
     }
     if (url === '/api/agent/answer-waiting') return Response.json({ questions: waiting.length });
@@ -122,6 +124,55 @@ describe('settings', () => {
     expect(calls.some((c) => c.url === '/api/agent/answer-waiting' && c.method === 'POST')).toBe(
       true,
     );
+  });
+
+  it('picks which installed agent answers', async () => {
+    agent = {
+      ...agent,
+      preset: 'claude',
+      agent: 'Claude Code',
+      presets: [
+        { id: 'claude', label: 'Claude Code', installed: true },
+        { id: 'codex', label: 'Codex', installed: true },
+      ],
+    };
+    render(<SettingsPage />);
+    const group = await screen.findByRole('radiogroup', { name: 'Agent that answers' });
+    const codex = within(group).getByRole('radio', { name: 'Codex' });
+    await waitFor(() =>
+      expect(
+        within(group).getByRole('radio', { name: 'Claude Code' }).getAttribute('aria-checked'),
+      ).toBe('true'),
+    );
+    fireEvent.click(codex);
+    await waitFor(() => expect(codex.getAttribute('aria-checked')).toBe('true'));
+    expect(calls.find((c) => c.method === 'PUT')).toEqual({
+      url: '/api/settings/agent',
+      method: 'PUT',
+      body: { preset: 'codex' },
+    });
+    await screen.findByText(/^Codex \(found on this computer\)/);
+  });
+
+  it('shows an agent that is not installed, and offers no choice under PHAROS_AGENT_COMMAND', async () => {
+    agent = {
+      ...agent,
+      preset: 'claude',
+      presets: [
+        { id: 'claude', label: 'Claude Code', installed: true },
+        { id: 'codex', label: 'Codex', installed: false },
+      ],
+    };
+    const { unmount } = render(<SettingsPage />);
+    const codex = await screen.findByRole('radio', { name: /Codex/ });
+    expect(codex.hasAttribute('disabled')).toBe(true);
+    expect(codex.textContent).toMatch(/not installed/);
+    unmount();
+
+    agent = { ...agent, mode: 'custom', preset: undefined, command: 'my-agent --answer' };
+    render(<SettingsPage />);
+    await screen.findByText(/decides which agent answers/);
+    expect(screen.queryByRole('radiogroup', { name: 'Agent that answers' })).toBeNull();
   });
 
   it('explains when no agent is set up', async () => {

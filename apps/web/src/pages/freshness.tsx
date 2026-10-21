@@ -9,6 +9,7 @@ import clsx from 'clsx';
 import { History, RefreshCw, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useViewData } from '../catalog/context';
+import { Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { useRevisionEvents } from '../lib/events';
 import { formatDate, localToday, plural, timeAgo } from '../lib/format';
@@ -173,21 +174,26 @@ export function WhatChanged({ freshness }: { freshness: ViewFreshness | null }) 
         {changesSentence(changed)}.{' '}
         <span className="text-xs text-muted">Latest {timeAgo(latest.at)}.</span>
       </p>
-      <button
-        type="button"
-        onClick={() => actions.open({ history: true })}
-        className="inline-flex shrink-0 items-center gap-1 rounded-control text-xs font-medium text-accent hover:underline"
-      >
-        <History className="size-3.5" aria-hidden /> History
-      </button>
-      <button
-        type="button"
-        aria-label="Hide what changed"
-        onClick={() => setHidden(key)}
-        className="-m-0.5 shrink-0 rounded-control p-0.5 text-faint hover:text-ink"
-      >
-        <X className="size-3.5" aria-hidden />
-      </button>
+      <Tooltip label="History">
+        <button
+          type="button"
+          aria-label="History"
+          onClick={() => actions.open({ history: true })}
+          className="-my-0.5 shrink-0 rounded-control p-0.5 text-accent hover:bg-sky-100 dark:hover:bg-sky-900"
+        >
+          <History className="size-4" aria-hidden />
+        </button>
+      </Tooltip>
+      <Tooltip label="Hide what changed">
+        <button
+          type="button"
+          aria-label="Hide what changed"
+          onClick={() => setHidden(key)}
+          className="-my-0.5 shrink-0 rounded-control p-0.5 text-faint hover:text-ink"
+        >
+          <X className="size-4" aria-hidden />
+        </button>
+      </Tooltip>
     </div>
   );
 }

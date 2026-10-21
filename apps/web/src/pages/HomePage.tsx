@@ -1,4 +1,4 @@
-import { FolderGit2, Plus } from 'lucide-react';
+import { FolderGit2, Layers, Pin, Plus, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { BUTTON, StatusBadge } from '../catalog/ui';
@@ -10,26 +10,27 @@ import { useWorkspace } from './projects';
 import type { Item } from './sidebar-model';
 import type { Entity } from '@pharos/schema';
 
-type Group = { key: string; label: string; folder: boolean; projects: Entity<'project'>[] };
+/** A group of cards; its icon is the sidebar's for the same thing (pinned, folder, section). */
+type Group = { key: string; label: string; icon?: LucideIcon; projects: Entity<'project'>[] };
 
 /** The sidebar's structure as flat groups: pinned, then each folder or loose list, section by section. */
 function homeGroups(tree: import('./sidebar-model').SidebarTree): Group[] {
   const groups: Group[] = [];
   if (tree.pinned.length)
-    groups.push({ key: 'pinned', label: 'Pinned', folder: false, projects: tree.pinned });
+    groups.push({ key: 'pinned', label: 'Pinned', icon: Pin, projects: tree.pinned });
   const add = (items: Item[], section?: string) => {
     const loose = items.flatMap((i) => (i.kind === 'project' ? [i.project] : []));
     for (const i of items) {
       if (i.kind === 'folder' && i.projects.length) {
         const label = section ? `${section} · ${i.repository.data.name}` : i.repository.data.name;
-        groups.push({ key: i.repository.id, label, folder: true, projects: i.projects });
+        groups.push({ key: i.repository.id, label, icon: FolderGit2, projects: i.projects });
       }
     }
     if (loose.length)
       groups.push({
         key: `loose:${section ?? ''}`,
         label: section ?? 'No folder',
-        folder: false,
+        icon: section ? Layers : undefined,
         projects: loose,
       });
   };
@@ -99,7 +100,7 @@ export function HomePage() {
       {groups.map((group) => (
         <section key={group.key} className="space-y-3">
           <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted">
-            {group.folder && <FolderGit2 className="size-4" />}
+            {group.icon && <group.icon className="size-4" aria-hidden />}
             {group.label}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

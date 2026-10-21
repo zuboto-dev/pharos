@@ -49,13 +49,15 @@ function renderTabs(active = overview!, onCreated = vi.fn()) {
   return onCreated;
 }
 
+/** The words a control's tooltip shows, as screen readers get them: its description. */
+const described = (el: Element) =>
+  document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent ?? null;
+
 describe('view tabs', () => {
   it('tells when each view was last updated, so similar names can be told apart', () => {
     renderTabs();
     // Relative to today's date, so only its start is fixed; tabTitle's wording is checked below.
-    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('title')).toMatch(
-      /^Updated \S/,
-    );
+    expect(described(screen.getByRole('link', { name: 'Overview' }))).toMatch(/^Updated \S/);
     const now = Date.parse(overview!.updatedAt) + 3 * 3_600_000;
     expect(
       tabTitle({ ...overview!, data: { ...overview!.data, description: 'The plan' } }, now),
@@ -174,7 +176,7 @@ describe('answer views in tabs', () => {
     );
     const tab = screen.getByRole('link', { name: /What's overdue\?/ });
     expect(tab.querySelector('[aria-label="Answer"]')).toBeTruthy();
-    expect(tab.getAttribute('title')).toMatch(/^What's overdue\?\nUpdated /);
+    expect(described(tab)).toMatch(/^What's overdue\?\nUpdated /);
     expect(screen.queryByRole('link', { name: /Old question/ })).toBeNull();
   });
 });
@@ -273,8 +275,9 @@ describe('ViewUpdated', () => {
       </MemoryRouter>,
     );
     const line = await screen.findByRole('button', { name: /Updated .* by Codex/ });
-    expect(line.textContent).toContain('Show the delivery handoff');
-    expect(line.getAttribute('title')).toBe('#42 · Show the delivery handoff');
+    // When and who on the line; what changed in its tooltip (and its description).
+    expect(line.textContent).not.toContain('Show the delivery handoff');
+    expect(described(line)).toBe('#42 · Show the delivery handoff');
     fireEvent.click(line);
     expect(open).toHaveBeenCalledWith({ entity: overview!.id });
     vi.unstubAllGlobals();

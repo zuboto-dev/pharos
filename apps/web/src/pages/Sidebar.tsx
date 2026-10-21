@@ -27,6 +27,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router';
 import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
+import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
 import { usePresence } from '../lib/events';
 import { useChangedViews } from '../lib/freshness';
@@ -533,26 +534,36 @@ export function Sidebar() {
           {renaming !== project.id && (
             // Pin or unpin straight from the row on hover, as well as from the ⋯ menu; a touch
             // screen keeps it in the menu, so the row isn't crowded.
+            <Tooltip
+              label={project.data.pinned ? 'Unpin' : 'Pin to top'}
+              className="pointer-coarse:hidden"
+            >
+              <button
+                type="button"
+                aria-label={`${project.data.pinned ? 'Unpin' : 'Pin'} ${project.data.name}`}
+                data-pin-toggle=""
+                aria-pressed={!!project.data.pinned}
+                className={PIN}
+                onClick={() => void togglePin(project)}
+              >
+                {project.data.pinned ? (
+                  <PinOff className="size-3.5" aria-hidden />
+                ) : (
+                  <Pin className="size-3.5" aria-hidden />
+                )}
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip label="Options">
             <button
               type="button"
-              aria-label={`${project.data.pinned ? 'Unpin' : 'Pin'} ${project.data.name}`}
-              title={project.data.pinned ? 'Unpin' : 'Pin to top'}
-              data-pin-toggle=""
-              aria-pressed={!!project.data.pinned}
-              className={PIN}
-              onClick={() => void togglePin(project)}
+              aria-label={`Options for ${project.data.name}`}
+              className={MORE}
+              onClick={(e) => openMenu(target, e)}
             >
-              {project.data.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+              <MoreHorizontal className="size-4" aria-hidden />
             </button>
-          )}
-          <button
-            type="button"
-            aria-label={`Options for ${project.data.name}`}
-            className={MORE}
-            onClick={(e) => openMenu(target, e)}
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
+          </Tooltip>
         </div>
       </li>
     );
@@ -595,28 +606,38 @@ export function Sidebar() {
               onDone={(name) => (setRenaming(null), name && rename(target, name))}
             />
           ) : (
+            <Tooltip
+              label={repository.data.name}
+              detail={repository.data.path ?? repository.data.url}
+              className="min-w-0 flex-1"
+            >
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(repository.id)}
+                onDoubleClick={() => setRenaming(repository.id)}
+                aria-expanded={open}
+                className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 py-1 text-left hover:text-ink"
+              >
+                <ChevronRight
+                  className={clsx('size-3 shrink-0 transition', open && 'rotate-90')}
+                  aria-hidden
+                />
+                <FolderGit2 className="size-3.5 shrink-0" aria-hidden />
+                <span className="truncate">{repository.data.name}</span>
+                {!open && <span className="font-normal text-faint">{projects.length}</span>}
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip label="Options">
             <button
               type="button"
-              onClick={() => toggleCollapsed(repository.id)}
-              onDoubleClick={() => setRenaming(repository.id)}
-              title={repository.data.path ?? repository.data.url}
-              aria-expanded={open}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 py-1 text-left hover:text-ink"
+              aria-label={`Options for folder ${repository.data.name}`}
+              className={MORE}
+              onClick={(e) => openMenu(target, e)}
             >
-              <ChevronRight className={clsx('size-3 shrink-0 transition', open && 'rotate-90')} />
-              <FolderGit2 className="size-3.5 shrink-0" />
-              <span className="truncate">{repository.data.name}</span>
-              {!open && <span className="font-normal text-faint">{projects.length}</span>}
+              <MoreHorizontal className="size-4" aria-hidden />
             </button>
-          )}
-          <button
-            type="button"
-            aria-label={`Options for folder ${repository.data.name}`}
-            className={MORE}
-            onClick={(e) => openMenu(target, e)}
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
+          </Tooltip>
         </div>
         {open && (
           <ul>
@@ -869,18 +890,24 @@ export function Sidebar() {
             aria-expanded={open}
             className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1 text-left hover:text-ink-soft"
           >
-            <ChevronRight className={clsx('size-3 shrink-0 transition', open && 'rotate-90')} />
+            <ChevronRight
+              className={clsx('size-3 shrink-0 transition', open && 'rotate-90')}
+              aria-hidden
+            />
+            <Layers className="size-3 shrink-0" aria-hidden />
             <span className="truncate">{section.data.name}</span>
           </button>
         )}
-        <button
-          type="button"
-          aria-label={`Options for section ${section.data.name}`}
-          className={MORE}
-          onClick={(e) => openMenu(target, e)}
-        >
-          <MoreHorizontal className="size-4" />
-        </button>
+        <Tooltip label="Options">
+          <button
+            type="button"
+            aria-label={`Options for section ${section.data.name}`}
+            className={MORE}
+            onClick={(e) => openMenu(target, e)}
+          >
+            <MoreHorizontal className="size-4" aria-hidden />
+          </button>
+        </Tooltip>
       </div>
     );
   };
@@ -889,13 +916,25 @@ export function Sidebar() {
     <>
       <div className="px-2 pb-1">
         <DeskLink />
-        <button
-          type="button"
-          onClick={(e) => openMenu('add', e)}
-          className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-sm text-muted hover:bg-subtle hover:text-ink"
-        >
-          <Plus className="size-3.5" /> New…
-        </button>
+        {/* One plus for everything new in the sidebar: a project, a folder or a section. */}
+        <div className="mt-2 flex items-center justify-between pl-2">
+          <span className="text-[11px] font-semibold tracking-wide text-faint uppercase">
+            Projects
+          </span>
+          <Tooltip label="New project, folder or section">
+            <button
+              type="button"
+              data-hover-shot=""
+              aria-label="New project, folder or section"
+              aria-haspopup="menu"
+              aria-expanded={menu?.target === 'add'}
+              onClick={(e) => openMenu('add', e)}
+              className={clsx(ICON_GHOST, 'pointer-coarse:p-2')}
+            >
+              <Plus className="size-4" aria-hidden />
+            </button>
+          </Tooltip>
+        </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-4" aria-label="Projects">
         {w.tree.pinned.length > 0 && (
@@ -914,8 +953,12 @@ export function Sidebar() {
               <ul>
                 {items(list, 0)}
                 {!list.length && (
-                  <li className="px-2 py-1 text-xs text-faint">
-                    Empty: drag projects or folders here
+                  <li className="flex items-center gap-1 px-2 py-1 text-xs text-faint">
+                    Empty
+                    <InfoTip
+                      label={`About section ${section.data.name}`}
+                      detail="Drag projects or folders here, or move one here from its ⋯ menu."
+                    />
                   </li>
                 )}
               </ul>
@@ -955,7 +998,9 @@ export function Sidebar() {
               >
                 <ChevronRight
                   className={clsx('size-3 shrink-0 transition', archivedOpen && 'rotate-90')}
+                  aria-hidden
                 />
+                <Archive className="size-3 shrink-0" aria-hidden />
                 <span className="truncate">Archived ({w.tree.archived.length})</span>
               </button>
             </div>

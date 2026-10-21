@@ -4,7 +4,6 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, type ViewActions } from '../catalog/context';
-import { Tip } from '../catalog/tip';
 import { ViewTabs, fitTabs, sortViews } from './ViewTabs';
 
 // v0.2 B1: the project's top bar keeps the view tabs and the icons on one line at every width.
@@ -160,25 +159,5 @@ describe('one-line tabs with More', () => {
     expect(screen.queryByRole('menu')).toBeNull();
     // Focus goes back to the button that opened it.
     expect(document.activeElement).toBe(more);
-  });
-});
-
-describe('Tip', () => {
-  it('shows a label and a shortcut hint without adding to the control’s accessible name', () => {
-    render(
-      <Tip label="Hide sidebar" shortcut="⌘\">
-        <button type="button" aria-label="Hide sidebar" aria-keyshortcuts="Meta+Backslash">
-          x
-        </button>
-      </Tip>,
-    );
-    const button = screen.getByRole('button', { name: 'Hide sidebar' });
-    const tip = button.parentElement!.querySelector('[data-tip]')!;
-    expect(tip.getAttribute('aria-hidden')).toBe('true');
-    expect(tip.textContent).toBe('Hide sidebar⌘\\');
-    // Hidden (display: none) until hover or keyboard focus, so it never widens a phone page.
-    expect(tip.className).toMatch(/\bhidden\b/);
-    expect(tip.className).toContain('group-hover/tip:flex');
-    expect(tip.className).toContain('group-has-[:focus-visible]/tip:flex');
   });
 });

@@ -79,11 +79,16 @@ describe('FileView', () => {
     for (const name of ['Open in its app', 'Reveal in Finder', 'Copy path'])
       expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(false);
     // Icons only, each with a tooltip saying what it does.
-    expect(actions.textContent).toBe(
-      ['Download', 'Open in its app', 'Reveal in Finder', 'Copy path', 'Open in a new tab'].join(
-        '',
-      ),
-    );
+    expect(actions.textContent).toBe('');
+    expect(
+      [...actions.querySelectorAll('a, button')].map((el) => el.getAttribute('aria-label')),
+    ).toEqual([
+      'Download',
+      'Open in its app',
+      'Reveal in Finder',
+      'Copy path',
+      'Open in a new tab',
+    ]);
     for (const tip of actions.querySelectorAll('[data-tip]'))
       expect(tip.getAttribute('aria-hidden')).toBe('true');
     expect(screen.getByRole('link', { name: 'Download' }).getAttribute('href')).toBe(

@@ -34,7 +34,7 @@ import type { Store } from './store/store.js';
 import { MCP_ASSET_NOTE, REPORT_GUIDE, registerGuidance } from './guidance.js';
 import type { Presence, PresenceTarget } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
-import { changesSince, unseenCount } from './views/changes.js';
+import { changesSince, handedBackLines, unseenCount } from './views/changes.js';
 import { catalogDescribe, catalogList } from './views/catalog.js';
 import {
   ViewAnswerInput,
@@ -167,16 +167,22 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     {
       title: 'Project snapshot',
       description:
-        'Compact structured summary of a project: status, progress, goals tree, scope, stages, tasks, artifacts, decisions, and recent revisions.',
+        'Compact structured summary of a project: status, progress, goals tree, scope, stages, tasks, artifacts, decisions, and recent revisions; `handedBack` lists review documents the owner finished (every sheet answered) and handed back to you since you last looked.',
       inputSchema: { projectId: z.string() },
       annotations: { readOnlyHint: true },
     },
     ({ projectId }) =>
-      run(() => ({
-        ...projectSnapshot(store, projectId),
-        // Nudges the agent to catch up on what people (and other agents) did since it last looked.
-        unseenChanges: unseenCount(store, author().name, projectId),
-      })),
+      run(() => {
+        const agent = author().name;
+        const handedBack = handedBackLines(store, agent, projectId);
+        return {
+          ...projectSnapshot(store, projectId),
+          // Nudges the agent to catch up on what people (and other agents) did since it last looked.
+          unseenChanges: unseenCount(store, agent, projectId),
+          // Review documents the owner finished and handed back since then (all answered).
+          ...(handedBack.length ? { handedBack } : {}),
+        };
+      }),
   );
 
   server.registerTool(

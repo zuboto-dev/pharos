@@ -64,7 +64,16 @@ export function blockChangeIssue(
 }
 
 /** View fields an agent can't change while a block request is open (only blocks may change). */
-const VIEW_FIELDS = ['name', 'description', 'pinned', 'archived', 'order', 'kind', 'expiresAt'];
+const VIEW_FIELDS = [
+  'name',
+  'description',
+  'pinned',
+  'archived',
+  'handedBack',
+  'order',
+  'kind',
+  'expiresAt',
+];
 
 /**
  * Why an agent's apply operations on views go beyond the blocks people asked about (REST

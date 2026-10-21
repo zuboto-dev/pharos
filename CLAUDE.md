@@ -196,6 +196,10 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   there (the save refuses them). `report_guide` leads with "Report documents" (`DOC_EXAMPLE` in
   `guidance.ts`, tested to preview clean). `node eval/report-doc/run.mjs --agent claude|codex`
   checks that a real agent writes one (own server on a temp database, port 4394 by default).
+- A review document is tentative: when the owner's last answer completes its sheets, the web app
+  (`pages/hand-back.tsx`) offers "Archive and tell the agent": one revision setting `archived`
+  and `handedBack` (`Archive “<view>”: all N answered — over to <agent>`), which agents see in
+  changes_since and in project_snapshot's `handedBack` (`handedBackLines` in `views/changes.ts`).
 - R15 (docs/reframe/r15-review-documents.md) adds `figure`, `steps`, `details` and `sheet`
   blocks: leaves go anywhere, columns hold leaves, details hold leaves and columns, sheets (top
   level only) hold all of those. Walk blocks with `docBlocks`/`docLeaves` (schema) or

@@ -191,7 +191,23 @@ export const ViewData = z.strictObject({
     'A report document (R14): blocks in reading order that Pharos draws in its own style; never with spec or page',
   ),
   pinned: z.boolean().describe('Pinned views are shown first'),
-  archived: z.boolean().optional().describe('Archived views are hidden from the tabs'),
+  archived: z
+    .boolean()
+    .optional()
+    .describe(
+      'Archived views are hidden from the tabs (listed under Archived, still openable); pinned and template views are never archived',
+    ),
+  handedBack: z
+    .strictObject({
+      to: Text.optional().describe(
+        'The agent it went back to: the author of its latest agent revision',
+      ),
+      answered: z.number().int().nonnegative().describe('How many of its sheets were answered'),
+    })
+    .optional()
+    .describe(
+      'Set with archived when the owner finished a review document (every sheet answered) and handed it back to the agent; read the answers with view_get',
+    ),
   kind: z
     .enum(['saved', 'answer'])
     .optional()

@@ -7,14 +7,13 @@ import {
   docLeaves,
   docReads,
   figureMedia,
-  meaningOf,
   readsNothing,
   runQuery,
+  sheetTasks,
   type Board,
   type DocBlock,
   type DocLeafBlock,
   type Entity,
-  type Filter,
 } from '@pharos/schema';
 import { AgentFiles } from '../store/agent-files.js';
 import { PharosError, formatPath } from '../store/errors.js';
@@ -279,8 +278,8 @@ export type SheetSummary = {
   time?: string;
   tags?: string[];
   /**
-   * Open until each decision has a choice or an answer and each checklist task is done; none for a
-   * sheet with neither.
+   * Open until each decision has a choice or an answer and each checklist task is finished (done
+   * or cancelled); none for a sheet with neither.
    */
   state?: 'open' | 'answered';
   decisions: SheetDecision[];
@@ -320,26 +319,16 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
           : {}),
       };
     });
-    const checklists = sheetLeaves(sheet).flatMap((b) =>
-      b.kind === 'block' && b.node.component === 'TaskChecklist'
-        ? [(b.node as { filter?: Filter }).filter ?? {}]
-        : [],
+    const hasChecklist = sheetLeaves(sheet).some(
+      (b) => b.kind === 'block' && b.node.component === 'TaskChecklist',
     );
-    const seen = new Set<string>();
-    const tasks = checklists.flatMap((filter) => {
-      let rows: Entity<'task'>[];
-      try {
-        rows = runQuery(data, 'task', filter);
-      } catch {
-        rows = [];
-      }
-      return rows.flatMap((t) => {
-        if (seen.has(t.id)) return [];
-        seen.add(t.id);
-        const done = meaningOf(data.project, 'task.status', t.data.status) === 'done';
-        return [{ id: t.id, title: t.data.title, status: t.data.status, done }];
-      });
-    });
+    const shown = sheetTasks(data, sheet as { blocks: DocBlock[] });
+    const tasks = shown.map(({ task, done }) => ({
+      id: task.id,
+      title: task.data.title,
+      status: task.data.status,
+      done,
+    }));
     return {
       id: sheet.id,
       title: sheet.title,
@@ -349,13 +338,13 @@ export function sheetSummaries(store: Store, projectId: string, doc: ReportDoc):
         ? {
             state:
               decisions.every((d) => d.state === 'chosen' || d.state === 'answered') &&
-              tasks.every((t) => t.done)
+              shown.every((t) => t.finished)
                 ? ('answered' as const)
                 : ('open' as const),
           }
         : {}),
       decisions,
-      ...(checklists.length ? { tasks: tasks.slice(0, 50) } : {}),
+      ...(hasChecklist ? { tasks: tasks.slice(0, 50) } : {}),
     };
   });
 }

@@ -17,3 +17,4 @@ export * from './check-queries.js';
 export * from './reads.js';
 export * from './report.js';
 export * from './doc.js';
+export * from './sheet-tasks.js';

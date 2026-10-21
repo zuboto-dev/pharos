@@ -1,12 +1,9 @@
 import {
-  docLeaves,
   figureMedia,
-  meaningOf,
-  runQuery,
+  sheetTasks,
   type DocBlock,
   type DocLeafBlock,
   type Entity,
-  type Filter,
 } from '@pharos/schema';
 import clsx from 'clsx';
 import { Check, ChevronLeft, ChevronRight, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
@@ -543,7 +540,7 @@ export function StepsView({ block }: { block: Steps }) {
 
 /**
  * How a sheet stands: answered once every decision it names has a choice or an answer and every
- * task its TaskChecklists show is done; none when it asks neither.
+ * task its TaskChecklists show is finished; none when it asks neither.
  */
 export type SheetState = 'answered' | 'open' | 'none';
 
@@ -554,7 +551,7 @@ type DecisionLike = Pick<Entity<'decision'>, 'id'> & {
 export function sheetState(
   sheet: Sheet,
   decisions: readonly DecisionLike[],
-  /** Done or not, for each task the sheet's TaskChecklists show. */
+  /** Finished or not, for each task the sheet's TaskChecklists show. */
   tasks: readonly boolean[] = [],
 ): SheetState {
   if (!sheet.decisions?.length && !tasks.length) return 'none';
@@ -566,31 +563,13 @@ export function sheetState(
   return decided && tasks.every(Boolean) ? 'answered' : 'open';
 }
 
-/** For each sheet, whether each task its TaskChecklists show is done (the reader ticks them). */
+/**
+ * For each sheet, whether each task its TaskChecklists show is finished: done or cancelled, as
+ * the list itself counts it (`sheetTasks`, the same rule view_get uses).
+ */
 export function useSheetTasks(): (sheet: Sheet) => boolean[] {
   const data = useViewData();
-  return (sheet) => {
-    const seen = new Map<string, boolean>();
-    for (const b of docLeaves(sheet.blocks as DocBlock[])) {
-      if (b.kind !== 'block' || b.node.component !== 'TaskChecklist') continue;
-      const node = b.node as { filter?: Filter; assigneeKind?: string };
-      let tasks: Entity<'task'>[];
-      try {
-        tasks = runQuery(data, 'task', node.filter);
-      } catch {
-        tasks = [];
-      }
-      for (const t of tasks) {
-        if (
-          node.assigneeKind &&
-          data.assigneeById.get(t.data.assigneeId ?? '')?.data.kind !== node.assigneeKind
-        )
-          continue;
-        seen.set(t.id, meaningOf(data.project, 'task.status', t.data.status) === 'done');
-      }
-    }
-    return [...seen.values()];
-  };
+  return (sheet) => sheetTasks(data, sheet as { blocks: DocBlock[] }).map((t) => t.finished);
 }
 
 const TIME_PART = /(\d+(?:[.,]\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)(?![a-z])/gi;

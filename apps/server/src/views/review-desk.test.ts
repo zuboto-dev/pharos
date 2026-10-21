@@ -229,6 +229,53 @@ describe("the reader's answers don't make a document out of date (R15)", () => {
     expect(state(other)).toBe('stale');
   });
 
+  it('an agent moving a checklist task makes it stale (only the reader ticks)', () => {
+    const ctx = setup();
+    ctx.store.apply(agent, {
+      message: 'Drop it',
+      operations: [
+        {
+          op: 'update',
+          type: 'task',
+          id: ctx.t1,
+          data: {
+            status: valueFor(
+              ctx.store.get(ctx.projectId) as Entity<'project'>,
+              'task.status',
+              'cancelled',
+            ),
+          },
+        },
+      ],
+    });
+    expect(state(ctx)).toBe('stale');
+  });
+
+  it("an answer to a decision the document doesn't ask about makes it stale", () => {
+    const ctx = setup();
+    const id = createView(ctx.store, agent, {
+      projectId: ctx.projectId,
+      name: 'Decisions so far',
+      message: 'm',
+      doc: {
+        blocks: [
+          {
+            kind: 'block',
+            id: 'lead',
+            node: { component: 'Text', content: '# One is still open' },
+          },
+          { kind: 'block', id: 'log', node: { component: 'DecisionLog' } },
+        ],
+      },
+    }).view.id;
+    const fresh = () => evidenceState(ctx.store, ctx.store.getOfType('view', id));
+    expect(fresh()).toBe('fresh');
+    choose(ctx, { chosenOptionId: 'ship' });
+    expect(fresh()).toBe('stale');
+    // The review desk asks it, so the same answer leaves that one fresh.
+    expect(state(ctx)).toBe('fresh');
+  });
+
   it('an answer together with another change to the decision still counts', () => {
     const ctx = setup();
     choose(ctx, { chosenOptionId: 'ship', body: 'Changed my mind about the reasons' });
@@ -291,7 +338,7 @@ describe('view_get on a document lists its sheets and the answers (R15)', () => 
       ],
     });
     expect(after.sheets![1]!.tasks![0]).toMatchObject({ id: ctx.t1, done: true });
-    // A checklist sheet is done once every task it shows is.
+    // A checklist sheet is done once every task it shows is finished.
     expect(after.sheets![1]!.state).toBe('open');
     tick(ctx, ctx.t2);
     expect(getView(ctx.store, ctx.viewId).sheets![1]!.state).toBe('answered');
@@ -830,5 +877,64 @@ describe('the "Review desk (sample)" install step (R15)', () => {
     const [second] = await step.run({ ...ctx, log: (l: string) => again.push(l) });
     expect(second).toMatchObject({ viewId: row!.viewId, made: false });
     expect(again).toEqual([]);
+  });
+});
+
+describe("a checklist sheet's state matches the page (R15)", () => {
+  it('a cancelled task counts as finished', () => {
+    const ctx = setup();
+    tick(ctx, ctx.t1);
+    tick(ctx, ctx.t2, 'cancelled');
+    const sheet = getView(ctx.store, ctx.viewId).sheets![1]!;
+    expect(sheet.state).toBe('answered');
+    expect(sheet.tasks!.map((t) => t.done)).toEqual([true, false]);
+  });
+
+  it("applies the checklist's assigneeKind, as the page does", () => {
+    const ctx = setup();
+    const { created } = ctx.store.apply(me, {
+      message: 'Who does what',
+      operations: [
+        { op: 'create', type: 'assignee', ref: 'h', data: { name: 'Sam', kind: 'human' } },
+        { op: 'create', type: 'assignee', ref: 'a', data: { name: 'Helper', kind: 'agent' } },
+        { op: 'update', type: 'task', id: ctx.t1, data: { assigneeId: '$h' } },
+        { op: 'update', type: 'task', id: ctx.t2, data: { assigneeId: '$a' } },
+      ],
+    });
+    expect(created.h).toBeTruthy();
+    const id = createView(ctx.store, agent, {
+      projectId: ctx.projectId,
+      name: 'Yours',
+      message: 'm',
+      doc: {
+        blocks: [
+          {
+            kind: 'sheet',
+            id: 'mine',
+            title: 'Your part',
+            blocks: [
+              {
+                kind: 'block',
+                id: 'list',
+                node: {
+                  component: 'TaskChecklist',
+                  assigneeKind: 'human',
+                  filter: { where: { title: ['Try it', 'Listen'] } },
+                },
+              },
+            ],
+          },
+          {
+            kind: 'sheet',
+            id: 'other',
+            title: 'Another',
+            blocks: [{ kind: 'block', id: 't', node: { component: 'Text', content: 'Hi' } }],
+          },
+        ],
+      },
+    }).view.id;
+    expect(getView(ctx.store, id).sheets![0]!.tasks!.map((t) => t.id)).toEqual([ctx.t1]);
+    tick(ctx, ctx.t1);
+    expect(getView(ctx.store, id).sheets![0]!.state).toBe('answered');
   });
 });

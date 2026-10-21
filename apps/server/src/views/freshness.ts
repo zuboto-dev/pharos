@@ -5,6 +5,7 @@ import {
   SEEN_SETTING,
   boardReads,
   changeTouches,
+  docDecisionIds,
   docLeaves,
   docReads,
   dueOf,
@@ -381,9 +382,9 @@ function checklistReads(doc: ReportDoc): BoardReads {
 }
 
 /**
- * The revisions without the reader's own answers on a document (R15): a decision answered (and
- * the person recorded as deciding it, made in the same revision) and a task's status ticked in one
- * of its TaskChecklists. Answers are what the document asks for, not news that makes its words
+ * The revisions without the reader's own answers on a document (R15): a decision the document
+ * asks about answered (and the person recorded as deciding it, made in the same revision) and a
+ * task's status ticked by a person in one of its TaskChecklists. Answers are what the document asks for, not news that makes its words
  * out of date; anything else in those revisions (an agent changing the decision's title) still
  * counts.
  */
@@ -393,7 +394,12 @@ function withoutAnswers(
   matcherOn: (day: string) => FilterMatcher,
 ): LoggedRevision[] {
   const ticks = docs.map(checklistReads).reduce(mergeReads);
-  const ticked = (change: ChangeLike, day: string) =>
+  // Only the decisions the document asks about: an answer to another one is news like any change.
+  const asked = new Set(docs.flatMap((d) => [...docDecisionIds(d)]));
+  const answer = (change: ChangeLike) => isAnswer(change) && asked.has(change.id);
+  // Only the reader's own ticks: an agent moving a task is news too.
+  const ticked = (change: ChangeLike, day: string, author: Author) =>
+    author.kind === 'human' &&
     change.type === 'task' &&
     !!change.before &&
     !!change.after &&
@@ -401,16 +407,16 @@ function withoutAnswers(
     isDeepStrictEqual(changedFields(change), ['status']) &&
     changeTouches(ticks, change, matcherOn(day), { everything: false });
   return revisions.map((revision) => {
-    const answers = revision.changes.filter(isAnswer);
+    const answers = revision.changes.filter(answer);
     const deciders = new Set(answers.map((c) => c.after?.decidedById).filter(Boolean));
     const day = localToday(revision.at);
     return {
       ...revision,
       changes: revision.changes.filter(
         (c) =>
-          !isAnswer(c) &&
+          !answer(c) &&
           !(c.op === 'create' && c.type === 'assignee' && deciders.has(c.id)) &&
-          !ticked(c, day),
+          !ticked(c, day, revision.author),
       ),
     };
   });

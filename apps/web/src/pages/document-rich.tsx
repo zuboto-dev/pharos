@@ -6,7 +6,19 @@ import {
   type Entity,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { Check, ChevronLeft, ChevronRight, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  Clock,
+  Link2,
+  ListChecks,
+  Maximize2,
+  Newspaper,
+  Scale,
+  X,
+} from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -17,6 +29,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { CopyButton } from '../catalog/copy';
 import { Markdown } from '../catalog/ui';
@@ -607,6 +620,10 @@ export type DeskSummary = {
   /** Sheets with decisions or tasks: the ones the progress counts. */
   asked: number;
   answered: number;
+  /** Sheets that ask something and aren't answered yet: what still needs the reader. */
+  open: number;
+  /** The open sheets' times summed, when any could be read. */
+  openMinutes: number | undefined;
   states: { sheet: Sheet; state: SheetState }[];
 };
 
@@ -620,9 +637,15 @@ export function deskSummary(
     state: sheetState(sheet, decisions, tasksOf(sheet)),
   }));
   const times = sheets.map((s) => parseMinutes(s.time)).filter((m) => m !== undefined);
+  const openTimes = states
+    .filter((s) => s.state === 'open')
+    .map((s) => parseMinutes(s.sheet.time))
+    .filter((m) => m !== undefined);
   return {
     items: sheets.length,
     minutes: times.length ? times.reduce((a, b) => a + b, 0) : undefined,
+    open: states.filter((s) => s.state === 'open').length,
+    openMinutes: openTimes.length ? openTimes.reduce((a, b) => a + b, 0) : undefined,
     asked: states.filter((s) => s.state !== 'none').length,
     answered: states.filter((s) => s.state === 'answered').length,
     states,
@@ -659,17 +682,49 @@ function scrollToSheet(e: MouseEvent<HTMLAnchorElement>, id: string) {
 export function ReviewDeskHeader({ sheets }: { sheets: Sheet[] }) {
   const decisions = useDecisions();
   const desk = deskSummary(sheets, decisions, useSheetTasks());
+  const [showDone, setShowDone] = useState(false);
   const share = desk.asked ? desk.answered / desk.asked : 0;
   const done = desk.asked > 0 && desk.answered === desk.asked;
+  const open = desk.states.filter((s) => s.state !== 'answered');
+  const answered = desk.states.filter((s) => s.state === 'answered');
+  const chip = ({ sheet, state }: { sheet: Sheet; state: SheetState }) => (
+    <li key={sheet.id}>
+      <a
+        href={`#${sheetAnchor(sheet.id)}`}
+        data-chip={sheet.id}
+        data-state={state}
+        onClick={(e) => scrollToSheet(e, sheet.id)}
+        className="doc-chip"
+      >
+        <span aria-hidden className="doc-chip-dot" />
+        <span className="truncate">{sheet.title}</span>
+        {state !== 'none' && (
+          <span className="sr-only">{state === 'answered' ? ', answered' : ', open'}</span>
+        )}
+      </a>
+    </li>
+  );
   return (
     <header data-review-desk="" className="doc-desk" aria-label="Review desk">
       <p className="doc-eyebrow">Review desk</p>
       <p data-needs-you="" className="doc-needs-you">
-        Needs you:{' '}
-        <strong className="text-accent">
-          {desk.items} {desk.items === 1 ? 'item' : 'items'}
-        </strong>
-        {desk.minutes !== undefined && <>, about {formatMinutes(desk.minutes)}</>}
+        {desk.open > 0 || desk.asked === 0 ? (
+          <>
+            Needs you:{' '}
+            <strong className="text-accent">
+              {desk.asked ? desk.open : desk.items}{' '}
+              {(desk.asked ? desk.open : desk.items) === 1 ? 'item' : 'items'}
+            </strong>
+            {(desk.asked ? desk.openMinutes : desk.minutes) !== undefined && (
+              <>, about {formatMinutes((desk.asked ? desk.openMinutes : desk.minutes)!)}</>
+            )}
+          </>
+        ) : (
+          <>
+            <CircleCheck aria-hidden className="mr-1.5 inline size-6 text-ok" />
+            All answered
+          </>
+        )}
       </p>
       {desk.asked > 0 && (
         <div className="doc-desk-progress">
@@ -693,27 +748,89 @@ export function ReviewDeskHeader({ sheets }: { sheets: Sheet[] }) {
         </div>
       )}
       <nav aria-label="Items">
+        {/* What's left leads; what's answered folds into one chip until asked for. */}
         <ul className="doc-chips">
-          {desk.states.map(({ sheet, state }) => (
-            <li key={sheet.id}>
-              <a
-                href={`#${sheetAnchor(sheet.id)}`}
-                data-chip={sheet.id}
-                data-state={state}
-                onClick={(e) => scrollToSheet(e, sheet.id)}
-                className="doc-chip"
+          {open.map(chip)}
+          {answered.length > 0 && (
+            <li>
+              <button
+                type="button"
+                data-done-chip=""
+                aria-expanded={showDone}
+                title={showDone ? 'Hide answered' : 'Show answered'}
+                onClick={() => setShowDone((v) => !v)}
+                className="doc-chip doc-chip-done"
               >
-                <span aria-hidden className="doc-chip-dot" />
-                <span className="truncate">{sheet.title}</span>
-                {state !== 'none' && (
-                  <span className="sr-only">{state === 'answered' ? ', answered' : ', open'}</span>
-                )}
-              </a>
+                <Check aria-hidden className="size-3.5" strokeWidth={3} />
+                <span>{answered.length}</span>
+                <span className="sr-only"> answered</span>
+              </button>
             </li>
-          ))}
+          )}
         </ul>
+        {showDone && answered.length > 0 && (
+          <ul data-done-chips="" className="doc-chips mt-2">
+            {answered.map(chip)}
+          </ul>
+        )}
       </nav>
     </header>
+  );
+}
+
+/** When a sheet was last answered: the latest change to the decisions and tasks it asks about. */
+export function useSheetAnsweredAt(): (sheet: Sheet) => string | undefined {
+  const data = useViewData();
+  return (sheet) => {
+    const times = [
+      ...(sheet.decisions ?? []).map((id) => data.decisions.find((d) => d.id === id)?.updatedAt),
+      ...sheetTasks(data, sheet as { blocks: DocBlock[] }).map((t) => t.task.updatedAt),
+    ].filter((t): t is string => !!t);
+    return times.sort().at(-1);
+  };
+}
+
+/** The earlier decisions, tasks or views a sheet follows up on, as small links under its title. */
+export function SheetRelated({ sheet }: { sheet: Sheet }) {
+  const data = useViewData();
+  const ids = sheet.related ?? [];
+  if (!ids.length) return null;
+  const items = ids.flatMap((id) => {
+    const decision = data.decisions.find((d) => d.id === id);
+    if (decision)
+      return [
+        { id, label: decision.data.title, Icon: Scale, href: `?entity=${encodeURIComponent(id)}` },
+      ];
+    const task = data.tasks.find((t) => t.id === id);
+    if (task)
+      return [
+        { id, label: task.data.title, Icon: ListChecks, href: `?entity=${encodeURIComponent(id)}` },
+      ];
+    const view = data.views.find((v) => v.id === id);
+    if (view)
+      return [
+        {
+          id,
+          label: view.data.name,
+          Icon: Newspaper,
+          href: `/projects/${view.data.projectId}/views/${id}`,
+        },
+      ];
+    return [];
+  });
+  if (!items.length) return null;
+  return (
+    <ul data-sheet-related="" aria-label="Follows up on" className="doc-related">
+      {items.map(({ id, label, Icon, href }) => (
+        <li key={id}>
+          <Link to={href} title={`Follows up on: ${label}`} className="doc-related-link">
+            <Link2 aria-hidden className="size-3" />
+            <Icon aria-hidden className="size-3" />
+            <span className="truncate">{label}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

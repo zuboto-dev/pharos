@@ -336,6 +336,26 @@ describe("the reader's answers don't make a document out of date (R15)", () => {
 });
 
 describe('view_get on a document lists its sheets and the answers (R15)', () => {
+  it('lists what a sheet follows up on, and warns about an id that is not in the project', () => {
+    const ctx = setup();
+    const doc = {
+      ...ctx.doc,
+      blocks: ctx.doc.blocks.map((b) =>
+        b.kind === 'sheet' && b.id === 'try' ? { ...b, related: [ctx.decision, 'dec_nowhere'] } : b,
+      ),
+    };
+    const preview = previewDoc(ctx.store, ctx.projectId, ReportDoc.parse(doc), ctx.viewId);
+    expect(preview.warnings.join()).toContain('related "dec_nowhere" is not a decision');
+    expect(preview.warnings.join()).not.toContain(`related "${ctx.decision}"`);
+    const id = createView(ctx.store, agent, {
+      projectId: ctx.projectId,
+      name: 'R',
+      message: 'm',
+      doc,
+    }).view.id;
+    expect(getView(ctx.store, id).sheets![1]!.related).toEqual([ctx.decision, 'dec_nowhere']);
+  });
+
   it('shows each sheet, its state, the decision answers and checklist ticks', () => {
     const ctx = setup();
     const before = getView(ctx.store, ctx.viewId);

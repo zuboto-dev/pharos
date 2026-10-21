@@ -329,7 +329,7 @@ describe('review desk in a document (R15)', () => {
     expect(order.slice(0, 3)).toEqual(['intro', 'desk', 'layout']);
     const desk = article.querySelector<HTMLElement>('[data-review-desk]')!;
     expect(desk.querySelector('[data-needs-you]')?.textContent).toBe(
-      'Needs you: 3 items, about 1 h 40 min',
+      'Needs you: 2 items, about 10 min',
     );
     expect(desk.querySelector('[data-progress]')?.textContent).toBe('0 of 2 answered');
     const bar = within(desk).getByRole('progressbar');
@@ -381,7 +381,7 @@ describe('review desk in a document (R15)', () => {
         <DocumentView view={noTimes} />
       </Providers>,
     );
-    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('Needs you: 3 items');
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('Needs you: 2 items');
     cleanup();
     const one = {
       ...docView,
@@ -407,10 +407,18 @@ describe('review desk in a document (R15)', () => {
     expect(block('layout').dataset.state).toBe('answered');
     expect(block('layout').querySelector('[data-pill="state"]')?.textContent).toBe('Answered');
     expect(document.querySelector('[data-progress]')?.textContent).toBe('1 of 2 answered');
+    // An answered item folds into the done chip; what's left leads.
+    expect(document.querySelector('[data-chip="layout"]')).toBeNull();
+    expect(document.querySelector('[data-done-chip]')?.textContent).toBe('1 answered');
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('Needs you: 1 item');
+    fireEvent.click(document.querySelector('[data-done-chip]')!);
     expect(document.querySelector<HTMLElement>('[data-chip="layout"]')?.dataset.state).toBe(
       'answered',
     );
     expect(document.querySelector<HTMLElement>('[data-chip="sound"]')?.dataset.state).toBe('open');
+    // The answered sheet is one line, its content behind a click.
+    expect(block('layout').tagName).toBe('DETAILS');
+    expect((block('layout') as HTMLDetailsElement).open).toBe(false);
     rerender(
       <Providers
         data={dataWith([answered[0]!, decision('dec_sound', 'q', { answer: 'Softer, please' })])}
@@ -434,6 +442,75 @@ describe('review desk in a document (R15)', () => {
     );
     expect(document.querySelector('[data-progress]')?.textContent).toBe('2 of 2 answered');
     expect(document.querySelector('.doc-desk-fill')?.classList.contains('is-done')).toBe(true);
+  });
+
+  it('says All answered when nothing is left', () => {
+    showDoc({
+      ...dataWith([
+        decision('dec_layout', 'q', { chosenOptionId: 'cards' }),
+        decision('dec_sound', 'q', { answer: 'Softer' }),
+      ]),
+      tasks: base.tasks.map((t) => ({ ...t, data: { ...t.data, status: 'done' } })),
+    });
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('All answered');
+  });
+
+  it('sheets answered before the page was last updated move to Earlier answers', () => {
+    const before = '2026-10-19T09:00:00.000Z';
+    const answered = {
+      ...decision('dec_layout', 'q', { chosenOptionId: 'cards' }),
+      updatedAt: before,
+    };
+    showDoc(dataWith([answered, DECISIONS[1]!]));
+    const earlier = document.querySelector<HTMLDetailsElement>('[data-earlier-answers]')!;
+    expect(earlier).toBeTruthy();
+    expect(earlier.open).toBe(false);
+    expect(earlier.querySelector('[data-doc-block="layout"]')).toBeTruthy();
+    expect(earlier.textContent).toContain('Earlier answers (1)');
+    // The desk header still counts it as answered.
+    expect(document.querySelector('[data-progress]')?.textContent).toBe('1 of 2 answered');
+  });
+
+  it('keeps the desk header when every sheet was answered before the last update', () => {
+    const before = '2026-10-19T09:00:00.000Z';
+    showDoc({
+      ...dataWith([
+        { ...decision('dec_layout', 'q', { chosenOptionId: 'cards' }), updatedAt: before },
+        { ...decision('dec_sound', 'q', { answer: 'Softer' }), updatedAt: before },
+      ]),
+      tasks: base.tasks.map((t) => ({
+        ...t,
+        updatedAt: before,
+        data: { ...t.data, status: 'done' },
+      })),
+    });
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('All answered');
+    expect(document.querySelector('[data-earlier-answers]')?.textContent).toContain(
+      'Earlier answers (2)',
+    );
+  });
+
+  it('a sheet links the earlier decision it follows up on', () => {
+    const withRelated = {
+      ...docView,
+      data: {
+        ...docView.data,
+        doc: {
+          ...doc,
+          blocks: doc.blocks.map((b) =>
+            b.kind === 'sheet' && b.id === 'sound' ? { ...b, related: ['dec_layout'] } : b,
+          ),
+        },
+      },
+    };
+    render(
+      <Providers>
+        <DocumentView view={withRelated} />
+      </Providers>,
+    );
+    const related = block('sound').querySelector('[data-sheet-related] a')!;
+    expect(related.getAttribute('href')).toContain('entity=dec_layout');
+    expect(related.getAttribute('title')).toMatch(/^Follows up on: /);
   });
 
   it('a chip scrolls to its sheet', () => {

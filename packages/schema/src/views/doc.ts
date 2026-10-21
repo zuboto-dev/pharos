@@ -209,6 +209,13 @@ export const DocSheetBlock = z.strictObject({
     .describe(
       'Ids of decisions with options this sheet asks the reader to answer (show each with a DecisionBlock inside); the sheet counts as answered once all have an answer',
     ),
+  related: z
+    .array(z.string().min(1))
+    .max(6)
+    .optional()
+    .describe(
+      'Ids of earlier decisions, tasks or views this sheet follows up on (e.g. the decision it builds on); shown as links under its title',
+    ),
   blocks: z
     .array(
       z.discriminatedUnion('kind', [...DocLeafBlock.options, DocColumnsBlock, DocDetailsBlock]),

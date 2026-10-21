@@ -610,6 +610,74 @@
     border-radius: 0.875rem;
     background: var(--ph-surface);
   }
+  /* An answered sheet: one quiet line, the sheet behind a click. */
+  .doc-sheet.is-answered {
+    padding: 0.875rem 1.25rem;
+    background: var(--ph-sunken);
+  }
+  .doc-sheet.is-answered[open] {
+    padding: 1.25rem 2rem 2rem;
+    background: var(--ph-surface);
+  }
+  .doc-sheet-summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  .doc-sheet-summary::-webkit-details-marker {
+    display: none;
+  }
+  .doc-sheet.is-answered:not([open]) .doc-sheet-head {
+    margin-bottom: 0;
+  }
+  .doc-sheet.is-answered:not([open]) .doc-sheet-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--ph-muted);
+  }
+  .doc-flow > .doc-sheet.is-answered + .doc-sheet.is-answered {
+    margin-top: 0.5rem;
+  }
+  .doc-earlier {
+    max-width: var(--doc-sheet);
+    margin-top: 2.5rem;
+  }
+  .doc-earlier > * + * {
+    margin-top: 0.5rem;
+  }
+  .doc-earlier-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ph-muted);
+  }
+  .doc-chip-done {
+    gap: 0.25rem;
+    color: var(--ph-ok);
+  }
+  .doc-related {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: -0.5rem 0 1.25rem;
+  }
+  .doc-related-link {
+    display: inline-flex;
+    max-width: 20rem;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--ph-line);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--ph-muted);
+  }
+  .doc-related-link:hover {
+    color: var(--ph-ink);
+    background: var(--ph-sunken);
+  }
   .doc-sheet:focus {
     outline: none;
   }

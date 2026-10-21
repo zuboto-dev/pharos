@@ -5,7 +5,7 @@ import {
   type Entity,
   type Widget,
 } from '@pharos/schema';
-import { ExternalLink } from 'lucide-react';
+import { CircleCheck, ExternalLink } from 'lucide-react';
 import { useId, useMemo, useState, type CSSProperties } from 'react';
 import { BoardActionsProvider } from '../catalog/action-board';
 import { BoardFilesProvider, WidgetIdProvider } from '../catalog/board-files';
@@ -31,6 +31,8 @@ import {
   deskSheets,
   sheetAnchor,
   sheetState,
+  SheetRelated,
+  useSheetAnsweredAt,
   useDecisions,
   useSheetTasks,
   type Sheet,
@@ -114,6 +116,22 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
     () => (doc ? doc.blocks.filter((b): b is Sheet => b.kind === 'sheet') : []),
     [doc],
   );
+  // Sheets answered before the agent last updated the page are handled: they leave the flow for
+  // an "Earlier answers" fold at the end, so the desk shows this round only.
+  const decisions = useDecisions();
+  const tasksOf = useSheetTasks();
+  const answeredAt = useSheetAnsweredAt();
+  const cleared = new Set(
+    allSheets
+      .filter((s) => {
+        if (sheetState(s, decisions, tasksOf(s)) !== 'answered') return false;
+        const at = answeredAt(s);
+        return !!at && at < view.updatedAt;
+      })
+      .map((s) => s.id),
+  );
+  const flow = doc ? doc.blocks.filter((b) => !(b.kind === 'sheet' && cleared.has(b.id))) : [];
+  const firstSheet = flow.find((b) => b.kind === 'sheet');
   if (!doc) return null;
   return (
     <VariantProvider variant="document">
@@ -125,15 +143,30 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
               aria-label={view.data.name}
               className="doc doc-flow pt-2 pb-16"
             >
-              {doc.blocks.map((block) => (
+              {flow.map((block) => (
                 <DocTopBlock
                   key={block.id}
                   view={view}
                   block={block}
-                  // The review desk (R15) sits above the first sheet.
-                  desk={sheets[0] === block ? sheets : undefined}
+                  // The review desk (R15) sits above the first sheet still in the flow.
+                  desk={sheets.length && firstSheet === block ? sheets : undefined}
                 />
               ))}
+              {/* Everything was answered before the last update: the desk still says so. */}
+              {sheets.length > 0 && !firstSheet && <ReviewDeskHeader sheets={sheets} />}
+              {cleared.size > 0 && (
+                <details data-earlier-answers="" className="doc-earlier">
+                  <summary className="doc-earlier-summary">
+                    <CircleCheck aria-hidden className="size-4 text-ok" />
+                    Earlier answers <span className="tabular-nums">({cleared.size})</span>
+                  </summary>
+                  {allSheets
+                    .filter((s) => cleared.has(s.id))
+                    .map((s) => (
+                      <SheetView key={s.id} view={view} block={s} />
+                    ))}
+                </details>
+              )}
             </article>
             {allSheets.length > 0 && <HandBackPrompt view={view} sheets={allSheets} />}
           </BoardActionsProvider>
@@ -237,23 +270,37 @@ function DetailsView({
 function SheetView({ view, block }: { view: Entity<'view'>; block: Sheet }) {
   const titleId = useId();
   const state = sheetState(block, useDecisions(), useSheetTasks()(block));
+  const body = (
+    <div className="doc-stack">
+      {block.blocks.map((inner) => (
+        <DocBlockView key={inner.id} view={view} block={inner} />
+      ))}
+    </div>
+  );
+  const common = {
+    id: sheetAnchor(block.id),
+    tabIndex: -1,
+    'data-doc-block': block.id,
+    'data-doc-sheet': '',
+    'data-state': state,
+    'data-width': docWidth(block),
+  };
+  // Answered: one line with its state, the sheet itself behind a click (the reader is done here).
+  if (state === 'answered')
+    return (
+      <details {...common} className="doc-block doc-sheet is-answered">
+        <summary aria-labelledby={titleId} className="doc-sheet-summary">
+          <SheetHead sheet={block} state={state} titleId={titleId} />
+        </summary>
+        <SheetRelated sheet={block} />
+        {body}
+      </details>
+    );
   return (
-    <section
-      id={sheetAnchor(block.id)}
-      tabIndex={-1}
-      aria-labelledby={titleId}
-      data-doc-block={block.id}
-      data-doc-sheet=""
-      data-state={state}
-      data-width={docWidth(block)}
-      className="doc-block doc-sheet"
-    >
+    <section {...common} aria-labelledby={titleId} className="doc-block doc-sheet">
       <SheetHead sheet={block} state={state} titleId={titleId} />
-      <div className="doc-stack">
-        {block.blocks.map((inner) => (
-          <DocBlockView key={inner.id} view={view} block={inner} />
-        ))}
-      </div>
+      <SheetRelated sheet={block} />
+      {body}
     </section>
   );
 }

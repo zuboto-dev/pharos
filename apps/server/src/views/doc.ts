@@ -212,6 +212,16 @@ function reviewWarnings(
   saved: boolean,
 ): string[] {
   const out: string[] = [];
+  for (const sheet of doc.blocks)
+    if (sheet.kind === 'sheet')
+      for (const id of sheet.related ?? []) {
+        const found = store.get(id);
+        const projectOf = (found?.data as { projectId?: string } | undefined)?.projectId;
+        if (!found || !['decision', 'task', 'view'].includes(found.type) || projectOf !== projectId)
+          out.push(
+            `Sheet "${sheet.id}": related "${id}" is not a decision, task or view of this project; it isn't shown`,
+          );
+      }
   const figures = docLeaves(doc.blocks).filter((b): b is FigureBlock => b.kind === 'figure');
   for (const f of figures) {
     const missing = [...new Set(f.items.map((i) => i.src).filter((src) => !have.has(src)))];
@@ -280,6 +290,8 @@ export type SheetSummary = {
   title: string;
   time?: string;
   tags?: string[];
+  /** Earlier decisions, tasks or views the sheet follows up on (ids). */
+  related?: string[];
   /**
    * Open until each decision has a choice or an answer and each checklist task is answered (done,
    * won't do, replied, or later until its day); none for a sheet with neither.
@@ -357,6 +369,7 @@ export function sheetSummaries(
       title: sheet.title,
       ...(sheet.time ? { time: sheet.time } : {}),
       ...(sheet.tags?.length ? { tags: sheet.tags } : {}),
+      ...(sheet.related?.length ? { related: sheet.related } : {}),
       ...(decisions.length || tasks.length
         ? {
             state:

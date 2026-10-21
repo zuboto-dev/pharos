@@ -1,6 +1,7 @@
 import type { Desk, DeskItem, DeskRun } from '@pharos/schema';
 import clsx from 'clsx';
 import {
+  Sparkles,
   AlertTriangle,
   Check,
   CircleCheck,
@@ -272,6 +273,97 @@ function RunChip({ run }: { run: DeskRun }) {
   );
 }
 
+type LandedNews = {
+  since: number;
+  projects: {
+    projectId: string;
+    project: string;
+    revisions: number;
+    agents: string[];
+    latest: { message: string; at: string };
+  }[];
+};
+
+/**
+ * What agents landed since you last opened the desk, by project (the Routines morning report's
+ * "what landed", now in Pharos). Read once when the desk opens, which then marks it seen, so the
+ * next visit shows only what is new.
+ */
+/** The busiest projects shown at first; the rest behind one click. */
+const LANDED_SHOWN = 5;
+
+function Landed() {
+  const [news, setNews] = useState<LandedNews | null>(null);
+  const [all, setAll] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const res = await fetch('/api/desk/landed');
+        const data = (await res.json()) as LandedNews;
+        if (!live || !Array.isArray(data?.projects)) return;
+        setNews(data);
+        await fetch('/api/desk/seen', { method: 'PUT' });
+      } catch {
+        // Nothing new to show is fine.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!news?.projects.length) return null;
+  const total = news.projects.reduce((n, p) => n + p.revisions, 0);
+  return (
+    <section aria-label="Since you last looked" data-landed="" className="space-y-2">
+      <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted">
+        <Sparkles aria-hidden className="size-4" />
+        <Tooltip label="Since you last looked" detail="Changes agents made, by project">
+          <span tabIndex={0} className="tabular-nums">
+            {total}
+          </span>
+        </Tooltip>
+      </h2>
+      <ul className="divide-y divide-line-soft rounded-block border border-line bg-surface">
+        {(all ? news.projects : news.projects.slice(0, LANDED_SHOWN)).map((p) => (
+          <li key={p.projectId} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <Link
+              to={`/projects/${p.projectId}`}
+              className="shrink-0 font-medium text-ink hover:underline"
+            >
+              {p.project}
+            </Link>
+            <Tooltip
+              label={p.latest.message}
+              detail={p.agents.join(', ')}
+              className="flex min-w-0 flex-1"
+            >
+              <span tabIndex={0} className="min-w-0 flex-1 truncate text-muted">
+                {p.latest.message}
+              </span>
+            </Tooltip>
+            <span className="shrink-0 rounded-full bg-sunken px-1.5 text-xs text-muted tabular-nums">
+              {p.revisions}
+              <span className="sr-only"> changes</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {news.projects.length > LANDED_SHOWN && (
+        <button
+          type="button"
+          onClick={() => setAll((v) => !v)}
+          aria-expanded={all}
+          className="text-xs text-muted hover:underline"
+        >
+          {all ? 'Fewer' : `+${news.projects.length - LANDED_SHOWN}`}
+          <span className="sr-only"> projects</span>
+        </button>
+      )}
+    </section>
+  );
+}
+
 export function DeskPage() {
   const desk = useResource<Desk>('/api/desk');
   const { reload } = desk;
@@ -348,6 +440,7 @@ export function DeskPage() {
       )}
       {section('Waiting more than two days', overdue, 'warn')}
       {section('Today', today)}
+      <Landed />
       {old.length > 0 && (
         <details className="group space-y-2">
           <summary className="cursor-pointer text-sm font-medium text-muted">

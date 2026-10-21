@@ -70,9 +70,28 @@ const DESK: Desk = {
 };
 
 let posted: { url: string; body: unknown }[];
+let seen: string[];
 beforeEach(() => {
   posted = [];
+  seen = [];
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (init?.method === 'PUT') {
+      seen.push(url);
+      return Response.json({ seen: 9 });
+    }
+    if (url === '/api/desk/landed')
+      return Response.json({
+        since: 3,
+        projects: [
+          {
+            projectId: 'p1',
+            project: 'Garden',
+            revisions: 4,
+            agents: ['Garden agent'],
+            latest: { message: 'Planted the beans', at: hoursAgo(1) },
+          },
+        ],
+      });
     if (init?.method === 'POST') {
       posted.push({ url, body: JSON.parse((init.body as string) || '{}') });
       return Response.json({ revision: { id: 9, message: 'Saved it' } });
@@ -175,5 +194,13 @@ describe('the desk page (R16)', () => {
     expect(waited('2026-10-21T11:20:00Z', now)).toBe('40 min');
     expect(waited('2026-10-21T07:00:00Z', now)).toBe('5 h');
     expect(waited('2026-10-18T12:00:00Z', now)).toBe('3 d');
+  });
+
+  it('shows what agents landed since the last look, then marks the desk seen', async () => {
+    await show();
+    const landed = await screen.findByRole('region', { name: 'Since you last looked' });
+    expect(landed.textContent).toContain('Garden');
+    expect(landed.textContent).toContain('Planted the beans');
+    await waitFor(() => expect(seen).toContain('/api/desk/seen'));
   });
 });

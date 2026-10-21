@@ -30,7 +30,24 @@ import { Node } from './renderer';
 import { WidgetSettings } from './settings';
 
 /** Blocks drawn without a card frame or title bar: Ask can't sit in a corner of their frame. */
-export const FRAMELESS: ReadonlySet<string> = new Set(['Text', 'Markdown']);
+export /** Lists that grow with the data: capped on a board unless the widget has a height. */
+const SCROLLING_LISTS = new Set<string>([
+  'GoalTree',
+  'ScopeBoard',
+  'DecisionLog',
+  'ActivityFeed',
+  'TaskChecklist',
+  'TaskTable',
+  'MilestoneList',
+  'DataList',
+  'DataTable',
+  'FileList',
+  'AssigneeMatrix',
+  'DueTracker',
+]);
+export const LIST_CAP = 'max-h-[34rem]';
+
+const FRAMELESS: ReadonlySet<string> = new Set(['Text', 'Markdown']);
 
 export type BoardChange = (board: Board, message: string) => void;
 
@@ -332,6 +349,10 @@ function BoardGrid({ board, editing, onChange, view, quiet = NEVER_QUIET }: Boar
                 'pointer-coarse:pr-9',
               // A saved height is a minimum: content that grows later is never cut off.
               (resizing ? preview.h : widget.h) && 'md:min-h-(--h)',
+              // A long list without a height of its own is capped and scrolls inside its frame
+              // (everything is loaded, nothing behind "Show more"), so one list never makes the
+              // whole board a long scroll.
+              !widget.h && !resizing && SCROLLING_LISTS.has(widget.node.component) && LIST_CAP,
               editing &&
                 'rounded-block outline-2 outline-offset-4 outline-transparent outline-dashed hover:outline-sky-300 dark:hover:outline-sky-800',
               resizing && 'outline-sky-400!',

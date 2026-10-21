@@ -76,6 +76,15 @@ describe('view tabs', () => {
     expect(screen.getByTestId('path').textContent).toBe('/projects/p/views/view_old');
   });
 
+  it('pins a view from its tab, without the menu', () => {
+    renderTabs(delivery);
+    const pins = screen.getAllByRole('button', { name: /^Pin / });
+    expect(pins.length).toBeGreaterThan(0);
+    fireEvent.click(pins[0]!);
+    expect(apply.mock.calls.at(-1)![1][0]).toMatchObject({ data: { pinned: true } });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('renames, pins, and archives the active view', () => {
     renderTabs(delivery);
     fireEvent.click(screen.getByRole('button', { name: 'Options for Delivery' }));

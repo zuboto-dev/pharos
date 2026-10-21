@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Newspaper,
   Pencil,
+  LayoutGrid,
   Pin,
   PinOff,
   Plus,
@@ -135,16 +136,19 @@ const ICON =
 
 /** A tab's icons and name (shared by the tab and its hidden measuring copy). */
 function TabLabel({ view }: { view: Entity<'view'> }) {
+  // A symbol leads every tab: a pin when pinned, then what it is (an answer, a report; a board
+  // has the grid only when nothing else leads). On hover the first one becomes the pin toggle
+  // (the button over it), so pinning needs no menu and the tabs never shift.
+  const kind = isAnswer(view) ? (
+    <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
+  ) : view.data.page || view.data.doc ? (
+    <Newspaper className="size-3.5 shrink-0 text-faint" aria-label="Report" />
+  ) : null;
   return (
     <>
-      {view.data.pinned && <Pin className="size-3 shrink-0" />}
-      {isAnswer(view) && (
-        <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
-      )}
-      {/* A report (R13 page, R14 document): told apart from working pages. */}
-      {(view.data.page || view.data.doc) && !isAnswer(view) && (
-        <Newspaper className="size-3.5 shrink-0 text-faint" aria-label="Report" />
-      )}
+      {view.data.pinned && <Pin className="size-3.5 shrink-0" aria-hidden />}
+      {kind ??
+        (!view.data.pinned && <LayoutGrid className="size-3.5 shrink-0 text-faint" aria-hidden />)}
       <span className="truncate">{view.data.name}</span>
     </>
   );
@@ -306,7 +310,10 @@ export function ViewTabs({
           <div
             key={view.id}
             // The open tab gives way on a narrow screen (its name truncates), so More stays in sight.
-            className={clsx('relative flex min-w-0 items-center', isActive ? 'shrink' : 'shrink-0')}
+            className={clsx(
+              'group/tab relative flex min-w-0 items-center',
+              isActive ? 'shrink' : 'shrink-0',
+            )}
           >
             {firstAnswer && i > 0 && (
               <span
@@ -364,6 +371,29 @@ export function ViewTabs({
                   )
                 )}
               </Link>
+            )}
+            {!renaming && !isAnswer(view) && (
+              // Pin or unpin from the tab on hover, as well as from its ⋯ menu; a touch screen keeps
+              // it in the menu. It sits in the tab's corner, so the tabs never shift.
+              <button
+                type="button"
+                aria-label={`${view.data.pinned ? 'Unpin' : 'Pin'} ${view.data.name}`}
+                title={view.data.pinned ? 'Unpin' : 'Pin'}
+                aria-pressed={!!view.data.pinned}
+                data-tab-pin=""
+                onClick={() =>
+                  void update(
+                    view,
+                    { pinned: !view.data.pinned },
+                    `${view.data.pinned ? 'Unpin' : 'Pin'} view “${view.data.name}”`,
+                  )
+                }
+                className={clsx(
+                  'absolute top-1/2 left-2 z-10 mt-[-1px] inline-flex size-5.5 -translate-y-1/2 items-center justify-center rounded-control bg-surface text-ink-soft opacity-0 hover:bg-subtle focus:opacity-100 group-hover/tab:opacity-100 pointer-coarse:hidden',
+                )}
+              >
+                {view.data.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+              </button>
             )}
             {isActive && !renaming && (
               <button

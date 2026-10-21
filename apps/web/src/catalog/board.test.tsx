@@ -42,6 +42,13 @@ describe('board', () => {
     expect(screen.queryByRole('button', { name: /Remove/ })).toBeNull();
   });
 
+  it('caps a long list without a height so it scrolls inside; a sized widget keeps its height', () => {
+    renderBoard(false);
+    expect(widget('c').className).toContain('max-h-[34rem]');
+    expect(widget('b').className).not.toContain('max-h-[34rem]');
+    expect(widget('a').className).not.toContain('max-h-[34rem]');
+  });
+
   it('removes a widget in edit mode', () => {
     const onChange = renderBoard(true);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Goals' }));

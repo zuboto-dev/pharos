@@ -84,6 +84,9 @@ Lucide icons. One line each: icon → meaning.
 - `RefreshCw` → refresh, or a newer version to load
 - `Copy` / `Check` → copy / copied or done
 - `Bot` / `User` / `Cog` → an agent / a person / Pharos itself
+- `SquareTerminal` → the agent panel (your agent CLI beside the page, R17)
+- `Crosshair` → point the agent at something on the page (the picker)
+- `TextQuote` → point the agent at the selected words
 - `EyeOff` / `Tags` / `BookOpen` → folder levels: hidden / details / contents
 - `ShieldAlert` → limits of what Pharos can enforce
 - `Palette`, `Database`, `Cable` → Settings: appearance, data, connecting an agent

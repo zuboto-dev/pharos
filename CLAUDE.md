@@ -34,10 +34,14 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
   - `src/presence.ts` — who is working where right now (v0.2 B5): view tool calls, agents'
     revisions and the answering run mark a project, view or block for 20 s (the run until it
     ends); sent on the feed as `presence`. In memory only: not project data, never a revision
-- `apps/web` — Vite + React + Tailwind on port 5173; proxies `/api` to the server
+  - `src/terminal/` — the agent panel (R17): the owner's agent CLI in a pseudo-terminal per
+    project, over a WebSocket; local-only guard, fixed commands, sessions.
+    docs/reframe/r17-agent-panel.md has the rules
+- `apps/web` — Vite + React + Tailwind on port 5173; proxies `/api` (and its WebSockets) to the server
   - `src/catalog/` — view renderer (`renderer.tsx`) and one React component per catalog entry
     (`components/`, registered in `components/index.ts`)
   - `src/pages/` — project list and project page (view tabs)
+  - `src/agent/` — the agent panel, its terminal (xterm.js) and the picker (R17)
 
 ## Commands
 

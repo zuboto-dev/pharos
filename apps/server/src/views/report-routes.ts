@@ -31,16 +31,17 @@ import {
 /**
  * Headers on every response under /api/views/:id/page: the page, its assets, the 404s, the
  * redirect, refusals and errors, whatever the method (R13.6). The CSP names the view's own page
- * path, from the request's Host (checked: local hosts only).
+ * path, from the request's Host (checked: local hosts, or the owner's web address).
  */
 export function lockedHeaders(
   host: string | undefined,
   viewId: string | undefined,
   /** A drawing of a report document (R14): its own path is the frame's own source. */
   blockId?: string,
+  web?: URL,
 ) {
   return {
-    'Content-Security-Policy': reportCsp(pageSource(host, viewId, blockId)),
+    'Content-Security-Policy': reportCsp(pageSource(host, viewId, blockId, web)),
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
@@ -76,37 +77,40 @@ function embedHeaders(current: string | null): Record<string, string> {
 /**
  * Sets the locked headers on every response to a request for /api/views/:id/page…, a drawing
  * (/api/views/:id/doc/:blockId…) or an embed wrapper (/api/views/:id/embed…), by the path as
- * parsed or as sent. Mounted first on the app, so it covers the local-only refusal too.
+ * parsed or as sent. Mounted first on the app, so it covers the local-only refusal too. `web` is
+ * the owner's non-local address (PHAROS_WEB_URL), whose Host counts as a page's own.
  */
-export const lockPageResponses: MiddlewareHandler = async (c, next) => {
-  const paths = [new URL(c.req.url).pathname, rawTarget(c) ?? ''];
-  const find = (re: RegExp) => paths.map((p) => re.exec(p)).find(Boolean) ?? null;
-  const page = find(PAGE_PREFIX);
-  const drawing = page ? null : find(DOC_PREFIX);
-  const embed = page || drawing ? null : find(EMBED_PREFIX);
-  await next();
-  if (!page && !drawing && !embed) return;
-  const host = c.req.header('host') ?? new URL(c.req.url).host;
-  const headers = page
-    ? lockedHeaders(host, decoded(page[1]))
-    : drawing
-      ? lockedHeaders(host, decoded(drawing[1]), decoded(drawing[2]) ?? '')
-      : embedHeaders(c.res.headers.get('content-security-policy'));
-  try {
-    for (const [name, value] of Object.entries(headers)) c.res.headers.set(name, value);
-  } catch {
-    // A response with immutable headers: answer with a copy that carries them.
-    const res = c.res;
-    const copy = new Headers(res.headers);
-    for (const [name, value] of Object.entries(headers)) copy.set(name, value);
-    c.res = undefined;
-    c.res = new Response(res.body, {
-      status: res.status,
-      statusText: res.statusText,
-      headers: copy,
-    });
-  }
-};
+export const lockPageResponses =
+  (web?: URL): MiddlewareHandler =>
+  async (c, next) => {
+    const paths = [new URL(c.req.url).pathname, rawTarget(c) ?? ''];
+    const find = (re: RegExp) => paths.map((p) => re.exec(p)).find(Boolean) ?? null;
+    const page = find(PAGE_PREFIX);
+    const drawing = page ? null : find(DOC_PREFIX);
+    const embed = page || drawing ? null : find(EMBED_PREFIX);
+    await next();
+    if (!page && !drawing && !embed) return;
+    const host = c.req.header('host') ?? new URL(c.req.url).host;
+    const headers = page
+      ? lockedHeaders(host, decoded(page[1]), undefined, web)
+      : drawing
+        ? lockedHeaders(host, decoded(drawing[1]), decoded(drawing[2]) ?? '', web)
+        : embedHeaders(c.res.headers.get('content-security-policy'));
+    try {
+      for (const [name, value] of Object.entries(headers)) c.res.headers.set(name, value);
+    } catch {
+      // A response with immutable headers: answer with a copy that carries them.
+      const res = c.res;
+      const copy = new Headers(res.headers);
+      for (const [name, value] of Object.entries(headers)) copy.set(name, value);
+      c.res = undefined;
+      c.res = new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: copy,
+      });
+    }
+  };
 
 /**
  * Headers on the web app's own pages (R13.6). `frame-src 'self'`: a frame in the app may only

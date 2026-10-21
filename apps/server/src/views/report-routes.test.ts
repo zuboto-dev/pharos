@@ -102,6 +102,33 @@ describe("a page's CSP names only its own files (R13.6)", () => {
     expect(asset.headers.get('content-security-policy')).toBe(exactCsp(pageView, 'localhost:5173'));
   });
 
+  it("trusts the owner's web address too, with its scheme; local hosts are unchanged", async () => {
+    const web = new URL('https://pharos.example.com');
+    expect(pageSource('pharos.example.com', 'view_1', undefined, web)).toBe(
+      'https://pharos.example.com/api/views/view_1/page/',
+    );
+    expect(pageSource('PHAROS.example.com', 'view_1', 'chart', web)).toBe(
+      'https://pharos.example.com/api/views/view_1/doc/chart/',
+    );
+    expect(pageSource('pharos.example.com', 'view_1')).toBeNull();
+    for (const host of ['evil.example', 'pharos.example.com:8443', 'pharos.example.com.evil'])
+      expect(pageSource(host, 'view_1', undefined, web), host).toBeNull();
+    expect(pageSource('127.0.0.1:4300', 'view_1', undefined, web)).toBe(
+      'http://127.0.0.1:4300/api/views/view_1/page/',
+    );
+    // Served through the app with PHAROS_WEB_URL set: the page and a picture of it.
+    const hosted = createApp(store, undefined, undefined, { webUrl: web.href });
+    for (const path of ['', 'img/a.png']) {
+      const res = await hosted.request(`/api/views/${pageView}/page/${path}`, {
+        headers: { host: 'pharos.example.com' },
+      });
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get('content-security-policy')).toContain(
+        `img-src https://pharos.example.com/api/views/${pageView}/page/ `,
+      );
+    }
+  });
+
   it('trusts only local hosts: any other Host gets no own-file source at all', () => {
     expect(pageSource('127.0.0.1:4300', 'view_1')).toBe(
       'http://127.0.0.1:4300/api/views/view_1/page/',

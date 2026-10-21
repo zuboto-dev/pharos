@@ -52,8 +52,10 @@ form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'`, 
     as an absolute source, `http://<host>/api/views/<id>/page/` (R13.6; `reportCsp`/`pageSource`
     in `views/report.ts`). `'self'` would be the whole origin, and with `Access-Control-Allow-Origin: *`
     on scripts and fonts a page could load another view's (another project's) files. `<host>` is
-    the request's Host, used only when it is 127.0.0.1, localhost or [::1] with an optional port
-    (and the id only when it looks like one); otherwise the page gets no own-file source at all.
+    the request's Host, used only when it is 127.0.0.1, localhost or [::1] with an optional port,
+    or exactly the host of the owner's non-local `PHAROS_WEB_URL` (then with that URL's scheme,
+    e.g. `https://`), and the id only when it looks like one; otherwise the page gets no
+    own-file source at all.
   - `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`
     for the page.
 - The page can't reach the API, other sites or the parent's storage: opaque origin, no `fetch`,

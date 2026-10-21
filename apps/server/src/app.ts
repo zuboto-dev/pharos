@@ -176,11 +176,11 @@ export function createApp(
 
   // Every response under /api/views/:id/page carries the report page's locked headers (R13.6),
   // the refusals below included.
-  app.use(lockPageResponses);
+  const web = webAddress(info.webUrl);
+  app.use(lockPageResponses(web));
 
   // Pharos is local-only: refuse requests that didn't come from a localhost page or client,
   // which also blocks DNS-rebinding attacks from websites.
-  const web = webAddress(info.webUrl);
   app.use(async (c, next) => {
     // The node adapter builds the request URL from the Host header.
     const url = new URL(c.req.url);

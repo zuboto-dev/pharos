@@ -30,18 +30,27 @@ const VIEW_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * The page's own files as a CSP source (R13.6): `http://<host>/api/views/<id>/page/`, a path
  * prefix, so a page loads its own assets and never another view's (which `'self'`, the whole
  * origin, allowed). Null when the Host or the id isn't one Pharos would serve: then the page
- * loads no files of its own rather than trusting a host it was given.
+ * loads no files of its own rather than trusting a host it was given. The owner's own web
+ * address (`web`, from PHAROS_WEB_URL, the one app.ts trusts) counts too, with its scheme.
  */
 export function pageSource(
   host: string | undefined,
   viewId: string | undefined,
   /** A drawing of a report document (R14): its own path, `…/doc/<blockId>/`, instead. */
   blockId?: string,
+  /** The owner's non-local address for Pharos, when it has one. */
+  web?: URL,
 ): string | null {
-  if (!host || !viewId || !LOCAL_HOST.test(host) || !VIEW_ID.test(viewId)) return null;
-  if (blockId === undefined) return `http://${host.toLowerCase()}/api/views/${viewId}/page/`;
+  if (!host || !viewId || !VIEW_ID.test(viewId)) return null;
+  const base = LOCAL_HOST.test(host)
+    ? `http://${host.toLowerCase()}`
+    : web && host.toLowerCase() === web.host.toLowerCase()
+      ? web.origin
+      : null;
+  if (!base) return null;
+  if (blockId === undefined) return `${base}/api/views/${viewId}/page/`;
   if (!BLOCK_ID.test(blockId)) return null;
-  return `http://${host.toLowerCase()}/api/views/${viewId}/doc/${blockId}/`;
+  return `${base}/api/views/${viewId}/doc/${blockId}/`;
 }
 
 const BLOCK_ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/;

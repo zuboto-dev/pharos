@@ -148,15 +148,19 @@ export function drawingOverlaps(id: string, html: string): string[] {
         .split(/[\s,]+/)
         .map(Number);
       const c = cmd!.toUpperCase();
-      if (c === 'M') [x, y] = [n[0]!, n[1]!];
-      else if (c === 'H') (segments.push({ x1: x, y1: y, x2: n[0]!, y2: y }), (x = n[0]!));
-      else if (c === 'V') (segments.push({ x1: x, y1: y, x2: x, y2: n[0]! }), (y = n[0]!));
-      else if (c === 'L') {
+      if (c === 'M') {
+        [x, y] = [n[0]!, n[1]!];
+      } else if (c === 'H') {
+        segments.push({ x1: x, y1: y, x2: n[0]!, y2: y });
+        x = n[0]!;
+      } else if (c === 'V') {
+        segments.push({ x1: x, y1: y, x2: x, y2: n[0]! });
+        y = n[0]!;
+      } else if (c === 'L') {
         // Only straight across or down: a slanted line's box would cover far more than the line.
         if (n[0] === x || n[1] === y) segments.push({ x1: x, y1: y, x2: n[0]!, y2: n[1]! });
         [x, y] = [n[0]!, n[1]!];
       }
-      (segments.push({ x1: x, y1: y, x2: n[0]!, y2: n[1]! }), ([x, y] = [n[0]!, n[1]!]));
     }
   }
   for (const m of html.matchAll(/<line\b([^>]*)>/g)) {

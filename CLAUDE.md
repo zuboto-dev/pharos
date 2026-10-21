@@ -89,14 +89,22 @@ agent runner catch and log their own errors, and `index.ts` logs unhandled rejec
 exiting (an uncaught exception still exits, after logging, so the service restarts it). Keep new
 timers, event listeners, and fire-and-forget promises in the server to that rule.
 
-Questions asked in the web app are answered automatically: when Claude Code (`claude`) is
-installed, the server runs it for new questions, connected to this server over MCP (each answer uses that
-agent's usage; the cost depends on the agent and model, so don't quote a price). `PHAROS_AGENT_COMMAND` replaces that command with your own, and `PHAROS_AGENT_COMMAND=off`
-turns it off. `src/agent-runner.ts` runs one at a time, with `PHAROS_PROMPT` (from
-`answerBrief` in `guidance.ts`), `PHAROS_PROJECT_IDS`, `PHAROS_REQUEST_IDS`, and `PHAROS_URL` in the environment, logging to `~/.pharos/agent.log`
-(`PHAROS_AGENT_LOG`). Only the environment decides the command; the API can't change it. The
-Settings page (`/settings`) can only pause or resume it, saved with `Store.setSetting` in the
-`settings` table (app settings, not project data, so not revisions).
+Questions asked in the web app are answered automatically by a built-in agent that is installed:
+Claude Code (`claude`) or Codex (`codex`), found with `command -v` at start. Each runs once per
+batch, non-interactively, connected over MCP to this server only (each answer uses that agent's
+usage; the cost depends on the agent and model, so don't quote a price). Their commands are fixed
+in `presetCommand` (`src/agent-runner.ts`); Codex runs like eval/compat does (`codex exec
+--ignore-user-config --ephemeral --sandbox read-only`, this server and its tool approval passed
+with `-c`), never touching the user's `~/.codex` config. Settings picks the preset (`agent.preset`
+app setting; Claude Code by default, else Codex): `PUT /api/settings/agent` takes `{ preset }` only
+for an installed one, refuses agents (`X-Pharos-Author: agent:…`), and applies from the next run.
+`PHAROS_AGENT_COMMAND` replaces the presets with your own command (Settings then shows it and
+offers no choice), and `PHAROS_AGENT_COMMAND=off` turns it off. `AgentRunner` runs one at a time,
+with `PHAROS_PROMPT` (from `answerBrief` in `guidance.ts`), `PHAROS_PROJECT_IDS`,
+`PHAROS_REQUEST_IDS`, and `PHAROS_URL` in the environment, logging to `~/.pharos/agent.log`
+(`PHAROS_AGENT_LOG`). Only the environment decides commands; the API can only pick a preset. The
+Settings page (`/settings`) can also pause or resume answering; both are saved with
+`Store.setSetting` in the `settings` table (app settings, not project data, so not revisions).
 
 ## Data model and history
 

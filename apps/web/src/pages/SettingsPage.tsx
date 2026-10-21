@@ -16,6 +16,7 @@ import {
   announceAgentStatus,
   useAgentStatus,
   useRevisionEvents,
+  type AgentPreset,
   type AgentStatus,
 } from '../lib/events';
 import { plural, timeAgo } from '../lib/format';
@@ -169,7 +170,7 @@ export function agentSummary(agent: AgentStatus): {
     return { text: 'Off: PHAROS_AGENT_COMMAND=off is set on the server', tone: 'muted' };
   if (!agent.configured)
     return {
-      text: 'Not set up: install Claude Code, or set PHAROS_AGENT_COMMAND, then restart the server',
+      text: 'Not set up: install Claude Code or Codex, or set PHAROS_AGENT_COMMAND, then restart the server',
       tone: 'muted',
     };
   const asked = agent.run?.requestIds.length;
@@ -234,6 +235,52 @@ const TONES = {
   muted: 'bg-neutral-300 dark:bg-neutral-600',
 };
 
+/**
+ * Which built-in agent answers: only installed ones can be picked. Shown only when the server
+ * leaves the choice to Settings (no PHAROS_AGENT_COMMAND).
+ */
+function AgentChoice({
+  agent,
+  onChoose,
+}: {
+  agent: AgentStatus;
+  onChoose: (preset: AgentPreset) => void;
+}) {
+  if (agent.mode !== 'default' || !agent.presets?.length) return null;
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Agent that answers"
+      className="inline-flex rounded-tile border border-line-strong p-0.5 text-sm"
+    >
+      {agent.presets.map(({ id, label, installed }) => {
+        const chosen = agent.preset === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={chosen}
+            disabled={!installed}
+            title={installed ? undefined : `${label} isn't installed on this computer`}
+            onClick={() => !chosen && onChoose(id)}
+            className={clsx(
+              'tap-area rounded-md px-2.5 py-1 whitespace-nowrap',
+              chosen
+                ? 'bg-sky-50 font-medium text-sky-900 dark:bg-sky-950/50 dark:text-sky-100'
+                : 'text-ink-soft hover:bg-neutral-50 disabled:hover:bg-transparent dark:hover:bg-neutral-800',
+              !installed && 'opacity-50',
+            )}
+          >
+            {label}
+            {!installed && <span className="ml-1 text-xs text-muted">not installed</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function AnsweringAgent({ waiting }: { waiting: number }) {
   const agent = useAgentStatus();
   const [error, setError] = useState<string | null>(null);
@@ -243,14 +290,14 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
   const report = (err: unknown) =>
     setError(err instanceof ApiError ? err.message : 'Couldn’t reach the server');
 
-  const setEnabled = async (enabled: boolean) => {
+  const change = async (update: { enabled: boolean } | { preset: AgentPreset }) => {
     setError(null);
     setNotice(null);
     try {
       const res = await fetch('/api/settings/agent', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(update),
       });
       const body = (await res.json()) as AgentStatus & { error?: { message: string } };
       if (!res.ok) throw new ApiError(res.status, body.error?.message ?? `HTTP ${res.status}`);
@@ -279,7 +326,8 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
           <span className={clsx('size-2 shrink-0 rounded-full', TONES[summary.tone])} />
           {summary.text}
         </p>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <AgentChoice agent={agent} onChoose={(preset) => void change({ preset })} />
           {hint && (
             <span id="agent-switch-hint" className="text-xs text-muted">
               {hint}
@@ -290,7 +338,7 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
             checked={agent.configured && agent.enabled}
             disabled={!agent.configured}
             describedBy={hint ? 'agent-switch-hint' : undefined}
-            onChange={(on) => void setEnabled(on)}
+            onChange={(on) => void change({ enabled: on })}
           />
         </div>
       </div>
@@ -311,9 +359,15 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
       <dl className="divide-y divide-line-soft">
         <Row label="Agent">
           {agent.mode === 'default' ? (
-            'Claude Code (found on this computer), connected only to Pharos'
+            `${agent.agent ?? 'Claude Code'} (found on this computer), connected only to Pharos`
           ) : agent.mode === 'custom' && agent.command ? (
-            <Copyable label="command" text={agent.command} />
+            <span className="flex flex-col gap-1">
+              <Copyable label="command" text={agent.command} />
+              <span className="text-xs text-muted">
+                Set by <code>PHAROS_AGENT_COMMAND</code> on the server, so it decides which agent
+                answers.
+              </span>
+            </span>
           ) : (
             'None'
           )}
@@ -331,9 +385,11 @@ function AnsweringAgent({ waiting }: { waiting: number }) {
         )}
         <Row label="Change the agent">
           <span className="text-muted">
-            Set <code>PHAROS_AGENT_COMMAND</code> to your own command (or <code>off</code>) and
-            restart the server. For safety, the command can only be set on the server, not from this
-            page.
+            {agent.mode === 'default' &&
+              'Pick Claude Code or Codex above; a change applies from the next run. '}
+            For another agent, set <code>PHAROS_AGENT_COMMAND</code> to your own command (or{' '}
+            <code>off</code>) and restart the server. For safety, the command can only be set on the
+            server, not from this page.
           </span>
         </Row>
       </dl>

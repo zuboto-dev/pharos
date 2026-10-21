@@ -17,8 +17,14 @@ export type AgentStatus = {
   /** What is really happening (R11, W7); older servers leave it out. */
   state?: 'off' | 'unavailable' | 'paused' | 'idle' | 'queued' | 'running' | 'stopping';
   /** The run in progress. */
-  run?: { projectIds: string[]; requestIds: string[]; startedAt: string };
+  run?: { projectIds: string[]; requestIds: string[]; startedAt: string; agent?: string };
   mode: 'default' | 'custom' | 'off' | 'unavailable';
+  /** The built-in agent chosen in Settings (mode `default`). */
+  preset?: AgentPreset;
+  /** The built-in agents and whether each is installed on the server's computer. */
+  presets?: { id: AgentPreset; label: string; installed: boolean }[];
+  /** Who answers, in words. */
+  agent?: string;
   command?: string;
   logPath?: string;
   running: boolean;
@@ -35,8 +41,12 @@ export type AgentStatus = {
     outcome?: 'finished' | 'failed' | 'timed_out' | 'stopped';
     requestIds?: string[];
     finishedAt?: string;
+    agent?: string;
   };
 };
+
+/** The built-in answering agents the server can run (Settings picks one). */
+export type AgentPreset = 'claude' | 'codex';
 
 /** Sent each time the feed (re)connects: which version of Pharos is answering. */
 type ReadyEvent = { latest?: number; version?: string; build?: string };

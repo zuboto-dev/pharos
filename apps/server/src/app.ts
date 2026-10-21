@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import {
   ACTION_HTTP_STATUS,
   ApplyInput,
+  AskOwner,
   RunReport,
   Author,
   EntityType,
@@ -28,7 +29,7 @@ import { z } from 'zod';
 import { folderRoutes, type FolderRouteOptions } from './files/folders.js';
 import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
-import { RunLog, deskAnswer, deskOf } from './desk.js';
+import { RunLog, askOwner, deskAnswer, deskOf } from './desk.js';
 import { landedSince, markDeskSeen } from './landed.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
@@ -457,6 +458,15 @@ export function createApp(
   // routine without MCP may report its run here. Only a person marks a run seen.
   const runs = new RunLog(store);
   api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
+  // What MCP ask_owner does, for runners without MCP (the routines): one call puts a decision
+  // (with options) or a task on the owner's desk. projectId may be a project's id or its name.
+  api.post('/desk/ask', async (c) => {
+    const raw = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const ref = typeof raw.projectId === 'string' ? raw.projectId : '';
+    const byName = store.list('project').find((p) => p.data.name === ref);
+    const input = AskOwner.parse({ ...raw, projectId: byName?.id ?? ref });
+    return c.json(askOwner(store, authorOf(c), input));
+  });
   api.post('/desk/answer', async (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Only the owner answers from the desk');
     const body = z

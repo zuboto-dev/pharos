@@ -511,4 +511,28 @@ describe('the desk (R16)', () => {
       }),
     ).toThrow(/already answered it \(reply\)/);
   });
+
+  it('REST ask: a routine without MCP puts a decision or a task on the desk, by project name too', async () => {
+    const { store, runs, p } = setup();
+    const app = createApp(store);
+    const ask = (body: unknown) =>
+      app.request('/api/desk/ask', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': 'agent:Night run' },
+        body: JSON.stringify(body),
+      });
+    const d = await ask({
+      projectId: 'Garden',
+      title: 'Pick a mulch',
+      options: OPTIONS,
+      minutes: 1,
+    });
+    expect(d.status).toBe(200);
+    const t = await ask({ projectId: p, title: 'Approve the push', gate: true });
+    expect(((await t.json()) as { kind: string }).kind).toBe('task');
+    expect(deskOf(store, runs).items.map((i) => i.title)).toEqual(
+      expect.arrayContaining(['Pick a mulch', 'Approve the push']),
+    );
+    expect((await ask({ projectId: 'Nowhere', title: 'x' })).status).toBe(404);
+  });
 });

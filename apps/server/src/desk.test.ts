@@ -186,6 +186,15 @@ describe('the desk (R16)', () => {
     }).view.id;
     const desk = deskOf(store, runs);
     expect(desk.items).toHaveLength(1);
+    store.apply(me, {
+      message: 'Archive',
+      operations: [{ op: 'update', type: 'view', id: view, data: { archived: true } }],
+    });
+    expect(deskOf(store, runs).items.map((i) => i.kind)).toEqual(['decision', 'task']);
+    store.apply(me, {
+      message: 'Restore',
+      operations: [{ op: 'update', type: 'view', id: view, data: { archived: null } }],
+    });
     expect(desk.items[0]).toMatchObject({
       kind: 'sheet',
       id: `${view}#seeds`,

@@ -227,7 +227,8 @@ export function deskOf(
     const data = store.dataset(project.id);
     const covered = new Set<string>();
     for (const view of data.views) {
-      if (!view.data.doc) continue;
+      // An archived report was handed back: its sheets no longer wait on the owner.
+      if (!view.data.doc || view.data.archived) continue;
       for (const sheet of sheetSummaries(store, project.id, view.data.doc)) {
         for (const d of sheet.decisions) covered.add(d.id);
         for (const t of sheet.tasks ?? []) covered.add(t.id);

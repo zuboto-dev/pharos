@@ -793,6 +793,71 @@
       grid-template-columns: repeat(auto-fill, 12.5rem);
     }
   }
+  /*
+   * Several items slide in one row: a finger swipes it, snapping to each item, and the next one
+   * peeks in at the edge. A pair stays side by side where there is room.
+   */
+  .doc-figure-items[data-slide] {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    /* Room for the focus ring, which the scroll box would otherwise cut. */
+    padding: 4px;
+    margin: -4px;
+    scroll-padding-inline: 4px;
+  }
+  .doc-figure-items[data-slide]::-webkit-scrollbar {
+    display: none;
+  }
+  .doc-figure-items[data-slide] > li {
+    flex: 0 0 85%;
+    scroll-snap-align: start;
+  }
+  [data-doc-figure='phone'] .doc-figure-items[data-slide] > li {
+    flex-basis: min(62%, 12.5rem);
+  }
+  @container doc (min-width: 560px) {
+    [data-doc-figure='grid'] .doc-figure-items[data-slide] > li {
+      flex-basis: 18rem;
+    }
+    [data-doc-figure='pair'] .doc-figure-items[data-slide] {
+      display: grid;
+      overflow: visible;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .doc-figure-items[data-slide] {
+      scroll-behavior: smooth;
+    }
+  }
+  .doc-slide-arrow {
+    position: absolute;
+    top: 50%;
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ph-line);
+    border-radius: 999px;
+    color: var(--ph-ink);
+    background: var(--ph-surface);
+    box-shadow: var(--shadow-overlay);
+    transform: translateY(-50%);
+  }
+  .doc-slide-arrow:hover {
+    background: var(--ph-sunken);
+  }
+  .doc-slide-arrow:focus-visible {
+    outline: 2px solid var(--color-sky-400);
+    outline-offset: 2px;
+  }
+  .doc-slide-arrow:disabled {
+    visibility: hidden;
+  }
   .doc-media {
     display: block;
     width: 100%;

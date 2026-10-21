@@ -10,7 +10,15 @@ import {
 } from '@pharos/schema';
 import clsx from 'clsx';
 import { Check, ChevronLeft, ChevronRight, CircleCheck, Clock, Maximize2, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useViewData } from '../catalog/context';
 import { CopyButton } from '../catalog/copy';
@@ -327,6 +335,48 @@ function CompareFigure({
 }
 
 /**
+ * Where a sliding row of figure items stands: whether it is wider than its block, which item is
+ * at its start, and moving it by one item.
+ */
+function useSlideRow(count: number) {
+  const row = useRef<HTMLUListElement>(null);
+  const [state, setState] = useState({ wide: false, at: 0, end: false });
+  const measure = useCallback(() => {
+    const el = row.current;
+    if (!el) return;
+    const wide = el.scrollWidth > el.clientWidth + 1;
+    const items = [...el.children] as HTMLElement[];
+    const left = el.scrollLeft;
+    // The item whose start is closest to the row's start.
+    let at = 0;
+    items.forEach((item, i) => {
+      if (
+        Math.abs(item.offsetLeft - el.offsetLeft - left) <
+        Math.abs(items[at]!.offsetLeft - el.offsetLeft - left)
+      )
+        at = i;
+    });
+    const end = left + el.clientWidth >= el.scrollWidth - 2;
+    setState((s) => (s.wide === wide && s.at === at && s.end === end ? s : { wide, at, end }));
+  }, []);
+  useEffect(() => {
+    const el = row.current;
+    measure();
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure, count]);
+  const show = (index: number) => {
+    const el = row.current;
+    const item = el?.children[index] as HTMLElement | undefined;
+    if (!el || !item) return;
+    el.scrollTo?.({ left: item.offsetLeft - el.offsetLeft - 4 });
+  };
+  return { row, ...state, measure, show };
+}
+
+/**
  * Pictures, clips or sounds: one, a pair side by side, a grid, narrow phone shots, or two to
  * compare with a slider. Pictures load lazily and open full size; clips and sounds have their
  * controls and never play by themselves.
@@ -341,9 +391,29 @@ export function FigureView({ view, block }: { view: Entity<'view'>; block: Figur
     opener.current = from;
     setZoomed(index);
   };
+  const sliding = layout !== 'single' && block.items.length > 1;
+  const {
+    row: slideRow,
+    wide: slideWide,
+    at: slideAt,
+    end: slideEnd,
+    measure: measureSlide,
+    show: showSlide,
+  } = useSlideRow(block.items.length);
   const closeZoom = () => {
+    const last = zoomed;
     setZoomed(null);
-    requestAnimationFrame(() => opener.current?.focus());
+    requestAnimationFrame(() => {
+      // Back in the row at the picture the reader stopped at, focused there.
+      const button =
+        last !== null && sliding
+          ? slideRow.current?.children[last]?.querySelector<HTMLElement>('[data-zoom]')
+          : null;
+      if (button && last !== null) {
+        showSlide(last);
+        button.focus({ preventScroll: true });
+      } else opener.current?.focus();
+    });
   };
   const shown = zoomed !== null ? block.items[zoomed] : undefined;
   // The pictures (not clips or sounds) the full-size view moves between.
@@ -369,16 +439,54 @@ export function FigureView({ view, block }: { view: Entity<'view'>; block: Figur
           onZoom={zoom}
         />
       ) : (
-        <ul data-figure-items="" className="doc-figure-items">
-          {block.items.map((item, i) => (
-            <li key={`${i}-${item.src}`} data-media={figureMedia(item.src)} className="min-w-0">
-              <figure className="m-0">
-                <FigureMedia item={item} url={urls[i]!} onZoom={(from) => zoom(i, from)} />
-                <ItemCaption text={item.caption} />
-              </figure>
-            </li>
-          ))}
-        </ul>
+        <div className="relative">
+          <ul
+            ref={slideRow}
+            data-figure-items=""
+            data-slide={sliding || undefined}
+            onScroll={sliding ? measureSlide : undefined}
+            // Once it's wider than the block, a keyboard can scroll it too.
+            tabIndex={slideWide ? 0 : undefined}
+            aria-label={slideWide ? `${block.items.length} items, sliding sideways` : undefined}
+            className="doc-figure-items"
+          >
+            {block.items.map((item, i) => (
+              <li key={`${i}-${item.src}`} data-media={figureMedia(item.src)} className="min-w-0">
+                <figure className="m-0">
+                  <FigureMedia item={item} url={urls[i]!} onZoom={(from) => zoom(i, from)} />
+                  <ItemCaption text={item.caption} />
+                </figure>
+              </li>
+            ))}
+          </ul>
+          {slideWide && (
+            <>
+              <button
+                type="button"
+                aria-label="Previous"
+                disabled={slideAt === 0}
+                onClick={() => showSlide(slideAt - 1)}
+                className="doc-slide-arrow -left-3 max-sm:hidden"
+              >
+                <ChevronLeft aria-hidden className="size-5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next"
+                disabled={slideEnd}
+                onClick={() => showSlide(slideAt + 1)}
+                className="doc-slide-arrow -right-3 max-sm:hidden"
+              >
+                <ChevronRight aria-hidden className="size-5" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {slideWide && (
+        <p data-slide-count="" className="doc-caption mt-2 text-center tabular-nums">
+          {slideAt + 1} / {block.items.length}
+        </p>
       )}
       {block.caption && (
         <div className="doc-caption doc-caption-md doc-figure-caption">

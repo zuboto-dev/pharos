@@ -639,6 +639,34 @@ describe('figures (R15)', () => {
     expect(document.querySelector('[data-zoom-count]')).toBeNull();
   });
 
+  it('several items slide in one row; arrows and a count once it is wider than the block', () => {
+    const proto = HTMLElement.prototype;
+    const widths = vi.spyOn(proto, 'scrollWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.hasAttribute('data-slide') ? 900 : 0;
+    });
+    vi.spyOn(proto, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-slide') ? 400 : 0;
+    });
+    showDoc();
+    const row = block('phones').querySelector<HTMLElement>('[data-figure-items]')!;
+    expect(row.hasAttribute('data-slide')).toBe(true);
+    expect(row.getAttribute('tabindex')).toBe('0');
+    expect(block('phones').querySelector('[data-slide-count]')?.textContent).toBe('1 / 3');
+    expect(within(block('phones')).getByRole('button', { name: 'Previous' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    const scrollTo = vi.fn();
+    row.scrollTo = scrollTo;
+    fireEvent.click(within(block('phones')).getByRole('button', { name: 'Next' }));
+    expect(scrollTo).toHaveBeenCalled();
+    // One picture doesn't slide.
+    expect(block('chime').querySelector('[data-slide]')).toBeNull();
+    widths.mockRestore();
+  });
+
   it('compare: two pictures with an accessible slider between them', () => {
     showDoc();
     const slide = block('slide');

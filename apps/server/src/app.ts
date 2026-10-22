@@ -592,9 +592,18 @@ export function createApp(
   });
   // What agents landed since the owner last looked at the desk; opening the desk moves the mark.
   api.get('/desk/landed', (c) => c.json(landedSince(store)));
-  api.put('/desk/seen', (c) => {
+  api.put('/desk/seen', async (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Only the owner marks the desk seen');
-    return c.json({ seen: markDeskSeen(store) });
+    // The revision the desk showed (GET /desk/landed's `until`); an empty body marks the latest.
+    const text = await c.req.text();
+    let json: unknown = {};
+    try {
+      if (text.trim()) json = JSON.parse(text);
+    } catch {
+      throw new PharosError('invalid', 'The body must be JSON: {"revision"?: number}');
+    }
+    const body = z.object({ revision: z.number().int().nonnegative().optional() }).parse(json);
+    return c.json({ seen: markDeskSeen(store, body.revision) });
   });
   api.get('/runs', (c) => {
     const q = c.req.query();

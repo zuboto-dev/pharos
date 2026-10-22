@@ -233,6 +233,9 @@ export class TerminalSessions {
   private end(session: TerminalSession, now = false): void {
     if (this.sessions.get(session.projectId) === session) this.sessions.delete(session.projectId);
     session.clients.clear();
+    // An agent that already exited has nothing left to stop, and its pid may belong to another
+    // program by now: never signal it (as `sweep` drops an exited session without a signal).
+    if (session.exited) return;
     const pid = session.pty.pid;
     const signal = (sig: NodeJS.Signals) => {
       try {

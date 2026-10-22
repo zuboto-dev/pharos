@@ -588,3 +588,44 @@ describe('DecisionBlock in dark mode', () => {
     expect(contrastIssues(chosen.container, 'dark')).toEqual([]);
   });
 });
+
+describe('a decision in the details panel', () => {
+  function panel(decision: Entity<'decision'>) {
+    const apply = vi.fn<ViewActions['apply']>(async () => ({
+      ok: true,
+      revision: 10,
+      created: {},
+    }));
+    render(
+      <ViewDataProvider
+        data={{ ...base, decisions: [...base.decisions, decision] }}
+        version={1}
+        actions={{ apply, open: vi.fn() }}
+      >
+        <DetailDrawer target={{ entity: decision.id }} onClose={() => {}} />
+      </ViewDataProvider>,
+    );
+    return { apply };
+  }
+
+  it('is answered there: choose an option, write another answer or decide later', () => {
+    const { apply } = panel(proposal());
+    expect(screen.getByText('Readers found the next step faster')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Write another answer/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Decide later/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Checklist' }));
+    expect(apply.mock.calls[0]![0]).toBe('Choose “Checklist”: Which empty state should pages use?');
+    expect(apply.mock.calls[0]![1][0]).toMatchObject({
+      op: 'update',
+      id: 'dec_empty',
+      data: { chosenOptionId: 'b', status: 'accepted', decidedById: ALEX.id },
+    });
+  });
+
+  it('shows a choice once, with a way to change it', () => {
+    panel(proposal({ chosenOptionId: 'a', status: 'accepted', decidedById: ALEX.id }));
+    expect(screen.getByText('Picture and one line', { selector: 'span' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Change/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Choose Checklist' })).toBeNull();
+  });
+});

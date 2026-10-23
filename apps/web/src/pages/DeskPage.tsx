@@ -368,6 +368,15 @@ export function DeskPage() {
   const desk = useResource<Desk>('/api/desk');
   const { reload } = desk;
   const [notice, setNotice] = useState<string | null>(null);
+  const [deskView, setDeskViewState] = useState(loadDeskView);
+  const setDeskView = (next: DeskView) => {
+    setDeskViewState(next);
+    try {
+      localStorage.setItem(DESK_VIEW_KEY, JSON.stringify(next));
+    } catch {
+      // Not remembered: fine.
+    }
+  };
   // Anyone's change can open or close an item; runs aren't revisions, so look again each minute.
   useRevisionEvents(() => reload());
   useEffect(() => {
@@ -380,10 +389,17 @@ export function DeskPage() {
   };
   if (desk.status === 'error') return <LoadError notFound={false} what="Desk" />;
   const data = desk.data;
-  const fresh = data?.items.filter((i) => !i.old) ?? [];
-  const overdue = fresh.filter((i) => i.overdue);
-  const today = fresh.filter((i) => !i.overdue);
-  const old = data?.items.filter((i) => i.old) ?? [];
+  const all = data?.items ?? [];
+  // A project that no longer has items shows them all again.
+  const view =
+    deskView.project && !all.some((i) => i.projectId === deskView.project)
+      ? { ...deskView, project: null }
+      : deskView;
+  const arranged = arrangeDesk(all, view);
+  const fresh = all.filter((i) => !i.old);
+  const overdue = arranged.filter((i) => !i.old && i.overdue);
+  const today = arranged.filter((i) => !i.old && !i.overdue);
+  const old = arranged.filter((i) => i.old);
   const minutes = fresh.reduce((sum, i) => sum + (i.minutes ?? 0), 0);
   const section = (title: string, items: DeskItem[], tone?: 'warn') =>
     items.length > 0 && (
@@ -438,6 +454,10 @@ export function DeskPage() {
           </ul>
         </section>
       )}
+      {all.length > 1 && <DeskControls items={all} view={view} onView={setDeskView} />}
+      {view.project && !overdue.length && !today.length && (
+        <p className="text-sm text-muted">Nothing from this project needs you today.</p>
+      )}
       {section('Waiting more than two days', overdue, 'warn')}
       {section('Today', today)}
       <Landed />
@@ -453,6 +473,117 @@ export function DeskPage() {
           </ul>
         </details>
       )}
+    </div>
+  );
+}
+
+const DESK_VIEW_KEY = 'pharos-desk-view';
+
+/** How the desk orders each section: the server's order (gates, then waiting longest) or another. */
+export const DESK_SORTS = {
+  waiting: 'Waiting longest',
+  newest: 'Newest',
+  quickest: 'Quickest first',
+} as const;
+export type DeskSort = keyof typeof DESK_SORTS;
+
+/** The desk's filter and order, remembered per browser. */
+type DeskView = { project: string | null; sort: DeskSort };
+
+function loadDeskView(): DeskView {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DESK_VIEW_KEY) ?? '{}') as Partial<DeskView>;
+    return {
+      project: typeof saved.project === 'string' ? saved.project : null,
+      sort: saved.sort && saved.sort in DESK_SORTS ? saved.sort : 'waiting',
+    };
+  } catch {
+    return { project: null, sort: 'waiting' };
+  }
+}
+
+/** One project's items (or all), in the chosen order; the server's order breaks ties. */
+export function arrangeDesk(items: DeskItem[], view: DeskView): DeskItem[] {
+  const shown = view.project ? items.filter((i) => i.projectId === view.project) : items;
+  if (view.sort === 'waiting') return shown;
+  const order = new Map(items.map((item, index) => [item.id, index]));
+  const tie = (a: DeskItem, b: DeskItem) => order.get(a.id)! - order.get(b.id)!;
+  return [...shown].sort((a, b) =>
+    view.sort === 'newest'
+      ? b.since.localeCompare(a.since) || tie(a, b)
+      : (a.minutes ?? Infinity) - (b.minutes ?? Infinity) || tie(a, b),
+  );
+}
+
+/** The projects with items on the desk, with how many each (today's, not the old ones). */
+function deskProjects(items: DeskItem[]): { id: string; name: string; count: number }[] {
+  const projects = new Map<string, { id: string; name: string; count: number }>();
+  for (const item of items) {
+    if (!item.projectId) continue;
+    const entry = projects.get(item.projectId) ?? {
+      id: item.projectId,
+      name: item.project ?? item.projectId,
+      count: 0,
+    };
+    if (!item.old) entry.count += 1;
+    projects.set(item.projectId, entry);
+  }
+  return [...projects.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+const CHIP =
+  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs focus-visible:outline-2 focus-visible:outline-sky-400';
+
+/** Filter by project and choose the order. */
+function DeskControls({
+  items,
+  view,
+  onView,
+}: {
+  items: DeskItem[];
+  view: DeskView;
+  onView: (view: DeskView) => void;
+}) {
+  const projects = deskProjects(items);
+  const chip = (id: string | null, label: string, count: number) => (
+    <li key={id ?? ''}>
+      <button
+        type="button"
+        aria-pressed={view.project === id}
+        onClick={() => onView({ ...view, project: id })}
+        className={clsx(
+          CHIP,
+          view.project === id
+            ? 'border-accent bg-accent/10 text-ink'
+            : 'border-line bg-surface text-muted hover:text-ink',
+        )}
+      >
+        {label} <span className="tabular-nums text-faint">{count}</span>
+      </button>
+    </li>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {projects.length > 1 && (
+        <ul aria-label="Project" className="flex flex-wrap gap-1.5">
+          {chip(null, 'All', items.filter((i) => !i.old).length)}
+          {projects.map((p) => chip(p.id, p.name, p.count))}
+        </ul>
+      )}
+      <label className="ml-auto flex items-center gap-1.5 text-xs text-muted">
+        Sort
+        <select
+          value={view.sort}
+          onChange={(e) => onView({ ...view, sort: e.target.value as DeskSort })}
+          className="rounded-control border border-line bg-surface px-2 py-1 text-xs text-ink"
+        >
+          {Object.entries(DESK_SORTS).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

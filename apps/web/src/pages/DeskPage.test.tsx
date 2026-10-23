@@ -2,7 +2,7 @@ import type { Desk } from '@pharos/schema';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DeskLink, DeskPage, formatMinutes, waited } from './DeskPage';
+import { DeskLink, DeskPage, arrangeDesk, formatMinutes, waited, type DeskSort } from './DeskPage';
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const DESK: Desk = {
@@ -130,6 +130,39 @@ describe('the desk page (R16)', () => {
       '/projects/p2/views/view_1#sheet-s',
     );
     expect(screen.getByRole('region', { name: 'Runs' }).textContent).toContain('Night run');
+  });
+
+  it('filters by project and sorts, remembering both', async () => {
+    localStorage.clear();
+    await show();
+    const projects = screen.getByRole('list', { name: 'Project' });
+    expect(
+      within(projects).getByRole('button', { name: 'All 2' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    fireEvent.click(within(projects).getByRole('button', { name: 'Bike 0' }));
+    expect(screen.queryByText('Which seeds?')).toBeNull();
+    expect(screen.getByText('Nothing from this project needs you today.')).toBeTruthy();
+    // The header still counts everything.
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe(
+      'Needs you: 2 items, about 5 min',
+    );
+    fireEvent.click(within(projects).getByRole('button', { name: 'All 2' }));
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'quickest' } });
+    expect(JSON.parse(localStorage.getItem('pharos-desk-view')!)).toEqual({
+      project: null,
+      sort: 'quickest',
+    });
+    localStorage.clear();
+  });
+
+  it('orders by waiting, newest or quickest, keeping the server’s order for ties', () => {
+    const items = DESK.items;
+    const ids = (sort: DeskSort, project: string | null = null) =>
+      arrangeDesk(items, { project, sort }).map((i) => i.id);
+    expect(ids('waiting')).toEqual(['dec_1', 'task_1', 'view_1#s']);
+    expect(ids('newest')).toEqual(['task_1', 'dec_1', 'view_1#s']);
+    expect(ids('quickest')).toEqual(['dec_1', 'task_1', 'view_1#s']);
+    expect(ids('waiting', 'p2')).toEqual(['view_1#s']);
   });
 
   it('answers a choice in place, asks for the note an option needs, marks a task done', async () => {

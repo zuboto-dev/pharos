@@ -478,6 +478,8 @@ export function createApp(
       const terminal = info.terminal!;
       let size = terminalSize(c.req.query('cols'), c.req.query('rows'));
       let client: TerminalClient | undefined;
+      // The session this panel is on (its project's folder), set when it attaches.
+      let key: string | undefined;
       return {
         onOpen(_event, ws) {
           client = {
@@ -491,7 +493,7 @@ export function createApp(
             close: (code, reason) => ws.close(code, reason),
           };
           try {
-            terminal.attach(projectId, client, size);
+            key = terminal.attach(projectId, client, size).key;
           } catch (error) {
             console.error('[pharos] Could not start the agent terminal:', error);
             client.send({ t: 'error', message: 'The agent could not start' });
@@ -501,11 +503,19 @@ export function createApp(
         onMessage(event, ws) {
           try {
             const message = TerminalClientMessage.parse(JSON.parse(String(event.data)));
-            if (message.t === 'i') terminal.sessions?.input(projectId, message.d);
-            else if (message.t === 'r') {
+            if (message.t === 'i') {
+              if (key) terminal.sessions?.input(key, message.d);
+            } else if (message.t === 'r') {
               size = terminalSize(message.cols, message.rows);
-              terminal.sessions?.resize(projectId, size);
-            } else if (message.t === 'restart') terminal.restart(projectId, size);
+              if (key) terminal.sessions?.resize(key, size);
+            } else if (message.t === 'restart' && client) {
+              const session = terminal.restart(projectId, size);
+              // The project's folder changed since this panel attached: move it to the new one.
+              if (session.key !== key) {
+                if (key) terminal.sessions?.detach(key, client);
+                key = terminal.attach(projectId, client, size).key;
+              }
+            }
           } catch (error) {
             console.error('[pharos] A terminal message failed:', error);
             if (error instanceof SyntaxError || error instanceof z.ZodError)
@@ -514,7 +524,7 @@ export function createApp(
         },
         onClose() {
           try {
-            if (client) terminal.sessions?.detach(projectId, client);
+            if (client && key) terminal.sessions?.detach(key, client);
           } catch (error) {
             console.error('[pharos] Could not detach a terminal panel:', error);
           }

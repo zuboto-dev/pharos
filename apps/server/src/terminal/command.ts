@@ -1,5 +1,5 @@
 import { mkdirSync, statSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import {
   AGENT_PRESETS,
   PRESET_LABELS,
@@ -50,18 +50,46 @@ export function terminalCommand(
   };
 }
 
+/** A project the panel's agent works for. */
+export type TerminalProject = { id: string; name: string };
+
 /**
- * Which project the panel's agent works for. Several projects can share a repository folder, and
- * the agent can't tell them apart from the folder: without this it guesses, or asks.
+ * The projects whose repository is this folder: they share one panel session (two agents in one
+ * checkout would overwrite each other's edits). Empty for a folder of the agent's own.
  */
-export function terminalBrief(store: Store, projectId: string, serverUrl: string): string {
-  const project = store.get(projectId);
-  const name = project?.type === 'project' ? (project as Entity<'project'>).data.name : undefined;
-  const which = name ? `${JSON.stringify(name)} (${projectId})` : projectId;
+export function folderProjects(store: Store, cwd: string): TerminalProject[] {
+  const repositories = new Set(
+    store
+      .list('repository')
+      .filter(
+        (r) => r.data.path && isAbsolute(r.data.path) && resolve(r.data.path) === resolve(cwd),
+      )
+      .map((r) => r.id),
+  );
+  if (!repositories.size) return [];
+  return store
+    .list('project')
+    .filter((p) => p.data.repositoryId && repositories.has(p.data.repositoryId))
+    .map((p) => ({ id: p.id, name: p.data.name }));
+}
+
+/**
+ * Which project the panel's agent works for, or, in a folder several projects share, which ones
+ * share it and how to tell them apart: the agent can't tell from the folder alone.
+ */
+export function terminalBrief(projects: TerminalProject[], serverUrl: string): string {
+  const named = (p: TerminalProject) => `${JSON.stringify(p.name)} (${p.id})`;
+  if (projects.length === 1)
+    return (
+      `You are running in the agent panel of the Pharos project ${named(projects[0]!)}, at ` +
+      `${serverUrl}. "This project" means that Pharos project unless the user names another one.`
+    );
   return (
-    `You are running in the agent panel of the Pharos project ${which}, opened from its page in ` +
-    `Pharos at ${serverUrl}. "This project" means that Pharos project unless the user names ` +
-    `another one; other Pharos projects may share this folder, so read and update that one.`
+    `You are running in the agent panel that the Pharos projects ${projects.map(named).join(', ')} ` +
+    `share, at ${serverUrl}: their code is in this folder. The user may talk about any of them. ` +
+    `A reference they paste from a page ("[Pharos: …]") names a view, block or task, which ` +
+    `belongs to one project; when it isn't clear which project they mean, ask before changing ` +
+    `anything in Pharos.`
   );
 }
 
@@ -87,12 +115,14 @@ function isDirectory(path: string): boolean {
 /**
  * Where the agent starts: the project's repository folder when its repository records a local
  * path that is an existing folder, else a folder of its own under the Pharos home
- * (`<home>/agent-home/<projectId>`), made on demand. Never a folder from the client.
+ * (`<home>/agent-home/<projectId>`), made on demand (unless `make` is false). Never a folder
+ * from the client.
  */
 export function terminalCwd(
   store: Store,
   projectId: string,
   home: string,
+  make = true,
 ): { cwd: string; kind: 'repository' | 'home' } {
   const project = store.get(projectId);
   const repositoryId =
@@ -102,19 +132,19 @@ export function terminalCwd(
     repository?.type === 'repository' ? (repository as Entity<'repository'>).data.path : undefined;
   if (path && isAbsolute(path) && isDirectory(path)) return { cwd: path, kind: 'repository' };
   const cwd = join(home, 'agent-home', projectId.replace(/[^A-Za-z0-9_-]/g, '_'));
-  mkdirSync(cwd, { recursive: true });
+  if (make) mkdirSync(cwd, { recursive: true });
   return { cwd, kind: 'home' };
 }
 
 /**
  * The environment of the agent: PATH and HOME of the server (and the few variables a terminal
- * program expects from the login), the terminal type, and where Pharos is and which project
- * (`PHAROS_PROJECT_ID`). Nothing from the client.
+ * program expects from the login), the terminal type, and where Pharos is and which projects
+ * (`PHAROS_PROJECT_IDS`, comma-separated, as for answering). Nothing from the client.
  */
 export function terminalEnv(
   serverEnv: NodeJS.ProcessEnv,
   serverUrl: string,
-  projectId?: string,
+  projectIds: string[] = [],
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG']) {
@@ -125,6 +155,6 @@ export function terminalEnv(
   env.TERM = 'xterm-256color';
   env.COLORTERM = 'truecolor';
   env.PHAROS_URL = serverUrl;
-  if (projectId) env.PHAROS_PROJECT_ID = projectId;
+  if (projectIds.length) env.PHAROS_PROJECT_IDS = projectIds.join(',');
   return env;
 }

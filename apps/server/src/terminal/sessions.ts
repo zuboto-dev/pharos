@@ -66,7 +66,7 @@ export class TerminalSession {
   exited = false;
 
   constructor(
-    readonly projectId: string,
+    readonly key: string,
     readonly launch: TerminalLaunch,
     readonly pty: Pty,
   ) {}
@@ -114,8 +114,9 @@ export class TerminalSession {
 }
 
 /**
- * The agent terminals (R17): one session per project, reused when its panel reopens (the
- * conversation survives closing the panel), never shared across projects. A session is killed
+ * The agent terminals (R17): one session per key (the service uses the working folder, so
+ * projects that share a repository folder share one agent), reused when its panel reopens (the
+ * conversation survives closing the panel). A session is killed
  * with its whole process group when the server stops and after `idleMs` with no panel attached
  * (`sweep`, run every minute by the server; tests call it with a fake clock).
  *
@@ -141,8 +142,8 @@ export class TerminalSessions {
     this.killGroup = options.killGroup ?? ((pid, signal) => process.kill(-pid, signal));
   }
 
-  get(projectId: string): TerminalSession | undefined {
-    const session = this.sessions.get(projectId);
+  get(key: string): TerminalSession | undefined {
+    const session = this.sessions.get(key);
     return session && !session.exited ? session : undefined;
   }
 
@@ -155,17 +156,17 @@ export class TerminalSessions {
    * running. A reattached panel gets the recent output first.
    */
   attach(
-    projectId: string,
+    key: string,
     launch: () => TerminalLaunch,
     client: TerminalClient,
     size: { cols: number; rows: number },
   ): TerminalSession {
-    let session = this.get(projectId);
+    let session = this.get(key);
     const replay = Boolean(session);
     if (!session) {
-      const exited = this.sessions.get(projectId);
+      const exited = this.sessions.get(key);
       // An exited session's panels move to the new one.
-      session = this.start(projectId, launch(), size);
+      session = this.start(key, launch(), size);
       for (const other of exited?.clients ?? []) {
         session.clients.add(other);
         other.send(startMessage(session, false));
@@ -185,31 +186,31 @@ export class TerminalSessions {
   }
 
   /** A panel went away (closed, reloaded, lost its connection). */
-  detach(projectId: string, client: TerminalClient): void {
-    const session = this.sessions.get(projectId);
+  detach(key: string, client: TerminalClient): void {
+    const session = this.sessions.get(key);
     if (!session?.clients.delete(client)) return;
     if (session.clients.size === 0) session.detachedAt = this.now();
   }
 
   /** Typing in the panel: to the project's running session only. */
-  input(projectId: string, data: string): void {
-    this.get(projectId)?.pty.write(data);
+  input(key: string, data: string): void {
+    this.get(key)?.pty.write(data);
   }
 
-  resize(projectId: string, size: { cols: number; rows: number }): void {
-    this.get(projectId)?.pty.resize(size.cols, size.rows);
+  resize(key: string, size: { cols: number; rows: number }): void {
+    this.get(key)?.pty.resize(size.cols, size.rows);
   }
 
   /** Ends the project's session and starts a new one for its attached panels (the restart button). */
   restart(
-    projectId: string,
+    key: string,
     launch: () => TerminalLaunch,
     size: { cols: number; rows: number },
   ): TerminalSession {
-    const old = this.sessions.get(projectId);
+    const old = this.sessions.get(key);
     const clients = old ? [...old.clients] : [];
     if (old) this.end(old);
-    const session = this.start(projectId, launch(), size);
+    const session = this.start(key, launch(), size);
     for (const client of clients) {
       session.clients.add(client);
       client.send(startMessage(session, false));
@@ -223,14 +224,14 @@ export class TerminalSessions {
     const ended: string[] = [];
     const now = this.now();
     for (const session of [...this.sessions.values()])
-      if (session.exited && session.clients.size === 0) this.sessions.delete(session.projectId);
+      if (session.exited && session.clients.size === 0) this.sessions.delete(session.key);
       else if (
         session.clients.size === 0 &&
         session.detachedAt !== undefined &&
         now - session.detachedAt >= this.idleMs
       ) {
         this.end(session);
-        ended.push(session.projectId);
+        ended.push(session.key);
       }
     return ended;
   }
@@ -241,7 +242,7 @@ export class TerminalSessions {
   }
 
   private start(
-    projectId: string,
+    key: string,
     launch: TerminalLaunch,
     size: { cols: number; rows: number },
   ): TerminalSession {
@@ -251,8 +252,8 @@ export class TerminalSessions {
       cols: size.cols,
       rows: size.rows,
     });
-    const session = new TerminalSession(projectId, launch, pty);
-    this.sessions.set(projectId, session);
+    const session = new TerminalSession(key, launch, pty);
+    this.sessions.set(key, session);
     pty.onData((data) => {
       try {
         session.record(data);
@@ -275,7 +276,7 @@ export class TerminalSessions {
 
   /** Stops a session's whole process group: SIGHUP and SIGTERM, then SIGKILL if it lingers. */
   private end(session: TerminalSession, now = false): void {
-    if (this.sessions.get(session.projectId) === session) this.sessions.delete(session.projectId);
+    if (this.sessions.get(session.key) === session) this.sessions.delete(session.key);
     session.clients.clear();
     const pid = session.pty.pid;
     const signal = (sig: NodeJS.Signals) => {

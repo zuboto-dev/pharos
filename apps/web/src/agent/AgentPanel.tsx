@@ -26,6 +26,8 @@ export type TerminalStatus = {
   message?: string;
   agent?: { id: 'claude' | 'codex'; label: string };
   running: boolean;
+  /** The other projects in this project's folder: one agent works for all of them. */
+  sharedWith?: { id: string; name: string }[];
 };
 
 /** Whether this project's page can show the agent terminal, and why not. */
@@ -180,6 +182,7 @@ export function AgentPanel({
   );
   const drag = useRef<{ x: number; width: number } | null>(null);
   const label = status.agent?.label ?? 'Agent';
+  const shared = status.sharedWith?.map((p) => p.name).join(', ');
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     drag.current = { x: e.clientX, width };
@@ -227,7 +230,14 @@ export function AgentPanel({
       <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line px-3">
         <Tooltip
           label={`${label}, connected to this Pharos`}
-          detail={state.detail ? `Working folder: ${state.detail}` : undefined}
+          detail={
+            [
+              state.detail && `Working folder: ${state.detail}`,
+              shared && `The same agent works for ${shared}, which share this folder.`,
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
         >
           <span
             tabIndex={0}
@@ -236,6 +246,7 @@ export function AgentPanel({
           >
             <Bot className="size-4 shrink-0 text-accent" aria-hidden />
             <span className="truncate">{label}</span>
+            {shared && <span className="truncate font-normal text-faint">· also {shared}</span>}
             {state.state === 'connecting' && (
               <Loader2 className="size-3.5 shrink-0 animate-spin text-faint" aria-hidden />
             )}

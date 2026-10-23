@@ -42,15 +42,15 @@ The panel starts a process from the browser, so:
 - **Never an agent.** A request declaring an agent author (`X-Pharos-Author` other than `human:…`)
   is refused, on the status route and the socket.
 - **Fixed commands.** Only the two presets, run without a shell from the path found at start:
-  - Claude Code: `claude --mcp-config <PHAROS_HOME>/agent-mcp.json --strict-mcp-config
---append-system-prompt <brief>` (interactive; only this Pharos as MCP server, so a "pharos"
+  - Claude Code: `claude --mcp-config <PHAROS_HOME>/agent-mcp.json --strict-mcp-config` and
+    `--append-system-prompt <brief>` (interactive; only this Pharos as MCP server, so a "pharos"
     entry in the owner's own config can't point it at another Pharos).
-  - Codex: `codex -c mcp_servers.pharos.url="http://localhost:<port>/mcp" -c
-developer_instructions=<brief>` (interactive; overrides a "pharos" entry, and any
+  - Codex: `codex -c mcp_servers.pharos.url="http://localhost:<port>/mcp"` and
+    `-c developer_instructions=<brief>` (interactive; overrides a "pharos" entry, and any
     `developer_instructions`, of the owner's own config).
-  - The brief (`terminalBrief`) names the project the panel belongs to, by name and id: several
-    projects can share a repository folder, and without it the agent couldn't tell which one
-    "this project" is.
+  - The brief (`terminalBrief`) names the projects the session works for, by name and id: one,
+    or all the projects whose repository is that folder (they share it, below), with a request
+    to ask which one when it isn't clear.
     The client sends only typed input, a size, or "restart"; any other message closes the socket.
     `PHAROS_AGENT_COMMAND` doesn't apply here (it is for headless answering). With neither CLI
     installed the panel says so.
@@ -59,13 +59,17 @@ developer_instructions=<brief>` (interactive; overrides a "pharos" entry, and an
   made on demand. Never a folder from the client. (A repository's `path` can be written by agents
   too: the panel then starts there, which is no more than any agent writing to the store can do.)
 - **Environment.** PATH and HOME of the server, plus USER, LOGNAME, SHELL, TMPDIR and LANG (which
-  terminal programs and the macOS keychain expect), `TERM=xterm-256color`, `COLORTERM=truecolor`
-  `PHAROS_URL` and `PHAROS_PROJECT_ID`. Nothing from the client, no other server variables.
-- **Sessions.** One per project, never shared across projects, reused when the panel reopens (the
-  last 256 KB of output is replayed, so the conversation is still there; once older output is
-  dropped, the replay starts at an escape sequence and is preceded by the private modes the agent
-  set before it, so Claude Code's full screen and mouse reports survive a long conversation). Killed with its whole
-  process group (SIGHUP, SIGTERM, then SIGKILL) when the server stops (`SIGTERM`, `SIGINT`,
+  terminal programs and the macOS keychain expect), `TERM=xterm-256color`, `COLORTERM=truecolor`,
+  `PHAROS_URL` and `PHAROS_PROJECT_IDS` (comma-separated). Nothing from the client, no other
+  server variables.
+- **Sessions.** One per working folder: projects whose repository is the same folder share one
+  agent (two agents in one checkout would overwrite each other's edits); the panel header says
+  "also <project>", and Restart restarts it for all of them. A project without a folder has its
+  own. Reused when the panel reopens (the last 256 KB of output is replayed, so the conversation
+  is still there; once older output is dropped, the replay starts at an escape sequence and is
+  preceded by the private modes the agent set before it, so Claude Code's full screen and mouse
+  reports survive a long conversation). Killed with its whole process group (SIGHUP, SIGTERM,
+  then SIGKILL) when the server stops (`SIGTERM`, `SIGINT`,
   `SIGHUP`, exit) and after 30 minutes with no panel attached. Restart ends the session and starts
   a new one.
 - **The server never dies from a session.** Output, exit, socket and sweep callbacks catch and log;

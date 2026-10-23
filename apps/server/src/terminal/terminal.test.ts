@@ -9,6 +9,7 @@ import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import {
+  folderProjects,
   terminalBrief,
   terminalCommand,
   terminalCwd,
@@ -200,12 +201,21 @@ describe('what the terminal runs', () => {
       '-c',
       `developer_instructions=${JSON.stringify(brief)}`,
     ]);
-    // Two projects in one folder get different briefs.
+    // One project, or the projects that share a folder.
+    expect(terminalBrief([{ id: 'prj_1', name: 'Garden' }], 'http://localhost:4490')).toContain(
+      'Pharos project "Garden" (prj_1)',
+    );
     const a = project('Alpha', home);
     const b = project('Beta', home);
-    expect(terminalBrief(store, a, 'http://localhost:4490')).toContain(`"Alpha" (${a})`);
-    expect(terminalBrief(store, b, 'http://localhost:4490')).toContain(`"Beta" (${b})`);
-    expect(terminalEnv({}, 'http://localhost:4490', a).PHAROS_PROJECT_ID).toBe(a);
+    project('Elsewhere', join(home, 'not-there'));
+    expect(folderProjects(store, home)).toEqual([
+      { id: a, name: 'Alpha' },
+      { id: b, name: 'Beta' },
+    ]);
+    const shared = terminalBrief(folderProjects(store, home), 'http://localhost:4490');
+    expect(shared).toContain(`"Alpha" (${a}), "Beta" (${b})`);
+    expect(shared).toContain('ask before changing');
+    expect(terminalEnv({}, 'http://localhost:4490', [a, b]).PHAROS_PROJECT_IDS).toBe(`${a},${b}`);
   });
 
   it('follows the agent chosen in Settings while it is installed', () => {
@@ -379,6 +389,37 @@ describe('the terminal routes', () => {
     });
   }
 
+  it('gives projects that share a folder one agent, told about all of them', () => {
+    const terminal = service();
+    const a = project('Alpha', home);
+    const b = project('Beta', home);
+    const alone = project('Plain');
+    const first = client();
+    const second = client();
+    terminal.attach(a, first, { cols: 80, rows: 24 });
+    terminal.attach(b, second, { cols: 80, rows: 24 });
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0]!.options.cwd).toBe(home);
+    expect(spawned[0]!.args.at(-1)).toContain(`"Alpha" (${a}), "Beta" (${b})`);
+    expect(spawned[0]!.options.env.PHAROS_PROJECT_IDS).toBe(`${a},${b}`);
+    expect(second.got[0]).toMatchObject({ t: 'start', replay: true });
+    spawned[0]!.emit('hi');
+    expect(first.got).toContainEqual({ t: 'o', d: 'hi' });
+    expect(second.got).toContainEqual({ t: 'o', d: 'hi' });
+    expect(terminal.status(a)).toMatchObject({
+      running: true,
+      sharedWith: [{ id: b, name: 'Beta' }],
+    });
+    // Restarting from one restarts it for both; a project with a folder of its own stays apart.
+    terminal.restart(b, { cols: 80, rows: 24 });
+    expect(spawned).toHaveLength(2);
+    expect(first.got.at(-1)).toMatchObject({ t: 'start', replay: false });
+    terminal.attach(alone, client(), { cols: 80, rows: 24 });
+    expect(spawned).toHaveLength(3);
+    expect(spawned[2]!.args.at(-1)).toContain(`"Plain" (${alone})`);
+    expect(terminal.status(alone).sharedWith).toBeUndefined();
+  });
+
   it('says whether the terminal is available here, and why not', async () => {
     const id = project();
     const app = createApp(store, undefined, undefined, {
@@ -474,7 +515,7 @@ describe('the terminal routes', () => {
       '--append-system-prompt',
     ]);
     expect(pty.args[4]).toContain(`(${id})`);
-    expect(pty.options.env.PHAROS_PROJECT_ID).toBe(id);
+    expect(pty.options.env.PHAROS_PROJECT_IDS).toBe(id);
     expect(pty.options.cwd).toBe(join(home, 'pharos', 'agent-home', id));
     expect(pty.size).toEqual([90, 20]);
     ws.send(JSON.stringify({ t: 'i', d: 'hello' }));
@@ -488,7 +529,7 @@ describe('the terminal routes', () => {
     ws.send(JSON.stringify({ t: 'run', file: '/bin/sh' }));
     await new Promise((resolve) => ws.once('close', resolve));
     expect(spawned).toHaveLength(1);
-    await until(() => terminal.sessions!.get(id)!.clients.size === 0);
-    expect(terminal.sessions!.get(id)!.clients.size).toBe(0);
+    await until(() => terminal.sessions!.get(terminal.key(id))!.clients.size === 0);
+    expect(terminal.sessions!.get(terminal.key(id))!.clients.size).toBe(0);
   });
 });

@@ -281,6 +281,12 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
 - Agents never write their own permissions: `/api/permissions*` needs `X-Pharos-Author: human:…`
   from the Pharos page, writes only rules it suggested, and has no MCP tool. Tests use a temp home;
   `PHAROS_CLAUDE_HOME` points a test server at fixture transcripts. Never test against `~/.claude`.
+- Live asks: `agents/claude/hooks/permission-ask.mjs` is a Claude Code `PermissionRequest` hook
+  (installed only by the owner with `pnpm agents install`, into `~/.claude/settings.json` after a
+  backup; `pnpm agents remove` takes it out). It posts the prompt to `POST /api/permission-asks`
+  (no browser headers allowed), waits on `GET /api/permission-asks/:id/wait`, and prints allow or
+  deny; otherwise exit 2 leaves Claude Code's own prompt. `permissions/asks.ts` keeps asks in
+  memory, notifies (a desk gate), and takes the owner's answer on `/api/permissions/asks/:id/*`.
 
 ## Options
 

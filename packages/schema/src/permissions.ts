@@ -21,6 +21,10 @@ export const PERMISSION_ROUTES = {
   preview: '/api/permissions/preview',
   write: '/api/permissions/write',
   undo: '/api/permissions/undo',
+  /** Live asks for the owner (GET), and their answers (POST /:id/preview, /:id/answer). */
+  asks: '/api/permissions/asks',
+  /** Where the Claude Code hook reports a permission prompt (POST) and waits (GET /:id/wait). */
+  hook: '/api/permission-asks',
 } as const;
 
 /** How far back the counts go, and the shorter window behind "this week". */
@@ -40,6 +44,9 @@ export const PERMISSION_TARGETS: Record<PermissionTarget, { file: string; label:
 };
 
 /** What a settings file already says about a rule. */
+export const PERMISSION_RISKS = ['low', 'medium', 'high'] as const;
+export type PermissionRisk = (typeof PERMISSION_RISKS)[number];
+
 export type PermissionStatus = 'allowed' | 'denied' | 'ask' | 'not_set';
 
 /** Where a matching rule was found. */
@@ -71,6 +78,13 @@ export type PermissionSuggestion = {
   allowable: boolean;
   /** Why it can only be denied. */
   reason?: string;
+  /** What it does, in plain words ("Runs the project’s tests"). */
+  summary: string;
+  risk: PermissionRisk;
+  /** One line on why that risk. */
+  riskWhy: string;
+  /** Which routines or kinds of session asked ("/nightshift", "an interactive session"), most first. */
+  origins: { label: string; count: number }[];
 };
 
 export type PermissionFile = { path: string; exists: boolean; error?: string };
@@ -159,3 +173,71 @@ export type PermissionWriteInput = z.infer<typeof PermissionWriteInput>;
 export const PermissionUndoInput = z.strictObject({ id: z.string().min(1).max(64) });
 
 export type PermissionWriteResult = { preview: PermissionPreview; record: PermissionWriteRecord };
+
+// ---- Live asks (the PermissionRequest hook) ----
+
+/**
+ * What the Claude Code `PermissionRequest` hook (agents/claude/hooks/permission-ask.mjs) sends when
+ * an agent is about to ask the owner: the hook's own stdin, as Claude Code gives it.
+ */
+export const PermissionAskInput = z.object({
+  session_id: z.string().max(200).optional(),
+  transcript_path: z.string().max(4096).optional(),
+  cwd: z.string().min(1).max(4096),
+  hook_event_name: z.string().max(100).optional(),
+  permission_mode: z.string().max(100).optional(),
+  tool_name: z.string().min(1).max(300),
+  tool_input: z.unknown().optional(),
+  /** How long the hook waits for an answer (seconds); the card goes when it stops waiting. */
+  wait_seconds: z.number().min(0).max(110).optional(),
+});
+export type PermissionAskInput = z.infer<typeof PermissionAskInput>;
+
+export type PermissionAskStatus =
+  'waiting' | 'allowed_once' | 'allowed_always' | 'denied' | 'terminal' | 'expired';
+
+/** The hook's answer: allow or deny this call, or nothing (Claude Code's own prompt shows). */
+export type PermissionAskDecision = {
+  status: PermissionAskStatus;
+  behavior?: 'allow' | 'deny';
+  message?: string;
+};
+
+export type PermissionAsk = {
+  id: string;
+  at: string;
+  /** When the hook stops waiting and Claude Code asks in the terminal instead. */
+  expiresAt: string;
+  status: PermissionAskStatus;
+  answeredAt?: string;
+  folderId?: string;
+  folder: string;
+  displayFolder: string;
+  projects: string[];
+  projectId?: string;
+  /** Which agent: the routine ("/nightshift"), "an interactive session", "a subagent", … */
+  agent: string;
+  tool: string;
+  /** The command or target, one line, secrets masked. */
+  example: string;
+  rule: string;
+  summary: string;
+  risk: PermissionRisk;
+  riskWhy: string;
+  allowable: boolean;
+  reason?: string;
+  /** Whether "Allow always" can write a rule (a project folder, not the home folder). */
+  canAlwaysAllow: boolean;
+  /** The write behind "Allow always", for Undo. */
+  record?: PermissionWriteRecord;
+};
+
+export const PermissionAskAnswer = z.discriminatedUnion('answer', [
+  z.strictObject({
+    answer: z.literal('always'),
+    target: PermissionTarget.default('local'),
+    hash: z.string().min(1).max(128),
+  }),
+  z.strictObject({ answer: z.enum(['once', 'deny', 'terminal']) }),
+]);
+export type PermissionAskAnswer = z.infer<typeof PermissionAskAnswer>;

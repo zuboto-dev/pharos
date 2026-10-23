@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   PERMISSION_TARGETS,
   PERMISSION_WEEK_DAYS,
@@ -31,7 +31,15 @@ import {
   writeSettings,
   type SettingsRead,
 } from './settings-files.js';
-import { TranscriptCache, listTranscripts, projectFolder, type AskEvent } from './transcripts.js';
+import {
+  TranscriptCache,
+  isSubagentTranscript,
+  listTranscripts,
+  projectFolder,
+  readOrigin,
+  type AskEvent,
+} from './transcripts.js';
+import { explain } from './explain.js';
 
 /** What Pharos wrote, kept as an app setting (never a revision, never over MCP). */
 export const PERMISSION_WRITES_SETTING = 'permissions.writes';
@@ -69,6 +77,7 @@ type Tally = {
   ruleDenied: number;
   lastAt: number;
   examples: { at: number; text: string }[];
+  origins: Map<string, number>;
 };
 
 type FolderTally = {
@@ -132,12 +141,45 @@ export class PermissionService {
     for (const repo of repos) {
       const raw = repo.data.path?.trim();
       if (!raw) continue;
-      const path = (raw.startsWith('~/') ? join(this.home, raw.slice(2)) : raw).replace(/\/+$/, '');
+      const path = this.absolute(raw);
       if (!path.startsWith('/')) continue;
       const names = projects.filter((p) => p.data.repositoryId === repo.id).map((p) => p.data.name);
       out.set(path, [...(out.get(path) ?? []), ...(names.length ? names : [repo.data.name])]);
     }
     return out;
+  }
+
+  /** Where a session works: its project folder, the Pharos projects there, and how it shows. */
+  whereIs(cwd: string): {
+    folder: string;
+    display: string;
+    projects: string[];
+    projectId?: string;
+    folderPath?: string;
+    folderId?: string;
+  } {
+    const repos = this.repositories();
+    const path = this.folderOf(cwd, repos);
+    const shown = path ?? projectFolder(cwd);
+    let projectId: string | undefined;
+    if (path && repos.has(path)) {
+      const repo = this.store
+        .list('repository')
+        .find((r) => r.data.path && this.absolute(r.data.path) === path);
+      projectId = this.store.list('project').find((p) => p.data.repositoryId === repo?.id)?.id;
+    }
+    return {
+      folder: shown,
+      display: this.display(shown),
+      projects: path ? (repos.get(path) ?? []) : [],
+      ...(projectId ? { projectId } : {}),
+      ...(path && isDir(path) ? { folderPath: path, folderId: folderId(path) } : {}),
+    };
+  }
+
+  private absolute(raw: string): string {
+    const t = raw.trim();
+    return (t.startsWith('~/') ? join(this.home, t.slice(2)) : t).replace(/\/+$/, '');
   }
 
   /** One scan at a time; transcripts unchanged since the last one come from the cache. */
@@ -156,6 +198,11 @@ export class PermissionService {
     this.cache.retain(new Set(files.map((f) => f.path)));
     const folders = new Map<string, FolderTally>();
     const repoPaths = [...repos.keys()].sort((a, b) => b.length - a.length);
+    const origins = new Map<string, string>();
+    // Main transcripts first, so subagents find their parent's routine.
+    files.sort(
+      (a, b) => Number(isSubagentTranscript(a.path)) - Number(isSubagentTranscript(b.path)),
+    );
     for (const file of files) {
       let summary;
       try {
@@ -165,25 +212,54 @@ export class PermissionService {
         continue;
       }
       if (!summary.cwd || !summary.events.length) continue;
-      const cwd = projectFolder(summary.cwd);
-      const path = repoPaths.find((r) => cwd === r || cwd.startsWith(`${r}/`)) ?? cwd;
-      if (!repos.has(path)) {
-        if (!this.includeTemp && this.isTemp(path)) continue;
-        if (path === this.home || path === '/' || `${path}/`.startsWith(`${this.claudeHome}/`))
-          continue;
-      }
+      const path = this.folderOf(summary.cwd, repos, repoPaths);
+      if (!path) continue;
+      // A subagent's routine is its parent session's (`<session>/subagents/x.jsonl` → `<session>.jsonl`).
+      let origin = summary.origin;
+      if (isSubagentTranscript(file.path)) {
+        const parent = `${dirname(dirname(file.path))}.jsonl`;
+        const parentOrigin = origins.get(parent) ?? (await this.parentOrigin(parent));
+        origin = `a subagent of ${parentOrigin}`;
+      } else origins.set(file.path, origin);
       let tally = folders.get(path);
       if (!tally) {
         tally = { path, sessions: new Set(), unfixable: 0, rules: new Map() };
         folders.set(path, tally);
       }
       tally.sessions.add(summary.sessionId ?? file.path);
-      for (const event of summary.events) this.count(tally, event, week);
+      for (const event of summary.events) this.count(tally, event, week, origin);
     }
     return { folders, transcripts: files.length };
   }
 
-  private count(tally: FolderTally, event: AskEvent, week: number) {
+  private async parentOrigin(file: string): Promise<string> {
+    try {
+      return await readOrigin(file);
+    } catch {
+      return 'a session';
+    }
+  }
+
+  /**
+   * The project folder for a session's working directory: a Pharos repository containing it, or
+   * the folder itself (worktrees count as their repository). Undefined for temp folders (unless a
+   * project uses them), the home folder, `/` and Claude Code's own folder.
+   */
+  private folderOf(
+    cwdRaw: string,
+    repos: Map<string, string[]>,
+    repoPaths = [...repos.keys()].sort((a, b) => b.length - a.length),
+  ): string | undefined {
+    const cwd = projectFolder(cwdRaw);
+    const path = repoPaths.find((r) => cwd === r || cwd.startsWith(`${r}/`)) ?? cwd;
+    if (repos.has(path)) return path;
+    if (!this.includeTemp && this.isTemp(path)) return undefined;
+    if (path === this.home || path === '/' || `${path}/`.startsWith(`${this.claudeHome}/`))
+      return undefined;
+    return path;
+  }
+
+  private count(tally: FolderTally, event: AskEvent, week: number, origin: string) {
     if (event.kind === 'unfixable' || !event.suggested) {
       tally.unfixable++;
       return;
@@ -201,10 +277,12 @@ export class PermissionService {
         ruleDenied: 0,
         lastAt: 0,
         examples: [],
+        origins: new Map(),
       };
       tally.rules.set(s.rule, t);
     }
     t.total++;
+    t.origins.set(origin, (t.origins.get(origin) ?? 0) + 1);
     if (event.at >= week) t.week++;
     t[event.kind]++;
     if (event.at > t.lastAt) {
@@ -269,6 +347,11 @@ export class PermissionService {
       ...this.status(s, folder, sources),
       allowable: s.allowable,
       ...(s.reason ? { reason: s.reason } : {}),
+      ...explain(s),
+      origins: [...t.origins]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3),
     };
   }
 
@@ -369,15 +452,28 @@ export class PermissionService {
     const suggestion = folder.all.find((s) => s.rule === input.rule);
     if (!suggestion)
       throw new PharosError('invalid', 'Pharos only writes rules it suggested for this folder');
-    if (input.action === 'allow' && !suggestion.allowable)
-      throw new PharosError('invalid', suggestion.reason ?? 'This rule can only be denied');
-    const path = join(folder.path, PERMISSION_TARGETS[input.target].file);
+    return this.previewAt({ ...input, folder: folder.path, ...suggestion }, user);
+  }
+
+  /** The change for a rule in a folder (from a suggestion, or a live ask's rule). */
+  previewAt(
+    input: PermissionChangeInput & {
+      folder: string;
+      tool: string;
+      allowable: boolean;
+      reason?: string;
+    },
+    user = this.userSettings(),
+  ): PermissionPreview {
+    if (input.action === 'allow' && !input.allowable)
+      throw new PharosError('invalid', input.reason ?? 'This rule can only be denied');
+    const path = join(input.folder, PERMISSION_TARGETS[input.target].file);
     const read = readSettings(path);
     if (read.error)
       throw new PharosError('invalid', `${read.error}: ${path}. Fix it by hand first.`);
     const plan = planChange(read, input.rule, input.action);
     return {
-      folderId: folder.id,
+      folderId: folderId(input.folder),
       path,
       exists: read.exists,
       rule: input.rule,
@@ -387,7 +483,7 @@ export class PermissionService {
       before: read.lists,
       after: plan.after,
       unchanged: plan.unchanged,
-      warnings: this.warnings(input, folder.path, user, suggestion),
+      warnings: this.warnings(input, input.folder, user, input),
       hash: read.hash,
     };
   }
@@ -396,7 +492,7 @@ export class PermissionService {
     input: PermissionChangeInput,
     folder: string,
     user: SettingsRead,
-    suggestion: PermissionSuggestion,
+    suggestion: { tool: string; allowable: boolean },
   ): string[] {
     const out: string[] = [];
     const where = { home: this.home, folder };
@@ -432,8 +528,13 @@ export class PermissionService {
   }
 
   async write(input: PermissionWriteInput): Promise<PermissionWriteResult> {
-    const preview = await this.preview(input);
-    if (preview.hash !== input.hash)
+    return this.commit(await this.preview(input), input.hash);
+  }
+
+  /** Writes a previewed change if the file is still as previewed: backup first, then the file. */
+  commit(preview: PermissionPreview, hash: string): PermissionWriteResult {
+    const input = preview;
+    if (preview.hash !== hash)
       throw new PharosError(
         'conflict',
         'The file changed since you looked at it. Check the change again.',

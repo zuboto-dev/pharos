@@ -53,7 +53,9 @@ import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { VERSION } from './version.js';
-import { permissionRoutes } from './permissions/routes.js';
+import { PermissionAsks } from './permissions/asks.js';
+import { permissionAskRoutes, permissionRoutes } from './permissions/routes.js';
+import type { PermissionAsk } from '@pharos/schema';
 import { PermissionService } from './permissions/service.js';
 import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
@@ -203,6 +205,11 @@ export type ServerInfo = {
   notifications?: Notifications;
   /** Claude Code permissions (Settings): tests pass one with a temp home; never the real one. */
   permissions?: PermissionService;
+  /** Live permission asks (the hook); tests make one with a short wait. */
+  permissionAsks?: (
+    service: PermissionService,
+    onAsk: (ask: PermissionAsk) => void,
+  ) => PermissionAsks;
 };
 
 /** Responses that stream and must never be held back for compression. */
@@ -819,12 +826,28 @@ export function createApp(
 
   // Claude Code permissions (Settings → Agent permissions): what agents keep asking for, and the
   // owner's Allow / Deny written to the folder's settings. Owner only, never over MCP.
-  api.route(
-    '/permissions',
-    permissionRoutes(
-      info.permissions ?? new PermissionService(store, { home: info.folders?.home }),
-    ),
-  );
+  const permissions =
+    info.permissions ?? new PermissionService(store, { home: info.folders?.home });
+  // Live asks from the Claude Code hook: a notification for the owner (a gate: only they answer),
+  // answered on the Permissions section of Settings.
+  const permissionAsks =
+    info.permissionAsks?.(permissions, notifyAsk) ??
+    new PermissionAsks(permissions, { onAsk: notifyAsk });
+  function notifyAsk(ask: PermissionAsk) {
+    const where = ask.projects[0] ?? ask.displayFolder;
+    notifications.add({
+      key: `permission-ask:${ask.id}`,
+      kind: 'desk',
+      gate: true,
+      title: `${where}: an agent asks permission. ${ask.summary}`,
+      detail: `${ask.example} · ${ask.risk} risk · from ${ask.agent}`,
+      ...(ask.projectId ? { projectId: ask.projectId } : {}),
+      href: '/settings#permissions',
+      action: 'Answer',
+    });
+  }
+  api.route('/permissions', permissionRoutes(permissions, permissionAsks));
+  api.route('/permission-asks', permissionAskRoutes(permissionAsks));
 
   app.route('/api', api);
 

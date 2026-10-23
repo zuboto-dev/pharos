@@ -41,8 +41,83 @@ export type TranscriptSummary = {
   /** The folder the session started in (`cwd` of its first entry). */
   cwd?: string;
   sessionId?: string;
+  /** Which agent: a routine (`/nightshift`), a headless run, an interactive session; a subagent's. */
+  origin: string;
   events: AskEvent[];
 };
+
+/** Claude Code's own slash commands: not a routine. */
+const BUILTIN_COMMANDS = new Set([
+  'model',
+  'clear',
+  'plugin',
+  'plugins',
+  'mcp',
+  'exit',
+  'reload-plugins',
+  'list-agents',
+  'config',
+  'compact',
+  'resume',
+  'login',
+  'logout',
+  'help',
+  'cost',
+  'status',
+  'permissions',
+  'memory',
+  'init',
+  'doctor',
+  'agents',
+  'hooks',
+  'context',
+  'rewind',
+  'export',
+  'usage',
+  'theme',
+  'vim',
+]);
+const COMMAND_NAME = /<command-name>\/?([\w:.-]+)<\/command-name>/;
+
+/** Watches a transcript's lines for what kind of session it is. */
+export class OriginReader {
+  private routine?: string;
+  private headless = false;
+  constructor(private readonly subagent: boolean) {}
+  /** Feed every line (cheap: only a substring check unless it can matter). */
+  line(line: string): void {
+    if (!this.headless && line.includes('"entrypoint":"sdk-')) this.headless = true;
+    if (this.routine === undefined && line.includes('<command-name>')) {
+      const name = COMMAND_NAME.exec(line)?.[1];
+      if (name && !BUILTIN_COMMANDS.has(name)) this.routine = `/${name}`;
+    }
+  }
+  get label(): string {
+    const base =
+      this.routine ?? (this.headless ? 'a headless run (claude -p)' : 'an interactive session');
+    return this.subagent ? `a subagent` : base;
+  }
+}
+
+export const isSubagentTranscript = (file: string) => /[/]subagents[/][^/]+\.jsonl$/.test(file);
+
+/** The origin of a session from the start of its transcript (the hook's live asks). */
+export async function readOrigin(file: string, maxLines = 400): Promise<string> {
+  const origin = new OriginReader(isSubagentTranscript(file));
+  const stream = createReadStream(file, { encoding: 'utf8' });
+  const lines = createInterface({ input: stream, crlfDelay: Infinity });
+  let count = 0;
+  try {
+    for await (const line of lines) {
+      if (++count > maxLines) break;
+      if (line.length <= MAX_LINE) origin.line(line);
+    }
+  } finally {
+    lines.close();
+    stream.destroy();
+  }
+  return origin.label;
+}
 
 /** Lines longer than this are skipped unread (huge tool outputs); a file stops after MAX_LINES. */
 const MAX_LINE = 2_000_000;
@@ -128,7 +203,8 @@ export async function readTranscript(
   home: string,
   since: number,
 ): Promise<TranscriptSummary> {
-  const summary: TranscriptSummary = { events: [] };
+  const summary: TranscriptSummary = { events: [], origin: '' };
+  const origin = new OriginReader(isSubagentTranscript(file));
   const uses = new Map<string, ToolUse>();
   const stream = createReadStream(file, { encoding: 'utf8' });
   const lines = createInterface({ input: stream, crlfDelay: Infinity });
@@ -137,6 +213,7 @@ export async function readTranscript(
     for await (const line of lines) {
       if (++count > MAX_LINES) break;
       if (line.length > MAX_LINE) continue;
+      origin.line(line);
       // Cheap filters before parsing: the session's folder, tool uses and tool results.
       const wantCwd = summary.cwd === undefined && line.includes('"cwd"');
       const hasUse = line.includes('"tool_use"');
@@ -193,6 +270,7 @@ export async function readTranscript(
     lines.close();
     stream.destroy();
   }
+  summary.origin = origin.label;
   return summary;
 }
 

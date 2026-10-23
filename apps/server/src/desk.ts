@@ -5,6 +5,8 @@ import {
   choiceMessage,
   choiceUpdate,
   decisionState,
+  relationLine,
+  relationNotes,
   TASK_ANSWER,
   isCalendarDate,
   localToday,
@@ -279,6 +281,25 @@ export function deskOf(
         if (meaning === 'superseded' || meaning === 'rejected') continue;
         const state = decisionState(d.data);
         const back = state.kind === 'deferred' && state.until <= today;
+        const notes = relationNotes(d, (id) => store.get(id) ?? undefined, data.decisions);
+        const note = notes[0] ? { note: relationLine(notes[0]) } : {};
+        // Decided, but something it rests on changed since: back on the desk to look again.
+        const changed = notes.find((n) => n.kind === 'changed');
+        if ((state.kind === 'chosen' || state.kind === 'answered') && changed) {
+          add({
+            id: d.id,
+            kind: 'decision',
+            projectId: project.id,
+            project: project.data.name,
+            title: d.data.title,
+            ask: relationLine(changed),
+            note: relationLine(changed),
+            since: d.updatedAt,
+            gate: !!d.data.gate,
+            href: decisionHref(data.views, project.id, d.id),
+          });
+          continue;
+        }
         if (state.kind !== 'open' && !back) continue;
         add({
           id: d.id,
@@ -291,6 +312,7 @@ export function deskOf(
           since: back ? `${state.until}T00:00:00.000Z` : d.createdAt,
           gate: !!d.data.gate,
           href: decisionHref(data.views, project.id, d.id),
+          ...note,
           options: d.data.options.map((o) => ({
             id: o.id,
             label: o.label,
@@ -414,6 +436,7 @@ export function askOwner(
             ...(input.ask ? { body: input.ask } : {}),
             status: valueFor(p, 'decision.status', 'proposed'),
             options: input.options,
+            ...(input.dependsOn?.length ? { dependsOn: input.dependsOn } : {}),
             ...(input.recommendedOptionId
               ? { recommendedOptionId: input.recommendedOptionId }
               : {}),

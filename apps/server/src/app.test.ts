@@ -76,7 +76,8 @@ describe('MCP', () => {
     // R10.19 about 1.9k (decision options). C1 (v0.2) brought it from 62k to under 48k: option
     // lists, record types, intervals and decision options are shared once in definitions, and an
     // update's fields are described once, in the create of the same type.
-    expect(apply.length).toBeLessThan(50_000);
+    // Raised from 50 000 on 2026-10-23 for decision.dependsOn (what a decision builds on).
+    expect(apply.length).toBeLessThan(50_500);
     expect(apply).toContain('"#/definitions/ProjectOptions"');
     expect(client.getInstructions()).toContain('apply');
   });

@@ -4,6 +4,8 @@ import {
   choiceMessage,
   choiceUpdate,
   decisionState,
+  relationLine,
+  relationNotes,
   valueFor,
   type DecisionOption,
   type Entity,
@@ -14,6 +16,8 @@ import clsx from 'clsx';
 import {
   CalendarClock,
   Check,
+  History,
+  Link2,
   ListPlus,
   Minus,
   PenLine,
@@ -25,7 +29,7 @@ import {
 import { useId, useState, type ReactNode } from 'react';
 import { formatDate, localToday } from '../../lib/format';
 import { useViewData, type ViewData } from '../context';
-import { EntityRef } from '../interactive';
+import { Clickable, EntityRef } from '../interactive';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { BUTTON, Badge } from '../ui';
 
@@ -59,6 +63,41 @@ function decider(data: ViewData): { id: string; create: Operation[] } {
       { op: 'create', type: 'assignee', ref: 'me', data: { name: 'me', kind: 'human' } } as const,
     ],
   };
+}
+
+/**
+ * What its relations say (relationNotes): a decision it builds on still open, one decided
+ * assuming this one, or something it rests on that changed after it was decided. Each names the
+ * other and opens it.
+ */
+function RelationStrip({ decision }: { decision: Entity<'decision'> }) {
+  const data = useViewData();
+  const notes = relationNotes(
+    decision,
+    (id) => data.entityById.get(id),
+    data.decisions as Entity<'decision'>[],
+  );
+  if (!notes.length) return null;
+  return (
+    <ul data-relation-notes="" className="space-y-1">
+      {notes.map((note) => (
+        <li
+          key={`${note.kind}-${note.id}`}
+          data-relation={note.kind}
+          className="flex items-start gap-2 rounded-tile bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {note.kind === 'changed' ? (
+            <History aria-hidden className="mt-0.5 size-4 shrink-0" />
+          ) : (
+            <Link2 aria-hidden className="mt-0.5 size-4 shrink-0" />
+          )}
+          <Clickable id={note.id} className="min-w-0 text-left hover:underline">
+            {relationLine(note)}
+          </Clickable>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Points({ kind, items }: { kind: 'pro' | 'con'; items?: string[] }) {
@@ -298,6 +337,7 @@ export function Decision({
       data-pick-title={question}
       className="space-y-4"
     >
+      <RelationStrip decision={decision} />
       <div
         className={clsx(
           'flex flex-wrap items-start justify-between gap-2',

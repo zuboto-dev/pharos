@@ -34,6 +34,9 @@ export type DeskItem = {
   gate: boolean;
   /** Where it is answered in the web app. */
   href: string;
+  /** What its relations say (relationLine): it builds on an open decision, one was decided
+   * assuming it, or something it rests on changed after it was decided. */
+  note?: string;
   /** A decision's options, so the desk can answer it in place. */
   options?: { id: string; label: string; asks?: string }[];
   recommendedOptionId?: string;
@@ -124,6 +127,7 @@ export const AskOwner = z.strictObject({
       'Choices: makes a decision the owner answers in one tap; without them it is a task for the owner',
     ),
   recommendedOptionId: z.string().optional(),
+  dependsOn: z.array(z.string()).optional().describe('Decisions this builds on'),
   viewId: z.string().optional().describe('A page that explains it (the desk links there)'),
 });
 export type AskOwner = z.infer<typeof AskOwner>;

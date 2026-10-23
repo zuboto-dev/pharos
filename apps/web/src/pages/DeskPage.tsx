@@ -11,6 +11,7 @@ import {
   Ellipsis,
   FileText,
   Inbox,
+  Link2,
   ListChecks,
   Loader2,
   Lock,
@@ -329,6 +330,14 @@ function Row({ item, onDone }: { item: DeskItem; onDone: (message: string) => vo
           {item.title}
         </Link>
       </Tooltip>
+      {item.note && (
+        // It builds on something unanswered, was assumed, or may be outdated (relationNotes).
+        <Tooltip label={item.note} className="flex shrink-0">
+          <span tabIndex={0} data-desk-note="" className="text-warn">
+            <Link2 aria-label={item.note} className="size-3.5" />
+          </span>
+        </Tooltip>
+      )}
       {item.gate && (
         <Tooltip label="Only you can do this" className="flex shrink-0">
           <span tabIndex={0} className="text-warn">

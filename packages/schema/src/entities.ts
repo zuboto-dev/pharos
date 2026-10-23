@@ -157,9 +157,10 @@ export const DecisionData = z.strictObject({
   body: Markdown.optional().describe('Context, options considered, and the reasoning'),
   status: optionField('decision.status'),
   decidedById: Id.optional().describe(
-    'Assignee (person or agent) who made the decision, often the person who asked; not just who recorded it',
+    'Assignee who made the decision, often the person who asked (not who recorded it)',
   ),
   decisionDate: IsoDate.optional().describe('YYYY-MM-DD the decision was made'),
+  dependsOn: z.array(Id).optional().describe('Decisions this builds on'),
   fileIds: FileIds,
   // R10.19: options the owner chooses from on a page.
   ...DECISION_CHOICE_FIELDS,
@@ -494,6 +495,7 @@ export const ENTITIES = {
     refs: {
       projectId: projectRef,
       decidedById: { type: 'assignee', onDelete: 'unset' },
+      dependsOn: { type: 'decision', many: true, onDelete: 'unset' },
       fileIds: { type: 'file', many: true, onDelete: 'unset' },
     },
     label: 'title',

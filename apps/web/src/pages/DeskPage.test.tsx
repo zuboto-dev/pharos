@@ -192,6 +192,17 @@ describe('the desk page (R16)', () => {
     localStorage.clear();
   });
 
+  it('opens on the project a link names (?project=, from the Routines page)', async () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter initialEntries={['/desk?project=p3']}>
+        <DeskPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Pick the tiles')).toBeTruthy();
+    expect(screen.queryByText('Which seeds?')).toBeNull();
+  });
+
   it('orders by waiting, newest or quickest, keeping the server’s order for ties', () => {
     const items = DESK.items;
     const ids = (sort: DeskSort, project: string | null = null) =>

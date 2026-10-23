@@ -4,6 +4,8 @@ import {
   ROUTINE_NAMES,
   ROUTINES,
   describeRoutinesChange,
+  type Desk,
+  type DeskRun,
   type Routine,
   type RoutineRun,
   type RoutinesChange,
@@ -16,73 +18,71 @@ import clsx from 'clsx';
 import {
   AlertTriangle,
   Brush,
-  CalendarClock,
-  ChevronDown,
+  Check,
   ChevronRight,
-  Clock,
-  FileText,
+  Flag,
   GitBranch,
   Inbox,
   Loader2,
   Moon,
+  MoreHorizontal,
+  Newspaper,
+  Pause,
+  Pencil,
   Play,
   RefreshCw,
   Repeat,
+  ScrollText,
   Sun,
   Sunset,
-  Workflow,
+  Wallet,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
-import { Menu, MenuItem, MenuLabel } from '../catalog/menu';
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { Select } from '../catalog/select';
-import { Tooltip } from '../catalog/tooltip';
-import { BUTTON, Badge, Dot, type Tone } from '../catalog/ui';
+import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
+import { BUTTON } from '../catalog/ui';
 import { ApiError, getJson, useResource } from '../lib/api';
 import { plural } from '../lib/format';
 import { LoadError } from './onboarding';
-import { Section, Switch } from './settings-ui';
 
-// The Routines page: one control panel for the owner's daily routines (evening wrap-up, night
-// run, morning report, cleanup). The engine is the Routines app; Pharos reads it through
-// /api/routines/* and draws it like the desk and Updates: at a glance first (what runs next,
-// what runs now, what needs the owner, today's pages), then one row per project, then the
-// schedule and the models, saved explicitly.
+// The Routines page: the owner's daily routines (evening wrap-up, night run, morning report,
+// cleanup) at a glance. The engine is the Routines app; Pharos reads it through /api/routines/*
+// and shows only what's needed (owner's review 2026-10-23): one headline, tonight as a timeline
+// with each project's last results as dots, and the rest one hover or click away. No planning
+// files or logs on the page; a log opens in a dialog when asked for.
 
 const ROUTINE_ICON: Record<Routine, LucideIcon> = {
   wrapup: Sunset,
   nightshift: Moon,
   daybreak: Sun,
 };
-/** Short names for chips. */
+/** Short names, lower case, for the headline and menus. */
 const SHORT: Record<Routine, string> = {
-  wrapup: 'Wrap-up',
-  nightshift: 'Night',
-  daybreak: 'Morning',
-};
-const ROUTINE_ABOUT: Record<Routine, string> = {
-  wrapup: 'Closes the day, updates Pharos, hands code-doable work to the night (HANDOFF.md).',
-  nightshift: 'Works the handoff: dispatches each task to its model, verifies, lands small slices.',
-  daybreak: 'Verifies the night and writes what was done, the results and today’s plan.',
+  wrapup: 'wrap-up',
+  nightshift: 'night',
+  daybreak: 'morning',
 };
 
-const CLEANUP_LEVELS: Record<number, { name: string; about: string }> = {
-  0: { name: 'Off', about: 'Nothing is cleaned up.' },
+const CLEANUP_LEVELS: Record<number, { name: string; line: string; about: string }> = {
+  0: { name: 'Off', line: 'nothing is cleaned up', about: 'Cleanup is turned off.' },
   1: {
     name: 'Safe',
+    line: 'merged worktrees, branches and old scratch go after the wrap-up',
     about:
-      'After the wrap-up: merged clean worktrees and branches, and old scratch folders. Each removal is listed with the command that brings it back.',
+      'After the full wrap-up: worktrees already in main with no changes, merged branches, and scratch folders older than the kept days. Each removal is listed with the command that brings it back.',
   },
   2: {
     name: 'Tidy',
-    about: 'Level 1, plus proposals for more that land on your desk to approve.',
+    line: 'proposals on your desk; nothing moves until you approve',
+    about:
+      'Level 1 runs as before; anything more is proposed on your desk, and nothing is removed until you approve it.',
   },
-  3: { name: 'Deep', about: 'Not built yet: treated as level 1.' },
+  3: { name: 'Deep', line: 'not built yet; runs as level 2', about: 'Level 3 is not built yet.' },
 };
-
-const CONTROL =
-  'inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted hover:bg-sunken';
 
 /** Writes and runs say who asks: the Pharos server refuses them otherwise. */
 async function ownerPost<T>(path: string, body: unknown): Promise<T> {
@@ -103,7 +103,7 @@ async function ownerPost<T>(path: string, body: unknown): Promise<T> {
 
 // ── Time ────────────────────────────────────────────────────────────────────────────────────
 
-/** "HH:MM" now in `timeZone` (the schedule's), as minutes since midnight. */
+/** Now in `timeZone` (the schedule's), as minutes since midnight. */
 export function minutesIn(timeZone: string | undefined, now = new Date()): number {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -174,6 +174,43 @@ export function runTime(when: string | null | undefined, today: string): string 
   return `${date} ${time ?? ''}`.trim();
 }
 
+/**
+ * Where tonight's three routines sit on the timeline (0–1), in order from the wrap-up, an hour
+ * of room at each end. Proportional to the clock, but never closer than `gap`, so 00:00 and 01:00
+ * stay apart on a phone. `at(minutes)` places any time (now) the same way, between the marks.
+ */
+export function timeline(schedule: RoutinesConfig['schedule'], gap = 0.3) {
+  const times = ROUTINES.map((r) => schedule[r]).filter((t): t is string => Boolean(t));
+  const start = (toMinutes(times[0] ?? '00:00') - 60 + 1440) % 1440;
+  const rel = (m: number) => (m - start + 1440) % 1440;
+  const marks = ROUTINES.map((r) => ({ routine: r, rel: rel(toMinutes(schedule[r] ?? '00:00')) }));
+  const span = Math.max(...marks.map((m) => m.rel)) + 60;
+  const raw = marks.map((m) => m.rel / span);
+  const placed: number[] = [];
+  raw.forEach((p, i) => placed.push(i === 0 ? p : Math.max(p, placed[i - 1]! + gap)));
+  const scale = Math.min(1, 0.92 / Math.max(...placed));
+  const pos = placed.map((p) => p * scale);
+  const knots = [
+    { rel: 0, x: 0 },
+    ...marks.map((m, i) => ({ rel: m.rel, x: pos[i]! })),
+    { rel: span, x: 1 },
+  ].sort((a, b) => a.rel - b.rel);
+  const at = (minutes: number): number | null => {
+    const r = rel(minutes);
+    if (r > span) return null;
+    for (let i = 1; i < knots.length; i++) {
+      const a = knots[i - 1]!;
+      const b = knots[i]!;
+      if (r <= b.rel) return a.x + ((r - a.rel) / Math.max(1, b.rel - a.rel)) * (b.x - a.x);
+    }
+    return null;
+  };
+  return {
+    marks: marks.map((m, i) => ({ routine: m.routine, at: schedule[m.routine] ?? '', x: pos[i]! })),
+    at,
+  };
+}
+
 // ── Edits ───────────────────────────────────────────────────────────────────────────────────
 
 /** What the page changed, field by field, as the save sends it (`from` is what it showed). */
@@ -214,118 +251,81 @@ export function diffConfig(base: RoutinesConfig, draft: RoutinesConfig): Routine
 
 type Edit = (change: (draft: RoutinesConfig) => void) => void;
 
-// ── Small pieces ────────────────────────────────────────────────────────────────────────────
+// ── Run dots ────────────────────────────────────────────────────────────────────────────────
 
-const RUN_LOOK: Record<RoutineRun['status'] | 'never', { tone: Tone; word: string }> = {
-  ok: { tone: 'green', word: 'ok' },
-  ran: { tone: 'amber', word: 'ran' },
-  error: { tone: 'red', word: 'failed' },
-  running: { tone: 'blue', word: 'running' },
-  never: { tone: 'muted', word: 'never' },
+type Look = RoutineRun['status'] | 'never';
+
+const RUN_WORD: Record<Look, string> = {
+  ok: 'ok',
+  ran: 'ended without finishing',
+  error: 'failed',
+  running: 'running now',
+  never: 'never ran',
 };
 
-const RUN_MEANING: Record<RoutineRun['status'] | 'never', string> = {
-  ok: 'Finished and said so',
-  ran: 'Ended without saying it finished: worth a look',
-  error: 'The log mentions an error, a refusal or the budget',
-  running: 'Running now',
-  never: 'No run logged yet',
+/** Last night in a word, when Pharos's desk has no run report with counts. */
+const NIGHT_WORD: Record<RoutineRun['status'], string> = {
+  ok: 'Finished',
+  ran: 'Ended without finishing',
+  error: 'Failed',
+  running: 'Running',
 };
 
-function RunChip({
+const DOT: Record<Look, string> = {
+  ok: 'bg-emerald-500',
+  ran: 'bg-amber-500',
+  error: 'bg-rose-500',
+  running: 'bg-sky-500',
+  never: 'border border-neutral-300 bg-transparent dark:border-neutral-600',
+};
+
+/** One routine's last result: a dot. Hover: when and how; click: its log. */
+function RunDot({
+  project,
   routine,
   run,
   today,
-  onOpen,
+  onLog,
 }: {
+  project: string;
   routine: Routine;
   run: RoutineRun | null | undefined;
   today: string;
-  onOpen?: () => void;
+  onLog: (file: string) => void;
 }) {
-  const status = run?.status ?? 'never';
-  const look = RUN_LOOK[status];
+  const look: Look = run?.status ?? 'never';
   const time = runTime(run?.when, today);
-  const chip = (
-    <Badge tone={look.tone} className={clsx(status === 'running' && 'animate-pulse')}>
-      {status === 'running' ? (
-        <Loader2 aria-hidden className="size-3 animate-spin" />
-      ) : (
-        <Dot tone={look.tone} className="size-1.5" />
-      )}
-      {SHORT[routine]} {look.word}
-      {time && <span className="font-normal tabular-nums opacity-75">{time}</span>}
-    </Badge>
-  );
+  // Not from last night: shown faint, its date in the tooltip.
+  const old = Boolean(run?.when && !run.when.startsWith(today));
+  const label = `${ROUTINE_NAMES[routine]} · ${project}: ${RUN_WORD[look]}${time ? `, ${time}` : ''}`;
   return (
-    <Tooltip
-      label={`${ROUTINE_NAMES[routine]}: ${look.word}${time ? ` · ${time}` : ''}`}
-      detail={RUN_MEANING[status]}
-      className="flex"
-    >
-      {onOpen && run?.file ? (
-        <button
-          type="button"
-          data-run-chip={routine}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen();
-          }}
-          className="rounded-full"
-        >
-          {chip}
-        </button>
-      ) : (
-        <span tabIndex={0} data-run-chip={routine} className="rounded-full">
-          {chip}
-        </span>
-      )}
+    <Tooltip label={label} detail={run?.file ? 'Click for its log' : undefined} className="flex">
+      <button
+        type="button"
+        aria-label={label}
+        data-run-dot={routine}
+        data-look={look}
+        disabled={!run?.file}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (run?.file) onLog(run.file);
+        }}
+        className="tap-area flex size-5 items-center justify-center rounded-full hover:bg-subtle focus-visible:outline-2 focus-visible:outline-sky-400 disabled:cursor-default disabled:hover:bg-transparent"
+      >
+        {look === 'running' ? (
+          <Loader2 aria-hidden className="size-3 animate-spin text-sky-500" />
+        ) : (
+          <span
+            aria-hidden
+            className={clsx('block size-2.5 rounded-full', DOT[look], old && 'opacity-35')}
+          />
+        )}
+      </button>
     </Tooltip>
   );
 }
 
-function Queue({ queue }: { queue: RoutinesProjectStatus['queue'] }) {
-  if (!queue) return <span className="text-xs text-faint">no NEXT.md</span>;
-  return (
-    <span className="flex items-center gap-1 text-xs tabular-nums" data-queue="">
-      <Tooltip
-        label={`${queue.auto} auto`}
-        detail="Claude does these without asking"
-        className="flex"
-      >
-        <span tabIndex={0} className="rounded-full bg-sunken px-1.5 py-0.5 text-muted">
-          {queue.auto} auto
-        </span>
-      </Tooltip>
-      <Tooltip
-        label={`${queue.review} review`}
-        detail="Built on a branch, held for your look"
-        className="flex"
-      >
-        <span tabIndex={0} className="rounded-full bg-sunken px-1.5 py-0.5 text-muted">
-          {queue.review} review
-        </span>
-      </Tooltip>
-      <Tooltip
-        label={`${queue.needs_you} need you`}
-        detail="Gates and questions only you answer"
-        className="flex"
-      >
-        <span
-          tabIndex={0}
-          className={clsx(
-            'rounded-full px-1.5 py-0.5',
-            queue.needs_you
-              ? 'bg-amber-100 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200'
-              : 'bg-sunken text-muted',
-          )}
-        >
-          {queue.needs_you} need you
-        </span>
-      </Tooltip>
-    </span>
-  );
-}
+// ── Small pieces ────────────────────────────────────────────────────────────────────────────
 
 /** A whole-number field that only changes the draft with a valid value. */
 function NumberField({
@@ -354,7 +354,6 @@ function NumberField({
   const bad = text.trim() === '' || !Number.isFinite(n) || n < 0 || n > max;
   return (
     <label
-      onClick={(e) => e.stopPropagation()}
       className={clsx(
         'inline-flex h-7 items-center gap-0.5 rounded-control border bg-surface px-1.5 text-sm tabular-nums focus-within:ring-2 focus-within:ring-sky-300 dark:focus-within:ring-sky-800',
         bad ? 'border-rose-400 dark:border-rose-700' : 'border-line-strong',
@@ -370,13 +369,12 @@ function NumberField({
         value={text}
         aria-label={label}
         aria-invalid={bad || undefined}
-        onKeyDown={(e) => e.stopPropagation()}
         onChange={(e) => {
           setText(e.target.value);
           const v = Number(e.target.value);
           if (e.target.value.trim() !== '' && Number.isFinite(v) && v >= 0 && v <= max) onChange(v);
         }}
-        className="w-9 bg-transparent text-right outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-8 bg-transparent text-right outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
       />
       {suffix && <span className="text-faint">{suffix}</span>}
     </label>
@@ -442,8 +440,6 @@ function Confirm({
   );
 }
 
-// ── At a glance ─────────────────────────────────────────────────────────────────────────────
-
 /** A Pharos page link from Routines ("http://127.0.0.1:4300/projects/…"): opened in this app. */
 function pharosPath(url: string): string | null {
   try {
@@ -454,368 +450,300 @@ function pharosPath(url: string): string | null {
   }
 }
 
-function Tile({
-  label,
-  icon: Icon,
-  children,
-  detail,
-  tone,
-  data,
+/** The project's Pharos id, when routines.json names one (by id, or by name via the desk). */
+function pharosProjectId(project: RoutinesProject, desk: Desk | undefined): string | null {
+  const ref = project.pm?.type === 'pharos' ? project.pm.project : undefined;
+  if (!ref) return null;
+  if (ref.startsWith('prj_')) return ref;
+  const item = desk?.items.find((i) => i.project === ref && i.projectId);
+  return item?.projectId ?? null;
+}
+
+/** The latest night run Pharos's desk logged for this project ("Night run · pharos"). */
+function nightRunOf(project: string, desk: Desk | undefined): DeskRun | undefined {
+  return desk?.runs.find((r) => r.name === `Night run · ${project}`);
+}
+
+// ── The headline and the timeline ───────────────────────────────────────────────────────────
+
+const GRID =
+  'grid grid-cols-[7rem_minmax(0,1fr)_2.5rem] items-center gap-x-2 sm:grid-cols-[11rem_minmax(0,1fr)_3rem]';
+
+function Headline({
+  schedule,
+  enrolled,
+  needs,
+  running,
 }: {
-  label: string;
-  icon: LucideIcon;
-  children: ReactNode;
-  detail?: ReactNode;
-  tone?: 'warn' | 'live';
-  data: string;
+  schedule: RoutinesConfig['schedule'];
+  enrolled: number;
+  needs: number;
+  running: { project: string; routine: Routine }[];
 }) {
+  const next = nextRun(schedule);
+  const zone = zoneName(schedule.timezone);
   return (
-    <li
-      data-tile={data}
-      className={clsx(
-        'min-w-0 rounded-block border bg-surface px-3 py-2.5',
-        tone === 'warn'
-          ? 'border-amber-300 dark:border-amber-800'
-          : tone === 'live'
-            ? 'border-sky-300 dark:border-sky-800'
-            : 'border-line',
-      )}
+    <p
+      data-headline=""
+      className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted"
     >
-      <div className="flex items-center gap-1.5 text-xs text-muted">
-        <Icon aria-hidden className="size-3" />
-        {label}
-      </div>
-      <div className="mt-1 truncate text-lg leading-tight font-semibold text-ink">{children}</div>
-      {detail && <div className="mt-0.5 truncate text-xs text-muted">{detail}</div>}
-    </li>
+      <span className="font-medium text-ink-soft">Tonight:</span>
+      {ROUTINES.map((r, i) => {
+        const isNext = next?.routine === r;
+        return (
+          <span key={r} className="inline-flex items-center gap-1.5">
+            {i > 0 && <span aria-hidden>→</span>}
+            <Tooltip
+              label={`${ROUTINE_NAMES[r]} at ${schedule[r] ?? '—'}${zone ? ` ${zone}` : ''}`}
+              detail={isNext && next ? `Next, ${inTime(next.inMinutes)}` : undefined}
+              className="flex"
+            >
+              <span
+                tabIndex={0}
+                data-next={isNext || undefined}
+                className={clsx('rounded-control tabular-nums', isNext && 'font-medium text-ink')}
+              >
+                {SHORT[r]} {schedule[r] ?? '—'}
+              </span>
+            </Tooltip>
+          </span>
+        );
+      })}
+      <span aria-hidden>·</span>
+      <span>{plural(enrolled, 'project')}</span>
+      {needs > 0 && (
+        <>
+          <span aria-hidden>·</span>
+          <Link to="/desk" className="font-medium text-warn hover:underline">
+            {needs} need you
+          </Link>
+        </>
+      )}
+      {running.length > 0 && (
+        <>
+          <span aria-hidden>·</span>
+          <span className="inline-flex items-center gap-1 text-accent">
+            <Loader2 aria-hidden className="size-3 animate-spin" />
+            {running.map((r) => `${SHORT[r.routine]} · ${r.project}`).join(', ')}
+          </span>
+        </>
+      )}
+    </p>
   );
 }
 
-function Glance({
-  state,
-  draft,
-}: {
-  state: Extract<RoutinesState, { available: true }>;
-  draft: RoutinesConfig;
-}) {
-  const enrolled = new Set(draft.projects.filter((p) => p.enrolled).map((p) => p.name));
-  const next = nextRun(state.config.schedule);
-  const running = state.status.flatMap((s) =>
-    ROUTINES.filter((r) => s.runs?.[r]?.status === 'running').map((r) => ({
-      project: s.name,
-      routine: r,
-      since: s.runs?.[r]?.when,
-    })),
-  );
-  const needs = state.status
-    .filter((s) => enrolled.has(s.name))
-    .reduce((n, s) => n + (s.queue?.needs_you ?? 0), 0);
-  const needing = state.status.filter((s) => enrolled.has(s.name) && s.queue?.needs_you);
-  const today = state.now.slice(0, 10);
-  const pages = (['morning', 'evening'] as const).flatMap((k) => {
-    const page = state.pages[k];
-    return page?.url ? [{ k, ...page }] : [];
-  });
-  const zone = zoneName(state.config.schedule.timezone);
+/** The timeline's head: tonight's three routines on a line, and now when it falls in it. */
+function Axis({ schedule }: { schedule: RoutinesConfig['schedule'] }) {
+  const line = timeline(schedule);
+  const now = line.at(minutesIn(schedule.timezone));
   return (
-    <ul className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="At a glance">
-      <Tile
-        label="Next run"
-        icon={CalendarClock}
-        data="next"
-        detail={next ? `${inTime(next.inMinutes)}${zone ? ` · ${zone}` : ''}` : undefined}
-      >
-        {next ? (
-          <>
-            {ROUTINE_NAMES[next.routine]} <span className="text-muted tabular-nums">{next.at}</span>
-          </>
-        ) : (
-          'None scheduled'
+    <div className={clsx(GRID, 'px-3 pt-3 pb-1')} aria-hidden>
+      <span />
+      <div className="relative h-9">
+        <div className="absolute inset-x-0 top-6 border-t border-line" />
+        {line.marks.map((m) => {
+          const Icon = ROUTINE_ICON[m.routine];
+          return (
+            <div
+              key={m.routine}
+              className="absolute top-0 flex -translate-x-1/2 flex-col items-center text-[11px] text-muted tabular-nums"
+              style={{ left: `${m.x * 100}%` }}
+            >
+              <span className="flex items-center gap-0.5">
+                <Icon className="hidden size-3 sm:block" />
+                {m.at}
+              </span>
+              <span className="mt-1.5 size-1.5 rounded-full bg-line-strong" />
+            </div>
+          );
+        })}
+        {now !== null && (
+          <div
+            data-now=""
+            className="absolute top-4 bottom-0 w-px bg-sky-500"
+            style={{ left: `${now * 100}%` }}
+          />
         )}
-      </Tile>
-      <Tile
-        label="Running now"
-        icon={Workflow}
-        data="running"
-        tone={running.length ? 'live' : undefined}
-        detail={
-          running.length
-            ? running
-                .map(
-                  (r) =>
-                    `${SHORT[r.routine]} · ${r.project}${r.since ? ` since ${runTime(r.since, today)}` : ''}`,
-                )
-                .join(', ')
-            : 'No routine is working right now'
-        }
-      >
-        {running.length ? plural(running.length, 'routine') : 'Nothing'}
-      </Tile>
-      <Tile
-        label="Needs you"
-        icon={Inbox}
-        data="needs"
-        tone={needs ? 'warn' : undefined}
-        detail={
-          needing.length ? (
-            <>
-              {needing.map((s) => `${s.name} ${s.queue!.needs_you}`).join(' · ')} ·{' '}
-              <Link to="/desk" className="font-medium text-accent hover:underline">
-                Desk
-              </Link>
-            </>
-          ) : (
-            'in enrolled projects’ queues'
-          )
-        }
-      >
-        {needs ? plural(needs, 'item') : 'Nothing'}
-      </Tile>
-      <Tile
-        label="Today’s pages"
-        icon={FileText}
-        data="pages"
-        detail={
-          pages.length
-            ? pages
-                .map(
-                  (p) =>
-                    `${p.k === 'morning' ? 'Morning' : 'Evening'} ${p.posted?.slice(11) ?? p.date ?? ''}`,
-                )
-                .join(' · ')
-            : 'They appear after the first runs'
-        }
-      >
-        {pages.length ? (
-          <span className="flex flex-wrap gap-x-3 text-base">
-            {pages.map((p) => {
-              const path = pharosPath(p.url);
-              const name = p.k === 'morning' ? 'Morning' : 'Evening';
-              const old = p.date && p.date !== today;
-              const Icon = p.k === 'morning' ? Sun : Sunset;
-              const inner = (
-                <>
-                  <Icon aria-hidden className="size-3.5" />
-                  {name}
-                  {old && (
-                    <span className="text-xs font-normal text-muted">({p.date?.slice(5)})</span>
-                  )}
-                </>
-              );
-              return path ? (
-                <Link
-                  key={p.k}
-                  to={path}
-                  data-page-link={p.k}
-                  className="inline-flex items-center gap-1 text-accent hover:underline"
-                >
-                  {inner}
-                </Link>
-              ) : (
-                <a
-                  key={p.k}
-                  href={p.url}
-                  data-page-link={p.k}
-                  className="inline-flex items-center gap-1 text-accent hover:underline"
-                >
-                  {inner}
-                </a>
-              );
-            })}
-          </span>
-        ) : (
-          'None yet'
-        )}
-      </Tile>
-    </ul>
+      </div>
+      <span />
+    </div>
   );
 }
 
 // ── Projects ────────────────────────────────────────────────────────────────────────────────
 
-function ProjectRow({
+function ProjectLine({
   project,
   status,
+  marks,
   today,
   open,
   onToggle,
+  onLog,
+  deskHref,
+}: {
+  project: RoutinesProject;
+  status: RoutinesProjectStatus | undefined;
+  marks: ReturnType<typeof timeline>['marks'];
+  today: string;
+  open: boolean;
+  onToggle: () => void;
+  onLog: (file: string) => void;
+  deskHref: string;
+}) {
+  const needs = status?.queue?.needs_you ?? 0;
+  return (
+    <div
+      className={clsx(GRID, 'min-h-10 px-3 py-1', open && 'bg-sunken/50')}
+      data-project-line={project.name}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className={clsx(
+          'flex min-w-0 items-center gap-1 rounded-control text-left text-sm hover:text-ink',
+          project.enrolled ? 'font-medium text-ink' : 'text-muted',
+        )}
+      >
+        <ChevronRight
+          aria-hidden
+          className={clsx('size-3.5 shrink-0 text-faint transition-transform', open && 'rotate-90')}
+        />
+        <span className="truncate">{project.name}</span>
+        {status && !status.exists && (
+          <Tooltip label="Folder missing" className="flex">
+            <span tabIndex={0} className="text-warn">
+              <AlertTriangle aria-label="Folder missing" className="size-3" />
+            </span>
+          </Tooltip>
+        )}
+      </button>
+      <div className="relative h-5" data-run-strip="">
+        <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-line-soft" />
+        {marks.map((m) => (
+          <div
+            key={m.routine}
+            className="absolute top-0 -translate-x-1/2"
+            style={{ left: `${m.x * 100}%` }}
+          >
+            <RunDot
+              project={project.name}
+              routine={m.routine}
+              run={status?.runs?.[m.routine]}
+              today={today}
+              onLog={onLog}
+            />
+          </div>
+        ))}
+      </div>
+      <span className="text-right">
+        {needs > 0 && (
+          <Tooltip
+            label={`${needs} need you in ${project.name}`}
+            detail="Open them on the desk"
+            className="inline-flex"
+          >
+            <Link
+              to={deskHref}
+              data-needs={needs}
+              aria-label={`${needs} need you in ${project.name}`}
+              className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 text-xs font-medium text-amber-900 tabular-nums hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-200"
+            >
+              {needs}
+            </Link>
+          </Tooltip>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** One fact in a project's detail: its symbol (the name in its tooltip), then the value. */
+function Fact({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2" data-fact={label}>
+      <Tooltip label={label} className="flex shrink-0">
+        <span tabIndex={0} className="rounded-control text-faint">
+          <Icon aria-label={label} className="size-3.5" />
+        </span>
+      </Tooltip>
+      <div className="min-w-0 flex-1 text-sm text-ink-soft">{children}</div>
+    </div>
+  );
+}
+
+function ProjectDetail({
+  project,
+  status,
+  night,
+  deskHref,
   edit,
   onRun,
   onLog,
 }: {
   project: RoutinesProject;
   status: RoutinesProjectStatus | undefined;
-  today: string;
-  open: boolean;
-  onToggle: () => void;
+  night: DeskRun | undefined;
+  deskHref: string;
   edit: Edit;
   onRun: (routine: Routine) => void;
   onLog: (file: string) => void;
 }) {
-  const detailsId = useId();
-  const git = status?.git;
+  const [menu, setMenu] = useState<DOMRect | null>(null);
+  const [budget, setBudget] = useState(false);
   const set = (patch: Partial<RoutinesProject>) =>
     edit((d) => {
       const p = d.projects.find((x) => x.name === project.name);
       if (p) Object.assign(p, patch);
     });
-  return (
-    <li data-routines-project={project.name} className={clsx(!project.enrolled && 'bg-sunken/40')}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
-        <Switch
-          checked={project.enrolled}
-          label={`Enrol ${project.name}`}
-          onChange={(enrolled) => set({ enrolled })}
-        />
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={detailsId}
-          onClick={onToggle}
-          className="flex min-w-0 flex-1 basis-40 items-center gap-1.5 text-left"
-        >
-          {open ? (
-            <ChevronDown aria-hidden className="size-3.5 shrink-0 text-faint" />
-          ) : (
-            <ChevronRight aria-hidden className="size-3.5 shrink-0 text-faint" />
-          )}
-          <span className="min-w-0">
-            <span
-              className={clsx(
-                'block truncate text-sm font-medium',
-                project.enrolled ? 'text-ink' : 'text-muted',
-              )}
-            >
-              {project.name}
-            </span>
-            <span className="block truncate text-xs text-muted">
-              {status && !status.exists ? 'folder missing' : project.note || project.path}
-            </span>
-          </span>
-        </button>
-        <Queue queue={status?.queue} />
-        <span className="flex items-center gap-1.5" aria-label={`Night budget for ${project.name}`}>
-          <NumberField
-            value={project.budget_usd}
-            max={500}
-            prefix="$"
-            label={`Night budget in dollars for ${project.name}`}
-            onChange={(budget_usd) => set({ budget_usd })}
-          />
-          <NumberField
-            value={project.hours}
-            max={24}
-            suffix="h"
-            label={`Night hours for ${project.name}`}
-            onChange={(hours) => set({ hours })}
-          />
-        </span>
-        {/* Second line, lined up under the name: the last runs and the repo. */}
-        <span className="flex basis-full flex-wrap items-center gap-1 sm:pl-[4.75rem]">
-          {ROUTINES.map((r) => {
-            const run = status?.runs?.[r];
-            return (
-              <RunChip
-                key={r}
-                routine={r}
-                run={run}
-                today={today}
-                onOpen={run?.file ? () => onLog(run.file!) : undefined}
-              />
-            );
-          })}
-          {git && (
-            <Tooltip label={git.head} detail="Last commit" className="flex">
-              <span
-                tabIndex={0}
-                data-repo=""
-                className="ml-1 flex items-center gap-1 text-xs text-muted tabular-nums"
-              >
-                <GitBranch aria-hidden className="size-3" />
-                {git.dirty ? `${git.dirty} changed` : 'clean'}
-                {git.ahead !== '-' && git.ahead !== '0' && ` · ${git.ahead} ahead`}
-              </span>
-            </Tooltip>
-          )}
-        </span>
-      </div>
-      {open && (
-        <ProjectDetails
-          id={detailsId}
-          project={project}
-          status={status}
-          today={today}
-          onRun={onRun}
-          onLog={onLog}
-        />
-      )}
-    </li>
-  );
-}
-
-function ProjectDetails({
-  id,
-  project,
-  status,
-  today,
-  onRun,
-  onLog,
-}: {
-  id: string;
-  project: RoutinesProject;
-  status: RoutinesProjectStatus | undefined;
-  today: string;
-  onRun: (routine: Routine) => void;
-  onLog: (file: string) => void;
-}) {
-  const files = Object.keys(status?.files ?? {});
-  const [file, setFile] = useState(files.includes('NEXT.md') ? 'NEXT.md' : files[0]);
-  const text = useResource<{ text: string }>(
-    file
-      ? `/api/routines/file?${new URLSearchParams({ project: project.name, name: file })}`
-      : null,
-  );
-  const [menu, setMenu] = useState<DOMRect | null>(null);
-  const lines = (text.data?.text ?? '').split('\n');
-  const [all, setAll] = useState(false);
-  const shown = all ? lines : lines.slice(0, 14);
-  const running = ROUTINES.some((r) => status?.runs?.[r]?.status === 'running');
+  const git = status?.git;
+  const needs = status?.queue?.needs_you ?? 0;
+  const ship = status?.queue?.ship;
+  const latest = ROUTINES.map((r) => status?.runs?.[r])
+    .filter((r): r is RoutineRun => Boolean(r?.file))
+    .sort((a, b) => (b.when ?? '').localeCompare(a.when ?? ''))[0];
+  const counts = night?.counts;
+  const nightRun = status?.runs?.nightshift;
   return (
     <div
-      id={id}
-      data-routines-details={project.name}
-      className="space-y-3 border-t border-line-soft bg-sunken/30 px-3 py-3 sm:pl-16"
+      data-project-detail={project.name}
+      className="relative border-t border-line-soft bg-sunken/50 px-3 py-3 sm:pl-[3.25rem]"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {status?.queue?.ship && (
-          <p className="min-w-0 flex-1 text-xs text-ink-soft">
-            <span className="font-medium">Ship:</span> {status.queue.ship}
-          </p>
-        )}
-        <button
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded={Boolean(menu)}
-          disabled={!status?.exists}
-          onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}
-          className={clsx(BUTTON.secondary, 'ml-auto')}
-        >
-          <Play aria-hidden className="size-3.5" /> Run now{' '}
-          <ChevronDown aria-hidden className="size-3" />
-        </button>
+      <div className="absolute top-2 right-2">
+        <Tooltip label={`Options for ${project.name}`} className="flex">
+          <button
+            type="button"
+            aria-label={`Options for ${project.name}`}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(menu)}
+            onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}
+            className={ICON_GHOST}
+          >
+            <MoreHorizontal className="size-4" aria-hidden />
+          </button>
+        </Tooltip>
         {menu && (
           <Menu
             anchor={menu}
             align="end"
-            label={`Run a routine for ${project.name} now`}
+            label={`Options for ${project.name}`}
             onClose={() => setMenu(null)}
           >
-            <MenuLabel>Starts real work now; asks first</MenuLabel>
+            <MenuLabel>Run now (asks first)</MenuLabel>
             {ROUTINES.map((r) => (
               <MenuItem
                 key={r}
                 icon={ROUTINE_ICON[r]}
-                disabled={status?.runs?.[r]?.status === 'running'}
+                disabled={!status?.exists || status?.runs?.[r]?.status === 'running'}
                 onClick={() => {
                   setMenu(null);
                   onRun(r);
@@ -824,247 +752,372 @@ function ProjectDetails({
                 {ROUTINE_NAMES[r]}
               </MenuItem>
             ))}
+            <MenuSeparator />
+            <MenuItem
+              icon={project.enrolled ? Pause : Play}
+              onClick={() => {
+                setMenu(null);
+                set({ enrolled: !project.enrolled });
+              }}
+            >
+              {project.enrolled ? 'Pause (leave the routines)' : 'Enroll in the routines'}
+            </MenuItem>
+            <MenuItem
+              icon={ScrollText}
+              disabled={!latest}
+              onClick={() => {
+                setMenu(null);
+                if (latest?.file) onLog(latest.file);
+              }}
+            >
+              Open last log
+            </MenuItem>
           </Menu>
         )}
       </div>
-      {running && (
-        <p className="flex items-center gap-1.5 text-xs text-accent">
-          <Loader2 aria-hidden className="size-3 animate-spin" /> A routine is running in this
-          project.
-        </p>
-      )}
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section aria-label="Planning files" className="min-w-0 space-y-1.5">
-          {files.length ? (
-            <>
-              <div role="tablist" aria-label="Planning files" className="flex flex-wrap gap-1">
-                {files.map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    role="tab"
-                    aria-selected={f === file}
-                    onClick={() => {
-                      setFile(f);
-                      setAll(false);
-                    }}
-                    className={clsx(
-                      'rounded-full px-2 py-0.5 text-xs',
-                      f === file
-                        ? 'bg-inverse text-on-inverse'
-                        : 'bg-surface text-muted ring-1 ring-line hover:bg-subtle',
-                    )}
-                  >
-                    {f.replace('.md', '')}
-                  </button>
-                ))}
-              </div>
-              <pre
-                data-file-text=""
-                className="max-h-80 overflow-auto rounded-control border border-line bg-surface px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap text-ink-soft"
-              >
-                {text.status === 'loading' && !text.data
-                  ? 'Loading…'
-                  : text.error
-                    ? text.error.message
-                    : shown.join('\n') || '(empty)'}
-              </pre>
-              {lines.length > shown.length && (
-                <button type="button" onClick={() => setAll(true)} className={CONTROL}>
-                  Show all {lines.length} lines
-                </button>
-              )}
-            </>
+      <div className="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-2 pr-8 sm:grid-cols-2">
+        {ship && (
+          <div className="min-w-0 sm:col-span-2">
+            <Fact icon={Flag} label="Ship criterion">
+              <Tooltip label={ship} className="flex max-w-full min-w-0">
+                <span tabIndex={0} className="block min-w-0 truncate">
+                  {ship}
+                </span>
+              </Tooltip>
+            </Fact>
+          </div>
+        )}
+        <Fact icon={Moon} label="Last night">
+          {counts && (counts.done || counts.failed || counts.unverified) ? (
+            <Tooltip label={night?.summary ?? 'Last night'} className="flex min-w-0">
+              <span tabIndex={0} className="flex flex-wrap gap-x-2 tabular-nums" data-night="">
+                <span className="text-emerald-700 dark:text-emerald-300">
+                  {counts.done ?? 0} done
+                </span>
+                {counts.failed ? (
+                  <span className="text-rose-700 dark:text-rose-300">{counts.failed} failed</span>
+                ) : null}
+                {counts.unverified ? (
+                  <span className="text-amber-700 dark:text-amber-300">
+                    {counts.unverified} unverified
+                  </span>
+                ) : null}
+              </span>
+            </Tooltip>
+          ) : night ? (
+            <Tooltip label={night.summary ?? night.outcome} className="flex min-w-0">
+              <span tabIndex={0} data-night="" className="truncate">
+                {night.outcome === 'ok'
+                  ? 'Finished'
+                  : night.outcome === 'running'
+                    ? 'Running'
+                    : night.outcome === 'failed'
+                      ? 'Failed'
+                      : 'Partly done'}
+              </span>
+            </Tooltip>
           ) : (
-            <p className="text-xs text-muted">
-              No planning files yet. Run /triage in this project, or the wrap-up.
-            </p>
+            <span data-night="" className="text-muted">
+              {nightRun ? NIGHT_WORD[nightRun.status] : 'No night run yet'}
+            </span>
           )}
-        </section>
-        <section aria-label="Last runs" className="min-w-0 space-y-1.5">
-          <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">Last runs</h3>
-          <ul className="space-y-1.5">
-            {ROUTINES.map((r) => {
-              const run = status?.runs?.[r];
-              const tail = (run?.tail ?? '')
-                .trim()
-                .split('\n')
-                .filter(Boolean)
-                .slice(-3)
-                .join('\n');
-              return (
-                <li key={r} className="rounded-control border border-line bg-surface px-2.5 py-2">
-                  <div className="flex items-center gap-2">
-                    <RunChip routine={r} run={run} today={today} />
-                    {run?.file && (
-                      <button
-                        type="button"
-                        onClick={() => onLog(run.file!)}
-                        className="ml-auto text-xs font-medium text-accent hover:underline"
-                      >
-                        Open log
-                      </button>
-                    )}
-                  </div>
-                  {tail && (
-                    <p className="mt-1.5 line-clamp-3 text-xs whitespace-pre-line text-muted">
-                      {tail}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        </Fact>
+        <Fact icon={Inbox} label="Needs you">
+          {needs ? (
+            <Link to={deskHref} className="font-medium text-warn hover:underline">
+              {plural(needs, 'item')}
+            </Link>
+          ) : (
+            <span className="text-muted">Nothing</span>
+          )}
+        </Fact>
+        <Fact icon={Wallet} label="Night budget: $ cap and hours handed over">
+          {budget ? (
+            <span className="flex items-center gap-1.5">
+              <NumberField
+                value={project.budget_usd}
+                max={500}
+                prefix="$"
+                label={`Night budget in dollars for ${project.name}`}
+                onChange={(budget_usd) => set({ budget_usd })}
+              />
+              <NumberField
+                value={project.hours}
+                max={24}
+                suffix="h"
+                label={`Night hours for ${project.name}`}
+                onChange={(hours) => set({ hours })}
+              />
+              <Tooltip label="Done" className="flex">
+                <button
+                  type="button"
+                  aria-label="Done"
+                  onClick={() => setBudget(false)}
+                  className={ICON_GHOST}
+                >
+                  <Check className="size-3.5" aria-hidden />
+                </button>
+              </Tooltip>
+            </span>
+          ) : (
+            <Tooltip label="Edit the night budget" className="flex">
+              <button
+                type="button"
+                data-budget=""
+                aria-label={`Night budget for ${project.name}: $${project.budget_usd}, ${project.hours} h. Edit`}
+                onClick={() => setBudget(true)}
+                className="group inline-flex items-center gap-1 rounded-control tabular-nums hover:text-ink"
+              >
+                ${project.budget_usd} · {project.hours}h
+                <Pencil
+                  aria-hidden
+                  className="size-3 text-faint opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+                />
+              </button>
+            </Tooltip>
+          )}
+        </Fact>
+        {git && (
+          <Fact icon={GitBranch} label="Repository">
+            <Tooltip label={git.head} detail="Last commit" className="flex">
+              <span tabIndex={0} data-repo="" className="tabular-nums">
+                {git.dirty ? `${git.dirty} changed` : 'clean'}
+                {git.ahead !== '-' && git.ahead !== '0' && ` · ${git.ahead} ahead`}
+              </span>
+            </Tooltip>
+          </Fact>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Schedule and dispatch ───────────────────────────────────────────────────────────────────
+// ── How it runs ─────────────────────────────────────────────────────────────────────────────
 
-function Schedule({ draft, edit }: { draft: RoutinesConfig; edit: Edit }) {
-  const zone = zoneName(draft.schedule.timezone);
-  return (
-    <Section
-      title="Schedule"
-      icon={Clock}
-      description="When each routine fires every day. A computer asleep at that time runs the missed ones on wake, in order. Saved times apply within a minute."
-    >
-      <ul className="divide-y divide-line-soft">
-        {ROUTINES.map((r) => {
-          const Icon = ROUTINE_ICON[r];
-          return (
-            <li key={r} className="space-y-0.5 py-2.5 first:pt-0">
-              <label className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <Icon aria-hidden className="size-3.5 text-faint" /> {ROUTINE_NAMES[r]}
-                </span>
-                <input
-                  type="time"
-                  value={draft.schedule[r] ?? ''}
-                  aria-label={`${ROUTINE_NAMES[r]} time`}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (/^\d\d:\d\d$/.test(v)) edit((d) => (d.schedule[r] = v));
-                  }}
-                  className="rounded-control border border-line-strong bg-surface px-2 py-1 text-sm tabular-nums"
-                />
-              </label>
-              <p className="text-xs text-muted">{ROUTINE_ABOUT[r]}</p>
-            </li>
-          );
-        })}
-      </ul>
-      <label className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted">Timezone</span>
+function TimeChip({
+  routine,
+  value,
+  onChange,
+}: {
+  routine: Routine;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const Icon = ROUTINE_ICON[routine];
+  const chip =
+    'inline-flex h-7 items-center gap-1 rounded-full border border-line bg-surface px-2.5 text-sm tabular-nums';
+  if (editing)
+    return (
+      <span className={chip}>
+        <Icon aria-hidden className="size-3.5 text-faint" />
         <input
-          type="text"
-          value={draft.schedule.timezone ?? ''}
-          aria-label="Timezone"
-          spellCheck={false}
-          onChange={(e) => edit((d) => (d.schedule.timezone = e.target.value))}
-          className="w-48 rounded-control border border-line-strong bg-surface px-2 py-1 text-sm"
+          type="time"
+          autoFocus
+          value={value}
+          aria-label={`${ROUTINE_NAMES[routine]} time`}
+          onChange={(e) => /^\d\d:\d\d$/.test(e.target.value) && onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+          className="bg-transparent text-sm outline-none"
         />
-        {zone ? (
-          <span className="text-xs text-muted">now {zone}</span>
-        ) : (
-          <span className="text-xs text-danger">not a timezone this browser knows</span>
-        )}
-      </label>
-    </Section>
+      </span>
+    );
+  return (
+    <Tooltip
+      label={`${ROUTINE_NAMES[routine]} at ${value}`}
+      detail="Click to change"
+      className="flex"
+    >
+      <button
+        type="button"
+        data-time-chip={routine}
+        aria-label={`${ROUTINE_NAMES[routine]} at ${value}. Change`}
+        onClick={() => setEditing(true)}
+        className={clsx(chip, 'hover:bg-subtle')}
+      >
+        <Icon aria-hidden className="size-3.5 text-faint" />
+        {value || '—'}
+      </button>
+    </Tooltip>
   );
 }
 
-function Dispatch({ draft, edit }: { draft: RoutinesConfig; edit: Edit }) {
+const MODEL_TONE: Record<string, string> = {
+  haiku: 'bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200',
+  sonnet: 'bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200',
+  opus: 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200',
+};
+
+function HowItRuns({
+  draft,
+  config,
+  edit,
+}: {
+  draft: RoutinesConfig;
+  config: RoutinesConfig;
+  edit: Edit;
+}) {
+  const [open, setOpen] = useState(false);
+  const [models, setModels] = useState(false);
+  const level = config.cleanup?.level ?? 1;
+  const cleanup = CLEANUP_LEVELS[level] ?? CLEANUP_LEVELS[1]!;
+  const zone = zoneName(draft.schedule.timezone);
   const options = ROUTINE_MODELS.map((m) => ({ value: m, label: m }));
   return (
-    <Section
-      title="Model dispatch"
-      icon={Workflow}
-      description="The night run hands each task to the model for its kind and difficulty. The master that dispatches and verifies is fixed in routines.json."
-    >
-      <p className="text-xs text-muted">
-        Master: <span className="font-medium text-ink-soft">{draft.master.model}</span>,{' '}
-        {draft.master.effort} effort
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full max-w-2xl min-w-[22rem] text-sm">
-          <thead>
-            <tr className="text-left text-xs text-muted">
-              <th className="py-1 pr-2 font-medium">Kind</th>
-              {DIFFICULTIES.map((l) => (
-                <th key={l} className="px-1 py-1 font-medium capitalize">
-                  {l}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line-soft">
-            {Object.entries(draft.dispatch).map(([kind, row]) => (
-              <tr key={kind}>
-                <td className="py-1.5 pr-2 capitalize">{kind}</td>
-                {DIFFICULTIES.map((level) => (
-                  <td key={level} className="px-1 py-1.5">
-                    <Select
-                      value={row[level] ?? ''}
-                      label={`${kind}, ${level}`}
-                      options={
-                        row[level] && !(ROUTINE_MODELS as readonly string[]).includes(row[level]!)
-                          ? [...options, { value: row[level]!, label: row[level]! }]
-                          : options
-                      }
-                      onChange={(model) =>
-                        edit((d) => {
-                          d.dispatch[kind] = { ...d.dispatch[kind], [level]: model };
-                        })
-                      }
-                    />
-                  </td>
-                ))}
-              </tr>
+    <section aria-label="How it runs" className="space-y-3">
+      <h2>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-1 rounded-control text-xs font-semibold tracking-wide text-muted uppercase hover:text-ink"
+        >
+          <ChevronRight
+            aria-hidden
+            className={clsx('size-3.5 text-faint transition-transform', open && 'rotate-90')}
+          />
+          How it runs
+        </button>
+      </h2>
+      {open && (
+        <div className="space-y-4 rounded-block border border-line bg-surface p-4" data-how="">
+          <div className="flex flex-wrap items-center gap-2">
+            {ROUTINES.map((r) => (
+              <TimeChip
+                key={r}
+                routine={r}
+                value={draft.schedule[r] ?? ''}
+                onChange={(v) => edit((d) => (d.schedule[r] = v))}
+              />
             ))}
-          </tbody>
-        </table>
-      </div>
-    </Section>
-  );
-}
+            <label className="inline-flex h-7 items-center gap-1 rounded-full border border-line px-2.5 text-xs text-muted">
+              <input
+                type="text"
+                value={draft.schedule.timezone ?? ''}
+                aria-label="Timezone"
+                spellCheck={false}
+                onChange={(e) => edit((d) => (d.schedule.timezone = e.target.value))}
+                className="w-32 bg-transparent outline-none"
+              />
+              {zone ? (
+                <span>{zone}</span>
+              ) : (
+                <Tooltip label="Not a timezone this browser knows" className="flex">
+                  <span tabIndex={0} className="text-danger">
+                    <AlertTriangle
+                      aria-label="Not a timezone this browser knows"
+                      className="size-3"
+                    />
+                  </span>
+                </Tooltip>
+              )}
+            </label>
+            <InfoTip
+              label="About the schedule"
+              detail="Each routine fires once a day at its time; a computer asleep then runs the missed ones on wake, in order. Saved times apply within a minute."
+            />
+          </div>
 
-function Cleanup({ config }: { config: RoutinesConfig }) {
-  const level = config.cleanup?.level ?? 1;
-  const look = CLEANUP_LEVELS[level] ?? CLEANUP_LEVELS[1]!;
-  const overrides = config.projects.filter((p) => typeof p.cleanup === 'number');
-  return (
-    <Section
-      title="Cleanup"
-      icon={Brush}
-      description="Runs at the end of the full wrap-up, before the night makes new worktrees. Its list joins the evening page. The level is set in routines.json."
-    >
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1" data-cleanup-level={level}>
-        <span className="text-sm font-medium">
-          Level {level} · {look.name}
-        </span>
-        {config.cleanup?.scratch_days !== undefined && (
-          <span className="text-xs text-muted">
-            scratch kept {config.cleanup.scratch_days} days
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-muted">{look.about}</p>
-      {overrides.length > 0 && (
-        <p className="text-xs text-muted">
-          Per project: {overrides.map((p) => `${p.name} level ${p.cleanup}`).join(', ')}
-        </p>
+          <p
+            className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
+            data-cleanup-level={level}
+          >
+            <Brush aria-hidden className="size-3.5 shrink-0 text-faint" />
+            <span className="font-medium whitespace-nowrap">
+              Level {level} · {cleanup.name}
+            </span>
+            <span className="text-muted">{cleanup.line}</span>
+            <InfoTip
+              label="About cleanup"
+              detail={`${cleanup.about} Set in routines.json${config.cleanup?.scratch_days !== undefined ? `; scratch kept ${config.cleanup.scratch_days} days` : ''}.`}
+            />
+          </p>
+
+          <div className="space-y-1.5" data-dispatch="">
+            <div className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="font-medium">Models</span>
+              <InfoTip
+                label="About models"
+                detail={`The night run hands each task to the model for its kind and difficulty. The master that dispatches and verifies: ${draft.master.model}, ${draft.master.effort} effort.`}
+              />
+              <Tooltip
+                label={models ? 'Done editing models' : 'Edit models'}
+                className="ml-auto flex"
+              >
+                <button
+                  type="button"
+                  aria-label={models ? 'Done editing models' : 'Edit models'}
+                  aria-pressed={models}
+                  onClick={() => setModels(!models)}
+                  className={ICON_GHOST}
+                >
+                  {models ? (
+                    <Check className="size-3.5" aria-hidden />
+                  ) : (
+                    <Pencil className="size-3.5" aria-hidden />
+                  )}
+                </button>
+              </Tooltip>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="text-xs">
+                <thead>
+                  <tr className="text-faint">
+                    <th className="pr-3 text-left font-normal" />
+                    {DIFFICULTIES.map((l) => (
+                      <th key={l} className="px-1 pb-1 text-left font-normal">
+                        {l}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(draft.dispatch).map(([kind, row]) => (
+                    <tr key={kind}>
+                      <td className="py-0.5 pr-3 text-muted">{kind}</td>
+                      {DIFFICULTIES.map((level) => {
+                        const model = row[level] ?? '';
+                        return (
+                          <td key={level} className="px-1 py-0.5">
+                            {models ? (
+                              <Select
+                                value={model}
+                                label={`${kind}, ${level}`}
+                                className="w-24"
+                                options={
+                                  model && !(ROUTINE_MODELS as readonly string[]).includes(model)
+                                    ? [...options, { value: model, label: model }]
+                                    : options
+                                }
+                                onChange={(m) =>
+                                  edit((d) => {
+                                    d.dispatch[kind] = { ...d.dispatch[kind], [level]: m };
+                                  })
+                                }
+                              />
+                            ) : (
+                              <span
+                                data-model={`${kind}-${level}`}
+                                className={clsx(
+                                  'inline-block w-14 rounded px-1.5 py-0.5 text-center',
+                                  MODEL_TONE[model] ?? 'bg-sunken text-muted',
+                                )}
+                              >
+                                {model || '—'}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
-      <p className="text-xs text-faint">
-        Level 2 proposals will arrive on your{' '}
-        <Link to="/desk" className="text-accent hover:underline">
-          desk
-        </Link>{' '}
-        to approve; nothing to set here yet.
-      </p>
-    </Section>
+    </section>
   );
 }
 
@@ -1082,23 +1135,22 @@ function Unavailable({
   return (
     <section
       data-routines-unavailable=""
-      className="space-y-3 rounded-block border border-line bg-surface p-5"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-block border border-line bg-surface px-4 py-3"
     >
-      <h2 className="flex items-center gap-2 text-base font-semibold">
-        <AlertTriangle aria-hidden className="size-4 text-warn" /> Can’t reach Routines
-      </h2>
-      <p className="text-sm text-ink-soft">{reason}</p>
-      <p className="text-xs text-muted">In the Routines folder:</p>
-      <pre className="overflow-x-auto rounded-control bg-sunken px-3 py-2 font-mono text-xs text-ink-soft">
+      <AlertTriangle aria-hidden className="size-4 text-warn" />
+      <span className="text-sm font-medium">Routines isn’t answering</span>
+      <code className="rounded-control bg-sunken px-2 py-0.5 font-mono text-xs text-ink-soft">
         python3 server.py
-      </pre>
-      <p className="text-xs text-muted">
-        Pharos looks for it at {url} (set <code>PHAROS_ROUTINES_URL</code> to change that). The
-        schedule keeps firing without the page; only this panel needs it.
-      </p>
-      <button type="button" onClick={onRetry} className={BUTTON.secondary}>
-        <RefreshCw aria-hidden className="size-3.5" /> Try again
-      </button>
+      </code>
+      <InfoTip
+        label="About starting Routines"
+        detail={`${reason} Pharos looks for it at ${url} (PHAROS_ROUTINES_URL). The schedule keeps firing without it; only this page needs it.`}
+      />
+      <Tooltip label="Try again" className="ml-auto flex">
+        <button type="button" aria-label="Try again" onClick={onRetry} className={ICON_GHOST}>
+          <RefreshCw className="size-4" aria-hidden />
+        </button>
+      </Tooltip>
     </section>
   );
 }
@@ -1107,6 +1159,7 @@ type Pending = { routine: Routine; project: RoutinesProject };
 
 export function RoutinesPage() {
   const state = useResource<RoutinesState>('/api/routines/state');
+  const desk = useResource<Desk>('/api/desk');
   const { reload } = state;
   const data = state.data?.available ? state.data : null;
   // Runs move on their own: look again every 30 seconds.
@@ -1144,8 +1197,9 @@ export function RoutinesPage() {
       return next;
     });
 
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: ReactNode } | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [parked, setParked] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [confirmSave, setConfirmSave] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1155,17 +1209,13 @@ export function RoutinesPage() {
     setBusy(true);
     try {
       const res = await ownerPost<{ saved: string[] }>('/api/routines/save', { changes });
-      setConfirmSave(false);
       setBase(draft);
-      setNotice({
-        tone: 'ok',
-        text: <>Saved to routines.json: {res.saved.join('; ')}.</>,
-      });
+      setNotice({ tone: 'ok', text: `Saved: ${res.saved.join('; ')}` });
       reload();
     } catch (err) {
-      setConfirmSave(false);
       setNotice({ tone: 'error', text: (err as Error).message });
     } finally {
+      setConfirmSave(false);
       setBusy(false);
     }
   };
@@ -1175,7 +1225,7 @@ export function RoutinesPage() {
       await ownerPost('/api/routines/run', { routine, project: project.name });
       setNotice({
         tone: 'ok',
-        text: `Started the ${ROUTINE_NAMES[routine].toLowerCase()} for ${project.name}.`,
+        text: `Started the ${ROUTINE_NAMES[routine].toLowerCase()} for ${project.name}`,
       });
       setTimeout(reload, 1500);
     } catch (err) {
@@ -1202,31 +1252,105 @@ export function RoutinesPage() {
 
   const status = new Map((data?.status ?? []).map((s) => [s.name, s]));
   const today = data?.now.slice(0, 10) ?? '';
-  const enrolled = draft?.projects.filter((p) => p.enrolled).length ?? 0;
+  const enrolled = draft?.projects.filter((p) => p.enrolled) ?? [];
+  const resting = draft?.projects.filter((p) => !p.enrolled) ?? [];
+  const needs = enrolled.reduce((n, p) => n + (status.get(p.name)?.queue?.needs_you ?? 0), 0);
+  const running = (data?.status ?? []).flatMap((s) =>
+    ROUTINES.filter((r) => s.runs?.[r]?.status === 'running').map((routine) => ({
+      project: s.name,
+      routine,
+    })),
+  );
+  const marks = draft ? timeline(draft.schedule).marks : [];
+  const deskHref = (p: RoutinesProject) => {
+    const id = pharosProjectId(p, desk.data);
+    return id ? `/desk?project=${encodeURIComponent(id)}` : '/desk';
+  };
+  const pages = (['morning', 'evening'] as const).flatMap((k) => {
+    const page = data?.pages[k];
+    return page?.url ? [{ k, ...page }] : [];
+  });
+
+  const line = (p: RoutinesProject) => (
+    <li key={p.name}>
+      <ProjectLine
+        project={p}
+        status={status.get(p.name)}
+        marks={marks}
+        today={today}
+        open={open === p.name}
+        onToggle={() => setOpen(open === p.name ? null : p.name)}
+        onLog={(file) => void openLog(file)}
+        deskHref={deskHref(p)}
+      />
+      {open === p.name && (
+        <ProjectDetail
+          project={p}
+          status={status.get(p.name)}
+          night={nightRunOf(p.name, desk.data)}
+          deskHref={deskHref(p)}
+          edit={edit}
+          onRun={(routine) => setPending({ routine, project: p })}
+          onLog={(file) => void openLog(file)}
+        />
+      )}
+    </li>
+  );
 
   return (
-    <div className={clsx('mx-auto max-w-5xl space-y-5 p-4 sm:p-8', changes.length && 'pb-24')}>
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Routines</h1>
-        <span className="text-sm text-muted">
-          {data && draft
-            ? `wrap-up, night run and morning report for ${plural(enrolled, 'enrolled project')}`
-            : 'wrap-up, night run, morning report and cleanup'}
-        </span>
-        {data && (
-          <Tooltip
-            label={`As of ${data.now.replace('T', ' ')}`}
-            detail={`From Routines at ${data.url}`}
-            className="ml-auto flex"
-          >
-            <button type="button" onClick={reload} className={CONTROL} aria-label="Refresh">
-              <RefreshCw
-                aria-hidden
-                className={clsx('size-3', state.status === 'loading' && 'animate-spin')}
-              />
-              {data.now.slice(11)}
-            </button>
-          </Tooltip>
+    <div className={clsx('mx-auto max-w-3xl space-y-4 p-4 sm:p-8', changes.length && 'pb-24')}>
+      <header className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Routines</h1>
+          <span className="ml-auto flex items-center gap-1">
+            {pages.map((p) => {
+              const path = pharosPath(p.url);
+              const name = p.k === 'morning' ? 'Morning' : 'Evening';
+              const label = `${name} page · ${p.date ?? ''}${p.posted ? `, posted ${p.posted.slice(11)}` : ''}`;
+              const cls = clsx(ICON_GHOST, 'gap-1 px-1.5 text-xs');
+              const inner = (
+                <>
+                  <Newspaper aria-hidden className="size-3.5" />
+                  {name}
+                </>
+              );
+              return (
+                <Tooltip key={p.k} label={label} className="flex">
+                  {path ? (
+                    <Link to={path} aria-label={label} data-page-link={p.k} className={cls}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <a href={p.url} aria-label={label} data-page-link={p.k} className={cls}>
+                      {inner}
+                    </a>
+                  )}
+                </Tooltip>
+              );
+            })}
+            {data && (
+              <Tooltip
+                label="Refresh"
+                detail={`As of ${data.now.slice(11)}, from ${data.url}`}
+                className="flex"
+              >
+                <button type="button" aria-label="Refresh" onClick={reload} className={ICON_GHOST}>
+                  <RefreshCw
+                    aria-hidden
+                    className={clsx('size-3.5', state.status === 'loading' && 'animate-spin')}
+                  />
+                </button>
+              </Tooltip>
+            )}
+          </span>
+        </div>
+        {data && draft && (
+          <Headline
+            schedule={draft.schedule}
+            enrolled={enrolled.length}
+            needs={needs}
+            running={running}
+          />
         )}
       </header>
 
@@ -1235,70 +1359,66 @@ export function RoutinesPage() {
           role="status"
           data-routines-notice={notice.tone}
           className={clsx(
-            'flex items-start gap-2 rounded-control px-3 py-2 text-sm',
+            'flex items-center gap-2 rounded-control px-3 py-1.5 text-sm',
             notice.tone === 'ok'
               ? 'bg-sunken text-ink-soft'
               : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200',
           )}
         >
-          <span className="min-w-0 flex-1">{notice.text}</span>
-          <button
-            type="button"
-            onClick={() => setNotice(null)}
-            className="text-xs text-muted hover:text-ink"
-          >
-            Dismiss
-          </button>
+          {notice.tone === 'ok' ? (
+            <Check aria-hidden className="size-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 flex-1 truncate">{notice.text}</span>
+          <Tooltip label="Dismiss" className="flex">
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setNotice(null)}
+              className={ICON_GHOST}
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </Tooltip>
         </p>
       )}
 
       {state.data && !state.data.available ? (
         <Unavailable reason={state.data.reason} url={state.data.url} onRetry={reload} />
       ) : !data || !draft ? (
-        <div className="space-y-3">
-          <div className="h-20 animate-pulse rounded-block bg-sunken" />
-          <div className="h-64 animate-pulse rounded-block bg-sunken" />
-        </div>
+        <div className="h-64 animate-pulse rounded-block bg-sunken" />
       ) : (
         <>
-          <Glance state={data} draft={draft} />
-
-          <section aria-label="Projects" className="space-y-1.5">
-            <h2 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-muted uppercase">
-              Projects <span className="tabular-nums text-faint">{draft.projects.length}</span>
-              <span className="font-normal tracking-normal normal-case text-faint">
-                · $ caps the night’s spend; h is how much work the wrap-up hands over
-              </span>
-            </h2>
-            <ul className="divide-y divide-line-soft overflow-hidden rounded-block border border-line bg-surface">
-              {draft.projects.map((p) => (
-                <ProjectRow
-                  key={p.name}
-                  project={p}
-                  status={status.get(p.name)}
-                  today={today}
-                  open={open.has(p.name)}
-                  onToggle={() =>
-                    setOpen((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(p.name)) next.delete(p.name);
-                      else next.add(p.name);
-                      return next;
-                    })
-                  }
-                  edit={edit}
-                  onRun={(routine) => setPending({ routine, project: p })}
-                  onLog={(file) => void openLog(file)}
-                />
-              ))}
-            </ul>
+          <section
+            aria-label="Projects"
+            className="overflow-hidden rounded-block border border-line bg-surface"
+          >
+            <Axis schedule={draft.schedule} />
+            <ul className="divide-y divide-line-soft">{enrolled.map(line)}</ul>
+            {resting.length > 0 && (
+              <div className="border-t border-line-soft">
+                <button
+                  type="button"
+                  aria-expanded={parked}
+                  onClick={() => setParked(!parked)}
+                  className="flex w-full items-center gap-1 px-3 py-2 text-left text-sm text-muted hover:text-ink"
+                >
+                  <ChevronRight
+                    aria-hidden
+                    className={clsx(
+                      'size-3.5 text-faint transition-transform',
+                      parked && 'rotate-90',
+                    )}
+                  />
+                  Parked <span className="tabular-nums">({resting.length})</span>
+                </button>
+                {parked && <ul className="divide-y divide-line-soft">{resting.map(line)}</ul>}
+              </div>
+            )}
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Schedule draft={draft} edit={edit} />
-            <Cleanup config={data.config} />
-          </div>
-          <Dispatch draft={draft} edit={edit} />
+          <HowItRuns draft={draft} config={data.config} edit={edit} />
         </>
       )}
 
@@ -1306,7 +1426,7 @@ export function RoutinesPage() {
         <div
           role="region"
           aria-label="Unsaved changes"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:left-auto sm:right-6 sm:bottom-6 sm:rounded-block sm:border sm:shadow-overlay"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:right-6 sm:bottom-6 sm:left-auto sm:rounded-block sm:border sm:shadow-overlay"
         >
           <div className="flex items-center gap-2">
             <span className="mr-auto text-sm font-medium" data-unsaved={changes.length}>
@@ -1340,8 +1460,7 @@ export function RoutinesPage() {
             ))}
           </ul>
           <p className="text-xs text-muted">
-            The next scheduled runs use these. There is no undo here: change them back and save
-            again.
+            The next runs use these. No undo: change back and save.
           </p>
         </Confirm>
       )}
@@ -1349,26 +1468,19 @@ export function RoutinesPage() {
       {pending && (
         <Confirm
           title={`Start the ${ROUTINE_NAMES[pending.routine].toLowerCase()} for ${pending.project.name} now?`}
-          action={`Start ${SHORT[pending.routine].toLowerCase()}`}
+          action={`Start ${SHORT[pending.routine]}`}
           danger
           busy={busy}
           onConfirm={() => void run(pending)}
           onCancel={() => setPending(null)}
         >
           <p>
-            This starts real work: a headless Claude Code session in {pending.project.path}, capped
-            at{' '}
+            Real work: a headless agent in {pending.project.path}, up to{' '}
             <span className="font-medium">
               ${pending.routine === 'nightshift' ? pending.project.budget_usd : 2}
             </span>
-            {pending.routine === 'nightshift' && (
-              <> and {pending.project.hours} h of handed-off work</>
-            )}
             .
           </p>
-          {pending.routine === 'wrapup' && (
-            <p className="text-xs text-muted">It rewrites HANDOFF.md for tonight’s run.</p>
-          )}
         </Confirm>
       )}
 
@@ -1384,12 +1496,19 @@ export function RoutinesPage() {
             onClick={() => setLog(null)}
           />
           <div className="relative flex max-h-[85vh] w-full max-w-3xl animate-pop-in flex-col rounded-block bg-surface shadow-overlay">
-            <div className="flex items-center gap-2 border-b border-line-soft px-4 py-2.5">
-              <Repeat aria-hidden className="size-3.5 text-faint" />
+            <div className="flex items-center gap-2 border-b border-line-soft px-4 py-2">
+              <ScrollText aria-hidden className="size-3.5 text-faint" />
               <span className="min-w-0 flex-1 truncate font-mono text-xs">{log.file}</span>
-              <button type="button" onClick={() => setLog(null)} className={BUTTON.secondary}>
-                Close
-              </button>
+              <Tooltip label="Close" className="flex">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setLog(null)}
+                  className={ICON_GHOST}
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </Tooltip>
             </div>
             <pre className="min-h-0 flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-ink-soft">
               {log.text ?? 'Loading…'}

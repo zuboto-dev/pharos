@@ -1,14 +1,22 @@
-import type { RoutinesConfig, RoutinesState } from '@pharos/schema';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { Desk, RoutinesConfig, RoutinesState } from '@pharos/schema';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RoutinesLink, RoutinesPage, diffConfig, inTime, nextRun, runTime } from './RoutinesPage';
+import {
+  RoutinesLink,
+  RoutinesPage,
+  diffConfig,
+  inTime,
+  nextRun,
+  runTime,
+  timeline,
+} from './RoutinesPage';
 
 const CONFIG = (): RoutinesConfig => ({
   schedule: { wrapup: '00:00', nightshift: '01:00', daybreak: '07:00', timezone: 'UTC' },
   master: { model: 'opus', effort: 'high' },
   dispatch: { develop: { easy: 'sonnet', medium: 'sonnet', hard: 'opus' } },
-  cleanup: { level: 1, scratch_days: 7 },
+  cleanup: { level: 2, scratch_days: 7 },
   projects: [
     {
       name: 'garden',
@@ -16,7 +24,7 @@ const CONFIG = (): RoutinesConfig => ({
       enrolled: true,
       budget_usd: 8,
       hours: 4,
-      note: 'slot 1',
+      pm: { type: 'pharos', project: 'prj_g' },
     },
     { name: 'bike', path: '/tmp/bike', enrolled: false, budget_usd: 5, hours: 3 },
   ],
@@ -47,7 +55,7 @@ const STATE = (): RoutinesState => ({
           file: '2026-10-23-garden-wrapup.log',
           when: '2026-10-23T00:02',
           status: 'ok',
-          tail: 'done\n[stopping: wrap-up complete]',
+          tail: 'SECRET TAIL TEXT',
         },
         nightshift: {
           file: '2026-10-23-garden-nightshift.log',
@@ -62,6 +70,27 @@ const STATE = (): RoutinesState => ({
   ],
 });
 
+const DESK: Desk = {
+  items: [],
+  minutes: 0,
+  overdue: 0,
+  old: 0,
+  runs: [
+    {
+      id: 'run_1',
+      projectId: 'prj_g',
+      kind: 'night',
+      name: 'Night run · garden',
+      agent: 'Routines',
+      startedAt: '2026-10-23T06:00:00Z',
+      endedAt: '2026-10-23T07:00:00Z',
+      outcome: 'partial',
+      summary: 'Two slices landed',
+      counts: { done: 3, failed: 1, unverified: 2 },
+    },
+  ],
+};
+
 type Call = { url: string; init?: RequestInit };
 let calls: Call[] = [];
 let state: RoutinesState;
@@ -72,20 +101,12 @@ beforeEach(() => {
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
     if (url === '/api/routines/state') return Response.json(state);
-    if (url.startsWith('/api/routines/file'))
-      return Response.json({
-        project: 'garden',
-        name: 'NEXT.md',
-        text: '# NEXT · garden\n- [ ] A1 auto water',
-      });
+    if (url === '/api/desk') return Response.json(DESK);
     if (url.startsWith('/api/routines/log'))
       return Response.json({ file: 'x', text: 'the whole log' });
     if (url === '/api/routines/save') {
       const body = JSON.parse(String(init?.body)) as { changes: unknown[] };
-      return Response.json({
-        ok: true,
-        saved: body.changes.map(() => 'garden: night budget $8 → $10'),
-      });
+      return Response.json({ ok: true, saved: body.changes.map(() => 'saved it') });
     }
     if (url === '/api/routines/run') return Response.json({ ok: true });
     return Response.json({}, { status: 404 });
@@ -104,118 +125,145 @@ const show = () =>
   );
 
 const posts = () => calls.filter((c) => c.init?.method === 'POST');
+const line = (name: string) =>
+  document.querySelector(`[data-project-line="${name}"]`) as HTMLElement;
+const openGarden = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: 'garden' }));
+  return document.querySelector('[data-project-detail="garden"]') as HTMLElement;
+};
 
 describe('the Routines page', () => {
-  it('shows the glance, each project with its queue, budget, runs and repo', async () => {
+  it('leads with one headline and a quiet line per project, details hidden', async () => {
     show();
-    const garden = await screen.findByText('garden');
-    const row = garden.closest('li')!;
-    expect(screen.getByRole('switch', { name: 'Enrol garden' }).getAttribute('aria-checked')).toBe(
-      'true',
+    await screen.findByRole('button', { name: 'garden' });
+    const headline = document.querySelector('[data-headline]')!.textContent!;
+    expect(headline).toMatch('Tonight:');
+    expect(headline).toMatch('wrap-up 00:00');
+    expect(headline).toMatch('night 01:00');
+    expect(headline).toMatch('morning 07:00');
+    expect(headline).toMatch('1 project');
+    expect(headline).toMatch('3 need you');
+    // Three dots, one per routine, coloured by the last result.
+    const dots = [...line('garden').querySelectorAll('[data-run-dot]')].map((d) =>
+      d.getAttribute('data-look'),
     );
-    expect(screen.getByRole('switch', { name: 'Enrol bike' }).getAttribute('aria-checked')).toBe(
-      'false',
+    expect(dots).toEqual(['ok', 'error', 'never']);
+    // Needs-you count links to the desk on that project.
+    expect(within(line('garden')).getByRole('link').getAttribute('href')).toBe(
+      '/desk?project=prj_g',
     );
-    expect(within(row).getByText('3 need you')).toBeTruthy();
-    expect(
-      within(row).getByLabelText('Night budget in dollars for garden') as HTMLInputElement,
-    ).toHaveProperty('value', '8');
-    expect(within(row).getByLabelText('Night hours for garden') as HTMLInputElement).toHaveProperty(
-      'value',
-      '4',
-    );
-    expect(row.querySelector('[data-run-chip="wrapup"]')?.textContent).toMatch('Wrap-up ok00:02');
-    expect(row.querySelector('[data-run-chip="nightshift"]')?.textContent).toMatch(
-      'Night failed01:09',
-    );
-    expect(row.querySelector('[data-run-chip="daybreak"]')?.textContent).toMatch('Morning never');
-    expect(row.querySelector('[data-repo]')?.textContent).toMatch('2 changed · 3 ahead');
-    // At a glance: what needs the owner (enrolled projects only) and today's page, in this app.
-    expect(document.querySelector('[data-tile="needs"]')?.textContent).toMatch('3 items');
+    // Parked projects fold into one line.
+    expect(line('bike')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Parked/ }));
+    expect(line('bike')).toBeTruthy();
+    // No controls or file text on the rows.
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.queryByText(/Run now/)).toBeNull();
+    expect(screen.queryByText(/SECRET TAIL TEXT|NEXT · garden/)).toBeNull();
     expect(document.querySelector('[data-page-link="morning"]')?.getAttribute('href')).toBe(
       '/projects/prj_r/views/view_m',
     );
-    expect(document.querySelector('[data-tile="next"]')?.textContent).toMatch(
-      /Wrap-up|Night run|Morning report/,
-    );
-    expect(document.querySelector('[data-cleanup-level="1"]')?.textContent).toMatch(
-      'Level 1 · Safe',
-    );
     expect(posts()).toEqual([]);
   });
 
-  it('opens a row to its NEXT.md and last runs, and the full log', async () => {
+  it('names each dot for hover and opens its log on click', async () => {
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /garden/ }));
-    const details = await waitFor(() => {
-      const el = document.querySelector('[data-routines-details="garden"]');
-      if (!el) throw new Error('no details');
-      return el as HTMLElement;
+    const dot = await screen.findByRole('button', {
+      name: 'Night run · garden: failed, 01:09',
     });
-    await within(details).findByText(/A1 auto water/);
-    expect(within(details).getByText(/beans by 2026-11-01/)).toBeTruthy();
-    fireEvent.click(within(details).getAllByRole('button', { name: 'Open log' })[0]!);
+    fireEvent.click(dot);
     expect(await screen.findByText('the whole log')).toBeTruthy();
-    expect(calls.some((c) => c.url === '/api/routines/log?file=2026-10-23-garden-wrapup.log')).toBe(
-      true,
-    );
+    expect(
+      calls.some((c) => c.url === '/api/routines/log?file=2026-10-23-garden-nightshift.log'),
+    ).toBe(true);
   });
 
-  it('saves an edit only after showing what changes, as the owner', async () => {
+  it('opens a project to a few facts, and edits the budget on click', async () => {
     show();
-    const budget = await screen.findByLabelText('Night budget in dollars for garden');
-    fireEvent.change(budget, { target: { value: '10' } });
-    fireEvent.click(screen.getByRole('switch', { name: 'Enrol bike' }));
-    expect(screen.getByText('2 unsaved changes')).toBeTruthy();
+    const detail = await openGarden();
+    expect(within(detail).getByText('beans by 2026-11-01')).toBeTruthy();
+    expect(detail.querySelector('[data-night]')?.textContent).toMatch('3 done1 failed2 unverified');
+    expect(within(detail).getByText('3 items')).toBeTruthy();
+    expect(detail.querySelector('[data-repo]')?.textContent).toBe('2 changed · 3 ahead');
+    fireEvent.click(within(detail).getByRole('button', { name: /Night budget for garden/ }));
+    fireEvent.change(within(detail).getByLabelText('Night budget in dollars for garden'), {
+      target: { value: '10' },
+    });
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Save…' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('garden: night budget $8 → $10')).toBeTruthy();
-    expect(within(dialog).getByText('bike: enrolled')).toBeTruthy();
     expect(posts()).toEqual([]);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await screen.findByText(/Saved to routines.json/);
+    await screen.findByText(/Saved: saved it/);
     const [save] = posts();
     expect(save!.url).toBe('/api/routines/save');
     expect((save!.init!.headers as Record<string, string>)['x-pharos-author']).toBe('human:me');
     expect(JSON.parse(String(save!.init!.body))).toEqual({
-      changes: [
-        { field: 'budget_usd', project: 'garden', from: 8, to: 10 },
-        { field: 'enrolled', project: 'bike', from: false, to: true },
-      ],
+      changes: [{ field: 'budget_usd', project: 'garden', from: 8, to: 10 }],
     });
   });
 
   it('keeps a bad number out of the draft', async () => {
     show();
-    const hours = await screen.findByLabelText('Night hours for garden');
+    const detail = await openGarden();
+    fireEvent.click(within(detail).getByRole('button', { name: /Night budget for garden/ }));
+    const hours = within(detail).getByLabelText('Night hours for garden');
     fireEvent.change(hours, { target: { value: '99' } });
     expect(hours.getAttribute('aria-invalid')).toBe('true');
     expect(screen.queryByText(/unsaved change/)).toBeNull();
   });
 
-  it('asks before Run now starts anything, and Cancel starts nothing', async () => {
+  it('runs from the ⋯ menu only after asking, and Cancel starts nothing', async () => {
     show();
-    fireEvent.click(await screen.findByRole('button', { name: /garden/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /Run now/ }));
+    await openGarden();
+    fireEvent.click(screen.getByRole('button', { name: 'Options for garden' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Night run' }));
     const dialog = screen.getByRole('dialog');
-    expect(dialog?.textContent).toMatch('Start the night run for garden now?');
-    expect(dialog?.textContent).toMatch('$8');
-    // The safe choice has focus.
+    expect(dialog.textContent).toMatch('Start the night run for garden now?');
+    expect(dialog.textContent).toMatch('$8');
     expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(posts()).toEqual([]);
 
-    fireEvent.click(screen.getByRole('button', { name: /Run now/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Options for garden' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Wrap-up' }));
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Start wrap-up' }),
     );
-    await screen.findByText('Started the wrap-up for garden.');
+    await screen.findByText('Started the wrap-up for garden');
     expect(posts().map((c) => [c.url, JSON.parse(String(c.init!.body))])).toEqual([
       ['/api/routines/run', { routine: 'wrapup', project: 'garden' }],
     ]);
+  });
+
+  it('pauses a project from the ⋯ menu as an unsaved change', async () => {
+    show();
+    await openGarden();
+    fireEvent.click(screen.getByRole('button', { name: 'Options for garden' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Pause/ }));
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Parked \(2\)/ })).toBeTruthy();
+  });
+
+  it('keeps how it runs folded, with time chips, cleanup and models to edit on click', async () => {
+    show();
+    const toggle = await screen.findByRole('button', { name: 'How it runs' });
+    expect(document.querySelector('[data-how]')).toBeNull();
+    fireEvent.click(toggle);
+    expect(document.querySelector('[data-cleanup-level="2"]')?.textContent).toMatch(
+      'Level 2 · Tidy',
+    );
+    expect(document.querySelector('[data-model="develop-hard"]')?.textContent).toBe('opus');
+    fireEvent.click(screen.getByRole('button', { name: 'Morning report at 07:00. Change' }));
+    fireEvent.change(screen.getByLabelText('Morning report time'), {
+      target: { value: '06:30' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit models' }));
+    expect(document.querySelector('[data-model]')).toBeNull();
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
   });
 
   it('says how to start Routines when it is not reachable', async () => {
@@ -225,9 +273,9 @@ describe('the Routines page', () => {
       url: 'http://127.0.0.1:4777',
     };
     show();
-    expect(await screen.findByText('Can’t reach Routines')).toBeTruthy();
+    expect(await screen.findByText('Routines isn’t answering')).toBeTruthy();
     expect(screen.getByText('python3 server.py')).toBeTruthy();
-    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 
   it('has a sidebar link', () => {
@@ -251,13 +299,20 @@ describe('routine times', () => {
     expect(nextRun(schedule, new Date('2026-10-23T00:30:00Z'))?.routine).toBe('nightshift');
     expect(
       nextRun({ ...schedule, timezone: 'America/Chicago' }, new Date('2026-10-23T05:30:00Z')),
-    ).toMatchObject({
-      routine: 'nightshift',
-      inMinutes: 30,
-    });
+    ).toMatchObject({ routine: 'nightshift', inMinutes: 30 });
     expect(inTime(626)).toBe('in 10 h 26 min');
     expect(runTime('2026-10-23T00:02', '2026-10-23')).toBe('00:02');
     expect(runTime('2026-10-22T00:02', '2026-10-23')).toMatch(/22.*00:02/);
+  });
+
+  it('places tonight in order on the timeline, never too close, now between the marks', () => {
+    const line = timeline({ wrapup: '00:00', nightshift: '01:00', daybreak: '07:00' });
+    const [a, b, c] = line.marks.map((m) => m.x);
+    expect(a! < b! && b! < c! && c! <= 1).toBe(true);
+    expect(b! - a!).toBeGreaterThanOrEqual(0.15);
+    const now = line.at(4 * 60)!;
+    expect(now > b! && now < c!).toBe(true);
+    expect(line.at(14 * 60)).toBeNull();
   });
 
   it('diffs the draft against what was loaded', () => {

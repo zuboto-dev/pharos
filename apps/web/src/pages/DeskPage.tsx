@@ -20,7 +20,7 @@ import {
   Scale,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
-import { Link, NavLink } from 'react-router';
+import { Link, NavLink, useSearchParams } from 'react-router';
 import { OtherAnswerButton } from '../catalog/components/task-answer';
 import { Menu, MenuItem, MenuSeparator } from '../catalog/menu';
 import { Popover, usePopover } from '../catalog/popover';
@@ -795,7 +795,13 @@ export function DeskPage() {
   const desk = useResource<Desk>('/api/desk');
   const { reload } = desk;
   const [notice, setNotice] = useState<string | null>(null);
-  const [deskView, setDeskViewState] = useState(loadDeskView);
+  // `?project=<id>` (a link from the Routines page) opens the desk on that project.
+  const [params] = useSearchParams();
+  const [deskView, setDeskViewState] = useState(() => {
+    const saved = loadDeskView();
+    const project = params.get('project');
+    return project ? { ...saved, project } : saved;
+  });
   const setDeskView = (next: DeskView) => {
     setDeskViewState(next);
     try {

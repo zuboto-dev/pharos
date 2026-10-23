@@ -1,7 +1,6 @@
 import type { Desk, DeskItem, DeskRun } from '@pharos/schema';
 import clsx from 'clsx';
 import {
-  Sparkles,
   AlertTriangle,
   ArrowRight,
   ArrowUpDown,
@@ -53,6 +52,12 @@ export function waited(since: string, now = Date.now()): string {
 }
 
 const KIND_ICON = { decision: Scale, sheet: FileText, task: ListChecks, run: Moon } as const;
+const KIND_NAME = {
+  decision: 'A decision: choose an option',
+  sheet: 'A review sheet: open it to answer',
+  task: 'A task for you: mark it done or answer otherwise',
+  run: 'A run',
+} as const;
 
 /** Small buttons on a one-line row. */
 const ROW_BUTTON =
@@ -310,7 +315,11 @@ function Row({ item, onDone }: { item: DeskItem; onDone: (message: string) => vo
       data-desk-item={item.kind}
       className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 sm:gap-3"
     >
-      <Icon aria-hidden className="size-3.5 shrink-0 text-faint" />
+      <Tooltip label={KIND_NAME[item.kind]} className="flex shrink-0">
+        <span tabIndex={0} className="rounded-control text-faint">
+          <Icon aria-label={KIND_NAME[item.kind]} className="size-3.5" />
+        </span>
+      </Tooltip>
       <Tooltip label={item.title} detail={item.ask} className="flex min-w-24 flex-1 sm:min-w-56">
         <Link
           to={item.href}
@@ -319,7 +328,13 @@ function Row({ item, onDone }: { item: DeskItem; onDone: (message: string) => vo
           {item.title}
         </Link>
       </Tooltip>
-      {item.gate && <Lock aria-label="only you" className="size-3 shrink-0 text-warn" />}
+      {item.gate && (
+        <Tooltip label="Only you can do this" className="flex shrink-0">
+          <span tabIndex={0} className="text-warn">
+            <Lock aria-label="only you" className="size-3" />
+          </span>
+        </Tooltip>
+      )}
       {item.project && (
         <span className="hidden max-w-36 shrink-0 truncate text-xs text-muted sm:block">
           {item.project}
@@ -494,38 +509,35 @@ function Landed() {
     };
   }, []);
   if (!news?.projects.length) return null;
-  const total = news.projects.reduce((n, p) => n + p.revisions, 0);
   return (
-    <section aria-label="Since you last looked" data-landed="" className="space-y-2">
-      <h2 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted uppercase">
-        <Sparkles aria-hidden className="size-3.5" />
-        Since you last looked
-        <span className="font-normal tracking-normal text-faint normal-case tabular-nums">
-          {total} {total === 1 ? 'change' : 'changes'} by agents
-        </span>
+    <section
+      aria-label="What agents changed since you last looked"
+      data-landed=""
+      className="space-y-1.5"
+    >
+      <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
+        What agents changed since you last looked
       </h2>
       <ul className="divide-y divide-line-soft rounded-block border border-line bg-surface">
         {(all ? news.projects : news.projects.slice(0, LANDED_SHOWN)).map((p) => (
-          <li key={p.projectId} className="flex items-center gap-3 px-3 py-2 text-sm">
-            <Link
-              to={`/projects/${p.projectId}`}
-              className="shrink-0 font-medium text-ink hover:underline"
-            >
-              {p.project}
-            </Link>
+          <li key={p.projectId}>
+            {/* The whole row opens the project; its tooltip says who changed it. */}
             <Tooltip
-              label={p.latest.message}
-              detail={p.agents.join(', ')}
-              className="flex min-w-0 flex-1"
+              label={`${p.project}: ${p.latest.message}`}
+              detail={`${p.revisions} ${p.revisions === 1 ? 'change' : 'changes'} by ${p.agents.join(', ')} · latest ${waited(p.latest.at)} ago`}
+              className="flex w-full min-w-0"
             >
-              <span tabIndex={0} className="min-w-0 flex-1 truncate text-muted">
-                {p.latest.message}
-              </span>
+              <Link
+                to={`/projects/${p.projectId}`}
+                className="flex min-h-10 w-full min-w-0 items-center gap-3 px-3 py-2 text-sm hover:bg-sunken"
+              >
+                <span className="shrink-0 font-medium text-ink">{p.project}</span>
+                <span className="min-w-0 flex-1 truncate text-muted">{p.latest.message}</span>
+                <span className="shrink-0 text-xs text-muted tabular-nums">
+                  {p.revisions} {p.revisions === 1 ? 'change' : 'changes'}
+                </span>
+              </Link>
             </Tooltip>
-            <span className="shrink-0 rounded-full bg-sunken px-1.5 text-xs text-muted tabular-nums">
-              {p.revisions}
-              <span className="sr-only"> changes</span>
-            </span>
           </li>
         ))}
       </ul>
@@ -536,8 +548,7 @@ function Landed() {
           aria-expanded={all}
           className="text-xs text-muted hover:underline"
         >
-          {all ? 'Fewer' : `+${news.projects.length - LANDED_SHOWN}`}
-          <span className="sr-only"> projects</span>
+          {all ? 'Fewer' : `${news.projects.length - LANDED_SHOWN} more projects`}
         </button>
       )}
     </section>

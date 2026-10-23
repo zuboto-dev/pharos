@@ -269,9 +269,13 @@ describe('the desk page (R16)', () => {
 
   it('shows what agents landed since the last look, then marks the desk seen', async () => {
     await show();
-    const landed = await screen.findByRole('region', { name: 'Since you last looked' });
-    expect(landed.textContent).toContain('Garden');
-    expect(landed.textContent).toContain('Planted the beans');
+    const landed = await screen.findByRole('region', {
+      name: 'What agents changed since you last looked',
+    });
+    // One row per project, all of it a link: project, latest change, how many.
+    const row = within(landed).getByRole('link');
+    expect(row.getAttribute('href')).toBe('/projects/p1');
+    expect(row.textContent).toBe('GardenPlanted the beans4 changes');
     await waitFor(() => expect(seen).toContain('/api/desk/seen'));
   });
 });

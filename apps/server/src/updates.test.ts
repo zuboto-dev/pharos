@@ -36,6 +36,23 @@ function setup() {
 }
 
 describe('updates: work sessions', () => {
+  it('names what a reference points at instead of its id', () => {
+    const { store, at, t } = setup();
+    at(minutesAgo(30));
+    const { created } = store.apply(bot, {
+      message: 'Hand it to Sam',
+      operations: [
+        { op: 'create', type: 'assignee', ref: 'sam', data: { name: 'Sam', kind: 'human' } },
+        { op: 'update', type: 'task', id: t, data: { assigneeId: '$sam' } },
+      ],
+    });
+    const field = updatesOf(store, {}, { now: NOW })
+      .sessions[0]!.entities.find((e) => e.id === t)!
+      .fields.find((f) => f.field === 'assigneeId')!;
+    expect(field.after).toBe(created.sam);
+    expect(field.ref).toEqual({ before: null, after: 'Sam' });
+  });
+
   it('groups one author in one project with gaps under 30 minutes', () => {
     const { store, at, p, q, t } = setup();
     at(minutesAgo(120));

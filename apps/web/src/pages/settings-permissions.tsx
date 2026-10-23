@@ -2,9 +2,11 @@ import {
   PERMISSION_ROUTES,
   PERMISSION_TARGETS,
   type PermissionAction,
+  type PermissionAsk,
   type PermissionFolder,
   type PermissionLists,
   type PermissionPreview,
+  type PermissionRisk,
   type PermissionStatus,
   type PermissionSuggestion,
   type PermissionTarget,
@@ -13,20 +15,27 @@ import {
   type PermissionsOverview,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { ChevronRight, FolderGit2, KeyRound, Undo2, X } from 'lucide-react';
+import { ChevronRight, FolderGit2, Hand, KeyRound, Undo2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { SkeletonRows } from '../catalog/skeleton';
-import { InfoTip, Tooltip } from '../catalog/tooltip';
+import { Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError } from '../lib/api';
+import { useNotificationEvents } from '../lib/events';
 import { plural, timeAgo } from '../lib/format';
 import { Section } from './settings-ui';
 
 /**
- * Settings → Agent permissions: what Claude Code agents kept asking permission for (or were
- * stopped on) per project folder, and one-click Allow / Deny that Pharos writes into that
- * folder's Claude Code settings after showing the exact change. Only this page writes a rule:
- * every request says it's the owner (`X-Pharos-Author: human:me`), and agents are refused.
+ * Settings → Agent permissions.
+ *
+ * - "Waiting now": live asks from the Claude Code hook (an agent is at a permission prompt right
+ *   now): which project and agent, the command in plain words and its risk, and Allow always /
+ *   Just this once / Deny / answer in the terminal.
+ * - Per folder (collapsed): what agents kept asking for in the last two weeks, one line each; a
+ *   line opens to what it does, why agents ask, two examples, the risk, and Allow / Deny.
+ *
+ * Only this page writes a rule: every request says it's the owner (`X-Pharos-Author: human:me`);
+ * agents are refused. Every write shows the exact change first, keeps a backup, and can be undone.
  */
 
 const OWNER_HEADERS = { 'x-pharos-author': 'human:me' };
@@ -69,11 +78,36 @@ const STATUS: Record<PermissionStatus, { label: string; className: string }> = {
   not_set: { label: 'Not set', className: 'bg-subtle text-muted' },
 };
 
+const RISK: Record<PermissionRisk, { label: string; className: string }> = {
+  low: {
+    label: 'Low risk',
+    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+  },
+  medium: {
+    label: 'Medium risk',
+    className: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+  },
+  high: {
+    label: 'High risk',
+    className: 'bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200',
+  },
+};
+
 const SOURCE_LABEL = {
   local: 'settings.local.json',
   shared: 'settings.json',
   user: '~/.claude/settings.json',
 };
+
+function Pill({ className, children }: { className: string; children: React.ReactNode }) {
+  return (
+    <span
+      className={clsx('rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap', className)}
+    >
+      {children}
+    </span>
+  );
+}
 
 /** "asked 23 times this week", or over the whole window when the week had none. */
 export function askedText(
@@ -85,41 +119,30 @@ export function askedText(
     : `asked ${plural(s.total, 'time')} in ${windowDays} days`;
 }
 
-function breakdown(s: PermissionSuggestion): string {
-  const parts = [
-    s.approved && `${s.approved} approved by you at the prompt`,
-    s.denied &&
-      `${s.denied} needed approval nobody gave (you said no, or a background run couldn’t ask)`,
-    s.blocked && `${s.blocked} stopped by auto mode’s safety check`,
+/** Why agents ask: which routines or sessions, and how the asks ended. */
+function whyText(s: PermissionSuggestion, windowDays: number): string {
+  const who = s.origins.map((o) => `${o.label} (${o.count})`).join(', ');
+  const how = [
+    s.approved && `${s.approved} approved by you`,
+    s.denied && `${s.denied} waited for an approval nobody gave`,
+    s.blocked && `${s.blocked} stopped by auto mode`,
     s.ruleDenied && `${s.ruleDenied} stopped by a rule or hook`,
-  ].filter(Boolean);
-  return `${parts.join('; ')}. ${s.total} in the last two weeks, last ${timeAgo(s.lastAt)}.`;
+  ]
+    .filter(Boolean)
+    .join(', ');
+  return `${who ? `From ${who}. ` : ''}${s.total} in ${windowDays} days (${how}); last ${timeAgo(s.lastAt)}.`;
 }
 
-function StatusBadge({ s }: { s: PermissionSuggestion }) {
-  const status = STATUS[s.status];
-  const badge = (
-    <span
-      className={clsx(
-        'rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
-        status.className,
-      )}
-    >
-      {status.label}
-    </span>
-  );
-  if (!s.statusSource) return badge;
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Tooltip
-      label={`${status.label} in ${SOURCE_LABEL[s.statusSource]}`}
-      detail={s.matchedBy ? `By ${s.matchedBy}` : undefined}
-    >
-      {badge}
-    </Tooltip>
+    <div className="grid gap-0.5 sm:grid-cols-[7.5rem_1fr] sm:gap-3">
+      <dt className="text-xs font-medium text-muted sm:pt-0.5">{label}</dt>
+      <dd className="min-w-0 text-sm">{children}</dd>
+    </div>
   );
 }
 
-function SuggestionRow({
+function CommandRow({
   s,
   windowDays,
   onChoose,
@@ -128,125 +151,131 @@ function SuggestionRow({
   windowDays: number;
   onChoose: (action: PermissionAction) => void;
 }) {
-  const allowDisabled = !s.allowable || s.status === 'allowed';
+  const [open, setOpen] = useState(false);
+  const status = STATUS[s.status];
+  const count = s.week > 0 ? `${s.week} this week` : `${s.total} in ${windowDays} d`;
   return (
-    <li className="space-y-1.5 py-3" aria-label={s.rule}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded bg-subtle px-1.5 py-0.5 text-[13px] break-all">{s.rule}</code>
-            <StatusBadge s={s} />
-          </div>
-          <p className="flex items-center gap-1 text-sm text-ink-soft">
-            {askedText(s, windowDays)}
-            <InfoTip label={`About the asks for ${s.rule}`} detail={breakdown(s)} />
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {s.allowable ? (
-            <button
-              type="button"
-              className={BUTTON.secondary}
-              disabled={allowDisabled}
-              onClick={() => onChoose('allow')}
-            >
-              Allow
-            </button>
-          ) : (
-            <Tooltip label="Deny only" detail={s.reason}>
+    <li aria-label={s.rule}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 py-2.5 text-left"
+      >
+        <ChevronRight
+          className={clsx('size-3.5 shrink-0 text-faint transition-transform', open && 'rotate-90')}
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 truncate text-sm">{s.summary}</span>
+        {s.status !== 'not_set' && (
+          <span className={clsx('hidden sm:inline', 'text-xs')}>
+            <Pill className={status.className}>{status.label}</Pill>
+          </span>
+        )}
+        <span className="shrink-0 text-xs text-ink-soft tabular-nums">{count}</span>
+      </button>
+      {open && (
+        <dl className="mb-3 ml-5.5 space-y-2.5 rounded-tile bg-sunken p-3">
+          <Detail label="What it does">
+            {s.summary}.{' '}
+            <code className="rounded bg-subtle px-1 text-[12px] break-all">{s.rule}</code>
+          </Detail>
+          <Detail label="Why agents ask">{whyText(s, windowDays)}</Detail>
+          {s.examples.length > 0 && (
+            <Detail label="Examples">
+              <ul className="space-y-0.5">
+                {s.examples.slice(0, 2).map((e) => (
+                  <li key={e} className="truncate font-mono text-xs text-ink-soft" title={e}>
+                    {e}
+                  </li>
+                ))}
+              </ul>
+            </Detail>
+          )}
+          <Detail label="Risk">
+            <Pill className={RISK[s.risk].className}>{RISK[s.risk].label}</Pill>{' '}
+            <span className="text-ink-soft">{s.riskWhy}</span>
+          </Detail>
+          <Detail label="Your rule">
+            <div className="flex flex-wrap items-center gap-2">
+              {s.statusSource ? (
+                <Tooltip
+                  label={`${status.label} in ${SOURCE_LABEL[s.statusSource]}`}
+                  detail={s.matchedBy ? `By ${s.matchedBy}` : undefined}
+                >
+                  <Pill className={status.className}>{status.label}</Pill>
+                </Tooltip>
+              ) : (
+                <Pill className={status.className}>{status.label}</Pill>
+              )}
+              {s.allowable && (
+                <button
+                  type="button"
+                  className={BUTTON.secondary}
+                  disabled={s.status === 'allowed'}
+                  onClick={() => onChoose('allow')}
+                >
+                  Allow
+                </button>
+              )}
               <button
                 type="button"
                 className={BUTTON.secondary}
-                disabled
-                aria-label={`Allow (${s.reason ?? 'deny only'})`}
+                disabled={s.status === 'denied'}
+                onClick={() => onChoose('deny')}
               >
-                Allow
+                Deny
               </button>
-            </Tooltip>
-          )}
-          <button
-            type="button"
-            className={BUTTON.secondary}
-            disabled={s.status === 'denied'}
-            onClick={() => onChoose('deny')}
-          >
-            Deny
-          </button>
-        </div>
-      </div>
-      {s.examples.length > 0 && (
-        <ul aria-label="Examples" className="space-y-0.5">
-          {s.examples.map((e) => (
-            <li key={e} className="truncate font-mono text-xs text-muted" title={e}>
-              {e}
-            </li>
-          ))}
-        </ul>
+              {!s.allowable && <span className="text-xs text-muted">{s.reason}</span>}
+            </div>
+          </Detail>
+        </dl>
       )}
     </li>
   );
 }
 
-const SHOWN = 5;
-
 function FolderCard({
   folder,
   windowDays,
-  open: initiallyOpen,
   onChoose,
 }: {
   folder: PermissionFolder;
   windowDays: number;
-  open: boolean;
   onChoose: (folder: PermissionFolder, s: PermissionSuggestion, action: PermissionAction) => void;
 }) {
-  const [open, setOpen] = useState(initiallyOpen);
-  const [all, setAll] = useState(false);
-  const list = all ? folder.suggestions : folder.suggestions.slice(0, SHOWN);
-  const hidden = folder.suggestions.length - list.length + (all ? folder.more : 0);
-  const summary =
+  const [open, setOpen] = useState(false);
+  const count =
     folder.total === 0
-      ? 'No asks in the last two weeks'
+      ? 'no asks'
       : folder.week > 0
-        ? `${plural(folder.week, 'ask')} this week · ${folder.total} in ${windowDays} days`
+        ? `${plural(folder.week, 'ask')} this week`
         : `${plural(folder.total, 'ask')} in ${windowDays} days`;
   return (
-    <li className="rounded-tile border border-line-soft">
+    <li className="rounded-tile border border-line-soft" aria-label={folder.label}>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full flex-wrap items-start gap-x-2 gap-y-1 px-3 py-2.5 text-left"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
       >
         <ChevronRight
-          className={clsx(
-            'mt-0.5 size-4 shrink-0 text-faint transition-transform',
-            open && 'rotate-90',
-          )}
+          className={clsx('size-4 shrink-0 text-faint transition-transform', open && 'rotate-90')}
           aria-hidden
         />
-        <span className="min-w-0 flex-1 space-y-0.5">
-          <span className="flex flex-wrap items-baseline gap-x-2">
-            <span className="flex items-center gap-1.5 text-sm font-medium">
-              <FolderGit2 className="size-4 shrink-0 text-faint" aria-hidden />
-              {folder.label}
-            </span>
-            {folder.projects.length > 0 && (
-              <span className="text-xs text-muted">{folder.projects.join(', ')}</span>
-            )}
-          </span>
-          <span className="block text-xs break-all text-muted">{folder.displayPath}</span>
+        <FolderGit2 className="size-4 shrink-0 text-faint" aria-hidden />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          {folder.projects[0] ?? folder.label}
         </span>
-        <span className="basis-full pl-6 text-xs text-ink-soft tabular-nums sm:basis-auto sm:pl-0">
-          {summary}
-        </span>
+        <span className="shrink-0 text-xs text-ink-soft tabular-nums">{count}</span>
       </button>
       {open && (
         <div className="border-t border-line-soft px-3">
+          <p className="pt-2 text-xs break-all text-muted">{folder.displayPath}</p>
           {folder.suggestions.length ? (
             <ul className="divide-y divide-line-soft">
-              {list.map((s) => (
-                <SuggestionRow
+              {folder.suggestions.map((s) => (
+                <CommandRow
                   key={s.rule}
                   s={s}
                   windowDays={windowDays}
@@ -257,25 +286,12 @@ function FolderCard({
           ) : (
             <p className="py-3 text-sm text-muted">Agents didn’t ask for anything here lately.</p>
           )}
-          {(hidden > 0 || folder.unfixable > 0) && (
-            <div className="space-y-1 border-t border-line-soft py-2.5 text-xs text-muted">
-              {!all && folder.suggestions.length > SHOWN && (
-                <button
-                  type="button"
-                  className="font-medium text-accent hover:underline"
-                  onClick={() => setAll(true)}
-                >
-                  Show {folder.suggestions.length - SHOWN} more
-                </button>
-              )}
-              {all && folder.more > 0 && <p>{plural(folder.more, 'rarer rule')} not listed.</p>}
-              {folder.unfixable > 0 && (
-                <p>
-                  {plural(folder.unfixable, 'more call')} stopped for the command’s shape (a
-                  variable, cd before git) or by a built-in safety check: no rule changes those.
-                </p>
-              )}
-            </div>
+          {(folder.more > 0 || folder.unfixable > 0) && (
+            <p className="border-t border-line-soft py-2.5 text-xs text-muted">
+              {folder.more > 0 && `${plural(folder.more, 'rarer command')} not listed. `}
+              {folder.unfixable > 0 &&
+                `${plural(folder.unfixable, 'more call')} stopped for the command’s shape (a variable, cd before git) or by a safety check: no rule changes those.`}
+            </p>
           )}
         </div>
       )}
@@ -330,40 +346,38 @@ function ListDiff({ before, after }: { before: PermissionLists; after: Permissio
   );
 }
 
-type Pending = { folder: PermissionFolder; s: PermissionSuggestion; action: PermissionAction };
+/** What a confirm dialog changes: how to load the preview and how to write it. */
+type Change = {
+  title: string;
+  action: PermissionAction;
+  intro: string;
+  preview: () => Promise<PermissionPreview>;
+  write: (hash: string) => Promise<PermissionWriteRecord | undefined>;
+};
 
 function ConfirmChange({
-  pending,
-  target,
+  change,
   onClose,
   onWritten,
 }: {
-  pending: Pending;
-  target: PermissionTarget;
+  change: Change;
   onClose: () => void;
-  onWritten: (result: PermissionWriteResult) => void;
+  onWritten: (record: PermissionWriteRecord | undefined) => void;
 }) {
   const [preview, setPreview] = useState<PermissionPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
-  const change = {
-    folderId: pending.folder.id,
-    rule: pending.s.rule,
-    action: pending.action,
-    target,
-  };
 
   useEffect(() => {
     let cancelled = false;
-    send<PermissionPreview>(PERMISSION_ROUTES.preview, change).then(
+    change.preview().then(
       (p) => !cancelled && setPreview(p),
       (err: unknown) => !cancelled && setError(errorText(err)),
     );
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, target]);
+  }, [change]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -375,32 +389,25 @@ function ConfirmChange({
     if (!preview) return;
     setWriting(true);
     try {
-      onWritten(
-        await send<PermissionWriteResult>(PERMISSION_ROUTES.write, {
-          ...change,
-          hash: preview.hash,
-        }),
-      );
+      onWritten(await change.write(preview.hash));
     } catch (err) {
       setError(errorText(err));
       setWriting(false);
     }
   };
 
-  const verb = pending.action === 'allow' ? 'Allow' : 'Deny';
+  const verb = change.action === 'allow' ? 'Allow' : 'Deny';
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`${verb} ${pending.s.rule}`}
+      aria-label={change.title}
       className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
     >
       <div className="absolute inset-0 bg-neutral-900/30 dark:bg-black/50" onClick={onClose} />
       <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-lg animate-pop-in space-y-4 overflow-y-auto rounded-block bg-surface p-5 shadow-overlay">
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-base font-semibold">
-            {verb} <code className="text-[15px] break-all">{pending.s.rule}</code>
-          </h2>
+          <h2 className="text-base font-semibold break-all">{change.title}</h2>
           <button
             type="button"
             aria-label="Close"
@@ -410,11 +417,7 @@ function ConfirmChange({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <p className="text-sm text-ink-soft">
-          {pending.action === 'allow'
-            ? `Claude Code will run these without asking in ${pending.folder.label}.`
-            : `Claude Code won’t run these in ${pending.folder.label}, even when asked.`}
-        </p>
+        <p className="text-sm text-ink-soft">{change.intro}</p>
         {error && (
           <p role="alert" className="text-sm text-danger">
             {error}
@@ -430,17 +433,11 @@ function ConfirmChange({
               <p className="font-mono text-xs break-all">{preview.path}</p>
             </div>
             <p className="text-sm">
-              Adds it to <code>{preview.addTo}</code>
+              Adds <code className="break-all">{preview.rule}</code> to <code>{preview.addTo}</code>
               {preview.removeFrom.length > 0 && (
                 <>
                   {' '}
-                  and takes it out of{' '}
-                  {preview.removeFrom.map((l, i) => (
-                    <span key={l}>
-                      {i > 0 && ', '}
-                      <code>{l}</code>
-                    </span>
-                  ))}
+                  and takes it out of <code>{preview.removeFrom.join(', ')}</code>
                 </>
               )}
               . Nothing else in the file changes; Pharos keeps a copy of it first.
@@ -462,7 +459,7 @@ function ConfirmChange({
           </button>
           <button
             type="button"
-            className={pending.action === 'allow' ? BUTTON.primary : BUTTON.danger}
+            className={change.action === 'allow' ? BUTTON.primary : BUTTON.danger}
             disabled={!preview || preview.unchanged || writing}
             onClick={() => void write()}
           >
@@ -470,6 +467,170 @@ function ConfirmChange({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function secondsLeft(ask: PermissionAsk, now: number): number {
+  return Math.max(0, Math.round((new Date(ask.expiresAt).getTime() - now) / 1000));
+}
+
+const ANSWERED: Partial<Record<PermissionAsk['status'], string>> = {
+  allowed_once: 'Allowed once',
+  allowed_always: 'Allowed always',
+  denied: 'Denied',
+  terminal: 'Left to the terminal',
+  expired: 'Asked in the terminal (no answer in time)',
+};
+
+function AskCard({
+  ask,
+  now,
+  onAnswer,
+  onAlways,
+}: {
+  ask: PermissionAsk;
+  now: number;
+  onAnswer: (answer: 'once' | 'deny' | 'terminal') => void;
+  onAlways: () => void;
+}) {
+  const where = ask.projects[0] ?? ask.displayFolder;
+  return (
+    <li
+      aria-label={`Ask from ${where}`}
+      className="space-y-3 rounded-tile border border-amber-300 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/20"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <Hand className="size-4 shrink-0 text-warn" aria-hidden />
+            {where}
+          </p>
+          <p className="text-xs break-all text-muted">
+            {ask.agent} · {ask.displayFolder}
+          </p>
+        </div>
+        <span className="text-xs text-ink-soft tabular-nums">
+          waits {secondsLeft(ask, now)} s, then asks in the terminal
+        </span>
+      </div>
+      <dl className="space-y-2">
+        <Detail label="Wants to">{ask.summary}</Detail>
+        <Detail label="Command">
+          <code className="block rounded bg-surface px-1.5 py-0.5 font-mono text-xs break-all">
+            {ask.example}
+          </code>
+        </Detail>
+        <Detail label="Risk">
+          <Pill className={RISK[ask.risk].className}>{RISK[ask.risk].label}</Pill>{' '}
+          <span className="text-ink-soft">{ask.riskWhy}</span>
+        </Detail>
+      </dl>
+      <div className="flex flex-wrap items-center gap-2">
+        {ask.canAlwaysAllow && (
+          <button type="button" className={BUTTON.primary} onClick={onAlways}>
+            Allow always
+          </button>
+        )}
+        <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('once')}>
+          Just this once
+        </button>
+        <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('deny')}>
+          Deny
+        </button>
+        <button
+          type="button"
+          className="tap-area text-sm text-accent hover:underline"
+          onClick={() => onAnswer('terminal')}
+        >
+          I’ll answer in the terminal
+        </button>
+      </div>
+      {!ask.canAlwaysAllow && (
+        <p className="text-xs text-muted">
+          {ask.allowable
+            ? 'No “Allow always” here: the agent isn’t working in a project folder.'
+            : `No “Allow always”: ${ask.reason ?? 'it can only be denied'}.`}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function WaitingAsks({
+  asks,
+  onChanged,
+  onChange,
+  target,
+  onError,
+}: {
+  asks: PermissionAsk[];
+  onChanged: () => void;
+  onChange: (change: Change) => void;
+  target: PermissionTarget;
+  onError: (message: string) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const waiting = asks.filter((a) => a.status === 'waiting');
+  const answered = asks.filter((a) => a.status !== 'waiting').slice(0, 3);
+  useEffect(() => {
+    if (!waiting.length) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [waiting.length]);
+  if (!asks.length) return null;
+
+  const answer = async (ask: PermissionAsk, answer: 'once' | 'deny' | 'terminal') => {
+    try {
+      await send(`${PERMISSION_ROUTES.asks}/${ask.id}/answer`, { answer });
+    } catch (err) {
+      onError(errorText(err));
+    }
+    onChanged();
+  };
+
+  return (
+    <div className="space-y-2" aria-label="Waiting now">
+      {waiting.length > 0 && <h3 className="text-sm font-semibold">Waiting now</h3>}
+      <ul className="space-y-2">
+        {waiting.map((ask) => (
+          <AskCard
+            key={ask.id}
+            ask={ask}
+            now={now}
+            onAnswer={(a) => void answer(ask, a)}
+            onAlways={() =>
+              onChange({
+                title: `Allow always: ${ask.summary}`,
+                action: 'allow',
+                intro: `Claude Code agents in ${ask.projects[0] ?? ask.displayFolder} will run this without asking, starting with the one waiting now.`,
+                preview: () =>
+                  send<PermissionPreview>(`${PERMISSION_ROUTES.asks}/${ask.id}/preview`, {
+                    target,
+                  }),
+                write: async (hash) =>
+                  (
+                    await send<PermissionAsk>(`${PERMISSION_ROUTES.asks}/${ask.id}/answer`, {
+                      answer: 'always',
+                      target,
+                      hash,
+                    })
+                  ).record,
+              })
+            }
+          />
+        ))}
+      </ul>
+      {answered.length > 0 && (
+        <ul className="space-y-1 text-xs text-muted" aria-label="Answered asks">
+          {answered.map((a) => (
+            <li key={a.id} className="truncate">
+              {ANSWERED[a.status]}: {a.summary.toLowerCase()} ({a.projects[0] ?? a.displayFolder},{' '}
+              {timeAgo(a.answeredAt ?? a.at)})
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -513,10 +674,11 @@ function RecentChanges({
 
 export function AgentPermissions() {
   const [data, setData] = useState<PermissionsOverview | null>(null);
+  const [asks, setAsks] = useState<PermissionAsk[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [target, setTarget] = useState<PermissionTarget>('local');
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [change, setChange] = useState<Change | null>(null);
   const [done, setDone] = useState<PermissionWriteRecord | null>(null);
 
   const load = useCallback(() => {
@@ -528,7 +690,21 @@ export function AgentPermissions() {
       (err: unknown) => setLoadError(errorText(err)),
     );
   }, []);
+  const loadAsks = useCallback(() => {
+    send<PermissionAsk[]>(PERMISSION_ROUTES.asks).then(
+      (list) => setAsks(Array.isArray(list) ? list : []),
+      () => {},
+    );
+  }, []);
   useEffect(load, [load]);
+  useEffect(loadAsks, [loadAsks]);
+  // A new ask arrives as a notification; waiting ones also expire, so look again now and then.
+  useNotificationEvents(loadAsks, loadAsks);
+  const anyWaiting = asks.some((a) => a.status === 'waiting');
+  useEffect(() => {
+    const timer = setInterval(loadAsks, anyWaiting ? 3000 : 15000);
+    return () => clearInterval(timer);
+  }, [loadAsks, anyWaiting]);
 
   const undo = async (record: PermissionWriteRecord) => {
     try {
@@ -541,16 +717,39 @@ export function AgentPermissions() {
     }
   };
 
+  const choose = (folder: PermissionFolder, s: PermissionSuggestion, action: PermissionAction) => {
+    setError(null);
+    const body = { folderId: folder.id, rule: s.rule, action, target };
+    setChange({
+      title: `${action === 'allow' ? 'Allow' : 'Deny'}: ${s.summary}`,
+      action,
+      intro:
+        action === 'allow'
+          ? `Claude Code will run these without asking in ${folder.projects[0] ?? folder.label}.`
+          : `Claude Code won’t run these in ${folder.projects[0] ?? folder.label}, even when asked.`,
+      preview: () => send<PermissionPreview>(PERMISSION_ROUTES.preview, body),
+      write: async (hash) =>
+        (await send<PermissionWriteResult>(PERMISSION_ROUTES.write, { ...body, hash })).record,
+    });
+  };
+
   const folders = data?.folders ?? [];
   return (
     <Section
       id="permissions"
       title="Agent permissions"
       icon={KeyRound}
-      description="Pharos reads Claude Code’s session logs on this computer (never sends them anywhere) and counts the tool calls that needed your approval or were stopped, over the last two weeks. Only you, here, can write a rule; agents can’t."
+      description="Pharos reads Claude Code’s session logs on this computer (never sends them anywhere) and counts the tool calls that needed your approval or were stopped, over the last two weeks. With the Pharos hook installed (pnpm agents install), an agent waiting at a permission prompt shows here too. Only you, here, can write a rule; agents can’t."
     >
+      <WaitingAsks
+        asks={asks}
+        target={target}
+        onChanged={loadAsks}
+        onChange={setChange}
+        onError={setError}
+      />
       <p className="text-sm text-ink-soft">
-        What Claude Code agents kept asking for, per folder. Allow or Deny writes the rule into that
+        What Claude Code agents kept asking for, per project. Allow or Deny writes a rule into that
         folder’s <code className="text-[13px]">.claude/settings.local.json</code> (just you, not
         committed), or into the shared <code className="text-[13px]">.claude/settings.json</code> if
         you pick it.
@@ -587,7 +786,7 @@ export function AgentPermissions() {
         >
           <span className="min-w-0 flex-1">
             {done.action === 'allow' ? 'Allowed' : 'Denied'}{' '}
-            <code className="text-[13px]">{done.rule}</code> in{' '}
+            <code className="text-[13px] break-all">{done.rule}</code> in{' '}
             <span className="break-all">{done.path}</span>
           </span>
           <button type="button" className={BUTTON.secondary} onClick={() => void undo(done)}>
@@ -606,18 +805,9 @@ export function AgentPermissions() {
       ) : !data ? (
         <SkeletonRows rows={3} label="Reading Claude Code’s logs" />
       ) : folders.length ? (
-        <ul className="space-y-2">
-          {folders.map((f, i) => (
-            <FolderCard
-              key={f.id}
-              folder={f}
-              windowDays={data.windowDays}
-              open={i === 0 && f.total > 0}
-              onChoose={(folder, s, action) => {
-                setError(null);
-                setPending({ folder, s, action });
-              }}
-            />
+        <ul className="space-y-2" aria-label="Projects">
+          {folders.map((f) => (
+            <FolderCard key={f.id} folder={f} windowDays={data.windowDays} onChoose={choose} />
           ))}
         </ul>
       ) : (
@@ -626,15 +816,15 @@ export function AgentPermissions() {
         </p>
       )}
       {data && <RecentChanges recent={data.recent ?? []} onUndo={(r) => void undo(r)} />}
-      {pending && (
+      {change && (
         <ConfirmChange
-          pending={pending}
-          target={target}
-          onClose={() => setPending(null)}
-          onWritten={(result) => {
-            setPending(null);
-            setDone(result.record);
+          change={change}
+          onClose={() => setChange(null)}
+          onWritten={(record) => {
+            setChange(null);
+            if (record) setDone(record);
             load();
+            loadAsks();
           }}
         />
       )}

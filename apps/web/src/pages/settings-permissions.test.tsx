@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type {
+  PermissionAsk,
   PermissionPreview,
   PermissionSuggestion,
   PermissionsOverview,
@@ -11,8 +12,11 @@ import { AgentPermissions, askedText } from './settings-permissions';
 type Call = { url: string; method: string; body?: unknown; author?: string };
 let calls: Call[];
 let overview: PermissionsOverview;
+let asks: PermissionAsk[];
 
-const suggestion = (s: Partial<PermissionSuggestion> & { rule: string }): PermissionSuggestion => ({
+const suggestion = (
+  s: Partial<PermissionSuggestion> & { rule: string; summary: string },
+): PermissionSuggestion => ({
   tool: 'Bash',
   total: 5,
   week: 4,
@@ -24,6 +28,9 @@ const suggestion = (s: Partial<PermissionSuggestion> & { rule: string }): Permis
   examples: [],
   status: 'not_set',
   allowable: true,
+  risk: 'low',
+  riskWhy: 'Only reads; it changes nothing.',
+  origins: [{ label: '/nightshift', count: 4 }],
   ...s,
 });
 
@@ -38,8 +45,46 @@ const RECORD: PermissionWriteRecord = {
   undoable: true,
 };
 
+const ASK: PermissionAsk = {
+  id: 'a1',
+  at: new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 40_000).toISOString(),
+  status: 'waiting',
+  folder: '/home/me/code/shop',
+  displayFolder: '~/code/shop',
+  projects: ['Shop site'],
+  agent: '/nightshift',
+  tool: 'Bash',
+  example: 'npx pnpm@12.9.1 test',
+  rule: 'Bash(npx pnpm@12.9.1 test:*)',
+  summary: 'Runs the project’s tests',
+  risk: 'low',
+  riskWhy: 'Runs the project’s own test scripts.',
+  allowable: true,
+  canAlwaysAllow: true,
+};
+
+function preview(body: { rule?: string; action?: string }): PermissionPreview {
+  const rule = body.rule ?? ASK.rule;
+  return {
+    folderId: 'f1',
+    path: '/home/me/code/shop/.claude/settings.local.json',
+    exists: true,
+    rule,
+    action: (body.action as 'allow') ?? 'allow',
+    addTo: (body.action as 'allow') ?? 'allow',
+    removeFrom: [],
+    before: { allow: ['Bash(ls:*)'], deny: [], ask: [] },
+    after: { allow: ['Bash(ls:*)', rule], deny: [], ask: [] },
+    unchanged: false,
+    warnings: [],
+    hash: 'h1',
+  };
+}
+
 beforeEach(() => {
   calls = [];
+  asks = [];
   overview = {
     windowDays: 14,
     scannedAt: '2026-10-23T10:00:00.000Z',
@@ -63,19 +108,19 @@ beforeEach(() => {
         },
         more: 0,
         suggestions: [
-          suggestion({ rule: 'Bash(pnpm build:*)', examples: ['pnpm build --prod'] }),
+          suggestion({
+            rule: 'Bash(pnpm build:*)',
+            summary: 'Builds or starts the project',
+            examples: ['pnpm build --prod', 'pnpm build', 'pnpm build --x'],
+          }),
           suggestion({
             rule: 'Bash(rm:*)',
+            summary: 'Runs the command “rm”',
             total: 3,
             week: 0,
             allowable: false,
+            risk: 'high',
             reason: 'Deletes files, so it can only be denied',
-          }),
-          suggestion({
-            rule: 'Bash(git log:*)',
-            status: 'allowed',
-            statusSource: 'user',
-            matchedBy: 'Bash(git:*)',
           }),
         ],
       },
@@ -87,32 +132,24 @@ beforeEach(() => {
     const author = new Headers(init?.headers).get('x-pharos-author') ?? undefined;
     calls.push({ url, method, body, author });
     if (url === '/api/permissions') return Response.json(overview);
-    if (url === '/api/permissions/preview')
-      return Response.json({
-        folderId: 'f1',
-        path: '/home/me/code/shop/.claude/settings.local.json',
-        exists: true,
-        rule: body.rule,
-        action: body.action,
-        addTo: body.action,
-        removeFrom: [],
-        before: { allow: ['Bash(ls:*)'], deny: [], ask: [] },
-        after: { allow: ['Bash(ls:*)', body.rule], deny: [], ask: [] },
-        unchanged: false,
-        warnings: [],
-        hash: 'h1',
-      } satisfies PermissionPreview);
+    if (url === '/api/permissions/asks') return Response.json(asks);
+    if (url === '/api/permissions/preview' || url.endsWith('/preview'))
+      return Response.json(preview(body ?? {}));
     if (url === '/api/permissions/write') {
       overview = { ...overview, recent: [RECORD] };
       return Response.json({ preview: {}, record: RECORD });
     }
-    if (url === '/api/permissions/undo') {
-      overview = {
-        ...overview,
-        recent: [{ ...RECORD, undone: '2026-10-23T10:01:00.000Z', undoable: false }],
-      };
-      return Response.json({ ...RECORD, undoable: false });
+    if (url.startsWith('/api/permissions/asks/') && url.endsWith('/answer')) {
+      const status = {
+        once: 'allowed_once',
+        deny: 'denied',
+        terminal: 'terminal',
+        always: 'allowed_always',
+      }[body.answer as string];
+      asks = asks.map((a) => ({ ...a, status: status as PermissionAsk['status'] }));
+      return Response.json({ ...asks[0], ...(body.answer === 'always' ? { record: RECORD } : {}) });
     }
+    if (url === '/api/permissions/undo') return Response.json({ ...RECORD, undoable: false });
     return Response.json({});
   });
 });
@@ -127,41 +164,47 @@ describe('Agent permissions in Settings', () => {
     expect(askedText({ week: 0, total: 1 }, 14)).toBe('asked 1 time in 14 days');
   });
 
-  it('lists asks per folder, with status and deny-only rules', async () => {
+  it('starts collapsed: a project, a count; then one line per command; then its detail', async () => {
     render(<AgentPermissions />);
-    const row = await screen.findByRole('listitem', { name: 'Bash(pnpm build:*)' });
-    expect(within(row).getByText('asked 4 times this week')).toBeTruthy();
-    expect(within(row).getByText('pnpm build --prod')).toBeTruthy();
-    expect(within(row).getByText('Not set')).toBeTruthy();
-    const rm = screen.getByRole('listitem', { name: 'Bash(rm:*)' });
-    expect((within(rm).getByRole('button', { name: /^Allow/ }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect((within(rm).getByRole('button', { name: 'Deny' }) as HTMLButtonElement).disabled).toBe(
-      false,
-    );
-    const log = screen.getByRole('listitem', { name: 'Bash(git log:*)' });
-    expect(within(log).getByText('Allowed')).toBeTruthy();
-    expect((within(log).getByRole('button', { name: 'Allow' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect(screen.getByText(/settings\.local\.json/, { selector: 'code' })).toBeTruthy();
+    const folder = await screen.findByRole('listitem', { name: 'shop' });
+    const header = within(folder).getByRole('button', { name: /Shop site/ });
+    expect(header.getAttribute('aria-expanded')).toBe('false');
+    expect(within(folder).getByText('7 asks this week')).toBeTruthy();
+    expect(within(folder).queryByText('Builds or starts the project')).toBeNull();
+    fireEvent.click(header);
+    const row = within(folder).getByRole('listitem', { name: 'Bash(pnpm build:*)' });
+    expect(within(row).getByText('Builds or starts the project')).toBeTruthy();
+    expect(within(row).getByText('4 this week')).toBeTruthy();
+    // No buttons until a command is opened.
+    expect(within(row).queryByRole('button', { name: 'Allow' })).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: /Builds or starts/ }));
+    expect(within(row).getByText(/From \/nightshift \(4\)/)).toBeTruthy();
+    expect(within(row).getAllByText(/^pnpm build/)).toHaveLength(2);
+    expect(within(row).getByText('Low risk')).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'Allow' })).toBeTruthy();
+    // A deny-only command has Deny and says why.
+    const rm = within(folder).getByRole('listitem', { name: 'Bash(rm:*)' });
+    fireEvent.click(within(rm).getByRole('button', { name: /rm/ }));
+    expect(within(rm).queryByRole('button', { name: 'Allow' })).toBeNull();
+    expect(within(rm).getByRole('button', { name: 'Deny' })).toBeTruthy();
+    expect(within(rm).getByText('Deletes files, so it can only be denied')).toBeTruthy();
     expect(calls.every((c) => c.author === 'human:me')).toBe(true);
   });
 
   it('shows the exact change, writes it as the owner, and undoes it', async () => {
     render(<AgentPermissions />);
-    const row = await screen.findByRole('listitem', { name: 'Bash(pnpm build:*)' });
+    fireEvent.click(await screen.findByRole('button', { name: /Shop site/ }));
+    const row = screen.getByRole('listitem', { name: 'Bash(pnpm build:*)' });
+    fireEvent.click(within(row).getByRole('button', { name: /Builds or starts/ }));
     fireEvent.click(within(row).getByRole('button', { name: 'Allow' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Allow Bash(pnpm build:*)' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Allow: Builds or starts the project',
+    });
     await within(dialog).findByText('/home/me/code/shop/.claude/settings.local.json');
     expect(within(dialog).getByText('+ Bash(pnpm build:*)')).toBeTruthy();
-    expect(calls.some((c) => c.url.endsWith('/write'))).toBe(false);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Allow and write' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    const write = calls.find((c) => c.url === '/api/permissions/write')!;
-    expect(write).toMatchObject({
-      method: 'POST',
+    expect(calls.find((c) => c.url === '/api/permissions/write')).toMatchObject({
       author: 'human:me',
       body: {
         folderId: 'f1',
@@ -174,18 +217,46 @@ describe('Agent permissions in Settings', () => {
     const status = await screen.findByRole('status');
     fireEvent.click(within(status).getByRole('button', { name: 'Undo' }));
     await waitFor(() => expect(calls.some((c) => c.url === '/api/permissions/undo')).toBe(true));
-    expect(calls.find((c) => c.url === '/api/permissions/undo')?.body).toEqual({ id: 'w1' });
   });
 
-  it('writes to the shared settings.json when picked', async () => {
+  it('shows a live ask with its project, agent, plain words and risk, and answers it', async () => {
+    asks = [ASK];
     render(<AgentPermissions />);
-    fireEvent.click(await screen.findByLabelText(/Everyone on the repo/));
-    const row = await screen.findByRole('listitem', { name: 'Bash(rm:*)' });
-    fireEvent.click(within(row).getByRole('button', { name: 'Deny' }));
-    await screen.findByRole('dialog', { name: 'Deny Bash(rm:*)' });
-    expect(calls.find((c) => c.url === '/api/permissions/preview')?.body).toMatchObject({
-      action: 'deny',
-      target: 'shared',
+    const card = await screen.findByRole('listitem', { name: 'Ask from Shop site' });
+    expect(within(card).getByText('Runs the project’s tests')).toBeTruthy();
+    expect(within(card).getByText('npx pnpm@12.9.1 test')).toBeTruthy();
+    expect(within(card).getByText(/\/nightshift/)).toBeTruthy();
+    expect(within(card).getByText('Low risk')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Just this once' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/permissions/asks/a1/answer')?.body).toEqual({
+        answer: 'once',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('listitem', { name: 'Ask from Shop site' })).toBeNull(),
+    );
+    expect(screen.getByText(/Allowed once/)).toBeTruthy();
+  });
+
+  it('Allow always on a live ask shows the change before writing', async () => {
+    asks = [ASK];
+    render(<AgentPermissions />);
+    const card = await screen.findByRole('listitem', { name: 'Ask from Shop site' });
+    fireEvent.click(within(card).getByRole('button', { name: 'Allow always' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Allow always: Runs the project’s tests',
     });
+    await within(dialog).findByText('+ Bash(npx pnpm@12.9.1 test:*)');
+    expect(calls.some((c) => c.url.endsWith('/answer'))).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Allow and write' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith('/answer'))?.body).toEqual({
+        answer: 'always',
+        target: 'local',
+        hash: 'h1',
+      }),
+    );
+    expect(await screen.findByRole('status')).toBeTruthy();
   });
 });

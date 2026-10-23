@@ -204,6 +204,7 @@ export function AgentPanel({
   const drag = useRef<{ x: number; width: number } | null>(null);
   const label = status.agent?.label ?? 'Agent';
   const shared = status.sharedWith?.map((p) => p.name).join(', ');
+  const sharedCount = status.sharedWith?.length ?? 0;
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     drag.current = { x: e.clientX, width };
@@ -249,7 +250,9 @@ export function AgentPanel({
         />
       )}
       <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-line px-3">
+        {/* The name gives way (it truncates) so the buttons on the right always show. */}
         <Tooltip
+          className="min-w-0"
           label={`${label}, connected to this Pharos`}
           detail={
             [
@@ -267,7 +270,16 @@ export function AgentPanel({
           >
             <Bot className="size-4 shrink-0 text-accent" aria-hidden />
             <span className="truncate">{label}</span>
-            {shared && <span className="truncate font-normal text-faint">· also {shared}</span>}
+            {sharedCount > 0 && (
+              // How many, not who: the names are in the tooltip, so a long list never crowds out
+              // Stop and Close.
+              <span className="shrink-0 font-normal text-faint">
+                ·{' '}
+                {sharedCount === 1
+                  ? 'shared with 1 project'
+                  : `shared with ${sharedCount} projects`}
+              </span>
+            )}
             {state.state === 'connecting' && (
               <Loader2 className="size-3.5 shrink-0 animate-spin text-faint" aria-hidden />
             )}

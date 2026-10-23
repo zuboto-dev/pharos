@@ -1,0 +1,25 @@
+---
+name: pharos-report
+description: Use when the user asks for a report, a review, a status or progress update, a summary of what was done, or more details or an explanation about a project, and Pharos's MCP tools (mcp__pharos__*) are available. Writes it in Pharos as a report document or a review desk, with pictures before words, and answers in chat with the link. Not for quick factual answers or code changes.
+---
+
+<!-- Installed by Pharos (pnpm agents install); `pnpm agents remove` takes it out. -->
+
+Pharos is installed here, so reports live in Pharos, where the user reads them, not in chat.
+
+1. **No Pharos tools?** If no `mcp__pharos__*` tools are available, answer as usual and stop.
+2. **Find the project.** `PHAROS_PROJECT_IDS` in the environment names it when you run in
+   Pharos's panel; else `list {type: "project"}` and match this folder's repository or the
+   project the user named. Then `project_snapshot`.
+3. **Read the guide once.** `report_guide` (report documents, the glance test, examples).
+4. **Write it.**
+   - A report, status or "more details": a report document (`view_create` with `doc`): a claim
+     as the heading, 3–5 key numbers, then sections that each lead with something to see (stats,
+     a chart, a table, a figure, a drawing, a clip), words only for the claim and the so-what.
+     Facts the page shows are Pharos data it reads, not numbers copied into it.
+   - A review, or anything the user must choose or do: a review desk (sheets with decisions
+     that have options and a recommendation, and tasks for them), so they answer in place and
+     it reaches their desk.
+   - Updating an existing page beats making a new one (`view_list`, then `view_update`).
+5. **Check it.** `view_preview`; fix every warning you can.
+6. **Answer in chat** with one or two lines (the claim, what needs them) and the page's link.

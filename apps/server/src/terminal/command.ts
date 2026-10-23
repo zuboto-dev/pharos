@@ -104,16 +104,23 @@ export function terminalBrief(projects: TerminalProject[], serverUrl: string): s
   if (projects.length === 1)
     return (
       `You are running in the agent panel of the Pharos project ${named(projects[0]!)}, at ` +
-      `${serverUrl}. "This project" means that Pharos project unless the user names another one.`
+      `${serverUrl}. "This project" means that Pharos project unless the user names another one. ` +
+      REPORTS_LINE
     );
   return (
     `You are running in the agent panel that the Pharos projects ${projects.map(named).join(', ')} ` +
     `share, at ${serverUrl}: their code is in this folder. The user may talk about any of them. ` +
     `A reference they paste from a page ("[Pharos: …]") names a view, block or task, which ` +
     `belongs to one project; when it isn't clear which project they mean, ask before changing ` +
-    `anything in Pharos.`
+    `anything in Pharos. ` +
+    REPORTS_LINE
   );
 }
+
+/** Reports, reviews and details go in Pharos, as its MCP instructions say for every agent. */
+const REPORTS_LINE =
+  'When the user asks for a report, a review, a status update or more details, write it in ' +
+  'Pharos (a report document, or a review desk when they must decide) and answer with its link.';
 
 /** The agent the panel runs: the one chosen for answering in Settings while installed, else the first installed. */
 export function terminalPreset(store: Store, installed: AgentPreset[]): AgentPreset | undefined {

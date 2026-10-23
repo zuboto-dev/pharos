@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm --recursive run test",
-    "service": "bash scripts/pharos-service.sh"
+    "service": "bash scripts/pharos-service.sh",
+    "agents": "node scripts/agents-setup.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

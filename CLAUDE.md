@@ -65,6 +65,11 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
   with answering off, a made-up garden season (`fixture.mjs`), per-run MCP config as in
   eval/compat; checks the doc is valid, previews with no warnings, and uses live values and a
   chart or table; saves the agent's doc to `--out` (default `eval/results/report-doc/`)
+- `pnpm agents install|status|remove` — teaches this computer's agents to use Pharos for reports,
+  reviews and details: a Claude Code skill (`agents/claude/pharos-report`, installed to
+  `~/.claude/skills`) and a marked block in Codex's `~/.codex/AGENTS.md` (`agents/codex`). Only
+  what Pharos wrote is replaced or removed. The same rule is in the MCP instructions (`mcp.ts`)
+  and the panel's brief (`terminalBrief`), so a connected agent sees it without the install too
 - `pnpm service install|status|update|autoupdate on|off|start|stop|restart|log|uninstall` — run
   the built server as a launchd user agent on macOS (`scripts/pharos-service.sh`): starts at
   login, restarts on exit, logs to `~/.pharos/server.log`. The built server also serves

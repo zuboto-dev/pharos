@@ -471,6 +471,8 @@ function RunsPill({
 
 type LandedNews = {
   since: number;
+  /** The newest revision this read covers: what opening the desk marks seen. */
+  until?: number;
   projects: {
     projectId: string;
     project: string;
@@ -499,7 +501,16 @@ function Landed() {
         const data = (await res.json()) as LandedNews;
         if (!live || !Array.isArray(data?.projects)) return;
         setNews(data);
-        await fetch('/api/desk/seen', { method: 'PUT' });
+        // Only what was shown is seen: a change landing meanwhile is news next time.
+        await fetch('/api/desk/seen', {
+          method: 'PUT',
+          ...(typeof data.until === 'number'
+            ? {
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ revision: data.until }),
+              }
+            : {}),
+        });
       } catch {
         // Nothing new to show is fine.
       }

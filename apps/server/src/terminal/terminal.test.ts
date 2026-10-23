@@ -356,6 +356,25 @@ describe('terminal sessions', () => {
     expect(spawned).toHaveLength(3);
   });
 
+  it('never signals an agent that already exited (its pid may be another program’s by now)', () => {
+    const killed: [number, string][] = [];
+    const sessions = new TerminalSessions(fakeSpawn, {
+      killGroup: (pid, signal) => killed.push([pid, signal]),
+    });
+    sessions.attach('p1', launch, client(), size);
+    sessions.attach('p2', launch, client(), size);
+    const [first, second] = [spawned[0]!, spawned[1]!];
+    first.end(0);
+    sessions.restart('p1', launch, size); // the restart button after the agent quit
+    second.end(0);
+    sessions.killAll(); // the server stops with an exited session still open in a panel
+    const pids = killed.map(([pid]) => pid);
+    expect(pids).not.toContain(first.pid);
+    expect(pids).not.toContain(second.pid);
+    expect(first.killed).toEqual([]);
+    expect(second.killed).toEqual([]);
+  });
+
   it('survives a panel whose connection throws', () => {
     const sessions = new TerminalSessions(fakeSpawn, { killGroup: () => {} });
     sessions.attach('p1', launch, { send: () => {}, close: () => {} }, size);

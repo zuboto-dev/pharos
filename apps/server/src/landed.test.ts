@@ -69,4 +69,22 @@ describe('what agents landed since the desk was seen (R16)', () => {
     expect((await app.request('/api/desk/seen', { method: 'PUT' })).status).toBe(200);
     expect(landedSince(store).projects).toEqual([]);
   });
+
+  it('marks seen only what the desk showed, not a change that landed after it read', async () => {
+    const { store, a, task } = setup();
+    const app = createApp(store);
+    task(bot('Garden agent'), a, 'Plant');
+    const read = (await (await app.request('/api/desk/landed')).json()) as { until: number };
+    // An agent lands a change while the desk is open, before the page marks what it showed.
+    task(bot('Night runner'), a, 'Water');
+    const put = await app.request('/api/desk/seen', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ revision: read.until }),
+    });
+    expect(put.status).toBe(200);
+    expect(landedSince(store).projects.map((p) => [p.revisions, p.latest.message])).toEqual([
+      [1, 'Add Water'],
+    ]);
+  });
 });

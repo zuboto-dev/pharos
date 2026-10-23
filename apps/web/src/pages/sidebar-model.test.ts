@@ -1,6 +1,9 @@
 import type { Entity, EntityType } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import {
+  removeSectionOps,
+  sectionAndInside,
+  sectionPath,
   buildTree,
   moveFolderOps,
   moveProjectOps,
@@ -138,6 +141,46 @@ describe('ordering ops', () => {
       { op: 'update', type: 'project', id: 'p3', data: { repositoryId: 'repo_a' } },
       // p1 is already at order 1
       { op: 'update', type: 'project', id: 'p2', data: { order: 2 } },
+    ]);
+  });
+});
+
+describe('sections inside sections', () => {
+  const business = e('section', 'sec_b', { name: 'business', order: 0 });
+  const gdo = e('section', 'sec_g', { name: 'g-do', order: 0, parentId: 'sec_b' });
+  const deep = e('section', 'sec_d', { name: 'engine', order: 0, parentId: 'sec_g' });
+  const repoG = e('repository', 'repo_g', { name: 'g-do', order: 0, sectionId: 'sec_g' });
+  const all = [business, gdo, deep];
+
+  it('nests them in the tree, each holding its own folders', () => {
+    const tree = buildTree([], [repoG], all);
+    expect(tree.sections.map((n) => n.section.id)).toEqual(['sec_b']);
+    const [b] = tree.sections;
+    expect(b!.items).toEqual([]);
+    expect(b!.children.map((n) => n.section.id)).toEqual(['sec_g']);
+    expect(b!.children[0]!.items.map((i) => i.kind === 'folder' && i.repository.id)).toEqual([
+      'repo_g',
+    ]);
+    expect(b!.children[0]!.children.map((n) => n.section.id)).toEqual(['sec_d']);
+    expect(sectionPath(all, 'sec_d')).toBe('business › g-do › engine');
+    expect([...sectionAndInside(all, 'sec_b')].sort()).toEqual(['sec_b', 'sec_d', 'sec_g']);
+  });
+
+  it('a loop or a missing parent shows the section at the top level, never hides it', () => {
+    const a = e('section', 'sec_a', { name: 'a', order: 0, parentId: 'sec_c' });
+    const c = e('section', 'sec_c', { name: 'c', order: 1, parentId: 'sec_a' });
+    const lost = e('section', 'sec_l', { name: 'lost', order: 2, parentId: 'sec_gone' });
+    const tree = buildTree([], [], [a, c, lost]);
+    expect(tree.sections.map((n) => n.section.id)).toEqual(['sec_a', 'sec_c', 'sec_l']);
+  });
+
+  it('removing one moves what it held up a level', () => {
+    const p = e('project', 'p_g', { name: 'G', status: 'active', order: 0, sectionId: 'sec_g' });
+    expect(removeSectionOps(gdo, all, [repoG], [p])).toEqual([
+      { op: 'update', type: 'repository', id: 'repo_g', data: { sectionId: 'sec_b' } },
+      { op: 'update', type: 'project', id: 'p_g', data: { sectionId: 'sec_b' } },
+      { op: 'update', type: 'section', id: 'sec_d', data: { parentId: 'sec_b' } },
+      { op: 'delete', type: 'section', id: 'sec_g' },
     ]);
   });
 });

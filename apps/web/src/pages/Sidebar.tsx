@@ -50,8 +50,14 @@ import {
   archiveChange,
   isArchived,
   projectSiblings,
+  removeSectionOps,
+  sectionAndInside,
+  sectionParents,
+  sectionPath,
+  sectionSiblings,
   type Container,
   type Item,
+  type SectionNode,
 } from './sidebar-model';
 
 type Project = Entity<'project'>;
@@ -262,18 +268,19 @@ export function Sidebar() {
   /** The agent running for a folder's projects (they share one), if any. */
   const folderHint = (projects: Project[]) =>
     projects.map((p) => terminals.get(p.id)).find(Boolean);
-  /** An agent running for any project in a section (shown while it is closed). */
-  const sectionHint = (sectionId: string) =>
-    terminals.size
-      ? folderHint(
-          w.projects.filter(
-            (p) =>
-              p.data.sectionId === sectionId ||
-              (p.data.repositoryId &&
-                repositoryById.get(p.data.repositoryId)?.data.sectionId === sectionId),
-          ),
-        )
-      : undefined;
+  /** An agent running for any project in a section or a section inside it (shown while closed). */
+  const sectionHint = (sectionId: string) => {
+    if (!terminals.size) return undefined;
+    const inside = sectionAndInside(w.sections, sectionId);
+    const within = (id: string | undefined) => Boolean(id && inside.has(id));
+    return folderHint(
+      w.projects.filter(
+        (p) =>
+          within(p.data.sectionId) ||
+          (p.data.repositoryId && within(repositoryById.get(p.data.repositoryId)?.data.sectionId)),
+      ),
+    );
+  };
   // Projects with views changed since the reader last looked (R11).
   const changedViews = useChangedViews().projects;
   const ws = useWorkspace();
@@ -285,7 +292,7 @@ export function Sidebar() {
   const [dialog, setDialog] = useState<
     | { kind: 'project'; container: Container }
     | { kind: 'folder'; sectionId?: string }
-    | { kind: 'section' }
+    | { kind: 'section'; parentId?: string }
     | { kind: 'delete'; project: Project }
     | null
   >(null);
@@ -365,7 +372,7 @@ export function Sidebar() {
       ? projectSiblings(w.projects, w.repositories, containerOf(target.entity))
       : target.type === 'repository'
         ? folderSiblings(w.repositories, target.entity.data.sectionId)
-        : [...w.sections].sort((a, b) => a.data.order - b.data.order);
+        : sectionSiblings(w.sections, sectionParents(w.sections).get(target.entity.id));
   const nudge = (target: Target, by: -1 | 1) => {
     const noun = target.type === 'repository' ? 'folder' : target.type;
     void apply(
@@ -694,6 +701,37 @@ export function Sidebar() {
 
   // ---------------------------------------------------------------- menus
 
+  /** Where a section can go: into another one (not itself or one inside it), or the top level. */
+  const sectionMoves = (s: Section) => {
+    const inside = sectionAndInside(w.sections, s.id);
+    const parentId = sectionParents(w.sections).get(s.id);
+    const into = w.sections.filter((o) => !inside.has(o.id) && o.id !== parentId);
+    const move = (to: string | undefined) =>
+      void apply(
+        `Move section “${s.data.name}” ${to ? `into “${sectionPath(w.sections, to)}”` : 'to the top level'}`,
+        placeOps(s, sectionSiblings(w.sections, to), Number.MAX_SAFE_INTEGER, {
+          parentId: to ?? null,
+        }),
+      );
+    if (!into.length && !parentId) return null;
+    return (
+      <>
+        <MenuSeparator />
+        <MenuLabel>Move into</MenuLabel>
+        {into.map((o) => (
+          <MenuItem key={o.id} icon={Layers} onClick={() => move(o.id)}>
+            {sectionPath(w.sections, o.id)}
+          </MenuItem>
+        ))}
+        {parentId && (
+          <MenuItem icon={CornerUpLeft} onClick={() => move(undefined)}>
+            Top level
+          </MenuItem>
+        )}
+      </>
+    );
+  };
+
   let menuContent: ReactNode = null;
   if (menu?.target === 'add') {
     menuContent = (
@@ -835,7 +873,7 @@ export function Sidebar() {
             .filter((s) => s.id !== r.data.sectionId)
             .map((s) => (
               <MenuItem key={s.id} icon={Layers} onClick={() => moveFolder(r, s.id)}>
-                {s.data.name}
+                {sectionPath(w.sections, s.id)}
               </MenuItem>
             ))}
           {r.data.sectionId && (
@@ -868,15 +906,23 @@ export function Sidebar() {
           >
             New folder here
           </MenuItem>
+          <MenuItem
+            icon={Layers}
+            onClick={() => (close(), setDialog({ kind: 'section', parentId: s.id }))}
+          >
+            New section inside
+          </MenuItem>
           {common}
+          {sectionMoves(s)}
           <MenuSeparator />
           <MenuItem
             icon={Trash2}
             danger
             onClick={() =>
-              void apply(`Remove section “${s.data.name}” (its contents move to the top level)`, [
-                { op: 'delete', type: 'section', id: s.id },
-              ])
+              void apply(
+                `Remove section “${s.data.name}” (what it held moves up a level)`,
+                removeSectionOps(s, w.sections, w.repositories, w.projects),
+              )
             }
           >
             Remove section
@@ -886,16 +932,45 @@ export function Sidebar() {
     }
   }
 
-  const sectionHeader = (section: Section) => {
+  /** A section, what it holds, then the sections inside it, each a step further in. */
+  const sectionBlock = ({ section, items: list, children }: SectionNode, depth: number) => (
+    <div key={section.id}>
+      {sectionHeader(section, depth)}
+      {!collapsed.has(section.id) && (
+        <>
+          <ul>
+            {items(list, depth)}
+            {!list.length && !children.length && (
+              <li
+                className="flex items-center gap-1 py-1 pr-2 text-xs text-faint"
+                style={{ paddingLeft: depth * 12 + 8 }}
+              >
+                Empty
+                <InfoTip
+                  label={`About section ${section.data.name}`}
+                  detail="Drag projects or folders here, or move one here from its ⋯ menu."
+                />
+              </li>
+            )}
+          </ul>
+          {children.map((child) => sectionBlock(child, depth + 1))}
+        </>
+      )}
+    </div>
+  );
+
+  const sectionHeader = (section: Section, depth = 0) => {
     const open = !collapsed.has(section.id);
     const target: Target = { type: 'section', entity: section };
     return (
       <div
         className={clsx(
           ROW,
-          'mt-2 text-[11px] font-semibold tracking-wide text-faint uppercase',
+          depth ? 'mt-1' : 'mt-2',
+          'text-[11px] font-semibold tracking-wide text-faint uppercase',
           dropHighlight(section.id),
         )}
+        style={{ paddingLeft: depth * 12 }}
         {...dropProps(
           section.id,
           ['project', 'repository'],
@@ -983,25 +1058,7 @@ export function Sidebar() {
           </div>
         )}
         <ul>{items(w.tree.root, 0)}</ul>
-        {w.tree.sections.map(({ section, items: list }) => (
-          <div key={section.id}>
-            {sectionHeader(section)}
-            {!collapsed.has(section.id) && (
-              <ul>
-                {items(list, 0)}
-                {!list.length && (
-                  <li className="flex items-center gap-1 px-2 py-1 text-xs text-faint">
-                    Empty
-                    <InfoTip
-                      label={`About section ${section.data.name}`}
-                      detail="Drag projects or folders here, or move one here from its ⋯ menu."
-                    />
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-        ))}
+        {w.tree.sections.map((node) => sectionBlock(node, 0))}
         {drag && (w.tree.sections.length > 0 || drag.type === 'project') && (
           <div
             className={clsx(
@@ -1091,9 +1148,19 @@ export function Sidebar() {
               onClose={() => setDialog(null)}
               onSubmit={({ name }) => {
                 setDialog(null);
-                void apply(`Add section “${name}”`, [
-                  { op: 'create', type: 'section', data: { name: name! } },
-                ]);
+                const parentId = dialog.parentId;
+                void apply(
+                  parentId
+                    ? `Add section “${name}” inside “${sectionPath(w.sections, parentId)}”`
+                    : `Add section “${name}”`,
+                  [
+                    {
+                      op: 'create',
+                      type: 'section',
+                      data: { name: name!, ...(parentId ? { parentId } : {}) },
+                    },
+                  ],
+                );
               }}
             />
           )}

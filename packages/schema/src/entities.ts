@@ -47,6 +47,7 @@ const FileIds = z.array(Id).optional().describe('Linked file ids');
 export const SectionData = z.strictObject({
   name: Text.describe('e.g. "Work", "Personal"'),
   order: Order,
+  parentId: Id.optional().describe('The section this one sits inside (none: the top level)'),
 });
 
 export const RepositoryData = z.strictObject({
@@ -423,7 +424,13 @@ type EntityDef = {
 const projectRef: RefSpec = { type: 'project', onDelete: 'cascade' };
 
 export const ENTITIES = {
-  section: { prefix: 'sec', data: SectionData, defaults: {}, refs: {}, label: 'name' },
+  section: {
+    prefix: 'sec',
+    data: SectionData,
+    defaults: {},
+    refs: { parentId: { type: 'section', onDelete: 'unset' } },
+    label: 'name',
+  },
   repository: {
     prefix: 'repo',
     data: RepositoryData,

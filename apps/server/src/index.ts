@@ -152,6 +152,15 @@ const server = serve(
     }, 3000);
   },
 );
+// A socket handed to the 'upgrade' listener has no error listener of Node's left, and
+// @hono/node-server writes its refusal (403, 409) to it: a client that resets first would end the
+// server with an uncaught EPIPE. Ours stays on every connection, so that write fails quietly.
+server.on('connection', (socket) => {
+  socket.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EPIPE' && error.code !== 'ECONNRESET')
+      console.error('[pharos] socket error:', error);
+  });
+});
 server.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code === 'EADDRINUSE') {
     console.error(

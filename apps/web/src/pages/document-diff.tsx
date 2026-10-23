@@ -49,7 +49,7 @@ export function DiffView({ block }: { block: Diff }) {
         ))}
       </div>
       {block.caption && (
-        <div className="doc-caption">
+        <div className="doc-caption doc-caption-md">
           <Markdown>{block.caption}</Markdown>
         </div>
       )}

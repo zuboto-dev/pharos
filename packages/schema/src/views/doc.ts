@@ -57,7 +57,11 @@ export const DocDrawingBlock = z.strictObject({
     .optional()
     .describe("Names from the document's `data` this drawing may read"),
   height: z.number().int().min(80).max(2000).describe('Height in pixels'),
-  caption: z.string().max(300).optional(),
+  caption: z
+    .string()
+    .max(300)
+    .optional()
+    .describe('Markdown under the drawing, e.g. "**Before.**"'),
 });
 
 /** Another website shown in place, e.g. a reference page; it opens in the browser too. */

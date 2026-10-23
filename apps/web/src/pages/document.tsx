@@ -40,6 +40,7 @@ import {
   type Sheet,
 } from './document-rich';
 import { DiffView } from './document-diff';
+import { Markdown } from '../catalog/ui';
 import { HandBackPrompt } from './hand-back';
 
 // Report documents (R14, docs/reframe/r14-report-documents.md): blocks in reading order that
@@ -428,7 +429,11 @@ function Leaf({
     return (
       <figure {...common} data-doc-drawing="">
         <DrawingFrame view={view} block={block} />
-        {block.caption && <figcaption className="doc-caption">{block.caption}</figcaption>}
+        {block.caption && (
+          <figcaption className="doc-caption doc-caption-md">
+            <Markdown>{block.caption}</Markdown>
+          </figcaption>
+        )}
       </figure>
     );
   if (block.kind === 'embed')

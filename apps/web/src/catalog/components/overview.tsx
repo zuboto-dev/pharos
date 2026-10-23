@@ -75,6 +75,9 @@ const STAT_COLS: Record<number, string> = {
   2: 'sm:grid-cols-2',
   3: 'sm:grid-cols-3',
   4: 'sm:grid-cols-4',
+  // Five or six numbers stay one line on a wide screen (owner, 10-23: the night report's numbers).
+  5: 'sm:grid-cols-3 lg:grid-cols-5',
+  6: 'sm:grid-cols-3 lg:grid-cols-6',
 };
 
 const STAT_TONES: Record<string, string> = {
@@ -109,7 +112,7 @@ export function StatCards({ node }: { node: NodeOf<'StatCards'> }) {
       className={clsx(
         'grid grid-cols-2',
         inDocument ? 'gap-x-8 gap-y-5' : 'gap-3',
-        STAT_COLS[Math.min(node.stats.length, 4)],
+        STAT_COLS[Math.min(node.stats.length, 6)],
       )}
     >
       {node.stats.map((stat, i) => {

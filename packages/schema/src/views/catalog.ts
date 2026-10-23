@@ -228,6 +228,18 @@ export const DependencyGraphNode = component(
   { filter: Filter.optional() },
 );
 
+export const MapNode = component(
+  'Map',
+  'Goals in a ring around the project (or one goal) and the tasks serving them around each; a task serving several goals sits between them, lines show what it waits on, colour its status. Tasks on no goal gather apart.',
+  {
+    center: z
+      .string()
+      .optional()
+      .describe('A goal to center on (its sub-goals form the ring); default the project'),
+    filter: Filter.optional().describe('Which tasks to place'),
+  },
+);
+
 export const AssigneeMatrixNode = component(
   'AssigneeMatrix',
   'Task counts per assignee and status.',
@@ -876,6 +888,7 @@ const LEAF_NODES = [
   TaskTableNode,
   TaskChecklistNode,
   DependencyGraphNode,
+  MapNode,
   AssigneeMatrixNode,
   ArtifactGalleryNode,
   DecisionLogNode,

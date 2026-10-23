@@ -37,6 +37,7 @@ const FILTERED: Record<string, QueryableType> = {
   TaskTable: 'task',
   TaskChecklist: 'task',
   DependencyGraph: 'task',
+  Map: 'task',
   AssigneeMatrix: 'task',
   ArtifactGallery: 'artifact',
   DecisionLog: 'decision',
@@ -114,6 +115,9 @@ export function boardReads(board: Board): BoardReads {
           break;
         case 'ScopeBoard':
           add('scope_item');
+          break;
+        case 'Map':
+          add('goal');
           break;
         case 'ProgressRing':
           add('task', { where: value.where });

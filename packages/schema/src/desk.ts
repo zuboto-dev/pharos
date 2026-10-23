@@ -69,6 +69,27 @@ export type Desk = {
   old: number;
   /** The latest run of each name, newest first. */
   runs: DeskRun[];
+  /** Reviews the owner handed back that no agent has picked up yet. */
+  handBacks?: DeskHandBack[];
+};
+
+/**
+ * A review the owner archived and handed back to an agent, with no agent change in its project
+ * since (2026-10-23: one waited 7 hours unseen). The desk says so; a session's start hook prints
+ * the ones for its folder.
+ */
+export type DeskHandBack = {
+  viewId: string;
+  view: string;
+  projectId: string;
+  project: string;
+  /** The agent it was handed to, when one was named. */
+  to?: string;
+  /** When it was handed back (ISO). */
+  since: string;
+  /** The project's repository folder, so a session in that folder finds it. */
+  folder?: string;
+  href: string;
 };
 
 const Count = z.number().int().min(0).max(100_000);

@@ -54,6 +54,7 @@ const SAMPLES: Record<ComponentName, ViewNode> = {
   ScopeBoard: { component: 'ScopeBoard' },
   StageTracker: { component: 'StageTracker' },
   Timeline: { component: 'Timeline' },
+  Map: { component: 'Map' },
   MilestoneList: { component: 'MilestoneList' },
   KanbanBoard: { component: 'KanbanBoard', groupBy: 'stage' },
   TaskChecklist: { component: 'TaskChecklist', assigneeKind: 'human' },

@@ -8,7 +8,7 @@ import {
 } from '@pharos/schema';
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { RunLog, answersSince, askOwner, deskOf, minutesIn } from './desk.js';
+import { RunLog, answersSince, askOwner, deskOf, minutesIn, waitingHandBacks } from './desk.js';
 import { openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { sheetSummaries } from './views/doc.js';
@@ -508,6 +508,52 @@ describe('the desk (R16)', () => {
       note: 'May be outdated: “Which payment provider?” changed after this was settled',
     });
     expect(item(price!)!.options).toBeUndefined();
+  });
+
+  it('says a hand-back is waiting until an agent picks it up', () => {
+    const { store, open } = setup();
+    const projectId = store.getOfType('decision', open).data.projectId;
+    const made = store.apply(
+      { kind: 'agent', name: 'Claude Code' },
+      {
+        message: 'a review',
+        operations: [
+          {
+            op: 'create',
+            type: 'view',
+            data: { projectId, name: 'Review · Desk', template: 'overview' },
+          },
+        ],
+      },
+    );
+    const view = made.changes.find((c) => c.type === 'view')!.id;
+    expect(waitingHandBacks(store)).toEqual([]);
+    store.apply(
+      { kind: 'human', name: 'me' },
+      {
+        message: 'Archive “Review · Desk”: all 3 answered — over to Claude Code',
+        operations: [
+          {
+            op: 'update',
+            type: 'view',
+            id: view,
+            data: { archived: true, handedBack: { to: 'Claude Code', answered: 3 } },
+          },
+        ],
+      },
+    );
+    expect(waitingHandBacks(store)).toMatchObject([
+      { viewId: view, view: 'Review · Desk', to: 'Claude Code', projectId },
+    ]);
+    // An agent works in the project: picked up.
+    store.apply(
+      { kind: 'agent', name: 'Claude Code' },
+      {
+        message: 'building what was answered',
+        operations: [{ op: 'create', type: 'task', data: { projectId, title: 'Build it' } }],
+      },
+    );
+    expect(waitingHandBacks(store)).toEqual([]);
   });
 
   it("a task's other answers: won't do, later (back on its day) and a reply, one revision each", async () => {

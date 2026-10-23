@@ -16,6 +16,7 @@ import {
   Loader2,
   Lock,
   Moon,
+  Undo2,
   Scale,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
@@ -781,6 +782,23 @@ export function DeskPage() {
           {data && <RunsPill runs={data.runs} look={look} onDone={onDone} />}
         </div>
       </header>
+      {data?.handBacks?.map((h) => (
+        // The owner handed a review back and no agent has picked it up yet.
+        <p
+          key={h.viewId}
+          data-hand-back=""
+          className="flex items-center gap-1.5 rounded-control bg-sunken px-3 py-1.5 text-xs text-muted"
+        >
+          <Undo2 aria-hidden className="size-3.5 shrink-0" />
+          <span className="min-w-0 truncate">
+            Handed back, not picked up yet:{' '}
+            <Link to={h.href} className="font-medium text-ink hover:underline">
+              {h.view}
+            </Link>{' '}
+            · {h.project} · {waited(h.since)}
+          </span>
+        </p>
+      ))}
       {notice && (
         <p role="status" className="rounded-control bg-sunken px-3 py-2 text-sm text-ink-soft">
           {notice}

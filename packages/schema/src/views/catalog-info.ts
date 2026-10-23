@@ -100,6 +100,13 @@ export const COMPONENT_INFO: Record<ComponentName, ComponentInfo> = {
     suggestedColumns: 12,
     example: { component: 'StageTracker', title: 'Stages' },
   },
+  Map: {
+    category: 'plan & time',
+    use: 'The big picture: goals and the tasks serving them, entangled, as a radial map. Overview pages; link tasks to goals (goalIds) first.',
+    minColumns: 6,
+    suggestedColumns: 12,
+    example: { component: 'Map', title: 'Map' },
+  },
   Timeline: {
     category: 'plan & time',
     use: 'When things happen: stages on a time axis (needs start/target dates). Full width.',

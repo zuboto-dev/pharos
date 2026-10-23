@@ -18,6 +18,7 @@ import {
   type AskOwner,
   type Author,
   type Desk,
+  type DeskHandBack,
   type DeskItem,
   type DeskRun,
   type Entity,
@@ -392,7 +393,42 @@ export function deskOf(
     overdue: items.filter((i) => i.overdue).length,
     old: items.filter((i) => i.old).length,
     runs: options.projectId ? latest.filter((r) => r.projectId === options.projectId) : latest,
+    handBacks: waitingHandBacks(store).filter(
+      (h) => !options.projectId || h.projectId === options.projectId,
+    ),
   };
+}
+
+/** Reviews handed back to an agent that no agent has picked up (no agent change in the project since). */
+export function waitingHandBacks(store: Store): DeskHandBack[] {
+  const out: DeskHandBack[] = [];
+  for (const view of store.list('view')) {
+    const back = view.data.handedBack;
+    if (!view.data.archived || !back) continue;
+    const set = store
+      .history({ entityId: view.id, authorKind: 'human', limit: 20 })
+      .find((r) => r.changes.some((c) => c.id === view.id && 'handedBack' in c.fields));
+    if (!set) continue;
+    const projectId = view.data.projectId;
+    if (store.history({ projectId, after: set.id, authorKind: 'agent', limit: 1 }).length) continue;
+    const project = store.get(projectId) as Entity<'project'> | null;
+    const repository = project?.data.repositoryId ? store.get(project.data.repositoryId) : null;
+    const folder =
+      repository?.type === 'repository'
+        ? (repository as Entity<'repository'>).data.path
+        : undefined;
+    out.push({
+      viewId: view.id,
+      view: view.data.name,
+      projectId,
+      project: project?.data.name ?? projectId,
+      ...(back.to ? { to: back.to } : {}),
+      since: set.createdAt,
+      ...(folder ? { folder } : {}),
+      href: `/projects/${projectId}/views/${view.id}`,
+    });
+  }
+  return out.sort((a, b) => a.since.localeCompare(b.since));
 }
 
 /** The person the owner's tasks go to: the person with the most tasks, made when there is none. */

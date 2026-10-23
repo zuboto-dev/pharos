@@ -6,6 +6,8 @@ import {
   type Entity,
   type EntityType,
   type RevisionSummary,
+  connectionsOf,
+  groupConnections,
 } from '@pharos/schema';
 import clsx from 'clsx';
 import {
@@ -368,6 +370,32 @@ function Related({ entity }: { entity: Entity }) {
       );
     }
   }
+  // Everything else that points at it, the pages that show it, the text that mentions it.
+  const shown: Partial<Record<string, string[]>> = {
+    stage: ['Tasks in this stage', 'Deliverables'],
+    task: ['Tasks waiting on it', 'Its deliverables'],
+    goal: ['Sub-goals'],
+  };
+  const groups = groupConnections(connectionsOf(entity, [...data.entityById.values()])).filter(
+    (g) => !shown[entity.type]?.includes(g.label),
+  );
+  if (groups.length)
+    sections.push(
+      <Section key="connected" title="Connected">
+        <dl data-connections="" className="space-y-2">
+          {groups.map((g) => (
+            <div key={g.label}>
+              <dt className="text-xs text-muted">{g.label}</dt>
+              <dd className="mt-1 flex flex-wrap gap-1">
+                {g.ids.map((id) => (
+                  <EntityRef key={id} id={id} />
+                ))}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Section>,
+    );
   return <>{sections}</>;
 }
 

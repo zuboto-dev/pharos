@@ -114,6 +114,8 @@ export const StageData = z.strictObject({
 export const TaskData = z.strictObject({
   projectId: Id,
   stageId: Id.optional(),
+  // The goals it serves (a task can serve several); the Map draws them.
+  goalIds: z.array(Id).optional(),
   title: Text,
   description: Markdown.optional(),
   status: optionField('task.status'),
@@ -470,6 +472,7 @@ export const ENTITIES = {
     refs: {
       projectId: projectRef,
       stageId: { type: 'stage', onDelete: 'unset' },
+      goalIds: { type: 'goal', many: true, onDelete: 'unset' },
       assigneeId: { type: 'assignee', onDelete: 'unset' },
       dependsOn: { type: 'task', many: true, onDelete: 'unset' },
       fileIds: { type: 'file', many: true, onDelete: 'unset' },

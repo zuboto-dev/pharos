@@ -5,6 +5,7 @@ import { GoalTree, ScopeBoard } from './goals';
 import { FileList } from './file-list';
 import { ActivityFeed, ArtifactGallery, DecisionLog } from './outputs';
 import { Callout, MarkdownBlock, ProgressRing, ProjectHeader, StatCards } from './overview';
+import { GoalMap } from './map';
 import { MilestoneList, StageTracker, Timeline } from './plan';
 import { Action } from './action';
 import { CategoryBreakdown, DueTracker } from './records';
@@ -43,6 +44,7 @@ export const COMPONENTS: { [C in LeafName]: ComponentDef<C> } = {
   ScopeBoard: { render: ScopeBoard },
   StageTracker: { render: StageTracker },
   Timeline: { render: Timeline },
+  Map: { render: GoalMap },
   MilestoneList: { render: MilestoneList },
   KanbanBoard: { render: KanbanBoard },
   TaskTable: { render: TaskTable },

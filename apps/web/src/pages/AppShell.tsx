@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { Menu as MenuIcon, Settings } from 'lucide-react';
 import { useState, type FocusEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
+import { PartBoundary } from '../lib/part-boundary';
 import { RunningAgentsButton } from '../agent/RunningAgents';
 import { RunningTerminalsProvider } from '../agent/running';
 import { Tooltip } from '../catalog/tooltip';
@@ -189,7 +190,10 @@ export function AppShell() {
             </aside>
             <main className="min-w-0 flex-1">
               <ShellFolderRequests />
-              <Outlet />
+              {/* A page that fails shows a message in place; moving to another page starts fresh. */}
+              <PartBoundary key={pathname} part="page">
+                <Outlet />
+              </PartBoundary>
             </main>
             <ToastStack>
               <UpdateNotice />

@@ -700,6 +700,21 @@ export function createApp(
     const input = AskOwner.parse({ ...raw, projectId: byName?.id ?? ref });
     return c.json(askOwner(store, authorOf(c), input));
   });
+  // What failed in the web app (its error boundaries and window errors), into the server log, so a
+  // crash the owner saw can be traced afterwards. At most 30 a minute; never more than a line each.
+  let clientErrors = { minute: 0, count: 0 };
+  api.post('/client-errors', async (c) => {
+    const minute = Math.floor(Date.now() / 60_000);
+    if (clientErrors.minute !== minute) clientErrors = { minute, count: 0 };
+    if (++clientErrors.count > 30) return c.json({ ok: false }, 429);
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const field = (k: string, n: number) => String(body[k] ?? '').slice(0, n);
+    console.error(
+      `[pharos] web error in ${field('part', 40)} at ${field('url', 200)}: ${field('message', 500)}\n` +
+        `${field('stack', 3000)}\n${field('componentStack', 3000)}`.trim(),
+    );
+    return c.json({ ok: true });
+  });
   api.post('/desk/answer', async (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Only the owner answers from the desk');
     const body = z

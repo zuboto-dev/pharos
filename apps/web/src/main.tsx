@@ -10,23 +10,30 @@ import { UpdatesPage } from './pages/UpdatesPage';
 import { RoutinesPage } from './pages/RoutinesPage';
 import { preloadBlocks } from './catalog/lazy-block';
 import './index.css';
+import { PartBoundary, reportClientError } from './lib/part-boundary';
+
+// Errors outside React (timers, sockets, the terminal) go to the server log too.
+addEventListener('error', (e) => reportClientError('window', e.error ?? e.message));
+addEventListener('unhandledrejection', (e) => reportClientError('promise', e.reason));
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<HomePage />} />
-          <Route path="projects/:projectId" element={<ProjectPage />} />
-          <Route path="projects/:projectId/views/:viewId" element={<ProjectPage />} />
-          <Route path="projects/:projectId/files" element={<ProjectPage page="files" />} />
-          <Route path="desk" element={<DeskPage />} />
-          <Route path="updates" element={<UpdatesPage />} />
-          <Route path="routines" element={<RoutinesPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <PartBoundary part="app" whole>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<HomePage />} />
+            <Route path="projects/:projectId" element={<ProjectPage />} />
+            <Route path="projects/:projectId/views/:viewId" element={<ProjectPage />} />
+            <Route path="projects/:projectId/files" element={<ProjectPage page="files" />} />
+            <Route path="desk" element={<DeskPage />} />
+            <Route path="updates" element={<UpdatesPage />} />
+            <Route path="routines" element={<RoutinesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </PartBoundary>
   </StrictMode>,
 );
 

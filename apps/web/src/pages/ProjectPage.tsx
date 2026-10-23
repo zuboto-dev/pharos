@@ -1,3 +1,4 @@
+import { PartBoundary } from '../lib/part-boundary';
 import {
   CATALOG,
   COMPONENT_INFO,
@@ -734,15 +735,17 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           </div>
         </div>
         {terminalHere && (
-          <AgentDock
-            projectId={projectId!}
-            status={terminal}
-            view={active ? { id: active.id, name: active.data.name } : undefined}
-            dock={dock}
-            width={panelWidth}
-            onWidth={setPanelWidth}
-            narrow={narrow}
-          />
+          <PartBoundary part="agent panel">
+            <AgentDock
+              projectId={projectId!}
+              status={terminal}
+              view={active ? { id: active.id, name: active.data.name } : undefined}
+              dock={dock}
+              width={panelWidth}
+              onWidth={setPanelWidth}
+              narrow={narrow}
+            />
+          </PartBoundary>
         )}
         {drawer.shown && (
           <DecisionContextSlot.Provider value={decisionContext}>

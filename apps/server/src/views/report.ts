@@ -482,6 +482,35 @@ export function navigationWarnings(html: string): string[] {
   return out;
 }
 
+const DATE_ONLY = /['"`](\d{4}-\d{2}-\d{2})['"`]/g;
+const READS_LOCAL_DATE = /\.(?:toLocale\w*String|getMonth|getDate|getDay|getFullYear)\s*\(/;
+const CLOCK = /new\s+Date\s*\(\s*\)|Date\s*\.\s*now\s*\(/;
+/** Dates built as local days: new Date(y, m - 1, d), or a time added ('2026-11-01T00:00'). */
+const LOCAL_DATES = /new\s+Date\s*\(\s*[\w.]+\s*,|T00:00/;
+
+/**
+ * Dates that come out wrong for the reader (the Lumisyl plan, 2026-10-22: "today" fixed at the
+ * day it was written, and every month label one month early):
+ * - "today" drawn at a fixed date, with no clock read, goes stale the next day;
+ * - a date-only string ('2026-11-01') is UTC midnight, the day before in the Americas, so local
+ *   month and day labels come out one off.
+ */
+export function dateWarnings(html: string): string[] {
+  const scripts = scriptText(html).join('\n');
+  const dates = [...scripts.matchAll(DATE_ONLY)].map((m) => m[1]!);
+  if (!dates.length) return [];
+  const out: string[] = [];
+  if (/\btoday\b|\bnow\b/i.test(html) && !CLOCK.test(scripts))
+    out.push(
+      `The page marks "today" but never reads the clock: a fixed date (e.g. '${dates[0]}') is wrong from the next day. Use new Date() for today; it is the reader's own clock`,
+    );
+  if (READS_LOCAL_DATE.test(scripts) && !/timeZone/.test(scripts) && !LOCAL_DATES.test(scripts))
+    out.push(
+      `Date-only strings like '${dates[0]}' are read as UTC midnight, which is the day before in the reader's time zone: local month and day labels come out one off (1 Nov shows as Oct). Parse them as local (new Date(y, m - 1, d) or '${dates[0]}T00:00'), or format with timeZone: 'UTC'`,
+    );
+  return out;
+}
+
 // ---------------------------------------------------------------- preview
 
 /** Query findings of a page's named reads, as lines naming the read. */
@@ -534,6 +563,7 @@ export function previewPage(store: Store, projectId: string, page: ReportPage, v
   }
   warnings.push(...blockedExternals(page.html));
   warnings.push(...navigationWarnings(page.html));
+  warnings.push(...dateWarnings(page.html));
   const used = new Set<string>();
   for (const m of page.html.matchAll(/pharos\.data\(\s*["'`]([^"'`]+)["'`]\s*\)/g)) used.add(m[1]!);
   for (const name of used)

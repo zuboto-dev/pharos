@@ -9,6 +9,7 @@ import {
   ReportAssets,
   blockedExternals,
   decodeBase64,
+  dateWarnings,
   navigationWarnings,
   referencedPaths,
   scheduleAssetPurge,
@@ -789,5 +790,35 @@ describe('refreshing a report page (R13 + R11: the refresh loop)', () => {
     expect(new ReportAssets(store).list(id).map((a) => a.path)).toEqual(['img/hero.svg']);
     // Nothing left to ask: the brief has no open request for it.
     expect(answerBrief(store, [projectId])).not.toContain(`requestId ${requestId}`);
+  });
+});
+
+describe('dates in a drawing', () => {
+  // The Lumisyl plan of 2026-10-22: today fixed at the day it was written, month labels from
+  // date-only strings (UTC midnight, so 1 Nov read as Oct in Chicago).
+  const stale = `<svg></svg><script>
+const X = (d) => new Date(d) - new Date('2026-10-15');
+['2026-11-01', '2026-12-01'].forEach((m) => label(new Date(m).toLocaleString('en', { month: 'short' })));
+const tx = X('2026-10-21'); text(tx, 'today');
+</script>`;
+  const fixed = `<svg></svg><script>
+const day = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+['2026-11-01', '2026-12-01'].forEach((m) => label(day(m).toLocaleString('en', { month: 'short' })));
+const tx = X(new Date()); text(tx, 'today');
+</script>`;
+
+  it('flags a fixed "today" and month labels from date-only strings', () => {
+    const warnings = dateWarnings(stale);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain('never reads the clock');
+    expect(warnings[1]).toContain('UTC midnight');
+  });
+
+  it('says nothing when today is the clock and the labels format in UTC', () => {
+    expect(dateWarnings(fixed)).toEqual([]);
+    expect(
+      dateWarnings(fixed.replace("{ month: 'short' }", "{ month: 'short', timeZone: 'UTC' }")),
+    ).toEqual([]);
+    expect(dateWarnings('<p>No dates, no scripts.</p>')).toEqual([]);
   });
 });

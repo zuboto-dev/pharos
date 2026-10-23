@@ -26,6 +26,7 @@ import {
   ReportAssets,
   blockedExternals,
   formatReadFinding,
+  dateWarnings,
   navigationWarnings,
   referencedPaths,
 } from './report.js';
@@ -165,7 +166,11 @@ function drawingWarnings(drawing: DrawingBlock, have: Set<string>, saved: boolea
         : `it refers to "${path}", which can't be an asset (relative path, no "..", file types ${Object.keys(REPORT_ASSET_TYPES).join(' ')}): it won't load`,
     );
   }
-  out.push(...blockedExternals(drawing.html), ...navigationWarnings(drawing.html));
+  out.push(
+    ...blockedExternals(drawing.html),
+    ...navigationWarnings(drawing.html),
+    ...dateWarnings(drawing.html),
+  );
   const listed = new Set(drawing.reads ?? []);
   const used = new Set<string>();
   for (const m of drawing.html.matchAll(/pharos\.data\(\s*["'`]([^"'`]+)["'`]\s*\)/g))

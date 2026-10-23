@@ -184,6 +184,25 @@ async function lastRevisionOf(entityId: string): Promise<number | null> {
  * A project: its view tabs and the active view, or its Files page (`page="files"`, at
  * /projects/:projectId/files), with the detail drawer over either.
  */
+/**
+ * Which project this is, above its view tabs: with the sidebar collapsed to a rail, nothing else
+ * on the page says so. The browser tab says it too.
+ */
+function ProjectName({ name }: { name: string }) {
+  useEffect(() => {
+    const before = document.title;
+    document.title = `${name} · Pharos`;
+    return () => {
+      document.title = before;
+    };
+  }, [name]);
+  return (
+    <p data-project-name="" className="-mb-2 truncate text-base font-semibold text-ink">
+      {name}
+    </p>
+  );
+}
+
 export function ProjectPage({ page }: { page?: 'files' } = {}) {
   const filesPage = page === 'files';
   const { projectId, viewId } = useParams();
@@ -490,6 +509,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           }
         >
           <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
+            {dataset.data && <ProjectName name={dataset.data.project.data.name} />}
             {archivedProject && (
               <p className="-mb-2 flex items-center gap-1.5 text-sm text-muted">
                 <Archive className="size-3.5" aria-hidden />

@@ -270,8 +270,9 @@ Two ways to write a report, both read live data and are marked out of date when 
   width. Use it for an explanation, research, a summary of work, "what we found".
 - **A report page** (\`page\`): a whole HTML page you design yourself. Only when the whole page
   needs a design no document can give (a bespoke interactive, its own visual world).
-- For one visual no component can draw (a map, a custom diagram), use a drawing block inside a
-  document, not a whole page.
+- For one visual no component can draw (a map, a diagram), a drawing block in a document. Its facts
+  stay data it \`reads\` (a plan's dates are stages; Timeline draws them, today marked); today is
+  \`new Date()\`, and '2026-11-01' is UTC midnight (1 Nov reads as Oct here): build dates as local.
 - Use a board (widgets) for a live working page the owner uses day to day (tasks, money this
   month, files, quick answers).
 

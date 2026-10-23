@@ -66,6 +66,30 @@ const DESK: Desk = {
       gate: false,
       href: '/projects/p2/views/view_1#sheet-s',
     },
+    {
+      id: 'view_2#t',
+      kind: 'sheet',
+      projectId: 'p3',
+      project: 'Kitchen',
+      title: 'Pick the tiles',
+      minutes: 4,
+      since: hoursAgo(3),
+      overdue: false,
+      old: false,
+      gate: false,
+      href: '/projects/p3/views/view_2#sheet-t',
+    },
+    {
+      id: 'run_1',
+      kind: 'run',
+      title: 'Night run: partly done',
+      ask: '7 could not verify',
+      since: hoursAgo(8),
+      overdue: false,
+      old: false,
+      gate: false,
+      href: '/desk#run_1',
+    },
   ],
 };
 
@@ -114,42 +138,55 @@ const show = async () => {
 };
 
 describe('the desk page (R16)', () => {
-  it('says what needs you today, overdue first, and folds the old ones', async () => {
+  it('says what needs you in groups by what you do, runs in one pill, and folds the old ones', async () => {
     await show();
-    expect(document.querySelector('[data-needs-you]')?.textContent).toBe(
-      'Needs you: 2 items, about 5 min',
-    );
-    expect(screen.getByText('1 waiting more than two days')).toBeTruthy();
-    const overdue = screen.getByRole('region', { name: 'Waiting more than two days' });
-    expect(within(overdue).getByText('Which seeds?')).toBeTruthy();
-    const today = screen.getByRole('region', { name: 'Today' });
-    expect(within(today).getByText('only you')).toBeTruthy();
+    // Runs aren't work: they are in the pill, not counted.
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('Needs you: 3 · ~9 min');
+    expect(screen.getByText('1 over two days')).toBeTruthy();
+    const only = screen.getByRole('region', { name: 'Only you' });
+    expect(within(only).getByText('Paste the API key')).toBeTruthy();
+    expect(within(only).getByLabelText('only you')).toBeTruthy();
+    const answer = screen.getByRole('region', { name: 'Answer here' });
+    expect(within(answer).getByText('Which seeds?')).toBeTruthy();
+    // Waited shows once it is over two days.
+    expect(within(answer).getByText('3 d')).toBeTruthy();
+    const review = screen.getByRole('region', { name: 'Open to review' });
+    expect(within(review).getByRole('link', { name: 'Open “Pick the tiles”' })).toBeTruthy();
     const older = screen.getByText(/Older than two weeks/).closest('details')!;
     expect(older.open).toBe(false);
     expect(within(older).getByText('Approve the new chain').getAttribute('href')).toBe(
       '/projects/p2/views/view_1#sheet-s',
     );
-    expect(screen.getByRole('region', { name: 'Runs' }).textContent).toContain('Night run');
+    // The pill: one ok run is not shown (it ran), one needs a look; Seen all marks it.
+    const pill = screen.getByRole('button', { name: 'Runs: 0 ok, 1 need a look' });
+    fireEvent.click(pill);
+    const panel = screen.getByRole('dialog', { name: 'Runs that need a look' });
+    expect(panel.textContent).toContain('Night run: partly done');
+    expect(panel.textContent).toContain('7 could not verify');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Seen all' }));
+    await waitFor(() => expect(posted.map((p) => p.url)).toEqual(['/api/runs/run_1/seen']));
   });
 
-  it('filters by project and sorts, remembering both', async () => {
+  it('filters by a project with something open, and sorts, remembering both', async () => {
     localStorage.clear();
     await show();
-    const projects = screen.getByRole('list', { name: 'Project' });
+    fireEvent.click(screen.getByRole('button', { name: 'All projects' }));
+    const menu = screen.getByRole('menu', { name: 'Project' });
+    // Bike has only a folded old item: not offered.
     expect(
-      within(projects).getByRole('button', { name: 'All 2' }).getAttribute('aria-pressed'),
-    ).toBe('true');
-    fireEvent.click(within(projects).getByRole('button', { name: 'Bike 0' }));
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((m) => m.textContent),
+    ).toEqual(['All projects 3', 'Garden 2', 'Kitchen 1']);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Kitchen 1' }));
     expect(screen.queryByText('Which seeds?')).toBeNull();
-    expect(screen.getByText('Nothing from this project needs you today.')).toBeTruthy();
+    expect(screen.getByText('Pick the tiles')).toBeTruthy();
     // The header still counts everything.
-    expect(document.querySelector('[data-needs-you]')?.textContent).toBe(
-      'Needs you: 2 items, about 5 min',
-    );
-    fireEvent.click(within(projects).getByRole('button', { name: 'All 2' }));
-    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'quickest' } });
+    expect(document.querySelector('[data-needs-you]')?.textContent).toBe('Needs you: 3 · ~9 min');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort: Waiting longest' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Quickest first' }));
     expect(JSON.parse(localStorage.getItem('pharos-desk-view')!)).toEqual({
-      project: null,
+      project: 'p3',
       sort: 'quickest',
     });
     localStorage.clear();
@@ -159,15 +196,15 @@ describe('the desk page (R16)', () => {
     const items = DESK.items;
     const ids = (sort: DeskSort, project: string | null = null) =>
       arrangeDesk(items, { project, sort }).map((i) => i.id);
-    expect(ids('waiting')).toEqual(['dec_1', 'task_1', 'view_1#s']);
-    expect(ids('newest')).toEqual(['task_1', 'dec_1', 'view_1#s']);
-    expect(ids('quickest')).toEqual(['dec_1', 'task_1', 'view_1#s']);
+    expect(ids('waiting')).toEqual(['dec_1', 'task_1', 'view_1#s', 'view_2#t', 'run_1']);
+    expect(ids('newest')).toEqual(['task_1', 'view_2#t', 'run_1', 'dec_1', 'view_1#s']);
+    expect(ids('quickest')).toEqual(['dec_1', 'task_1', 'view_2#t', 'view_1#s', 'run_1']);
     expect(ids('waiting', 'p2')).toEqual(['view_1#s']);
   });
 
   it('answers a choice in place, asks for the note an option needs, marks a task done', async () => {
     await show();
-    fireEvent.click(screen.getByRole('button', { name: /Plan A/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plan A (suggested)' }));
     await waitFor(() => expect(posted).toHaveLength(1));
     expect(posted[0]).toEqual({
       url: '/api/desk/answer',
@@ -180,7 +217,7 @@ describe('the desk page (R16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Choose “Plan B”' }));
     await waitFor(() => expect(posted).toHaveLength(2));
     expect(posted[1]!.body).toEqual({ id: 'dec_1', chosenOptionId: 'b', note: 'Cheaper' });
-    fireEvent.click(screen.getByRole('button', { name: /Mark done/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark “Paste the API key” done' }));
     await waitFor(() => expect(posted).toHaveLength(3));
     expect(posted[2]!.body).toEqual({ id: 'task_1', done: true });
   });
@@ -216,7 +253,8 @@ describe('the desk page (R16)', () => {
         <DeskLink />
       </MemoryRouter>,
     );
-    expect((await screen.findByText('2')).closest('[data-desk-count]')).toBeTruthy();
+    // Not the run, not the old one.
+    expect((await screen.findByText('3')).closest('[data-desk-count]')).toBeTruthy();
   });
 
   it('writes times briefly', () => {

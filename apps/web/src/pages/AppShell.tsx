@@ -1,7 +1,7 @@
 import clsx from 'clsx';
-import { Settings } from 'lucide-react';
-import type { FocusEvent } from 'react';
-import { Link, NavLink, Outlet, useMatch } from 'react-router';
+import { Menu as MenuIcon, Settings } from 'lucide-react';
+import { useState, type FocusEvent } from 'react';
+import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import { Tooltip } from '../catalog/tooltip';
 import { FolderRequestNotice } from '../files/FolderRequests';
 import { useAgentStatus } from '../lib/events';
@@ -54,10 +54,16 @@ export function AppShell() {
   // Keeps the chosen theme applied (and "system" following the OS) on every page.
   useTheme();
   // Wide screens: a slim rail that slides the sidebar out on hover or focus, unless kept open.
-  // Phones keep the sidebar above the page.
+  // Phones: a bar with the logo and a button that opens the sidebar over the page (it closes
+  // when you go somewhere), so the page starts on the first screen.
   const { pinned, toggle } = useSidebarPinned();
   const { peek, show, hide, setPeek } = usePeek();
   const open = pinned || peek;
+  // Open on the page it was opened on: going to another page closes it.
+  const { pathname } = useLocation();
+  const [drawerAt, setDrawerAt] = useState<string | null>(null);
+  const drawer = drawerAt === pathname;
+  const setDrawer = (on: boolean) => setDrawerAt(on ? pathname : null);
   const peekHandlers = pinned
     ? {}
     : {
@@ -70,6 +76,32 @@ export function AppShell() {
       };
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
+      <div
+        data-phone-bar=""
+        className="sticky top-0 z-20 flex items-center border-b border-line bg-surface pr-2 md:hidden"
+      >
+        <Link to="/" className="flex items-center gap-2 px-4 py-2.5 font-semibold tracking-tight">
+          <PharosLogo className="size-5 text-amber-500" /> Pharos
+        </Link>
+        <span className="flex-1" />
+        <button
+          type="button"
+          aria-label="Open the sidebar"
+          aria-controls={SIDEBAR_ID}
+          aria-expanded={drawer}
+          onClick={() => setDrawer(true)}
+          className="flex size-9 items-center justify-center rounded-control text-muted hover:bg-sunken"
+        >
+          <MenuIcon aria-hidden className="size-5" />
+        </button>
+      </div>
+      {drawer && (
+        <div
+          aria-hidden
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          onClick={() => setDrawer(false)}
+        />
+      )}
       {!pinned && (
         // The rail: the logo in the exact spot it has in the sidebar, no buttons. Hovering or
         // focusing it slides the sidebar out over the page.
@@ -90,10 +122,17 @@ export function AppShell() {
         id={SIDEBAR_ID}
         data-sidebar={pinned ? 'open' : peek ? 'peek' : 'collapsed'}
         {...peekHandlers}
+        onKeyDown={(e) => drawer && e.key === 'Escape' && setDrawer(false)}
         className={clsx(
-          'flex max-h-[60vh] shrink-0 flex-col border-b border-line bg-surface md:h-screen md:max-h-none md:w-64 md:border-r md:border-b-0',
-          pinned ? 'md:sticky md:top-0' : 'md:fixed md:top-0 md:left-0 md:z-30 md:shadow-overlay',
-          !open && 'md:hidden',
+          'shrink-0 flex-col border-line bg-surface md:h-screen md:w-64 md:border-r',
+          // Phones: hidden until the bar's button opens it over the page.
+          drawer
+            ? 'fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] border-r shadow-overlay'
+            : 'hidden',
+          pinned
+            ? 'md:sticky md:top-0 md:bottom-auto md:shadow-none'
+            : 'md:fixed md:top-0 md:left-0 md:z-30 md:shadow-overlay',
+          open ? 'md:flex' : 'md:hidden',
           peek && !pinned && 'md:animate-side-in',
         )}
       >

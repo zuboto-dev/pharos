@@ -30,6 +30,7 @@ import { useChangedViews } from '../lib/freshness';
 import { dismissAnswer, keepAnswer } from './answers';
 import { canArchive, restoreView } from './hand-back';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
+import { AsksBadge, useOpenAsks } from './open-asks';
 
 /** Pinned views first, then by order. */
 const isAnswer = (v: Entity<'view'>) => v.data.kind === 'answer';
@@ -182,6 +183,8 @@ export function ViewTabs({
   // Views an agent is working on right now (v0.2 B5): view id → agents.
   const working = viewsWithPresence(usePresence());
   // Views changed since the reader last looked (R11); the open one counts as seen.
+  // Views still waiting for the owner's answers, seen or not (open review sheets, decisions).
+  const asks = useOpenAsks().byView;
   const changedIds = useChangedViews().projects[projectId];
   const changed = new Set((changedIds ?? []).filter((id) => id !== active?.id));
   const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
@@ -363,6 +366,7 @@ export function ViewTabs({
                   )}
                 >
                   <TabLabel view={view} />
+                  <AsksBadge n={asks.get(view.id) ?? 0} className="ml-1.5" />
                   {working.has(view.id) ? (
                     <>
                       <PresenceDot className="absolute top-1.5 right-0.5 size-1.5" />
@@ -547,6 +551,7 @@ export function ViewTabs({
                 </>
               )
             )}
+            <AsksBadge n={overflow.reduce((n, v) => n + (asks.get(v.id) ?? 0), 0)} />
             {overflow.length ? (
               <>
                 <span className="rounded-full bg-subtle px-1.5 text-ink-soft">
@@ -590,6 +595,7 @@ export function ViewTabs({
               }}
             >
               {view.data.name}
+              <AsksBadge n={asks.get(view.id) ?? 0} className="ml-1.5 align-middle" />
               {working.has(view.id) && (
                 <>
                   <PresenceDot className="ml-1.5 size-1.5 align-middle" />

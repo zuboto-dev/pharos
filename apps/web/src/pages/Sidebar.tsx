@@ -37,6 +37,7 @@ import { BUTTON, Dot, toneOf } from '../catalog/ui';
 import { usePresence } from '../lib/events';
 import { useChangedViews } from '../lib/freshness';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
+import { AsksBadge, useOpenAsks } from './open-asks';
 import { ApiError, getJson, postJson } from '../lib/api';
 import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
@@ -284,6 +285,18 @@ export function Sidebar() {
   };
   // Projects with views changed since the reader last looked (R11).
   const changedViews = useChangedViews().projects;
+  // Projects still waiting for the owner's answers (from the desk), shown until answered.
+  const asksByProject = useOpenAsks().byProject;
+  /** What a section's projects (sections inside it too) still wait on, for its closed header. */
+  const sectionAsks = (sectionId: string) => {
+    const inside = sectionAndInside(w.sections, sectionId);
+    return w.projects.reduce((n, p) => {
+      const at = p.data.repositoryId
+        ? repositoryById.get(p.data.repositoryId)?.data.sectionId
+        : p.data.sectionId;
+      return at && inside.has(at) ? n + (asksByProject.get(p.id) ?? 0) : n;
+    }, 0);
+  };
   const ws = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
@@ -551,6 +564,7 @@ export function Sidebar() {
                   // Its own agent (no folder): the mark is on the project.
                   <TerminalMark hint={terminals.get(project.id)!} />
                 )}
+              <AsksBadge n={asksByProject.get(project.id) ?? 0} />
               {changedViews[project.id]?.length ? (
                 <>
                   <ChangedDot className="shrink-0" />
@@ -661,6 +675,10 @@ export function Sidebar() {
                 <FolderGit2 className="size-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{repository.data.name}</span>
                 {!open && <span className="font-normal text-faint">{projects.length}</span>}
+                {!open && (
+                  // Closed: what its projects still wait on shows on the folder.
+                  <AsksBadge n={projects.reduce((n, p) => n + (asksByProject.get(p.id) ?? 0), 0)} />
+                )}
                 {folderHint(projects) && (
                   // One agent runs for the whole folder (its projects share it).
                   <TerminalMark hint={folderHint(projects)!} where="this folder" />
@@ -1012,6 +1030,7 @@ export function Sidebar() {
             />
             <Layers className="size-3 shrink-0" aria-hidden />
             <span className="truncate">{section.data.name}</span>
+            {!open && <AsksBadge n={sectionAsks(section.id)} className="normal-case" />}
             {!open && sectionHint(section.id) && (
               // Closed: the agent running in a folder inside still shows.
               <TerminalMark hint={sectionHint(section.id)!} where="this section" />

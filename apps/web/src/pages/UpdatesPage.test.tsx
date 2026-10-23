@@ -158,8 +158,12 @@ const show = async (path = '/updates') => {
       <UpdatesPage />
     </MemoryRouter>,
   );
-  await screen.findByText('Weed bed');
+  await screen.findByText('Today');
 };
+const openSession = (id: string) =>
+  fireEvent.click(document.querySelector(`[data-session="${id}"] > button`)!);
+const openDay = (day: string) =>
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${day}`) }));
 
 describe('the Updates page', () => {
   it('shows the tiles, the timeline and one card per session', async () => {
@@ -168,13 +172,24 @@ describe('the Updates page', () => {
     expect(within(tile('added') as HTMLElement).getByText('2')).toBeTruthy();
     expect(within(tile('lookedUp') as HTMLElement).getByText('3')).toBeTruthy();
     expect(screen.getByRole('img', { name: /Work per 2 hours/ })).toBeTruthy();
+    // Today is open; older days start closed, one click away.
+    expect(document.querySelectorAll('[data-session]')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^Today/ }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    const yesterday = screen.getByRole('button', { name: /^Yesterday/ });
+    expect(yesterday.getAttribute('aria-expanded')).toBe('false');
+    openDay('Yesterday');
     expect(document.querySelectorAll('[data-session]')).toHaveLength(2);
-    expect(screen.getByText('Today')).toBeTruthy();
-    expect(screen.getByText('Yesterday')).toBeTruthy();
+    // Every session starts as one line.
+    expect(
+      document.querySelector('[data-session="s1"] > button')!.getAttribute('aria-expanded'),
+    ).toBe('false');
   });
 
-  it('opens the newest session to its before → after', async () => {
+  it('opens a session to its before → after', async () => {
     await show();
+    openSession('s1');
     const card = document.querySelector('[data-session="s1"]') as HTMLElement;
     await within(card).findByText('To do');
     // Status as pill → pill, the title as its changed part, the picture, the delete.
@@ -190,6 +205,7 @@ describe('the Updates page', () => {
     // Looked up: once per thing, with how many times.
     expect(within(card).getByText('×2')).toBeTruthy();
     // The other card opens on a click.
+    openDay('Yesterday');
     const other = document.querySelector('[data-session="s2"] > button') as HTMLElement;
     expect(other.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(other);
@@ -199,6 +215,8 @@ describe('the Updates page', () => {
 
   it('filters by kind and by words', async () => {
     await show();
+    openDay('Yesterday');
+    expect(document.querySelector('[data-session="s2"]')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Added/, pressed: true }));
     // Sam's session only added: with Added off it goes.
     expect(document.querySelector('[data-session="s2"]')).toBeNull();
@@ -208,6 +226,21 @@ describe('the Updates page', () => {
     expect(document.querySelector('[data-session="s2"]')).toBeTruthy();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'nothing like it' } });
     expect(screen.getByText('Nothing matches these filters.')).toBeTruthy();
+  });
+
+  it("shows the newest day's first five sessions until Show all", async () => {
+    const [today] = UPDATES.sessions;
+    const many = Array.from({ length: 7 }, (_, i) => ({ ...today!, id: `t${i}` }));
+    vi.stubGlobal('fetch', async () => Response.json({ ...UPDATES, sessions: many }));
+    await show();
+    expect(document.querySelectorAll('[data-session]')).toHaveLength(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 7' }));
+    expect(document.querySelectorAll('[data-session]')).toHaveLength(7);
+  });
+
+  it('says what a reference points at, not its id', () => {
+    expect(fieldName('decidedById')).toBe('Decided by');
+    expect(fieldName('goalIds')).toBe('Goals');
   });
 
   it('asks the server for one project and agent from the address', async () => {

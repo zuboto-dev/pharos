@@ -164,9 +164,18 @@ export function valueText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** "dueDate" → "Due date". */
+/** "dueDate" → "Due date"; a reference reads as what it points at: "decidedById" → "Decided by". */
 export const fieldName = (field: string) =>
-  humanize(field.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase());
+  humanize(
+    field
+      .replace(/Ids$/, 's')
+      .replace(/Id$/, '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .toLowerCase(),
+  );
+
+/** Sessions the newest day shows before "Show all". */
+export const TODAY_SHOWN = 5;
 
 /** Fields not worth a row: bookkeeping the owner never set. */
 const QUIET_FIELDS = new Set(['order', 'evidenceRevision', 'projectId']);
@@ -416,8 +425,13 @@ function Pill({ option }: { option: UpdateOption | null }) {
 }
 
 /** One field: pill → pill, a text's changed part, or value → value. */
-function FieldChange({ field, op }: { field: UpdateField; op: UpdateEntity['op'] }) {
-  const name = fieldName(field.field);
+function FieldChange({ field: raw, op }: { field: UpdateField; op: UpdateEntity['op'] }) {
+  const name = fieldName(raw.field);
+  // A reference shows the names it points at, never ids.
+  const named = (v: string | string[] | null) => (Array.isArray(v) ? v.join(', ') : v);
+  const field = raw.ref
+    ? { ...raw, before: named(raw.ref.before), after: named(raw.ref.after) }
+    : raw;
   let body: ReactNode;
   if (field.option) {
     body =
@@ -432,6 +446,7 @@ function FieldChange({ field, op }: { field: UpdateField; op: UpdateEntity['op']
       );
   } else if (
     op === 'update' &&
+    !field.ref &&
     typeof field.before === 'string' &&
     typeof field.after === 'string'
   ) {
@@ -661,8 +676,15 @@ function SessionCard({
           )}
         />
         <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
-          <span className="flex min-w-0 items-center gap-1.5 text-sm">
-            <span className="shrink-0 font-medium text-ink">{whoName(session.author)}</span>
+          {/* Who and where take at most half the row, so a long name truncates instead of
+              running into the message. */}
+          <span className="flex min-w-0 items-center gap-1.5 text-sm sm:max-w-[45%] sm:shrink-0">
+            <span
+              className="max-w-48 min-w-0 shrink-0 truncate font-medium text-ink"
+              title={whoName(session.author)}
+            >
+              {whoName(session.author)}
+            </span>
             {session.project && (
               <span className="min-w-0 truncate text-muted">· {session.project}</span>
             )}
@@ -867,10 +889,12 @@ export function UpdatesPage() {
     [data, pages],
   );
   const shown = sessions.filter((s) => matchesSession(s, kinds, search));
-  // The newest session with changes starts open, so the page shows a before → after without
-  // a click.
-  const firstOpen = (shown.find((s) => s.revisions.length) ?? shown[0])?.id;
-  const isOpen = (id: string) => toggled.get(id) ?? id === firstOpen;
+  // Every session starts as one line; the reader opens the ones they want.
+  const isOpen = (id: string) => toggled.get(id) ?? false;
+  // Days the reader opened or closed; the first day starts open, older ones closed.
+  const [dayToggled, setDayToggled] = useState<Map<string, boolean>>(new Map());
+  // The first day shows its newest TODAY_SHOWN sessions until "Show all".
+  const [allOf, setAllOf] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const before = document.title;
@@ -996,24 +1020,61 @@ export function UpdatesPage() {
 
       {data && (
         <section aria-label="Work sessions" className="space-y-4">
-          {groups.map((g) => (
-            <div key={g.day} className="space-y-1.5">
-              <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">
-                {g.day} <span className="text-faint tabular-nums">{g.sessions.length}</span>
-              </h2>
-              <ul className="space-y-1.5">
-                {g.sessions.map((s) => (
-                  <SessionCard
-                    key={s.id}
-                    session={s}
-                    kinds={kinds}
-                    expanded={isOpen(s.id)}
-                    onToggle={() => setToggled((prev) => new Map(prev).set(s.id, !isOpen(s.id)))}
-                  />
-                ))}
-              </ul>
-            </div>
-          ))}
+          {groups.map((g, i) => {
+            const searching = Boolean(search.trim());
+            // Searching opens every day with a match and shows them all; otherwise the first day
+            // starts open at its newest few, older days closed.
+            const open = dayToggled.get(g.day) ?? (i === 0 || searching);
+            const all = allOf.has(g.day) || searching || i > 0;
+            const list = all ? g.sessions : g.sessions.slice(0, TODAY_SHOWN);
+            const dayId = `day-${i}`;
+            return (
+              <div key={g.day} data-day={g.day} className="space-y-1.5">
+                <h2>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={dayId}
+                    onClick={() => setDayToggled((prev) => new Map(prev).set(g.day, !open))}
+                    className="flex items-center gap-1 rounded-control text-xs font-semibold tracking-wide text-muted uppercase hover:text-ink"
+                  >
+                    {open ? (
+                      <ChevronDown aria-hidden className="size-3.5 text-faint" />
+                    ) : (
+                      <ChevronRight aria-hidden className="size-3.5 text-faint" />
+                    )}
+                    {g.day} <span className="text-faint tabular-nums">{g.sessions.length}</span>
+                  </button>
+                </h2>
+                {open && (
+                  <div id={dayId} className="space-y-1.5">
+                    <ul className="space-y-1.5">
+                      {list.map((s) => (
+                        <SessionCard
+                          key={s.id}
+                          session={s}
+                          kinds={kinds}
+                          expanded={isOpen(s.id)}
+                          onToggle={() =>
+                            setToggled((prev) => new Map(prev).set(s.id, !isOpen(s.id)))
+                          }
+                        />
+                      ))}
+                    </ul>
+                    {list.length < g.sessions.length && (
+                      <button
+                        type="button"
+                        onClick={() => setAllOf((prev) => new Set(prev).add(g.day))}
+                        className={CONTROL}
+                      >
+                        Show all {g.sessions.length}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {!shown.length && (
             <p className="rounded-block border border-dashed border-line px-3 py-6 text-center text-sm text-muted">
               {sessions.length ? 'Nothing matches these filters.' : 'Nothing happened this week.'}

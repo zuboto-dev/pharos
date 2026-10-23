@@ -38,6 +38,8 @@ export type UpdateField = {
   after: unknown;
   /** For option fields: the labels and colours of both values. */
   option?: { before: UpdateOption | null; after: UpdateOption | null };
+  /** For reference fields: the names of what before and after point at, in place of ids. */
+  ref?: { before: string | string[] | null; after: string | string[] | null };
 };
 
 /** A value too big to show: what it is and how big. */

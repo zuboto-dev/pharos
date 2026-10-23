@@ -394,6 +394,13 @@ export function updatesOf(
       const fields: UpdateField[] = [];
       for (const [field, diff] of Object.entries(d.fields)) {
         const key = optionKeyFor(d.type, field);
+        const refSpec = (ENTITIES[d.type].refs as Record<string, unknown>)[field];
+        const names = (v: unknown): string | string[] | null =>
+          typeof v === 'string'
+            ? (labelOf(v) ?? v)
+            : Array.isArray(v)
+              ? v.map((id) => (typeof id === 'string' ? (labelOf(id) ?? id) : String(id)))
+              : null;
         fields.push({
           field,
           before: compactValue(diff.before),
@@ -406,6 +413,7 @@ export function updatesOf(
                 },
               }
             : {}),
+          ...(refSpec ? { ref: { before: names(diff.before), after: names(diff.after) } } : {}),
         });
       }
       const entity: UpdateEntity = { op: d.op, type: d.type, id: d.id, label: d.label, fields };

@@ -18,7 +18,7 @@ export type DiskListing = {
 
 const MAX = 400;
 /** A folder name the owner can create: letters, digits, spaces, dots, dashes, underscores. */
-const NAME = /^(?!\.{1,2}$)[\w .\-]{1,80}$/u;
+const NAME = /^(?!\.{1,2}$)[\w .-]{1,80}$/u;
 
 export class DiskFolders {
   constructor(private readonly home = homedir()) {}
@@ -49,7 +49,7 @@ export class DiskFolders {
     if (!existsSync(path) || !lstatSync(path).isDirectory())
       throw new PharosError('not_found', 'No such folder');
     const home = realpathSync(this.home);
-    let names: string[] = [];
+    let names: string[];
     try {
       names = readdirSync(path);
     } catch {

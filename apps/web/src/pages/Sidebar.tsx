@@ -344,6 +344,9 @@ export function Sidebar() {
         created: Record<string, string>;
       }>('/api/apply', { message, operations });
       if (result.revision) setNotice({ kind: 'undo', text: message, revision: result.revision.id });
+      // Redraw now, not when the change notice arrives: a dropped live connection (a sleeping
+      // laptop, a restart) must never leave a move unshown until a refresh (owner, 10-23).
+      notifyProjectsChanged();
       return result;
     } catch (err) {
       setNotice({

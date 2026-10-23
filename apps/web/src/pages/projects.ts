@@ -39,8 +39,16 @@ export function useWorkspace():
       reloadRepositories();
       reloadSections();
     };
+    // Coming back to the tab reloads too, in case the live feed dropped while away.
+    const onBack = () => document.visibilityState === 'visible' && onChange();
     window.addEventListener(CHANGED, onChange);
-    return () => window.removeEventListener(CHANGED, onChange);
+    window.addEventListener('focus', onChange);
+    document.addEventListener('visibilitychange', onBack);
+    return () => {
+      window.removeEventListener(CHANGED, onChange);
+      window.removeEventListener('focus', onChange);
+      document.removeEventListener('visibilitychange', onBack);
+    };
   }, [reloadProjects, reloadRepositories, reloadSections]);
   // Any revision may add, rename, move, or remove projects (e.g. an agent creating one).
   useRevisionEvents(reload);

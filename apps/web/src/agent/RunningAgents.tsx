@@ -1,6 +1,6 @@
 import type { Entity } from '@pharos/schema';
 import clsx from 'clsx';
-import { Square, SquareTerminal } from 'lucide-react';
+import { Bot, Square } from 'lucide-react';
 import { useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
@@ -53,7 +53,7 @@ export function RunningAgentsButton() {
           }
           className="relative flex size-8 items-center justify-center rounded-control text-muted hover:bg-sunken hover:text-ink"
         >
-          <SquareTerminal aria-hidden className="size-4" />
+          <Bot aria-hidden className="size-4" />
           <TerminalDot unseen={unseen} className="-top-0.5 -right-0.5" />
         </button>
       </Tooltip>
@@ -67,7 +67,7 @@ export function RunningAgentsButton() {
             return (
               <MenuItem
                 key={r.projectIds.join(',')}
-                icon={SquareTerminal}
+                icon={Bot}
                 onClick={() => {
                   setAnchor(null);
                   navigate(`/projects/${first}?terminal=1`);

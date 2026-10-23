@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
+  Bot,
   ChevronRight,
   CornerUpLeft,
   FolderGit2,
@@ -17,7 +18,6 @@ import {
   Pencil,
   Pin,
   PinOff,
-  SquareTerminal,
   Plus,
   SquarePlus,
   Trash2,
@@ -1244,7 +1244,7 @@ function TerminalMark({ hint, where }: { hint: TerminalHint; where?: string }) {
       title={label}
       className="relative ml-auto inline-flex shrink-0 text-faint"
     >
-      <SquareTerminal aria-hidden className="size-3.5" />
+      <Bot aria-hidden className="size-3.5" />
       <span className="sr-only"> ({label})</span>
       <TerminalDot unseen={hint.unseen} className="-top-1 -right-1 size-1.5" />
     </span>

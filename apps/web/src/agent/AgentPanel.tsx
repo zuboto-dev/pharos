@@ -1,15 +1,5 @@
 import clsx from 'clsx';
-import {
-  AlertTriangle,
-  Bot,
-  Crosshair,
-  Loader2,
-  Play,
-  RefreshCw,
-  Square,
-  SquareTerminal,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, Bot, Crosshair, Loader2, Play, RefreshCw, Square, X } from 'lucide-react';
 import {
   Suspense,
   lazy,
@@ -137,7 +127,7 @@ export function AgentPanelButton({
           onClick={(e) => e.preventDefault()}
           className={clsx(ICON_BUTTON.secondary, 'cursor-not-allowed opacity-40')}
         >
-          <SquareTerminal className="size-4" aria-hidden />
+          <Bot className="size-4" aria-hidden />
         </button>
       </Tooltip>
     );
@@ -154,7 +144,7 @@ export function AgentPanelButton({
         aria-pressed={open}
         className={clsx(open ? ICON_BUTTON.pressed : ICON_BUTTON.secondary, 'relative')}
       >
-        <SquareTerminal className="size-4" aria-hidden />
+        <Bot className="size-4" aria-hidden />
         {/* Its agent still runs with the panel closed; the accent dot: new output since. */}
         {!open && hint && <TerminalDot unseen={hint.unseen} className="-top-1 -right-1" />}
       </button>

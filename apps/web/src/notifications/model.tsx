@@ -9,12 +9,12 @@ import {
 } from '@pharos/schema';
 import {
   AlertTriangle,
+  Bot,
   Cog,
   Inbox,
   Lock,
   RefreshCw,
   Send,
-  SquareTerminal,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -41,7 +41,7 @@ import { useNotificationEvents } from '../lib/events';
 export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   desk: Inbox,
   run: AlertTriangle,
-  terminal: SquareTerminal,
+  terminal: Bot,
   stale: RefreshCw,
   handback: Send,
   system: Cog,

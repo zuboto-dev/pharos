@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import {
+  PERMISSION_HIDDEN_SETTING,
   PERMISSION_TARGETS,
   PERMISSION_WEEK_DAYS,
   PERMISSION_WINDOW_DAYS,
@@ -14,6 +15,8 @@ import {
   type PermissionSource,
   type PermissionStatus,
   type PermissionSuggestion,
+  type FolderTarget,
+  type PermissionScope,
   type PermissionTarget,
   type PermissionWriteInput,
   type PermissionWriteRecord,
@@ -40,6 +43,7 @@ import {
   type AskEvent,
 } from './transcripts.js';
 import { explain } from './explain.js';
+import { scopesFor } from './scopes.js';
 
 /** What Pharos wrote, kept as an app setting (never a revision, never over MCP). */
 export const PERMISSION_WRITES_SETTING = 'permissions.writes';
@@ -78,6 +82,8 @@ type Tally = {
   lastAt: number;
   examples: { at: number; text: string }[];
   origins: Map<string, number>;
+  /** What agents asked with (unmasked, server only): for the narrower "How far" choices. */
+  raws: string[];
 };
 
 type FolderTally = {
@@ -88,6 +94,20 @@ type FolderTally = {
 };
 
 const TEMP_ROOTS = ['/tmp/', '/private/tmp/', '/var/folders/', '/private/var/folders/'];
+
+/** A rule may be written only as one of its suggestion's scopes, to that scope's kind of file. */
+export function checkScope(scopes: PermissionScope[], rule: string, target: PermissionTarget) {
+  const ok = scopes.some(
+    (sc) => sc.rule === rule && (sc.target === 'user' ? target === 'user' : target !== 'user'),
+  );
+  if (!ok)
+    throw new PharosError(
+      'invalid',
+      target === 'user'
+        ? 'Only low-risk rules can go in all your projects'
+        : 'Pharos only writes rules it suggested for this folder',
+    );
+}
 
 export const folderId = (path: string) =>
   createHash('sha256').update(path).digest('hex').slice(0, 12);
@@ -153,6 +173,7 @@ export class PermissionService {
   whereIs(cwd: string): {
     folder: string;
     display: string;
+    name: string;
     projects: string[];
     projectId?: string;
     folderPath?: string;
@@ -171,6 +192,7 @@ export class PermissionService {
     return {
       folder: shown,
       display: this.display(shown),
+      name: (path && this.repoName(path)) ?? (basename(shown) || shown),
       projects: path ? (repos.get(path) ?? []) : [],
       ...(projectId ? { projectId } : {}),
       ...(path && isDir(path) ? { folderPath: path, folderId: folderId(path) } : {}),
@@ -277,6 +299,7 @@ export class PermissionService {
         ruleDenied: 0,
         lastAt: 0,
         examples: [],
+        raws: [],
         origins: new Map(),
       };
       tally.rules.set(s.rule, t);
@@ -289,6 +312,7 @@ export class PermissionService {
       t.lastAt = event.at;
       t.suggested = s;
     }
+    if (t.raws.length < 8 && !t.raws.includes(s.subject)) t.raws.push(s.subject);
     const text = example(s.subject, this.home);
     if (s.subject !== s.tool && !t.examples.some((e) => e.text === text)) {
       t.examples.push({ at: event.at, text });
@@ -297,7 +321,7 @@ export class PermissionService {
     }
   }
 
-  private files(path: string): Record<PermissionTarget, SettingsRead> {
+  private files(path: string): Record<FolderTarget, SettingsRead> {
     return {
       local: readSettings(join(path, PERMISSION_TARGETS.local.file)),
       shared: readSettings(join(path, PERMISSION_TARGETS.shared.file)),
@@ -329,10 +353,11 @@ export class PermissionService {
 
   private suggestion(
     t: Tally,
-    folder: string,
+    folder: { path: string; name: string },
     sources: [PermissionSource, SettingsRead][],
   ): PermissionSuggestion {
     const s = t.suggested;
+    const explained = explain(s);
     return {
       rule: s.rule,
       tool: s.tool,
@@ -344,14 +369,21 @@ export class PermissionService {
       ruleDenied: t.ruleDenied,
       lastAt: new Date(t.lastAt).toISOString(),
       examples: t.examples.map((e) => e.text),
-      ...this.status(s, folder, sources),
+      ...this.status(s, folder.path, sources),
       allowable: s.allowable,
       ...(s.reason ? { reason: s.reason } : {}),
-      ...explain(s),
+      ...explained,
       origins: [...t.origins]
         .map(([label, count]) => ({ label, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 3),
+      scopes: scopesFor({
+        suggested: s,
+        raws: t.raws,
+        folder,
+        home: this.home,
+        risk: explained.risk,
+      }),
     };
   }
 
@@ -364,14 +396,22 @@ export class PermissionService {
     folders: (PermissionFolder & { all: PermissionSuggestion[] })[];
     transcripts: number;
     user: SettingsRead;
+    hidden: number;
   }> {
     const repos = this.repositories();
     const { folders: tallies, transcripts } = await this.scan(repos);
     const user = this.userSettings();
     const paths = new Set([...repos.keys(), ...tallies.keys()]);
+    const hidden = new Set(this.hiddenFolders());
     const out: (PermissionFolder & { all: PermissionSuggestion[] })[] = [];
+    let hiddenCount = 0;
     for (const path of paths) {
       if (!isDir(path)) continue;
+      if (hidden.has(path)) {
+        hiddenCount++;
+        continue;
+      }
+      const name = this.repoName(path) ?? (basename(path) || path);
       const tally = tallies.get(path);
       const files = this.files(path);
       const sources: [PermissionSource, SettingsRead][] = [
@@ -381,13 +421,15 @@ export class PermissionService {
       ];
       const all = [...(tally?.rules.values() ?? [])]
         .sort((a, b) => b.total - a.total || b.lastAt - a.lastAt)
-        .map((t) => this.suggestion(t, path, sources));
+        .map((t) => this.suggestion(t, { path, name }, sources));
       const projects = repos.get(path) ?? [];
       out.push({
         id: folderId(path),
         path,
         displayPath: this.display(path),
         label: basename(path) || path,
+        name,
+        inPharos: repos.has(path),
         projects,
         sessions: tally?.sessions.size ?? 0,
         total: all.reduce((n, s) => n + s.total, 0),
@@ -400,7 +442,53 @@ export class PermissionService {
       });
     }
     out.sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
-    return { folders: out, transcripts, user };
+    return { folders: out, transcripts, user, hidden: hiddenCount };
+  }
+
+  private repoName(path: string): string | undefined {
+    return this.store
+      .list('repository')
+      .find((r) => r.data.path && this.absolute(r.data.path) === path)?.data.name;
+  }
+
+  hiddenFolders(): string[] {
+    return this.store.setting<string[]>(PERMISSION_HIDDEN_SETTING) ?? [];
+  }
+
+  private async folderById(id: string): Promise<string> {
+    const { folders } = await this.folders();
+    const folder = folders.find((f) => f.id === id);
+    if (!folder) throw new PharosError('not_found', 'That folder isn’t in the list any more');
+    return folder.path;
+  }
+
+  /** Hides a folder from Agent permissions (an app setting); `show` brings every one back. */
+  async hide(id: string): Promise<void> {
+    const path = await this.folderById(id);
+    this.store.setSetting(PERMISSION_HIDDEN_SETTING, [...new Set([...this.hiddenFolders(), path])]);
+  }
+
+  showHidden(): void {
+    this.store.setSetting(PERMISSION_HIDDEN_SETTING, []);
+  }
+
+  /** "Add to Pharos": a repository for the folder, as the owner, through the normal apply. */
+  async addToPharos(id: string, author: { kind: 'human'; name: string }): Promise<string> {
+    const path = await this.folderById(id);
+    if (this.repositories().has(path))
+      throw new PharosError('invalid', 'That folder is already in Pharos');
+    const result = this.store.apply(author, {
+      message: `Added ${this.display(path)} from Agent permissions (agents asked for permission there)`,
+      operations: [
+        {
+          op: 'create',
+          type: 'repository',
+          ref: 'repo',
+          data: { name: basename(path) || path, path },
+        },
+      ],
+    } as never) as { created: Record<string, string> };
+    return result.created.repo!;
   }
 
   /** Reads the transcripts once in the background, so the Settings page is fast the first time. */
@@ -411,8 +499,9 @@ export class PermissionService {
   }
 
   async overview(): Promise<PermissionsOverview> {
-    const { folders, transcripts, user } = await this.folders();
+    const { folders, transcripts, user, hidden } = await this.folders();
     return {
+      hidden,
       windowDays: PERMISSION_WINDOW_DAYS,
       scannedAt: this.now().toISOString(),
       transcripts,
@@ -449,10 +538,21 @@ export class PermissionService {
     const { folders, user } = await this.folders();
     const folder = folders.find((f) => f.id === input.folderId);
     if (!folder) throw new PharosError('not_found', 'That folder isn’t in the list any more');
-    const suggestion = folder.all.find((s) => s.rule === input.rule);
+    const base = input.base ?? input.rule;
+    const suggestion = folder.all.find((s) => s.rule === base);
     if (!suggestion)
       throw new PharosError('invalid', 'Pharos only writes rules it suggested for this folder');
-    return this.previewAt({ ...input, folder: folder.path, ...suggestion }, user);
+    checkScope(suggestion.scopes, input.rule, input.target);
+    return this.previewAt(
+      {
+        ...input,
+        folder: folder.path,
+        tool: suggestion.tool,
+        allowable: suggestion.allowable,
+        ...(suggestion.reason ? { reason: suggestion.reason } : {}),
+      },
+      user,
+    );
   }
 
   /** The change for a rule in a folder (from a suggestion, or a live ask's rule). */
@@ -467,7 +567,10 @@ export class PermissionService {
   ): PermissionPreview {
     if (input.action === 'allow' && !input.allowable)
       throw new PharosError('invalid', input.reason ?? 'This rule can only be denied');
-    const path = join(input.folder, PERMISSION_TARGETS[input.target].file);
+    const path =
+      input.target === 'user'
+        ? join(this.claudeHome, 'settings.json')
+        : join(input.folder, PERMISSION_TARGETS[input.target].file);
     const read = readSettings(path);
     if (read.error)
       throw new PharosError('invalid', `${read.error}: ${path}. Fix it by hand first.`);
@@ -509,7 +612,9 @@ export class PermissionService {
           PERMISSION_TARGETS[t].file,
           readSettings(join(folder, PERMISSION_TARGETS[t].file)),
         ]),
-      ['~/.claude/settings.json', user],
+      ...(input.target === 'user'
+        ? []
+        : [['~/.claude/settings.json', user] as [string, SettingsRead]]),
     ];
     for (const [name, read] of others) {
       if (input.action === 'allow') {
@@ -524,6 +629,8 @@ export class PermissionService {
     }
     if (input.target === 'shared')
       out.push('settings.json is shared: it’s committed with the repository unless it’s ignored.');
+    if (input.target === 'user')
+      out.push('~/.claude/settings.json applies in every folder you run Claude Code in.');
     return out;
   }
 

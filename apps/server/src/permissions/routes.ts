@@ -69,13 +69,31 @@ export function permissionRoutes(service: PermissionService, asks?: PermissionAs
   api.post('/undo', async (c) =>
     c.json(service.undo(PermissionUndoInput.parse(await c.req.json()).id)),
   );
+  // Folders agents asked in that aren't in Pharos: add one (a repository, as the owner) or hide it.
+  api.post('/folders/:id/add', async (c) => {
+    const name = c.req.header('x-pharos-author')!.slice('human:'.length).trim();
+    return c.json({
+      repositoryId: await service.addToPharos(c.req.param('id'), { kind: 'human', name }),
+    });
+  });
+  api.post('/folders/:id/hide', async (c) => {
+    await service.hide(c.req.param('id'));
+    return c.json({ hidden: true });
+  });
+  api.post('/folders/show-hidden', (c) => {
+    service.showHidden();
+    return c.json({ hidden: 0 });
+  });
   if (asks) {
     api.get('/asks', (c) => c.json(asks.list()));
     api.post('/asks/:id/preview', async (c) => {
-      const { target } = z
-        .object({ target: PermissionTarget.default('local') })
+      const { target, rule } = z
+        .object({
+          target: PermissionTarget.default('local'),
+          rule: z.string().min(1).max(400).optional(),
+        })
         .parse(await c.req.json().catch(() => ({})));
-      return c.json(asks.preview(c.req.param('id'), target));
+      return c.json(asks.preview(c.req.param('id'), target, rule));
     });
     api.post('/asks/:id/answer', async (c) =>
       c.json(asks.answer(c.req.param('id'), PermissionAskAnswer.parse(await c.req.json()))),

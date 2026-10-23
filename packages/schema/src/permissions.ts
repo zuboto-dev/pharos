@@ -34,14 +34,37 @@ export const PERMISSION_WEEK_DAYS = 7;
 export const PermissionAction = z.enum(['allow', 'deny']);
 export type PermissionAction = z.infer<typeof PermissionAction>;
 
-/** Which of the folder's settings files a rule goes in. */
-export const PermissionTarget = z.enum(['local', 'shared']);
+/**
+ * Which settings file a rule goes in: the folder's own (`local`, just the owner; `shared`, committed
+ * with the repository), or the owner's `~/.claude/settings.json` (`user`, every project; only for
+ * low-risk rules the page offers as "All my projects").
+ */
+export const PermissionTarget = z.enum(['local', 'shared', 'user']);
 export type PermissionTarget = z.infer<typeof PermissionTarget>;
+export type FolderTarget = Exclude<PermissionTarget, 'user'>;
 
-export const PERMISSION_TARGETS: Record<PermissionTarget, { file: string; label: string }> = {
+export const PERMISSION_TARGETS: Record<FolderTarget, { file: string; label: string }> = {
   local: { file: '.claude/settings.local.json', label: 'Just me (settings.local.json)' },
   shared: { file: '.claude/settings.json', label: 'Everyone on the repo (settings.json)' },
 };
+
+/** One "How far" choice for a rule: the exact rule written, and where. */
+export type PermissionScope = {
+  id: string;
+  kind: 'narrow' | 'folder' | 'wider' | 'user';
+  rule: string;
+  /** `local` (the folder's settings; the dialog can switch it to `shared`) or `user`. */
+  target: 'local' | 'user';
+  /** The choice, short ("Only `git commit -m …`", "As suggested", "All my projects"). */
+  label: string;
+  /** "Only in breathe" or "In all your projects". */
+  where: string;
+  /** What it lets agents do: "run `npx pnpm@12.9.1 test …`". */
+  phrase: string;
+};
+
+/** Folders hidden from Agent permissions (an app setting: paths). */
+export const PERMISSION_HIDDEN_SETTING = 'permissions.hiddenFolders';
 
 /** What a settings file already says about a rule. */
 export const PERMISSION_RISKS = ['low', 'medium', 'high'] as const;
@@ -85,6 +108,8 @@ export type PermissionSuggestion = {
   riskWhy: string;
   /** Which routines or kinds of session asked ("/nightshift", "an interactive session"), most first. */
   origins: { label: string; count: number }[];
+  /** "How far": narrower variants from the actual asks, this folder (the default), all projects. */
+  scopes: PermissionScope[];
 };
 
 export type PermissionFile = { path: string; exists: boolean; error?: string };
@@ -106,7 +131,11 @@ export type PermissionFolder = {
    * session's folders) or by Claude Code's safety checks: no rule changes those.
    */
   unfixable: number;
-  files: Record<PermissionTarget, PermissionFile>;
+  files: Record<FolderTarget, PermissionFile>;
+  /** A Pharos repository has this path; otherwise it shows under "Not in Pharos". */
+  inPharos: boolean;
+  /** The repository's name, or the folder's own name. */
+  name: string;
   suggestions: PermissionSuggestion[];
   /** Suggestions beyond those listed. */
   more: number;
@@ -133,6 +162,8 @@ export type PermissionsOverview = {
   transcripts: number;
   user: PermissionFile;
   folders: PermissionFolder[];
+  /** Folders the owner hid (not in `folders`). */
+  hidden: number;
   recent: PermissionWriteRecord[];
 };
 
@@ -140,7 +171,10 @@ export type PermissionLists = { allow: string[]; deny: string[]; ask: string[] }
 
 export const PermissionChangeInput = z.strictObject({
   folderId: z.string().min(1).max(64),
+  /** The rule written: the suggestion's, or one of its "How far" scopes. */
   rule: z.string().min(1).max(400),
+  /** The suggestion it came from, when `rule` is a narrower or wider scope of it. */
+  base: z.string().min(1).max(400).optional(),
   action: PermissionAction,
   target: PermissionTarget.default('local'),
 });
@@ -245,6 +279,8 @@ export type PermissionAsk = {
   reason?: string;
   /** Whether "Allow always" can write a rule (a project folder, not the home folder). */
   canAlwaysAllow: boolean;
+  /** "How far" for Allow always (empty when it can't be allowed always). */
+  scopes: PermissionScope[];
   /** The write behind "Allow always", for Undo. */
   record?: PermissionWriteRecord;
 };
@@ -252,6 +288,8 @@ export type PermissionAsk = {
 export const PermissionAskAnswer = z.discriminatedUnion('answer', [
   z.strictObject({
     answer: z.literal('always'),
+    /** One of the ask's scopes; the suggested rule when left out. */
+    rule: z.string().min(1).max(400).optional(),
     target: PermissionTarget.default('local'),
     hash: z.string().min(1).max(128),
   }),

@@ -1,15 +1,14 @@
 import {
   PERMISSION_ROUTES,
-  PERMISSION_TARGETS,
   type PermissionAction,
   type PermissionAsk,
   type PermissionFolder,
   type PermissionLists,
   type PermissionPreview,
   type PermissionRisk,
+  type PermissionScope,
   type PermissionStatus,
   type PermissionSuggestion,
-  type PermissionTarget,
   type PermissionWriteRecord,
   type PermissionWriteResult,
   type PermissionsOverview,
@@ -142,6 +141,86 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
+/** Where a scope's rule is written, in words. */
+const scopeFile = (scope: PermissionScope) =>
+  scope.target === 'user' ? '~/.claude/settings.json' : '.claude/settings.local.json';
+
+/** "Only in breathe: lets agents run `npx pnpm@12.9.1 test …`" (or "agents can't …" for Deny). */
+export function scopeSentence(scope: PermissionScope, action: PermissionAction): string {
+  return `${scope.where}: ${action === 'allow' ? 'lets agents' : 'agents can’t'} ${scope.phrase}`;
+}
+
+/** Inline code in a sentence: `x` becomes <code>. */
+function Sentence({ text }: { text: string }) {
+  const parts = text.split('`');
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 ? (
+          <code key={i} className="rounded bg-subtle px-1 text-[12px] break-all">
+            {p}
+          </code>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/** "How far": the scopes of a rule, one radio each, with the exact rule and file under the choice. */
+function HowFar({
+  scopes,
+  value,
+  onChange,
+  action,
+  name,
+}: {
+  scopes: PermissionScope[];
+  value: string;
+  onChange: (id: string) => void;
+  action: PermissionAction;
+  name: string;
+}) {
+  const chosen = scopes.find((s) => s.id === value) ?? scopes[0];
+  if (!chosen) return null;
+  return (
+    <div className="space-y-1.5">
+      {scopes.length > 1 && (
+        <fieldset className="flex flex-wrap gap-1.5" aria-label="How far">
+          {scopes.map((scope) => (
+            <label
+              key={scope.id}
+              className={clsx(
+                'tap-area cursor-pointer rounded-control border px-2 py-0.5 text-xs',
+                scope.id === chosen.id
+                  ? 'border-sky-500 bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-100'
+                  : 'border-line-strong text-ink-soft',
+              )}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={scope.id}
+                checked={scope.id === chosen.id}
+                onChange={() => onChange(scope.id)}
+                className="sr-only"
+              />
+              <Sentence text={scope.kind === 'folder' ? 'This folder' : scope.label} />
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <p className="text-sm" aria-label="What this writes">
+        <Sentence text={scopeSentence(chosen, action)} />
+      </p>
+      <p className="text-xs break-all text-muted">
+        Writes <code>{chosen.rule}</code> to {scopeFile(chosen)}
+      </p>
+    </div>
+  );
+}
+
 function CommandRow({
   s,
   windowDays,
@@ -149,11 +228,13 @@ function CommandRow({
 }: {
   s: PermissionSuggestion;
   windowDays: number;
-  onChoose: (action: PermissionAction) => void;
+  onChoose: (action: PermissionAction, scope: PermissionScope) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [scopeId, setScopeId] = useState('folder');
   const status = STATUS[s.status];
   const count = s.week > 0 ? `${s.week} this week` : `${s.total} in ${windowDays} d`;
+  const scope = s.scopes.find((x) => x.id === scopeId) ?? s.scopes.find((x) => x.kind === 'folder');
   return (
     <li aria-label={s.rule}>
       <button
@@ -196,37 +277,48 @@ function CommandRow({
             <Pill className={RISK[s.risk].className}>{RISK[s.risk].label}</Pill>{' '}
             <span className="text-ink-soft">{s.riskWhy}</span>
           </Detail>
-          <Detail label="Your rule">
-            <div className="flex flex-wrap items-center gap-2">
-              {s.statusSource ? (
-                <Tooltip
-                  label={`${status.label} in ${SOURCE_LABEL[s.statusSource]}`}
-                  detail={s.matchedBy ? `By ${s.matchedBy}` : undefined}
-                >
+          <Detail label="How far">
+            <div className="space-y-2">
+              <HowFar
+                scopes={s.scopes}
+                value={scopeId}
+                onChange={setScopeId}
+                action={s.allowable ? 'allow' : 'deny'}
+                name={`how-far-${s.rule}`}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                {s.statusSource ? (
+                  <Tooltip
+                    label={`${status.label} in ${SOURCE_LABEL[s.statusSource]}`}
+                    detail={s.matchedBy ? `By ${s.matchedBy}` : undefined}
+                  >
+                    <Pill className={status.className}>{status.label}</Pill>
+                  </Tooltip>
+                ) : (
                   <Pill className={status.className}>{status.label}</Pill>
-                </Tooltip>
-              ) : (
-                <Pill className={status.className}>{status.label}</Pill>
-              )}
-              {s.allowable && (
-                <button
-                  type="button"
-                  className={BUTTON.secondary}
-                  disabled={s.status === 'allowed'}
-                  onClick={() => onChoose('allow')}
-                >
-                  Allow
-                </button>
-              )}
-              <button
-                type="button"
-                className={BUTTON.secondary}
-                disabled={s.status === 'denied'}
-                onClick={() => onChoose('deny')}
-              >
-                Deny
-              </button>
-              {!s.allowable && <span className="text-xs text-muted">{s.reason}</span>}
+                )}
+                {s.allowable && scope && (
+                  <button
+                    type="button"
+                    className={BUTTON.secondary}
+                    disabled={s.status === 'allowed' && scope.kind === 'folder'}
+                    onClick={() => onChoose('allow', scope)}
+                  >
+                    Allow
+                  </button>
+                )}
+                {scope && (
+                  <button
+                    type="button"
+                    className={BUTTON.secondary}
+                    disabled={s.status === 'denied' && scope.kind === 'folder'}
+                    onClick={() => onChoose('deny', scope)}
+                  >
+                    Deny
+                  </button>
+                )}
+                {!s.allowable && <span className="text-xs text-muted">{s.reason}</span>}
+              </div>
             </div>
           </Detail>
         </dl>
@@ -242,10 +334,18 @@ function FolderCard({
   folder,
   windowDays,
   onChoose,
+  actions,
 }: {
   folder: PermissionFolder;
   windowDays: number;
-  onChoose: (folder: PermissionFolder, s: PermissionSuggestion, action: PermissionAction) => void;
+  onChoose: (
+    folder: PermissionFolder,
+    s: PermissionSuggestion,
+    action: PermissionAction,
+    scope: PermissionScope,
+  ) => void;
+  /** For folders not in Pharos: Add to Pharos, Hide. */
+  actions?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   // The five most asked first; the rest one click away (owner's review, 10-23).
@@ -258,11 +358,12 @@ function FolderCard({
         ? `${plural(folder.week, 'ask')} this week`
         : `${plural(folder.total, 'ask')} in ${windowDays} days`;
   return (
-    <li className="rounded-tile border border-line-soft" aria-label={folder.label}>
+    <li className="rounded-tile border border-line-soft" aria-label={folder.name}>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
+        title={folder.displayPath}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
       >
         <ChevronRight
@@ -270,14 +371,23 @@ function FolderCard({
           aria-hidden
         />
         <FolderGit2 className="size-4 shrink-0 text-faint" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {folder.projects[0] ?? folder.label}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{folder.name}</span>
+          {actions && (
+            <span className="block truncate text-xs text-muted">{folder.displayPath}</span>
+          )}
         </span>
         <span className="shrink-0 text-xs text-ink-soft tabular-nums">{count}</span>
       </button>
       {open && (
         <div className="border-t border-line-soft px-3">
-          <p className="pt-2 text-xs break-all text-muted">{folder.displayPath}</p>
+          {!actions && (
+            <p className="pt-2 text-xs break-all text-muted">
+              {folder.projects.length > 0 && <span>{folder.projects.join(', ')} · </span>}
+              {folder.displayPath}
+            </p>
+          )}
+          {actions && <div className="flex flex-wrap gap-2 pt-2">{actions}</div>}
           {folder.suggestions.length ? (
             <ul className="divide-y divide-line-soft">
               {shown.map((s) => (
@@ -285,7 +395,7 @@ function FolderCard({
                   key={s.rule}
                   s={s}
                   windowDays={windowDays}
-                  onChoose={(action) => onChoose(folder, s, action)}
+                  onChoose={(action, scope) => onChoose(folder, s, action, scope)}
                 />
               ))}
             </ul>
@@ -311,6 +421,68 @@ function FolderCard({
         </div>
       )}
     </li>
+  );
+}
+
+/** Folders agents asked in that aren't in Pharos: one collapsed group at the bottom. */
+function NotInPharos({
+  folders,
+  windowDays,
+  onChoose,
+  onAdd,
+  onHide,
+}: {
+  folders: PermissionFolder[];
+  windowDays: number;
+  onChoose: React.ComponentProps<typeof FolderCard>['onChoose'];
+  onAdd: (folder: PermissionFolder) => void;
+  onHide: (folder: PermissionFolder) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!folders.length) return null;
+  return (
+    <div
+      className="rounded-tile border border-dashed border-line-strong"
+      aria-label="Not in Pharos"
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <ChevronRight
+          className={clsx('size-4 shrink-0 text-faint transition-transform', open && 'rotate-90')}
+          aria-hidden
+        />
+        <span className="flex-1 text-sm font-medium text-ink-soft">
+          Not in Pharos ({folders.length})
+        </span>
+        <span className="text-xs text-muted">folders agents asked in</span>
+      </button>
+      {open && (
+        <ul className="space-y-2 border-t border-line-soft p-2">
+          {folders.map((f) => (
+            <FolderCard
+              key={f.id}
+              folder={f}
+              windowDays={windowDays}
+              onChoose={onChoose}
+              actions={
+                <>
+                  <button type="button" className={BUTTON.secondary} onClick={() => onAdd(f)}>
+                    Add to Pharos
+                  </button>
+                  <button type="button" className={BUTTON.secondary} onClick={() => onHide(f)}>
+                    Hide
+                  </button>
+                </>
+              }
+            />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -366,8 +538,10 @@ type Change = {
   title: string;
   action: PermissionAction;
   intro: string;
-  preview: () => Promise<PermissionPreview>;
-  write: (hash: string) => Promise<PermissionWriteRecord | undefined>;
+  /** The rule goes in the folder's settings.local.json; the owner may pick settings.json. */
+  canShare: boolean;
+  preview: (shared: boolean) => Promise<PermissionPreview>;
+  write: (hash: string, shared: boolean) => Promise<PermissionWriteRecord | undefined>;
 };
 
 function ConfirmChange({
@@ -382,17 +556,18 @@ function ConfirmChange({
   const [preview, setPreview] = useState<PermissionPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
+  const [shared, setShared] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    change.preview().then(
+    change.preview(shared).then(
       (p) => !cancelled && setPreview(p),
       (err: unknown) => !cancelled && setError(errorText(err)),
     );
     return () => {
       cancelled = true;
     };
-  }, [change]);
+  }, [change, shared]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -404,7 +579,7 @@ function ConfirmChange({
     if (!preview) return;
     setWriting(true);
     try {
-      onWritten(await change.write(preview.hash));
+      onWritten(await change.write(preview.hash, shared));
     } catch (err) {
       setError(errorText(err));
       setWriting(false);
@@ -432,7 +607,9 @@ function ConfirmChange({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <p className="text-sm text-ink-soft">{change.intro}</p>
+        <p className="text-sm text-ink-soft">
+          <Sentence text={change.intro} />
+        </p>
         {error && (
           <p role="alert" className="text-sm text-danger">
             {error}
@@ -467,6 +644,12 @@ function ConfirmChange({
             )}
             {preview.unchanged && <p className="text-sm text-muted">The rule is already there.</p>}
           </div>
+        )}
+        {change.canShare && (
+          <label className="flex items-center gap-2 text-xs text-ink-soft">
+            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+            Save for everyone on this repo (settings.json) instead
+          </label>
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className={BUTTON.secondary} onClick={onClose}>
@@ -508,9 +691,12 @@ function AskCard({
   ask: PermissionAsk;
   now: number;
   onAnswer: (answer: 'once' | 'deny' | 'terminal' | 'dismiss') => void;
-  onAlways: () => void;
+  onAlways: (scope: PermissionScope) => void;
 }) {
   const where = ask.projects[0] ?? ask.displayFolder;
+  const [scopeId, setScopeId] = useState('folder');
+  const scope =
+    ask.scopes.find((x) => x.id === scopeId) ?? ask.scopes.find((x) => x.kind === 'folder');
   // Asked in a run nobody watches: the hook didn't wait; a rule is for next time.
   const notifyOnly = ask.status === 'unattended';
   return (
@@ -557,9 +743,22 @@ function AskCard({
           refused it there. {ask.canAlwaysAllow ? 'Answer for next time with Allow always.' : ''}
         </p>
       )}
+      {ask.canAlwaysAllow && ask.scopes.length > 0 && (
+        <dl>
+          <Detail label="Allow always">
+            <HowFar
+              scopes={ask.scopes}
+              value={scopeId}
+              onChange={setScopeId}
+              action="allow"
+              name={`how-far-ask-${ask.id}`}
+            />
+          </Detail>
+        </dl>
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        {ask.canAlwaysAllow && (
-          <button type="button" className={BUTTON.primary} onClick={onAlways}>
+        {ask.canAlwaysAllow && scope && (
+          <button type="button" className={BUTTON.primary} onClick={() => onAlways(scope)}>
             Allow always
           </button>
         )}
@@ -600,13 +799,11 @@ function WaitingAsks({
   asks,
   onChanged,
   onChange,
-  target,
   onError,
 }: {
   asks: PermissionAsk[];
   onChanged: () => void;
   onChange: (change: Change) => void;
-  target: PermissionTarget;
   onError: (message: string) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
@@ -644,25 +841,30 @@ function WaitingAsks({
             ask={ask}
             now={now}
             onAnswer={(a) => void answer(ask, a)}
-            onAlways={() =>
+            onAlways={(scope) => {
+              const targetOf = (shared: boolean) =>
+                scope.target === 'user' ? 'user' : shared ? 'shared' : 'local';
               onChange({
                 title: `Allow always: ${ask.summary}`,
                 action: 'allow',
-                intro: `Claude Code agents in ${ask.projects[0] ?? ask.displayFolder} will run this without asking${ask.status === 'waiting' ? ', starting with the one waiting now' : ' from the next run on'}.`,
-                preview: () =>
+                intro: `${scopeSentence(scope, 'allow')}${ask.status === 'waiting' ? ', starting with the one waiting now' : ', from the next run on'}.`,
+                canShare: scope.target === 'local',
+                preview: (shared) =>
                   send<PermissionPreview>(`${PERMISSION_ROUTES.asks}/${ask.id}/preview`, {
-                    target,
+                    target: targetOf(shared),
+                    rule: scope.rule,
                   }),
-                write: async (hash) =>
+                write: async (hash, shared) =>
                   (
                     await send<PermissionAsk>(`${PERMISSION_ROUTES.asks}/${ask.id}/answer`, {
                       answer: 'always',
-                      target,
+                      rule: scope.rule,
+                      target: targetOf(shared),
                       hash,
                     })
                   ).record,
-              })
-            }
+              });
+            }}
           />
         ))}
       </ul>
@@ -722,7 +924,6 @@ export function AgentPermissions() {
   const [asks, setAsks] = useState<PermissionAsk[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [target, setTarget] = useState<PermissionTarget>('local');
   const [change, setChange] = useState<Change | null>(null);
   const [done, setDone] = useState<PermissionWriteRecord | null>(null);
 
@@ -762,20 +963,40 @@ export function AgentPermissions() {
     }
   };
 
-  const choose = (folder: PermissionFolder, s: PermissionSuggestion, action: PermissionAction) => {
+  const choose = (
+    folder: PermissionFolder,
+    s: PermissionSuggestion,
+    action: PermissionAction,
+    scope: PermissionScope,
+  ) => {
     setError(null);
-    const body = { folderId: folder.id, rule: s.rule, action, target };
+    const body = (shared: boolean) => ({
+      folderId: folder.id,
+      base: s.rule,
+      rule: scope.rule,
+      action,
+      target: scope.target === 'user' ? 'user' : shared ? 'shared' : 'local',
+    });
     setChange({
       title: `${action === 'allow' ? 'Allow' : 'Deny'}: ${s.summary}`,
       action,
-      intro:
-        action === 'allow'
-          ? `Claude Code will run these without asking in ${folder.projects[0] ?? folder.label}.`
-          : `Claude Code won’t run these in ${folder.projects[0] ?? folder.label}, even when asked.`,
-      preview: () => send<PermissionPreview>(PERMISSION_ROUTES.preview, body),
-      write: async (hash) =>
-        (await send<PermissionWriteResult>(PERMISSION_ROUTES.write, { ...body, hash })).record,
+      intro: `${scopeSentence(scope, action)}.`,
+      canShare: scope.target === 'local',
+      preview: (shared) => send<PermissionPreview>(PERMISSION_ROUTES.preview, body(shared)),
+      write: async (hash, shared) =>
+        (await send<PermissionWriteResult>(PERMISSION_ROUTES.write, { ...body(shared), hash }))
+          .record,
     });
+  };
+
+  const folderAction = async (folder: PermissionFolder, what: 'add' | 'hide') => {
+    try {
+      await send(`${PERMISSION_ROUTES.list}/folders/${folder.id}/${what}`, {});
+      setError(null);
+      load();
+    } catch (err) {
+      setError(errorText(err));
+    }
   };
 
   const folders = data?.folders ?? [];
@@ -786,44 +1007,13 @@ export function AgentPermissions() {
       icon={KeyRound}
       description="Pharos reads Claude Code’s session logs on this computer (never sends them anywhere) and counts the tool calls that needed your approval or were stopped, over the last two weeks. With the Pharos hook installed (pnpm agents install), an agent waiting at a permission prompt shows here too. Only you, here, can write a rule; agents can’t."
     >
-      <WaitingAsks
-        asks={asks}
-        target={target}
-        onChanged={loadAsks}
-        onChange={setChange}
-        onError={setError}
-      />
+      <WaitingAsks asks={asks} onChanged={loadAsks} onChange={setChange} onError={setError} />
       <p className="text-sm text-ink-soft">
-        What Claude Code agents kept asking for, per project. Allow or Deny writes a rule into that
-        folder’s <code className="text-[13px]">.claude/settings.local.json</code> (just you, not
-        committed), or into the shared <code className="text-[13px]">.claude/settings.json</code> if
-        you pick it.
+        What Claude Code agents kept asking for, per folder. Open a command to choose how far a rule
+        reaches; it goes in that folder’s{' '}
+        <code className="text-[13px]">.claude/settings.local.json</code> (just you, not committed)
+        unless you choose otherwise.
       </p>
-      <fieldset className="flex flex-wrap items-center gap-2 text-sm">
-        <legend className="sr-only">Where rules go</legend>
-        <span className="text-muted">Write to</span>
-        {(Object.keys(PERMISSION_TARGETS) as PermissionTarget[]).map((t) => (
-          <label
-            key={t}
-            className={clsx(
-              'tap-area cursor-pointer rounded-control border px-2.5 py-1',
-              target === t
-                ? 'border-sky-500 bg-sky-50 text-sky-900 dark:bg-sky-950 dark:text-sky-100'
-                : 'border-line-strong text-ink-soft',
-            )}
-          >
-            <input
-              type="radio"
-              name="permission-target"
-              value={t}
-              checked={target === t}
-              onChange={() => setTarget(t)}
-              className="sr-only"
-            />
-            {PERMISSION_TARGETS[t].label}
-          </label>
-        ))}
-      </fieldset>
       {done && (
         <div
           role="status"
@@ -850,11 +1040,35 @@ export function AgentPermissions() {
       ) : !data ? (
         <SkeletonRows rows={3} label="Reading Claude Code’s logs" />
       ) : folders.length ? (
-        <ul className="space-y-2" aria-label="Projects">
-          {folders.map((f) => (
-            <FolderCard key={f.id} folder={f} windowDays={data.windowDays} onChoose={choose} />
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-2" aria-label="Folders">
+            {folders
+              .filter((f) => f.inPharos)
+              .map((f) => (
+                <FolderCard key={f.id} folder={f} windowDays={data.windowDays} onChoose={choose} />
+              ))}
+          </ul>
+          <NotInPharos
+            folders={folders.filter((f) => !f.inPharos)}
+            windowDays={data.windowDays}
+            onChoose={choose}
+            onAdd={(f) => void folderAction(f, 'add')}
+            onHide={(f) => void folderAction(f, 'hide')}
+          />
+          {data.hidden > 0 && (
+            <button
+              type="button"
+              className="text-xs text-muted hover:underline"
+              onClick={() =>
+                void send(`${PERMISSION_ROUTES.list}/folders/show-hidden`, {}).then(load, (err) =>
+                  setError(errorText(err)),
+                )
+              }
+            >
+              {plural(data.hidden, 'hidden folder')} · Show again
+            </button>
+          )}
+        </>
       ) : (
         <p className="text-sm text-muted">
           No Claude Code sessions asked for permission in the last {data.windowDays} days.

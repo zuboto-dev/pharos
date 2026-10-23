@@ -22,7 +22,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const source = join(here, '..', 'agents');
+// Run from the service's deploy copy (~/.pharos/slots/a|b), point at ~/.pharos/app, the link that
+// always names the deployed version: a slot is rebuilt with the next update.
+const deployed = here.match(/^(.*\/\.pharos)\/slots\/[^/]+\/scripts$/);
+const source = deployed ? join(deployed[1], 'app', 'agents') : join(here, '..', 'agents');
 const claudeHome = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
 const codexHome = process.env.CODEX_HOME ?? join(homedir(), '.codex');
 

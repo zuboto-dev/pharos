@@ -839,7 +839,10 @@ export function createApp(
       key: `permission-ask:${ask.id}`,
       kind: 'desk',
       gate: true,
-      title: `${where}: an agent asks permission. ${ask.summary}`,
+      title:
+        ask.status === 'unattended'
+          ? `${where}: ${ask.agent} needed permission and couldn’t wait. ${ask.summary}`
+          : `${where}: an agent asks permission. ${ask.summary}`,
       detail: `${ask.example} · ${ask.risk} risk · from ${ask.agent}`,
       ...(ask.projectId ? { projectId: ask.projectId } : {}),
       href: '/settings#permissions',

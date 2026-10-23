@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { PermissionAsks } from './asks.js';
+import { PermissionAsks, isUnattended } from './asks.js';
 import { PermissionService } from './service.js';
 
 // Live asks from the Claude Code PermissionRequest hook, with made-up hook input, a temp home and
@@ -121,7 +121,7 @@ describe('live permission asks', () => {
     mkdirSync(dirname(transcript), { recursive: true });
     writeFileSync(
       transcript,
-      `${JSON.stringify({ type: 'user', entrypoint: 'sdk-cli', message: { content: '<command-name>/nightshift</command-name>' } })}\n`,
+      `${JSON.stringify({ type: 'user', entrypoint: 'cli', message: { content: '<command-name>/triage</command-name>' } })}\n`,
     );
     const id = await created(hookInput({ transcript_path: transcript }));
     const asks = (await (await owner('GET', '/asks')).json()) as PermissionAsk[];
@@ -132,7 +132,7 @@ describe('live permission asks', () => {
       displayFolder: '~/code/shop',
       projects: ['Shop site'],
       projectId,
-      agent: '/nightshift',
+      agent: '/triage',
       tool: 'Bash',
       example: 'npx pnpm@12.9.1 test 2>&1',
       rule: 'Bash(npx pnpm@12.9.1 test:*)',
@@ -385,4 +385,103 @@ describe('pnpm agents install / remove (the hook)', () => {
     expect(JSON.parse(readFileSync(settings, 'utf8'))).toEqual(before);
     expect(await setup('remove')).toMatch(/no Pharos permission hook/);
   });
+});
+
+describe('unattended sessions', () => {
+  function session(name: string, lines: object[]) {
+    const file = join(claudeHome, 'projects', 'x', `${name}.jsonl`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
+    return file;
+  }
+  const routine = (name: string, entrypoint = 'cli') => ({
+    type: 'user',
+    entrypoint,
+    message: { content: `<command-name>/${name}</command-name>` },
+  });
+
+  it('tells which sessions nobody watches', () => {
+    expect(isUnattended({ permission_mode: 'dontAsk' }, undefined)).toBe(true);
+    expect(isUnattended({ entrypoint: 'sdk-cli' }, undefined)).toBe(true);
+    expect(isUnattended({}, { headless: true })).toBe(true);
+    expect(isUnattended({}, { headless: false, routine: '/nightshift' })).toBe(true);
+    expect(isUnattended({}, { headless: false, routine: '/wrapup' })).toBe(true);
+    expect(isUnattended({}, { headless: false, routine: '/daybreak' })).toBe(true);
+    // When unsure: interactive.
+    expect(isUnattended({ entrypoint: 'cli', permission_mode: 'default' }, undefined)).toBe(false);
+    expect(isUnattended({}, { headless: false, routine: '/triage' })).toBe(false);
+  });
+
+  it('posts a night run’s ask as notify-only, and the hook doesn’t wait', async () => {
+    const night = session('night', [routine('nightshift', 'sdk-cli')]);
+    const res = await report(hookInput({ transcript_path: night }));
+    expect(await res.json()).toMatchObject({ wait: false });
+    const [ask] = (await (await owner('GET', '/asks')).json()) as PermissionAsk[];
+    expect(ask).toMatchObject({ status: 'unattended', unattended: true, agent: '/nightshift' });
+    expect(await waitFor(ask!.id, 1000)).toEqual({ status: 'unattended' });
+    const list = (await (
+      await app.request('http://localhost/api/notifications')
+    ).json()) as NotificationList;
+    expect(list.items[0]?.title).toMatch(/\/nightshift needed permission and couldn’t wait/);
+    // Only a rule for next time, or dismissing it.
+    expect((await owner('POST', `/asks/${ask!.id}/answer`, { answer: 'once' })).status).toBe(400);
+    const preview = (await (
+      await owner('POST', `/asks/${ask!.id}/preview`, {})
+    ).json()) as PermissionPreview;
+    const always = await owner('POST', `/asks/${ask!.id}/answer`, {
+      answer: 'always',
+      hash: preview.hash,
+    });
+    expect(always.status).toBe(200);
+    expect(((await always.json()) as PermissionAsk).status).toBe('allowed_always');
+  });
+
+  it('counts a subagent of a night run as unattended, and lets the owner dismiss it', async () => {
+    session('parent', [routine('wrapup')]);
+    const sub = join(claudeHome, 'projects', 'x', 'parent', 'subagents', 'agent-1.jsonl');
+    mkdirSync(dirname(sub), { recursive: true });
+    writeFileSync(sub, '{}\n');
+    const id = await created(hookInput({ transcript_path: sub }));
+    const [ask] = (await (await owner('GET', '/asks')).json()) as PermissionAsk[];
+    expect(ask).toMatchObject({ id, status: 'unattended', agent: 'a subagent of /wrapup' });
+    expect((await owner('POST', `/asks/${id}/answer`, { answer: 'dismiss' })).status).toBe(200);
+    expect((await waitFor(id, 10)).status).toBe('dismissed');
+  });
+
+  it('PHAROS_ASK_WAIT overrides: an unattended run waits when told to', async () => {
+    const res = await report(
+      hookInput({ entrypoint: 'sdk-cli', wait_override: true, wait_seconds: 30 }),
+    );
+    expect(await res.json()).toMatchObject({ wait: true });
+  });
+
+  it('the hook exits at once for an unattended run, and waits for an interactive one', async () => {
+    const server = await new Promise<{ url: string; close: () => void }>((ready) => {
+      const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, (info) =>
+        ready({ url: `http://127.0.0.1:${info.port}`, close: () => s.close() }),
+      );
+    });
+    try {
+      const started = Date.now();
+      const night = await runHook(hookInput(), {
+        PHAROS_URL: server.url,
+        CLAUDE_CODE_ENTRYPOINT: 'sdk-cli',
+      });
+      expect(night).toEqual({ code: 2, stdout: '' });
+      expect(Date.now() - started).toBeLessThan(5000);
+      // Interactive (no override set): still waiting after a second, until the owner answers.
+      const run = runHook(hookInput(), { PHAROS_URL: server.url, CLAUDE_CODE_ENTRYPOINT: 'cli' });
+      await new Promise((r) => setTimeout(r, 1000));
+      const waiting = ((await (await owner('GET', '/asks')).json()) as PermissionAsk[]).find(
+        (a) => a.status === 'waiting',
+      );
+      expect(waiting).toBeTruthy();
+      await owner('POST', `/asks/${waiting!.id}/answer`, { answer: 'once' });
+      const { code, stdout } = await run;
+      expect(code).toBe(0);
+      expect(stdout).toContain('"behavior":"allow"');
+    } finally {
+      server.close();
+    }
+  }, 20_000);
 });

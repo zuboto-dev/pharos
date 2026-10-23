@@ -12,7 +12,11 @@
 // subagents), no decision means the call is denied, as without this hook.
 //
 // PHAROS_URL picks the server (default http://127.0.0.1:4300; local addresses only).
-// PHAROS_ASK_WAIT is how many seconds to wait for an answer (default 55; 0 only notifies).
+// Unattended sessions (headless `claude -p`, the night/morning/wrap-up routines; Pharos tells from
+// the transcript, permission_mode and CLAUDE_CODE_ENTRYPOINT) are never held: the ask is posted as
+// notify-only and the hook exits at once.
+// PHAROS_ASK_WAIT is how many seconds to wait for an answer (default 55; 0 only notifies). When
+// set, it applies to every session, unattended ones too.
 
 const base = (process.env.PHAROS_URL ?? 'http://127.0.0.1:4300').replace(/\/+$/, '');
 const waitSeconds = Math.max(0, Math.min(110, Number(process.env.PHAROS_ASK_WAIT ?? 55) || 0));
@@ -58,8 +62,14 @@ async function main() {
     tool_name: input.tool_name,
     tool_input: input.tool_input,
     wait_seconds: waitSeconds,
+    // PHAROS_ASK_WAIT set: wait that long even in an unattended run.
+    wait_override: process.env.PHAROS_ASK_WAIT !== undefined,
+    ...(process.env.CLAUDE_CODE_ENTRYPOINT
+      ? { entrypoint: process.env.CLAUDE_CODE_ENTRYPOINT }
+      : {}),
   };
   let id;
+  let wait;
   try {
     const res = await fetch(`${base}/api/permission-asks`, {
       method: 'POST',
@@ -68,11 +78,12 @@ async function main() {
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return passThrough();
-    ({ id } = await res.json());
+    ({ id, wait } = await res.json());
   } catch {
     return passThrough();
   }
-  if (!id || !waitSeconds) return passThrough();
+  // Pharos says nobody is watching this session (a headless or night run): don't hold it.
+  if (!id || !waitSeconds || wait === false) return passThrough();
   const deadline = Date.now() + waitSeconds * 1000;
   while (Date.now() < deadline) {
     const ms = Math.min(25_000, deadline - Date.now());

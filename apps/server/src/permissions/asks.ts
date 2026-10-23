@@ -14,7 +14,7 @@ import { PharosError } from '../store/errors.js';
 import { explain } from './explain.js';
 import { example, ruleFor } from './rules.js';
 import type { PermissionService } from './service.js';
-import { readOrigin } from './transcripts.js';
+import { readSession } from './transcripts.js';
 
 /**
  * Live permission asks (the Claude Code `PermissionRequest` hook): an agent is about to ask the
@@ -29,6 +29,28 @@ import { readOrigin } from './transcripts.js';
 export const ASK_WAIT_MS = 60_000;
 /** Asks kept after they're answered or expired, for the page. */
 const KEPT = 20;
+
+/** Routines that run with nobody at the terminal (scheduled night, morning and wrap-up runs). */
+export const UNATTENDED_ROUTINES = new Set(['/nightshift', '/daybreak', '/wrapup']);
+
+type Session = { label: string; unattended: boolean };
+
+/**
+ * Whether nobody can answer a prompt in this session: `permission_mode: dontAsk`, a headless entry
+ * point (`sdk-…`, from the hook's environment or the transcript), or one of the unattended
+ * routines (for a subagent, its parent session's). When unsure: interactive.
+ */
+export function isUnattended(
+  input: Pick<PermissionAskInput, 'permission_mode' | 'entrypoint'>,
+  session: { headless: boolean; routine?: string } | undefined,
+): boolean {
+  if (input.permission_mode === 'dontAsk') return true;
+  if (input.entrypoint?.startsWith('sdk')) return true;
+  if (!session) return false;
+  return (
+    session.headless || (session.routine !== undefined && UNATTENDED_ROUTINES.has(session.routine))
+  );
+}
 
 type Entry = PermissionAsk & { folderPath?: string; waiters: Set<() => void> };
 
@@ -50,8 +72,14 @@ const DECISION: Record<PermissionAskStatus, PermissionAskDecision> = {
       'The owner denied this in Pharos. Don’t retry it; continue with other work or ask why.',
   },
   terminal: { status: 'terminal' },
+  unattended: { status: 'unattended' },
+  dismissed: { status: 'dismissed' },
   expired: { status: 'expired' },
 };
+
+/** Waiting first, then notify-only ones still open, then the answered. */
+const rank = (status: PermissionAskStatus) =>
+  status === 'waiting' ? 0 : status === 'unattended' ? 1 : 2;
 
 export class PermissionAsks {
   private readonly asks = new Map<string, Entry>();
@@ -72,20 +100,28 @@ export class PermissionAsks {
   }
 
   /** A transcript path is read only when it is one of Claude Code's (never any other file). */
-  private async origin(input: PermissionAskInput): Promise<string> {
+  private async session(input: PermissionAskInput): Promise<Session> {
+    const unknown = { label: 'a Claude Code session', unattended: isUnattended(input, undefined) };
     const path = input.transcript_path;
-    if (!path) return 'a Claude Code session';
+    if (!path) return unknown;
     try {
       const projects = realpathSync(join(this.service.claudeHome, 'projects'));
       const file = realpathSync(resolve(path));
       if (!file.startsWith(`${projects}/`) || !file.endsWith('.jsonl') || !statSync(file).isFile())
-        return 'a Claude Code session';
+        return unknown;
       const subagent = /\/subagents\/[^/]+\.jsonl$/.test(file);
-      if (!subagent) return await readOrigin(file);
-      const parent = `${file.replace(/\/subagents\/[^/]+\.jsonl$/, '')}.jsonl`;
-      return `a subagent of ${await readOrigin(parent).catch(() => 'a session')}`;
+      if (!subagent) {
+        const s = await readSession(file);
+        return { label: s.label, unattended: isUnattended(input, s) };
+      }
+      const parentFile = `${file.replace(/\/subagents\/[^/]+\.jsonl$/, '')}.jsonl`;
+      const parent = await readSession(parentFile).catch(() => undefined);
+      return {
+        label: `a subagent of ${parent?.label ?? 'a session'}`,
+        unattended: isUnattended(input, parent),
+      };
     } catch {
-      return 'a Claude Code session';
+      return unknown;
     }
   }
 
@@ -100,19 +136,24 @@ export class PermissionAsks {
     };
     const where = this.service.whereIs(input.cwd);
     const at = this.now();
+    const session = await this.session(input);
+    // Nobody can answer in time in an unattended run: notify only, and the hook doesn't wait
+    // (unless PHAROS_ASK_WAIT says to).
+    const notifyOnly = session.unattended && !input.wait_override;
     // The card stays as long as the hook waits (it says how long), never longer than ours.
-    const waitMs = Math.min(this.waitMs, (input.wait_seconds ?? Infinity) * 1000);
+    const waitMs = notifyOnly ? 0 : Math.min(this.waitMs, (input.wait_seconds ?? Infinity) * 1000);
     const entry: Entry = {
       id: randomUUID(),
       at: at.toISOString(),
       expiresAt: new Date(at.getTime() + waitMs).toISOString(),
-      status: 'waiting',
+      status: notifyOnly ? 'unattended' : 'waiting',
+      unattended: session.unattended,
       folder: where.folder,
       displayFolder: where.display,
       projects: where.projects,
       ...(where.projectId ? { projectId: where.projectId } : {}),
       ...(where.folderPath ? { folderId: where.folderId, folderPath: where.folderPath } : {}),
-      agent: await this.origin(input),
+      agent: session.label,
       tool: input.tool_name,
       example: example(
         suggested.subject === suggested.tool ? input.tool_name : suggested.subject,
@@ -126,10 +167,11 @@ export class PermissionAsks {
       waiters: new Set(),
     };
     this.asks.set(entry.id, entry);
-    this.timers.set(
-      entry.id,
-      setTimeout(() => this.settle(entry.id, 'expired'), waitMs + 1_000),
-    );
+    if (!notifyOnly)
+      this.timers.set(
+        entry.id,
+        setTimeout(() => this.settle(entry.id, 'expired'), waitMs + 1_000),
+      );
     this.prune();
     const ask = this.shown(entry);
     try {
@@ -157,7 +199,7 @@ export class PermissionAsks {
     const timer = this.timers.get(id);
     if (timer) clearTimeout(timer);
     this.timers.delete(id);
-    if (!entry || entry.status !== 'waiting') return entry;
+    if (!entry || (entry.status !== 'waiting' && entry.status !== 'unattended')) return entry;
     entry.status = status;
     entry.answeredAt = this.now().toISOString();
     for (const wake of entry.waiters) wake();
@@ -173,11 +215,7 @@ export class PermissionAsks {
   /** Newest first: the waiting ones, then the last answered. */
   list(): PermissionAsk[] {
     return [...this.asks.values()]
-      .sort(
-        (a, b) =>
-          Number(b.status === 'waiting') - Number(a.status === 'waiting') ||
-          b.at.localeCompare(a.at),
-      )
+      .sort((a, b) => rank(a.status) - rank(b.status) || b.at.localeCompare(a.at))
       .map((e) => this.shown(e));
   }
 
@@ -223,9 +261,21 @@ export class PermissionAsks {
   /** The owner's answer; "always" also writes the rule (backup, Undo) before letting it run. */
   answer(id: string, answer: PermissionAskAnswer): PermissionAsk {
     const entry = this.get(id);
-    if (entry.status !== 'waiting')
-      throw new PharosError('invalid', 'That ask was already answered or timed out');
-    if (answer.answer === 'always') {
+    // A notify-only ask (an unattended run) has no hook waiting: only a rule for next time, or
+    // dismissing it, make sense.
+    const open =
+      entry.status === 'waiting' ||
+      (entry.status === 'unattended' &&
+        (answer.answer === 'always' || answer.answer === 'dismiss'));
+    if (!open)
+      throw new PharosError(
+        'invalid',
+        entry.status === 'unattended'
+          ? 'That run couldn’t wait: allow it always for next time, or dismiss it'
+          : 'That ask was already answered or timed out',
+      );
+    if (answer.answer === 'dismiss') this.settle(id, 'dismissed');
+    else if (answer.answer === 'always') {
       const result = this.service.commit(this.preview(id, answer.target), answer.hash);
       entry.record = result.record;
       this.settle(id, 'allowed_always');

@@ -81,8 +81,8 @@ const COMMAND_NAME = /<command-name>\/?([\w:.-]+)<\/command-name>/;
 
 /** Watches a transcript's lines for what kind of session it is. */
 export class OriginReader {
-  private routine?: string;
-  private headless = false;
+  routine?: string;
+  headless = false;
   constructor(private readonly subagent: boolean) {}
   /** Feed every line (cheap: only a substring check unless it can matter). */
   line(line: string): void {
@@ -103,6 +103,14 @@ export const isSubagentTranscript = (file: string) => /[/]subagents[/][^/]+\.jso
 
 /** The origin of a session from the start of its transcript (the hook's live asks). */
 export async function readOrigin(file: string, maxLines = 400): Promise<string> {
+  return (await readSession(file, maxLines)).label;
+}
+
+/** A session's kind from the start of its transcript: its label, routine and whether headless. */
+export async function readSession(
+  file: string,
+  maxLines = 400,
+): Promise<{ label: string; routine?: string; headless: boolean }> {
   const origin = new OriginReader(isSubagentTranscript(file));
   const stream = createReadStream(file, { encoding: 'utf8' });
   const lines = createInterface({ input: stream, crlfDelay: Infinity });
@@ -116,7 +124,11 @@ export async function readOrigin(file: string, maxLines = 400): Promise<string> 
     lines.close();
     stream.destroy();
   }
-  return origin.label;
+  return {
+    label: origin.label,
+    headless: origin.headless,
+    ...(origin.routine ? { routine: origin.routine } : {}),
+  };
 }
 
 /** Lines longer than this are skipped unread (huge tool outputs); a file stops after MAX_LINES. */

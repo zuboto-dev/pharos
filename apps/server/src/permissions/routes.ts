@@ -93,7 +93,8 @@ export function permissionAskRoutes(asks: PermissionAsks) {
     if (asks.list().filter((a) => a.status === 'waiting').length >= MAX_WAITING)
       return c.json({ error: { code: 'invalid', message: 'Too many asks waiting' } }, 429);
     const ask = await asks.create(input);
-    return c.json({ id: ask.id, expiresAt: ask.expiresAt }, 201);
+    // `wait: false`: an unattended run; the hook exits at once and Claude Code goes on as usual.
+    return c.json({ id: ask.id, expiresAt: ask.expiresAt, wait: ask.status === 'waiting' }, 201);
   });
   api.get('/:id/wait', async (c) => {
     const ms = z.coerce.number().int().min(0).max(120_000).catch(30_000).parse(c.req.query('ms'));

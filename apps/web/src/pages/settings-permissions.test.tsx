@@ -50,6 +50,7 @@ const ASK: PermissionAsk = {
   at: new Date().toISOString(),
   expiresAt: new Date(Date.now() + 40_000).toISOString(),
   status: 'waiting',
+  unattended: false,
   folder: '/home/me/code/shop',
   displayFolder: '~/code/shop',
   projects: ['Shop site'],
@@ -258,5 +259,22 @@ describe('Agent permissions in Settings', () => {
       }),
     );
     expect(await screen.findByRole('status')).toBeTruthy();
+  });
+
+  it('shows a night run’s ask as notify-only: Allow always for next time, or Dismiss', async () => {
+    asks = [{ ...ASK, status: 'unattended', unattended: true }];
+    render(<AgentPermissions />);
+    const card = await screen.findByRole('listitem', { name: 'Ask from Shop site' });
+    expect(screen.getByText('Asked while nobody was watching')).toBeTruthy();
+    expect(within(card).getByText(/Asked during \/nightshift, which nobody watches/)).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Allow always' })).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Just this once' })).toBeNull();
+    expect(within(card).queryByRole('button', { name: 'Deny' })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url === '/api/permissions/asks/a1/answer')?.body).toEqual({
+        answer: 'dismiss',
+      }),
+    );
   });
 });

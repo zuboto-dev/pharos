@@ -190,11 +190,26 @@ export const PermissionAskInput = z.object({
   tool_input: z.unknown().optional(),
   /** How long the hook waits for an answer (seconds); the card goes when it stops waiting. */
   wait_seconds: z.number().min(0).max(110).optional(),
+  /** PHAROS_ASK_WAIT was set: wait that long even in an unattended run. */
+  wait_override: z.boolean().optional(),
+  /** CLAUDE_CODE_ENTRYPOINT from the hook's environment, when Claude Code sets it (`cli`, `sdk-cli`). */
+  entrypoint: z.string().max(100).optional(),
 });
 export type PermissionAskInput = z.infer<typeof PermissionAskInput>;
 
+/**
+ * `unattended`: asked in a run nobody watches (headless, the night/morning/wrap-up routines); the
+ * hook didn't wait, Claude Code denied it there, and the card offers a rule for next time.
+ */
 export type PermissionAskStatus =
-  'waiting' | 'allowed_once' | 'allowed_always' | 'denied' | 'terminal' | 'expired';
+  | 'waiting'
+  | 'unattended'
+  | 'allowed_once'
+  | 'allowed_always'
+  | 'denied'
+  | 'terminal'
+  | 'expired'
+  | 'dismissed';
 
 /** The hook's answer: allow or deny this call, or nothing (Claude Code's own prompt shows). */
 export type PermissionAskDecision = {
@@ -209,6 +224,8 @@ export type PermissionAsk = {
   /** When the hook stops waiting and Claude Code asks in the terminal instead. */
   expiresAt: string;
   status: PermissionAskStatus;
+  /** Asked in a run nobody watches: notify only, no waiting. */
+  unattended: boolean;
   answeredAt?: string;
   folderId?: string;
   folder: string;
@@ -238,6 +255,6 @@ export const PermissionAskAnswer = z.discriminatedUnion('answer', [
     target: PermissionTarget.default('local'),
     hash: z.string().min(1).max(128),
   }),
-  z.strictObject({ answer: z.enum(['once', 'deny', 'terminal']) }),
+  z.strictObject({ answer: z.enum(['once', 'deny', 'terminal', 'dismiss']) }),
 ]);
 export type PermissionAskAnswer = z.infer<typeof PermissionAskAnswer>;

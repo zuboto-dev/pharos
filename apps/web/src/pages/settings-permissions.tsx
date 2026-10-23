@@ -481,6 +481,7 @@ const ANSWERED: Partial<Record<PermissionAsk['status'], string>> = {
   denied: 'Denied',
   terminal: 'Left to the terminal',
   expired: 'Asked in the terminal (no answer in time)',
+  dismissed: 'Dismissed',
 };
 
 function AskCard({
@@ -491,14 +492,21 @@ function AskCard({
 }: {
   ask: PermissionAsk;
   now: number;
-  onAnswer: (answer: 'once' | 'deny' | 'terminal') => void;
+  onAnswer: (answer: 'once' | 'deny' | 'terminal' | 'dismiss') => void;
   onAlways: () => void;
 }) {
   const where = ask.projects[0] ?? ask.displayFolder;
+  // Asked in a run nobody watches: the hook didn't wait; a rule is for next time.
+  const notifyOnly = ask.status === 'unattended';
   return (
     <li
       aria-label={`Ask from ${where}`}
-      className="space-y-3 rounded-tile border border-amber-300 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-950/20"
+      className={clsx(
+        'space-y-3 rounded-tile border p-3',
+        notifyOnly
+          ? 'border-line-strong bg-sunken'
+          : 'border-amber-300 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-950/20',
+      )}
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="min-w-0">
@@ -511,11 +519,13 @@ function AskCard({
           </p>
         </div>
         <span className="text-xs text-ink-soft tabular-nums">
-          waits {secondsLeft(ask, now)} s, then asks in the terminal
+          {notifyOnly
+            ? timeAgo(ask.at)
+            : `waits ${secondsLeft(ask, now)} s, then asks in the terminal`}
         </span>
       </div>
       <dl className="space-y-2">
-        <Detail label="Wants to">{ask.summary}</Detail>
+        <Detail label={notifyOnly ? 'Wanted to' : 'Wants to'}>{ask.summary}</Detail>
         <Detail label="Command">
           <code className="block rounded bg-surface px-1.5 py-0.5 font-mono text-xs break-all">
             {ask.example}
@@ -526,25 +536,39 @@ function AskCard({
           <span className="text-ink-soft">{ask.riskWhy}</span>
         </Detail>
       </dl>
+      {notifyOnly && (
+        <p className="text-sm text-ink-soft">
+          Asked during {ask.agent}, which nobody watches, so it couldn’t wait and Claude Code
+          refused it there. {ask.canAlwaysAllow ? 'Answer for next time with Allow always.' : ''}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {ask.canAlwaysAllow && (
           <button type="button" className={BUTTON.primary} onClick={onAlways}>
             Allow always
           </button>
         )}
-        <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('once')}>
-          Just this once
-        </button>
-        <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('deny')}>
-          Deny
-        </button>
-        <button
-          type="button"
-          className="tap-area text-sm text-accent hover:underline"
-          onClick={() => onAnswer('terminal')}
-        >
-          I’ll answer in the terminal
-        </button>
+        {notifyOnly ? (
+          <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('dismiss')}>
+            Dismiss
+          </button>
+        ) : (
+          <>
+            <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('once')}>
+              Just this once
+            </button>
+            <button type="button" className={BUTTON.secondary} onClick={() => onAnswer('deny')}>
+              Deny
+            </button>
+            <button
+              type="button"
+              className="tap-area text-sm text-accent hover:underline"
+              onClick={() => onAnswer('terminal')}
+            >
+              I’ll answer in the terminal
+            </button>
+          </>
+        )}
       </div>
       {!ask.canAlwaysAllow && (
         <p className="text-xs text-muted">
@@ -572,7 +596,10 @@ function WaitingAsks({
 }) {
   const [now, setNow] = useState(() => Date.now());
   const waiting = asks.filter((a) => a.status === 'waiting');
-  const answered = asks.filter((a) => a.status !== 'waiting').slice(0, 3);
+  const notified = asks.filter((a) => a.status === 'unattended');
+  const answered = asks
+    .filter((a) => a.status !== 'waiting' && a.status !== 'unattended')
+    .slice(0, 3);
   useEffect(() => {
     if (!waiting.length) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -580,7 +607,7 @@ function WaitingAsks({
   }, [waiting.length]);
   if (!asks.length) return null;
 
-  const answer = async (ask: PermissionAsk, answer: 'once' | 'deny' | 'terminal') => {
+  const answer = async (ask: PermissionAsk, answer: 'once' | 'deny' | 'terminal' | 'dismiss') => {
     try {
       await send(`${PERMISSION_ROUTES.asks}/${ask.id}/answer`, { answer });
     } catch (err) {
@@ -592,8 +619,11 @@ function WaitingAsks({
   return (
     <div className="space-y-2" aria-label="Waiting now">
       {waiting.length > 0 && <h3 className="text-sm font-semibold">Waiting now</h3>}
+      {!waiting.length && notified.length > 0 && (
+        <h3 className="text-sm font-semibold">Asked while nobody was watching</h3>
+      )}
       <ul className="space-y-2">
-        {waiting.map((ask) => (
+        {[...waiting, ...notified].map((ask) => (
           <AskCard
             key={ask.id}
             ask={ask}
@@ -603,7 +633,7 @@ function WaitingAsks({
               onChange({
                 title: `Allow always: ${ask.summary}`,
                 action: 'allow',
-                intro: `Claude Code agents in ${ask.projects[0] ?? ask.displayFolder} will run this without asking, starting with the one waiting now.`,
+                intro: `Claude Code agents in ${ask.projects[0] ?? ask.displayFolder} will run this without asking${ask.status === 'waiting' ? ', starting with the one waiting now' : ' from the next run on'}.`,
                 preview: () =>
                   send<PermissionPreview>(`${PERMISSION_ROUTES.asks}/${ask.id}/preview`, {
                     target,

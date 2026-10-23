@@ -261,8 +261,8 @@ export class Notifications {
   /** An agent terminal ended: finished by itself, or stopped with no panel for a while. */
   terminalExited(exit: TerminalExit): PharosNotification | null {
     const { session } = exit;
-    // The owner saw it, restarted it, or Pharos is stopping (the next start says so).
-    if (exit.watched || session.endedBy === 'restart' || session.endedBy === 'server') return null;
+    // The owner saw it, stopped or restarted it, or Pharos is stopping (the next start says so).
+    if (exit.watched || (session.endedBy && session.endedBy !== 'idle')) return null;
     const projectIds = (session.launch.env.PHAROS_PROJECT_IDS ?? '').split(',').filter(Boolean);
     const first = projectIds[0];
     const agent = presetLabel(session.launch.preset);

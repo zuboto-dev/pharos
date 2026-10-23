@@ -216,7 +216,7 @@ describe('notifications: sources', () => {
     expect(center.checkHandbacks()).toEqual([]);
   });
 
-  it('a terminal agent that finished unwatched notifies; watched, restarted or server stop do not', () => {
+  it('a terminal agent that finished unwatched notifies; watched, stopped, restarted or server stop do not', () => {
     const { store, center, projectId } = setup();
     const ptys: { end: (code?: number) => void }[] = [];
     const spawn: PtySpawn = () => {
@@ -263,6 +263,11 @@ describe('notifications: sources', () => {
     sessions.detach('k3', panel);
     sessions.killAll();
     ptys[2]!.end(1);
+    expect(got).toHaveLength(1);
+    // The owner's Stop: they did it themselves.
+    sessions.attach('k4', launch, panel, { cols: 80, rows: 24 });
+    sessions.stop('k4');
+    ptys[3]!.end(1);
     expect(got).toHaveLength(1);
     expect(store).toBeTruthy();
   });

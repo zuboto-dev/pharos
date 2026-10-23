@@ -67,8 +67,8 @@ export class TerminalSession {
   /** When the last panel went away (undefined while one is attached). */
   detachedAt: number | undefined;
   exited = false;
-  /** Pharos ended it: the restart button, no panel for a while, or the server stopping. */
-  endedBy: 'restart' | 'idle' | 'server' | undefined;
+  /** Who ended it: the restart button, no panel for a while, the server stopping, or the owner's Stop. */
+  endedBy: 'restart' | 'idle' | 'server' | 'owner' | undefined;
 
   constructor(
     readonly key: string,
@@ -258,6 +258,7 @@ export class TerminalSessions {
   stop(key: string): boolean {
     const session = this.get(key);
     if (!session) return false;
+    session.endedBy ??= 'owner';
     session.broadcast({ t: 'exit', code: null });
     // Ended first: a session already marked exited isn't signalled (its pid may be reused).
     this.end(session);

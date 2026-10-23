@@ -235,6 +235,9 @@ function CommandRow({
   );
 }
 
+/** Commands a project shows before "Show all". */
+export const FOLDER_SHOWN = 5;
+
 function FolderCard({
   folder,
   windowDays,
@@ -245,6 +248,9 @@ function FolderCard({
   onChoose: (folder: PermissionFolder, s: PermissionSuggestion, action: PermissionAction) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // The five most asked first; the rest one click away (owner's review, 10-23).
+  const [all, setAll] = useState(false);
+  const shown = all ? folder.suggestions : folder.suggestions.slice(0, FOLDER_SHOWN);
   const count =
     folder.total === 0
       ? 'no asks'
@@ -274,7 +280,7 @@ function FolderCard({
           <p className="pt-2 text-xs break-all text-muted">{folder.displayPath}</p>
           {folder.suggestions.length ? (
             <ul className="divide-y divide-line-soft">
-              {folder.suggestions.map((s) => (
+              {shown.map((s) => (
                 <CommandRow
                   key={s.rule}
                   s={s}
@@ -285,6 +291,15 @@ function FolderCard({
             </ul>
           ) : (
             <p className="py-3 text-sm text-muted">Agents didn’t ask for anything here lately.</p>
+          )}
+          {shown.length < folder.suggestions.length && (
+            <button
+              type="button"
+              onClick={() => setAll(true)}
+              className="w-full border-t border-line-soft py-2 text-left text-xs font-medium text-accent hover:underline"
+            >
+              Show all {folder.suggestions.length}
+            </button>
           )}
           {(folder.more > 0 || folder.unfixable > 0) && (
             <p className="border-t border-line-soft py-2.5 text-xs text-muted">

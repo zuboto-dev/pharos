@@ -160,6 +160,27 @@ afterEach(() => {
 });
 
 describe('Agent permissions in Settings', () => {
+  it('lists a project’s five most asked commands, the rest behind Show all', async () => {
+    const folder = overview.folders[0]!;
+    overview = {
+      ...overview,
+      folders: [
+        {
+          ...folder,
+          suggestions: Array.from({ length: 7 }, (_, i) =>
+            suggestion({ rule: `Bash(tool${i}:*)`, summary: `Runs tool ${i}` }),
+          ),
+        },
+      ],
+    };
+    render(<AgentPermissions />);
+    const card = await screen.findByRole('listitem', { name: 'shop' });
+    fireEvent.click(within(card).getByRole('button', { name: /Shop site/ }));
+    expect(within(card).getAllByText(/^Runs tool/)).toHaveLength(5);
+    fireEvent.click(within(card).getByRole('button', { name: 'Show all 7' }));
+    expect(within(card).getAllByText(/^Runs tool/)).toHaveLength(7);
+  });
+
   it('says how often a rule was asked for', () => {
     expect(askedText({ week: 23, total: 30 }, 14)).toBe('asked 23 times this week');
     expect(askedText({ week: 0, total: 1 }, 14)).toBe('asked 1 time in 14 days');

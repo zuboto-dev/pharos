@@ -37,6 +37,7 @@ import { createMcpServer } from './mcp.js';
 import { RunLog, askOwner, deskAnswer, deskOf } from './desk.js';
 import { landedSince, markDeskSeen } from './landed.js';
 import { folderBriefs, projectBrief } from './brief.js';
+import { DiskFolders } from './disk-folders.js';
 import { updatesOf } from './updates.js';
 import { routinesRoutes, type RoutinesOptions } from './routines.js';
 import { Presence, watchAgentRevisions } from './presence.js';
@@ -202,6 +203,8 @@ export type ServerInfo = {
   webUrl?: string;
   /** The agent terminal (R17); without it the panel says it is unavailable. */
   terminal?: TerminalService;
+  /** Folders on this computer the owner can pick (tests pass one with a temp home). */
+  diskFolders?: DiskFolders;
   /** What Pharos tells the owner (index.ts starts its sources); made here, idle, when absent. */
   notifications?: Notifications;
   /** The Routines app the Routines page manages (`PHAROS_ROUTINES_URL`); tests pass a stub fetch. */
@@ -700,6 +703,23 @@ export function createApp(
     const input = AskOwner.parse({ ...raw, projectId: byName?.id ?? ref });
     return c.json(askOwner(store, authorOf(c), input));
   });
+  // The owner picks or makes a project folder on this computer (the sidebar's New folder). Only a
+  // request that declares the owner gets an answer: folder names on disk are not for agents.
+  const disk = info.diskFolders ?? new DiskFolders();
+  const ownerAsks = (c: Context) => (c.req.header('x-pharos-author') ?? '').startsWith('human:');
+  api.get('/disk/folders', (c) =>
+    ownerAsks(c)
+      ? c.json(disk.list(c.req.query('path')))
+      : forbidden(c, 'Only the owner browses folders on this computer'),
+  );
+  api.post('/disk/folders', async (c) => {
+    if (!ownerAsks(c)) return forbidden(c, 'Only the owner makes folders on this computer');
+    const body = z
+      .object({ parent: z.string().min(1).max(1000), name: z.string().min(1).max(80) })
+      .parse(await c.req.json().catch(() => ({})));
+    return c.json(disk.create(body.parent, body.name));
+  });
+
   // What failed in the web app (its error boundaries and window errors), into the server log, so a
   // crash the owner saw can be traced afterwards. At most 30 a minute; never more than a line each.
   let clientErrors = { minute: 0, count: 0 };

@@ -38,6 +38,7 @@ import { usePresence } from '../lib/events';
 import { useChangedViews } from '../lib/freshness';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
 import { AsksBadge, useOpenAsks } from './open-asks';
+import { NewFolderDialog } from './folder-picker';
 import { ApiError, getJson, postJson } from '../lib/api';
 import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
@@ -1148,13 +1149,7 @@ export function Sidebar() {
             <NewProjectDialog initial={dialog.container} onClose={() => setDialog(null)} />
           )}
           {dialog?.kind === 'folder' && (
-            <PromptDialog
-              title="New folder"
-              submitLabel="Create folder"
-              fields={[
-                { name: 'name', label: 'Name', required: true, placeholder: 'e.g. my-app' },
-                { name: 'path', label: 'Local path (optional)', placeholder: '~/code/my-app' },
-              ]}
+            <NewFolderDialog
               onClose={() => setDialog(null)}
               onSubmit={({ name, path }) => {
                 setDialog(null);
@@ -1163,7 +1158,7 @@ export function Sidebar() {
                     op: 'create',
                     type: 'repository',
                     data: {
-                      name: name!,
+                      name,
                       ...(path ? { path } : {}),
                       ...(dialog.sectionId ? { sectionId: dialog.sectionId } : {}),
                     },

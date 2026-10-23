@@ -1,11 +1,14 @@
 import type { AgentPreset } from '../agent-runner.js';
 import type { Entity } from '@pharos/schema';
 import type { Store } from '../store/store.js';
+import { randomUUID } from 'node:crypto';
 import {
+  CONVERSATIONS_SETTING,
   folderProjects,
   presetLabel,
   terminalBrief,
   terminalCommand,
+  conversationKept,
   terminalCwd,
   terminalEnv,
   terminalPreset,
@@ -126,16 +129,28 @@ export class TerminalService {
     return { available: true, agent, running, ...sharedWith };
   }
 
-  /** The exact command, folder and environment for the project's session. */
-  launch(projectId: string): TerminalLaunch {
+  /**
+   * The exact command, folder and environment for the project's session. Claude Code's
+   * conversation is kept per folder: a session that ends with the server (an update, a restart)
+   * or after 30 idle minutes resumes it next time, so the work goes on; `fresh` (the panel's
+   * Start again) begins a new one.
+   */
+  launch(projectId: string, fresh = false): TerminalLaunch {
     const preset = this.preset;
     if (!preset) throw new Error('No agent CLI is installed');
     const cwd = this.key(projectId);
     const projects = this.projects(projectId, cwd);
+    const env = terminalEnv(
+      this.options.serverEnv ?? process.env,
+      this.options.serverUrl,
+      projects.map((p) => p.id),
+    );
+    const conversation = preset === 'claude' ? this.conversation(cwd, env.HOME, fresh) : undefined;
     const { file, args } = terminalCommand(preset, {
       mcpConfigPath: this.options.mcpConfigPath,
       serverUrl: this.options.serverUrl,
       brief: terminalBrief(projects, this.options.serverUrl),
+      ...(conversation ? { conversation } : {}),
     });
     return {
       preset,
@@ -143,12 +158,20 @@ export class TerminalService {
       file: this.options.installed[preset] || file,
       args,
       cwd,
-      env: terminalEnv(
-        this.options.serverEnv ?? process.env,
-        this.options.serverUrl,
-        projects.map((p) => p.id),
-      ),
+      env,
     };
+  }
+
+  /** The folder's conversation: resumed when Claude Code kept it, else a new id, remembered. */
+  private conversation(cwd: string, home: string | undefined, fresh: boolean) {
+    const store = this.options.store;
+    const kept = store.setting<Record<string, string>>(CONVERSATIONS_SETTING) ?? {};
+    const last = kept[cwd];
+    if (!fresh && last && home && conversationKept(home, cwd, last))
+      return { id: last, resume: true };
+    const id = randomUUID();
+    store.setSetting(CONVERSATIONS_SETTING, { ...kept, [cwd]: id });
+    return { id, resume: false };
   }
 
   /** Attaches a panel of the project to its folder's session; input and sizes go to `session.key`. */
@@ -164,7 +187,7 @@ export class TerminalService {
   /** Restarts the project's folder session: every panel on it (other projects too) gets the new one. */
   restart(projectId: string, size: { cols: number; rows: number }): TerminalSession {
     if (!this.sessions) throw new Error('The terminal is unavailable');
-    return this.sessions.restart(this.key(projectId), () => this.launch(projectId), size);
+    return this.sessions.restart(this.key(projectId), () => this.launch(projectId, true), size);
   }
 
   /**

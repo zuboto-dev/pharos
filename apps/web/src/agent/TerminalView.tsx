@@ -10,9 +10,10 @@ type ServerMessage =
   | { t: 'o'; d: string }
   | { t: 'start'; agent: string; cwd: string; replay: boolean }
   | { t: 'exit'; code: number | null; signal?: number }
+  | { t: 'pong' }
   | { t: 'error'; message: string };
 
-export type TerminalState = 'connecting' | 'running' | 'exited' | 'closed';
+export type TerminalState = 'connecting' | 'running' | 'exited' | 'closed' | 'reconnecting';
 
 export type TerminalHandle = {
   /** Ends the agent and starts a new one (or reconnects when the connection was lost). */
@@ -97,6 +98,8 @@ export default function TerminalView({
   /** Changes to reconnect. */
   const [connection, setConnectionKey] = useState(0);
   const setConnection = useCallback(() => setConnectionKey((k) => k + 1), []);
+  /** Reconnects in a row without reaching the agent: the wait grows (1 s, 2 s, 4 s … 30 s). */
+  const attempts = useRef(0);
   const send = useRef<(message: object) => boolean>(() => false);
   const flush = useRef<() => void>(() => {});
   const stateRef = useRef(onState);
@@ -171,7 +174,17 @@ export default function TerminalView({
         flush.current();
       }, ms);
     };
+    // A connection can die without a word (a laptop asleep): ask every 25 s, and if nothing has
+    // come back for a minute, drop it and connect again (the agent kept running on the server).
+    let heard = Date.now();
+    const alive = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      if (Date.now() - heard > 60_000) ws.close();
+      else ws.send(JSON.stringify({ t: 'ping' }));
+    }, 25_000);
+    let retry: ReturnType<typeof setTimeout> | undefined;
     ws.onmessage = (event) => {
+      heard = Date.now();
       let message: ServerMessage;
       try {
         message = JSON.parse(String(event.data)) as ServerMessage;
@@ -183,6 +196,7 @@ export default function TerminalView({
         seen();
         if (!ready.current) settle(700);
       } else if (message.t === 'start') {
+        attempts.current = 0;
         terminal.reset();
         ready.current = false;
         stateRef.current('running', message.cwd);
@@ -195,7 +209,17 @@ export default function TerminalView({
     };
     ws.onclose = (event) => {
       ready.current = false;
-      stateRef.current('closed', event.code === 1006 ? undefined : event.reason || undefined);
+      // Refused for good (another site, an agent, no terminal here): say why and stop.
+      if (event.code === 1008 || event.code === 1003 || event.code === 1011) {
+        stateRef.current('closed', event.reason || undefined);
+        return;
+      }
+      // The server restarted (an update) or the connection dropped: connect again by itself. The
+      // agent resumes its conversation (terminal/service.ts), so the work goes on.
+      stateRef.current('reconnecting');
+      const wait = Math.min(30_000, 1000 * 2 ** attempts.current);
+      attempts.current += 1;
+      retry = setTimeout(setConnection, wait);
     };
     const typing = terminal.onData((data) => send.current({ t: 'i', d: data }));
     // Whether the agent asked for SGR mouse reports; the parser goes on to handle the mode.
@@ -235,6 +259,8 @@ export default function TerminalView({
     terminal.focus();
     return () => {
       markTerminalSeen(projectId);
+      clearInterval(alive);
+      clearTimeout(retry);
       clearTimeout(quiet);
       clearTimeout(sizing);
       observer.disconnect();
@@ -250,7 +276,7 @@ export default function TerminalView({
       // The rail and the sidebar look again once the server has noticed the panel left.
       setTimeout(terminalsChanged, 300);
     };
-  }, [projectId, connection]);
+  }, [projectId, connection, setConnection]);
 
   // References from the picker: typed into the input line once the agent is ready.
   useEffect(() => {

@@ -298,6 +298,17 @@ export function AgentPanel({
           </button>
         </Tooltip>
       </header>
+      {state.state === 'reconnecting' && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center gap-2 border-b border-line bg-sunken px-3 py-1.5 text-xs text-muted"
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          <span className="min-w-0 flex-1 truncate">
+            Reconnecting… the agent keeps its conversation
+          </span>
+        </div>
+      )}
       {(state.state === 'exited' || state.state === 'closed') && (
         <div className="flex shrink-0 items-center gap-2 border-b border-line bg-sunken px-3 py-1.5 text-xs text-muted">
           <AlertTriangle className="size-3.5 text-warn" aria-hidden />

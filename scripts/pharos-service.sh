@@ -397,6 +397,14 @@ do_update() {
   case "$agent" in
     running|stopping|queued) log "update: the answering agent is $agent; waiting before deploying $(short "$sha")"; exit 0 ;;
   esac
+  # Nor while an agent in a panel is working (it printed in the last 5 minutes): a restart would
+  # cut it off mid-task. An idle panel doesn't hold updates back; its conversation resumes.
+  busy=$(curl -sf -m 2 "http://127.0.0.1:$PORT/api/terminal/running" 2>/dev/null |
+    node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { try { const now = Date.now(); process.stdout.write(String(JSON.parse(s).filter((r) => r.lastOutputAt && now - Date.parse(r.lastOutputAt) < 300000).length)); } catch {} });' || true)
+  if [ -n "$busy" ] && [ "$busy" != "0" ]; then
+    log "update: $busy agent terminal(s) working; waiting before deploying $(short "$sha")"
+    exit 0
+  fi
 
   old_slot=$(current_slot)
   slot=$(other_slot)

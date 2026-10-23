@@ -30,7 +30,8 @@ export type TerminalServerMessage =
   | { t: 'o'; d: string }
   | { t: 'start'; agent: AgentPreset; cwd: string; replay: boolean }
   | { t: 'exit'; code: number | null; signal?: number }
-  | { t: 'error'; message: string };
+  | { t: 'error'; message: string }
+  | { t: 'pong' };
 
 /** A connected panel (a WebSocket in the server). */
 export type TerminalClient = {

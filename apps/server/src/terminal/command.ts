@@ -1,4 +1,4 @@
-import { mkdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import {
   AGENT_PRESETS,
@@ -27,7 +27,13 @@ export type TerminalCommand = { file: string; args: string[] };
  */
 export function terminalCommand(
   preset: AgentPreset,
-  options: { mcpConfigPath: string; serverUrl: string; brief?: string },
+  options: {
+    mcpConfigPath: string;
+    serverUrl: string;
+    brief?: string;
+    /** Claude Code's conversation: a new one with this id, or the one to resume after a restart. */
+    conversation?: { id: string; resume: boolean };
+  },
 ): TerminalCommand {
   if (preset === 'codex')
     return {
@@ -46,8 +52,24 @@ export function terminalCommand(
       options.mcpConfigPath,
       '--strict-mcp-config',
       ...(options.brief ? ['--append-system-prompt', options.brief] : []),
+      ...(options.conversation
+        ? [options.conversation.resume ? '--resume' : '--session-id', options.conversation.id]
+        : []),
     ],
   };
+}
+
+/** The app setting keeping each folder's panel conversation, so a restart resumes it. */
+export const CONVERSATIONS_SETTING = 'terminal.conversations';
+
+/**
+ * Whether Claude Code kept a conversation's transcript (~/.claude/projects/<folder>/<id>.jsonl,
+ * the folder's path with every other character than letters and digits as "-"): only then can
+ * `--resume` pick it up; otherwise a new one starts.
+ */
+export function conversationKept(home: string, cwd: string, id: string): boolean {
+  const folder = cwd.replace(/[^A-Za-z0-9]/g, '-');
+  return existsSync(join(home, '.claude', 'projects', folder, `${id}.jsonl`));
 }
 
 /** A project the panel's agent works for. */

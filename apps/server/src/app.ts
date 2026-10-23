@@ -56,6 +56,8 @@ const TerminalClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('i'), d: z.string().max(65_536) }),
   z.object({ t: z.literal('r'), cols: z.number(), rows: z.number() }),
   z.object({ t: z.literal('restart') }),
+  // The panel checks the connection is alive (a laptop asleep can leave it dead without a word).
+  z.object({ t: z.literal('ping') }),
 ]);
 
 function terminalSize(cols: unknown, rows: unknown): { cols: number; rows: number } {
@@ -509,7 +511,8 @@ export function createApp(
         onMessage(event, ws) {
           try {
             const message = TerminalClientMessage.parse(JSON.parse(String(event.data)));
-            if (message.t === 'i') {
+            if (message.t === 'ping') client?.send({ t: 'pong' });
+            else if (message.t === 'i') {
               if (key) terminal.sessions?.input(key, message.d);
             } else if (message.t === 'r') {
               size = terminalSize(message.cols, message.rows);

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -396,10 +396,14 @@ describe('the terminal routes', () => {
     server = undefined;
   });
 
-  function service(installed: { claude?: string; codex?: string } = { claude: '/usr/bin/claude' }) {
+  function service(
+    installed: { claude?: string; codex?: string } = { claude: '/usr/bin/claude' },
+    serverEnv?: NodeJS.ProcessEnv,
+  ) {
     return new TerminalService({
       store,
       installed,
+      ...(serverEnv ? { serverEnv } : {}),
       mcpConfigPath: join(home, 'agent-mcp.json'),
       serverUrl: 'http://localhost:4490',
       home: join(home, 'pharos'),
@@ -419,7 +423,8 @@ describe('the terminal routes', () => {
     terminal.attach(b, second, { cols: 80, rows: 24 });
     expect(spawned).toHaveLength(1);
     expect(spawned[0]!.options.cwd).toBe(home);
-    expect(spawned[0]!.args.at(-1)).toContain(`"Alpha" (${a}), "Beta" (${b})`);
+    const brief = (pty: FakePty) => pty.args[pty.args.indexOf('--append-system-prompt') + 1];
+    expect(brief(spawned[0]!)).toContain(`"Alpha" (${a}), "Beta" (${b})`);
     expect(spawned[0]!.options.env.PHAROS_PROJECT_IDS).toBe(`${a},${b}`);
     expect(second.got[0]).toMatchObject({ t: 'start', replay: true });
     spawned[0]!.emit('hi');
@@ -435,8 +440,34 @@ describe('the terminal routes', () => {
     expect(first.got.at(-1)).toMatchObject({ t: 'start', replay: false });
     terminal.attach(alone, client(), { cols: 80, rows: 24 });
     expect(spawned).toHaveLength(3);
-    expect(spawned[2]!.args.at(-1)).toContain(`"Plain" (${alone})`);
+    expect(brief(spawned[2]!)).toContain(`"Plain" (${alone})`);
     expect(terminal.status(alone).sharedWith).toBeUndefined();
+  });
+
+  it("resumes the folder's conversation after a restart; Start again begins a new one", () => {
+    const terminal = service();
+    const a = project('Alpha', home);
+    const size = { cols: 80, rows: 24 };
+    const conversation = (pty: FakePty) => pty.args.slice(-2);
+    terminal.attach(a, client(), size);
+    const [flag, id] = conversation(spawned[0]!);
+    expect(flag).toBe('--session-id');
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    // The server stops (an update): the session goes. Claude Code kept the transcript.
+    terminal.stop();
+    const fakeHome = mkdtempSync(join(tmpdir(), 'pharos-claude-home-'));
+    const folder = join(fakeHome, '.claude', 'projects', home.replace(/[^A-Za-z0-9]/g, '-'));
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, `${id}.jsonl`), '{}');
+    const again = service(undefined, { HOME: fakeHome, PATH: '/bin' });
+    again.attach(a, client(), size);
+    expect(conversation(spawned[1]!)).toEqual(['--resume', id]);
+    // Start again: a new conversation.
+    again.restart(a, size);
+    const [flag3, id3] = conversation(spawned[2]!);
+    expect(flag3).toBe('--session-id');
+    expect(id3).not.toBe(id);
+    rmSync(fakeHome, { recursive: true, force: true });
   });
 
   it('lists the agents running, for the hint of where one was opened', () => {

@@ -2,6 +2,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { markTerminalSeen, terminalsChanged } from './running';
 import { wheelSteps } from './wheel';
 
 /** What the server sends (apps/server/src/terminal/sessions.ts). */
@@ -155,6 +156,13 @@ export default function TerminalView({
       ws.send(JSON.stringify(message));
       return true;
     };
+    // What this panel shows counts as seen (the "new output" hint elsewhere), noted at most every 2 s.
+    let noted = 0;
+    const seen = () => {
+      if (Date.now() - noted < 2000) return;
+      noted = Date.now();
+      markTerminalSeen(projectId);
+    };
     let quiet: ReturnType<typeof setTimeout> | undefined;
     const settle = (ms: number) => {
       clearTimeout(quiet);
@@ -172,11 +180,13 @@ export default function TerminalView({
       }
       if (message.t === 'o') {
         terminal.write(message.d);
+        seen();
         if (!ready.current) settle(700);
       } else if (message.t === 'start') {
         terminal.reset();
         ready.current = false;
         stateRef.current('running', message.cwd);
+        terminalsChanged();
         if (message.replay) settle(150);
       } else if (message.t === 'exit') {
         ready.current = false;
@@ -224,6 +234,7 @@ export default function TerminalView({
     observer.observe(el);
     terminal.focus();
     return () => {
+      markTerminalSeen(projectId);
       clearTimeout(quiet);
       clearTimeout(sizing);
       observer.disconnect();
@@ -236,6 +247,8 @@ export default function TerminalView({
       ws.close();
       terminal.dispose();
       term.current = null;
+      // The rail and the sidebar look again once the server has noticed the panel left.
+      setTimeout(terminalsChanged, 300);
     };
   }, [projectId, connection]);
 

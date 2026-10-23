@@ -457,6 +457,12 @@ export function createApp(
   const projectOrThrow = (id: string) => {
     if (store.get(id)?.type !== 'project') throw new PharosError('not_found', 'project not found');
   };
+  // Which agents run now, so the app can show where one was opened (local panels only).
+  api.get('/terminal/running', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Agents can’t see the owner’s terminals');
+    if (terminalPlaceRefusal(header(c))) return c.json([]);
+    return c.json(info.terminal?.runningSessions() ?? []);
+  });
   api.get('/projects/:id/terminal', (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Agents can’t open the owner’s terminal');
     projectOrThrow(c.req.param('id'));

@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
 import { Loading, SkeletonShape, SkeletonRows } from './skeleton';
@@ -387,7 +387,14 @@ function EntityHistory({ id }: { id: string }) {
   );
 }
 
+/**
+ * What a page says about a decision, drawn by the page that holds the panel (the project page
+ * passes the document's renderer; the catalog doesn't import pages).
+ */
+export const DecisionContextSlot = createContext<((decisionId: string) => ReactNode) | null>(null);
+
 function EntityDetails({ entity }: { entity: Entity }) {
+  const decisionContext = useContext(DecisionContextSlot);
   const longText = [...MARKDOWN].filter((f) => f in ENTITIES[entity.type].data.shape);
   return (
     <div className="space-y-6">
@@ -404,6 +411,8 @@ function EntityDetails({ entity }: { entity: Entity }) {
         <ArtifactSourcePanel artifact={entity as Entity<'artifact'>} />
       )}
       {/* Choose, write another answer or decide later, as on the page (R10.19). */}
+      {/* The reasons, pictures and clips the page gives it, then the answer form, as on the page. */}
+      {entity.type === 'decision' && decisionContext?.(entity.id)}
       {entity.type === 'decision' && <Decision decision={entity as Entity<'decision'>} inPanel />}
       {longText.map((field) => (
         <EditableMarkdown key={field} entity={entity} field={field} />

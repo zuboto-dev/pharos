@@ -39,7 +39,7 @@ import {
   type OpenTarget,
   type ViewActions,
 } from '../catalog/context';
-import { DetailDrawer } from '../catalog/drawer';
+import { DecisionContextSlot, DetailDrawer } from '../catalog/drawer';
 import { FileViewerProvider } from '../files/FileViewer';
 import { EmptyState } from '../catalog/empty-state';
 import { FilesPage } from '../files/FilesPage';
@@ -51,7 +51,7 @@ import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
-import { DocumentView, isDocument } from './document';
+import { DecisionPageContext, DocumentView, isDocument } from './document';
 import { ArchivedNotice } from './hand-back';
 import { notifyProjectsChanged } from './projects';
 import { archiveChange, isArchived } from './sidebar-model';
@@ -391,7 +391,29 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   // The agent panel (R17): the owner's agent CLI beside the page, where this computer has one.
   // Where it is, "Ask" on a block points the agent at it there instead of the questions dialog.
   const terminal = useTerminalStatus(projectId);
-  const dock = useAgentDock();
+  const dock = useAgentDock(projectId, !!terminal?.running);
+  // Arriving from the list of running agents (the rail): open its panel, once.
+  const openTerminal = params.get('terminal') === '1' && !!terminal?.available;
+  const { setOpen: setDockOpen } = dock;
+  useEffect(() => {
+    if (!openTerminal) return;
+    setDockOpen(true);
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('terminal');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [openTerminal, setDockOpen, setParams]);
+  // A decision's details show what its page says about it (its sheet's text, pictures, clips).
+  const allViews = dataset.data?.views;
+  const decisionContext = useCallback(
+    (decisionId: string) =>
+      allViews ? <DecisionPageContext views={allViews} decisionId={decisionId} /> : null,
+    [allViews],
+  );
   const [panelWidth, setPanelWidth] = usePanelWidth();
   const narrow = useNarrow();
   const terminalHere = terminal?.available === true;
@@ -591,6 +613,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                         apply={apply}
                       />
                       <AgentPanelButton
+                        projectId={projectId!}
                         status={terminal}
                         open={dock.open}
                         onToggle={() => dock.setOpen((o) => !o)}
@@ -722,12 +745,14 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
           />
         )}
         {drawer.shown && (
-          <DetailDrawer
-            target={drawer.shown}
-            onClose={close}
-            onBack={drawerDepth > 0 && !drawer.leaving ? () => navigate(-1) : undefined}
-            leaving={drawer.leaving}
-          />
+          <DecisionContextSlot.Provider value={decisionContext}>
+            <DetailDrawer
+              target={drawer.shown}
+              onClose={close}
+              onBack={drawerDepth > 0 && !drawer.leaving ? () => navigate(-1) : undefined}
+              leaving={drawer.leaving}
+            />
+          </DecisionContextSlot.Provider>
         )}
         {asking && (
           <AskDialog

@@ -2,6 +2,8 @@ import clsx from 'clsx';
 import { Menu as MenuIcon, Settings } from 'lucide-react';
 import { useState, type FocusEvent } from 'react';
 import { Link, NavLink, Outlet, useLocation, useMatch } from 'react-router';
+import { RunningAgentsButton } from '../agent/RunningAgents';
+import { RunningTerminalsProvider } from '../agent/running';
 import { Tooltip } from '../catalog/tooltip';
 import { FolderRequestNotice } from '../files/FolderRequests';
 import { useAgentStatus } from '../lib/events';
@@ -75,95 +77,102 @@ export function AppShell() {
         },
       };
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <div
-        data-phone-bar=""
-        className="sticky top-0 z-20 flex items-center border-b border-line bg-surface pr-2 md:hidden"
-      >
-        <Link to="/" className="flex items-center gap-2 px-4 py-2.5 font-semibold tracking-tight">
-          <PharosLogo className="size-5 text-amber-500" /> Pharos
-        </Link>
-        <span className="flex-1" />
-        <button
-          type="button"
-          aria-label="Open the sidebar"
-          aria-controls={SIDEBAR_ID}
-          aria-expanded={drawer}
-          onClick={() => setDrawer(true)}
-          className="flex size-9 items-center justify-center rounded-control text-muted hover:bg-sunken"
-        >
-          <MenuIcon aria-hidden className="size-5" />
-        </button>
-      </div>
-      {drawer && (
+    <RunningTerminalsProvider>
+      <div className="flex min-h-screen flex-col md:flex-row">
         <div
-          aria-hidden
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
-          onClick={() => setDrawer(false)}
-        />
-      )}
-      {!pinned && (
-        // The rail: the logo in the exact spot it has in the sidebar, no buttons. Hovering or
-        // focusing it slides the sidebar out over the page.
-        <div
-          data-sidebar-rail=""
-          className="hidden shrink-0 flex-col items-center border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen"
-          {...peekHandlers}
-          onClick={() => setPeek(true)}
+          data-phone-bar=""
+          className="sticky top-0 z-20 flex items-center border-b border-line bg-surface pr-2 md:hidden"
         >
-          <Link to="/" aria-label="Pharos home" className="flex px-4 pt-4 pb-2">
-            <span className="flex h-6 items-center">
-              <PharosLogo className="size-5 text-amber-500" />
-            </span>
+          <Link to="/" className="flex items-center gap-2 px-4 py-2.5 font-semibold tracking-tight">
+            <PharosLogo className="size-5 text-amber-500" /> Pharos
           </Link>
-        </div>
-      )}
-      <aside
-        id={SIDEBAR_ID}
-        data-sidebar={pinned ? 'open' : peek ? 'peek' : 'collapsed'}
-        {...peekHandlers}
-        onKeyDown={(e) => drawer && e.key === 'Escape' && setDrawer(false)}
-        className={clsx(
-          'shrink-0 flex-col border-line bg-surface md:h-screen md:w-64 md:border-r',
-          // Phones: hidden until the bar's button opens it over the page.
-          drawer
-            ? 'fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] border-r shadow-overlay'
-            : 'hidden',
-          pinned
-            ? 'md:sticky md:top-0 md:bottom-auto md:shadow-none'
-            : 'md:fixed md:top-0 md:left-0 md:z-30 md:shadow-overlay',
-          open ? 'md:flex' : 'md:hidden',
-          peek && !pinned && 'md:animate-side-in',
-        )}
-      >
-        <div className="flex items-center justify-between gap-2 pr-2">
-          <Link
-            to="/"
-            className="flex items-center gap-2 px-4 pt-4 pb-2 font-semibold tracking-tight"
+          <span className="flex-1" />
+          <RunningAgentsButton />
+          <button
+            type="button"
+            aria-label="Open the sidebar"
+            aria-controls={SIDEBAR_ID}
+            aria-expanded={drawer}
+            onClick={() => setDrawer(true)}
+            className="flex size-9 items-center justify-center rounded-control text-muted hover:bg-sunken"
           >
-            <span className="flex h-6 items-center">
-              <PharosLogo className="size-5 text-amber-500" />
-            </span>{' '}
-            Pharos
-          </Link>
-          <SidebarToggle
-            pinned={pinned}
-            onToggle={() => {
-              toggle();
-              setPeek(false);
-            }}
+            <MenuIcon aria-hidden className="size-5" />
+          </button>
+        </div>
+        {drawer && (
+          <div
+            aria-hidden
+            className="fixed inset-0 z-30 bg-black/30 md:hidden"
+            onClick={() => setDrawer(false)}
           />
-        </div>
-        <Sidebar />
-        <div className="border-t border-line-soft p-3">
-          <SettingsLink />
-        </div>
-      </aside>
-      <main className="min-w-0 flex-1">
-        <ShellFolderRequests />
-        <Outlet />
-      </main>
-      <UpdateNotice />
-    </div>
+        )}
+        {!pinned && (
+          // The rail: the logo in the exact spot it has in the sidebar, no buttons. Hovering or
+          // focusing it slides the sidebar out over the page.
+          <div
+            data-sidebar-rail=""
+            className="hidden shrink-0 flex-col items-center border-r border-line bg-surface md:sticky md:top-0 md:flex md:h-screen"
+            {...peekHandlers}
+            onClick={() => setPeek(true)}
+          >
+            <Link to="/" aria-label="Pharos home" className="flex px-4 pt-4 pb-2">
+              <span className="flex h-6 items-center">
+                <PharosLogo className="size-5 text-amber-500" />
+              </span>
+            </Link>
+            {/* Where agents run, visible with the sidebar collapsed (R17). */}
+            <div className="mt-2" onMouseEnter={(e) => e.stopPropagation()}>
+              <RunningAgentsButton />
+            </div>
+          </div>
+        )}
+        <aside
+          id={SIDEBAR_ID}
+          data-sidebar={pinned ? 'open' : peek ? 'peek' : 'collapsed'}
+          {...peekHandlers}
+          onKeyDown={(e) => drawer && e.key === 'Escape' && setDrawer(false)}
+          className={clsx(
+            'shrink-0 flex-col border-line bg-surface md:h-screen md:w-64 md:border-r',
+            // Phones: hidden until the bar's button opens it over the page.
+            drawer
+              ? 'fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] border-r shadow-overlay'
+              : 'hidden',
+            pinned
+              ? 'md:sticky md:top-0 md:bottom-auto md:shadow-none'
+              : 'md:fixed md:top-0 md:left-0 md:z-30 md:shadow-overlay',
+            open ? 'md:flex' : 'md:hidden',
+            peek && !pinned && 'md:animate-side-in',
+          )}
+        >
+          <div className="flex items-center justify-between gap-2 pr-2">
+            <Link
+              to="/"
+              className="flex items-center gap-2 px-4 pt-4 pb-2 font-semibold tracking-tight"
+            >
+              <span className="flex h-6 items-center">
+                <PharosLogo className="size-5 text-amber-500" />
+              </span>{' '}
+              Pharos
+            </Link>
+            <SidebarToggle
+              pinned={pinned}
+              onToggle={() => {
+                toggle();
+                setPeek(false);
+              }}
+            />
+          </div>
+          <Sidebar />
+          <div className="border-t border-line-soft p-3">
+            <SettingsLink />
+          </div>
+        </aside>
+        <main className="min-w-0 flex-1">
+          <ShellFolderRequests />
+          <Outlet />
+        </main>
+        <UpdateNotice />
+      </div>
+    </RunningTerminalsProvider>
   );
 }

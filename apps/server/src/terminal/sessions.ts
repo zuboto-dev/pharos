@@ -61,6 +61,8 @@ export class TerminalSession {
   private readonly modes = new Map<number, 'h' | 'l'>();
   /** The end of the last output, so a mode sequence split across two outputs is still seen. */
   private modeTail = '';
+  /** When the agent last printed something (the panel's "new output" hint). */
+  lastOutputAt: number | undefined;
   /** When the last panel went away (undefined while one is attached). */
   detachedAt: number | undefined;
   exited = false;
@@ -72,7 +74,8 @@ export class TerminalSession {
   ) {}
 
   /** Keeps output for replay and notes the modes it sets. */
-  record(data: string): void {
+  record(data: string, at?: number): void {
+    if (at !== undefined) this.lastOutputAt = at;
     const text = this.modeTail + data;
     for (const match of text.matchAll(PRIVATE_MODE))
       for (const mode of match[1]!.split(';'))
@@ -145,6 +148,11 @@ export class TerminalSessions {
   get(key: string): TerminalSession | undefined {
     const session = this.sessions.get(key);
     return session && !session.exited ? session : undefined;
+  }
+
+  /** The sessions still running. */
+  running(): TerminalSession[] {
+    return [...this.sessions.values()].filter((s) => !s.exited);
   }
 
   get size(): number {
@@ -256,7 +264,7 @@ export class TerminalSessions {
     this.sessions.set(key, session);
     pty.onData((data) => {
       try {
-        session.record(data);
+        session.record(data, this.now());
         session.broadcast({ t: 'o', d: data });
       } catch (error) {
         console.error('[pharos] A terminal output callback failed:', error);

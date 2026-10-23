@@ -439,6 +439,40 @@ describe('the terminal routes', () => {
     expect(terminal.status(alone).sharedWith).toBeUndefined();
   });
 
+  it('lists the agents running, for the hint of where one was opened', () => {
+    let now = Date.parse('2026-10-22T20:00:00Z');
+    const terminal = new TerminalService({
+      store,
+      installed: { claude: '/usr/bin/claude' },
+      mcpConfigPath: join(home, 'agent-mcp.json'),
+      serverUrl: 'http://localhost:4490',
+      home: join(home, 'pharos'),
+      pty: { spawn: fakeSpawn },
+      killGroup: () => {},
+      now: () => now,
+    });
+    const a = project('Alpha', home);
+    const b = project('Beta', home);
+    expect(terminal.runningSessions()).toEqual([]);
+    const panel = client();
+    terminal.attach(a, panel, { cols: 80, rows: 24 });
+    now += 5000;
+    spawned[0]!.emit('working');
+    expect(terminal.runningSessions()).toEqual([
+      {
+        projectIds: [a, b],
+        agent: 'Claude Code',
+        watched: true,
+        lastOutputAt: '2026-10-22T20:00:05.000Z',
+      },
+    ]);
+    // The panel left; the agent goes on.
+    terminal.sessions!.detach(terminal.key(a), panel);
+    expect(terminal.runningSessions()[0]!.watched).toBe(false);
+    spawned[0]!.end();
+    expect(terminal.runningSessions()).toEqual([]);
+  });
+
   it('says whether the terminal is available here, and why not', async () => {
     const id = project();
     const app = createApp(store, undefined, undefined, {

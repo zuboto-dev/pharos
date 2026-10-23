@@ -31,6 +31,15 @@ export type TerminalStatus = {
   sharedWith?: { id: string; name: string }[];
 };
 
+/** A running agent (GET /api/terminal/running). */
+export type TerminalRunning = {
+  projectIds: string[];
+  agent: string;
+  /** A panel shows it now. */
+  watched: boolean;
+  lastOutputAt?: string;
+};
+
 export type TerminalServiceOptions = {
   store: Store;
   /** The installed agent CLIs and where each is (its absolute path when known). */
@@ -156,6 +165,22 @@ export class TerminalService {
   restart(projectId: string, size: { cols: number; rows: number }): TerminalSession {
     if (!this.sessions) throw new Error('The terminal is unavailable');
     return this.sessions.restart(this.key(projectId), () => this.launch(projectId), size);
+  }
+
+  /**
+   * The agents running now, for the hint of where one was opened (the rail, the sidebar, the
+   * page's terminal button): the projects each works for, whether a panel shows it, and when it
+   * last printed something.
+   */
+  runningSessions(): TerminalRunning[] {
+    return (this.sessions?.running() ?? []).map((session) => ({
+      projectIds: (session.launch.env.PHAROS_PROJECT_IDS ?? '').split(',').filter(Boolean),
+      agent: presetLabel(session.launch.preset),
+      watched: session.clients.size > 0,
+      ...(session.lastOutputAt
+        ? { lastOutputAt: new Date(session.lastOutputAt).toISOString() }
+        : {}),
+    }));
   }
 
   /** Ends idle sessions every minute (30 minutes with no panel). */

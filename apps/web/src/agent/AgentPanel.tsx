@@ -15,6 +15,8 @@ import { ICON_BUTTON, ICON_GHOST, Tooltip } from '../catalog/tooltip';
 import { getJson } from '../lib/api';
 import type { InboxItem, TerminalHandle, TerminalState } from './TerminalView';
 import { panelShortcut } from './shortcut';
+import { TerminalDot } from './RunningAgents';
+import { useTerminalHints } from './running';
 
 // xterm.js loads with the panel, not with every page.
 const TerminalView = lazy(() => import('./TerminalView'));
@@ -102,14 +104,17 @@ export function useNarrow(): boolean {
 
 /** The project bar's button: opens the panel, or says why there is none here. */
 export function AgentPanelButton({
+  projectId,
   status,
   open,
   onToggle,
 }: {
+  projectId: string;
   status: TerminalStatus | null;
   open: boolean;
   onToggle: () => void;
 }) {
+  const hint = useTerminalHints().hints.get(projectId);
   if (!status) return null;
   const label = status.agent ? `${status.agent.label} terminal` : 'Agent terminal';
   if (!status.available)
@@ -131,11 +136,17 @@ export function AgentPanelButton({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={open ? `Hide ${label}` : label}
+        aria-label={
+          open
+            ? `Hide ${label}`
+            : `${label}${hint ? (hint.unseen ? ' (running, new output)' : ' (running)') : ''}`
+        }
         aria-pressed={open}
-        className={open ? ICON_BUTTON.pressed : ICON_BUTTON.secondary}
+        className={clsx(open ? ICON_BUTTON.pressed : ICON_BUTTON.secondary, 'relative')}
       >
         <SquareTerminal className="size-4" aria-hidden />
+        {/* Its agent still runs with the panel closed; the accent dot: new output since. */}
+        {!open && hint && <TerminalDot unseen={hint.unseen} className="-top-1 -right-1" />}
       </button>
     </Tooltip>
   );

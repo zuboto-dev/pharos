@@ -10,16 +10,58 @@ import { PickHighlight, SelectionPoint, usePicker } from './picker';
 import { describeTarget, kindLabel, referenceText, type PickTarget } from './reference';
 import type { InboxItem } from './TerminalView';
 
-/** The project page's agent panel state (R17): open, and what waits to be typed into it. */
-export function useAgentDock() {
-  const [open, setOpen] = useState(false);
+const OPEN_KEY = 'pharos-agent-panel-open';
+
+function readOpen(): string[] {
+  try {
+    const ids = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]') as unknown;
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The project page's agent panel state (R17): open, and what waits to be typed into it. Whether
+ * it is open is remembered per project in this browser, so coming back to a project whose panel
+ * you left open opens it again (its agent kept running meanwhile).
+ */
+export function useAgentDock(projectId?: string, running = false) {
+  const [openIds, setOpenIds] = useState<string[]>(readOpen);
+  // Opened in this visit. A remembered panel reopens only while its agent still runs, so coming
+  // back never starts a new agent (and its usage) by itself.
+  const [openedHere, setOpenedHere] = useState<string[]>([]);
+  const open =
+    !!projectId && openIds.includes(projectId) && (running || openedHere.includes(projectId));
+  const setOpen = useCallback(
+    (next: boolean | ((open: boolean) => boolean)) =>
+      setOpenIds((ids) => {
+        if (!projectId) return ids;
+        const was = ids.includes(projectId) && (running || openedHere.includes(projectId));
+        const now = typeof next === 'function' ? next(was) : next;
+        if (now) setOpenedHere((here) => (here.includes(projectId) ? here : [...here, projectId]));
+        const updated = now
+          ? [...ids.filter((id) => id !== projectId), projectId]
+          : ids.filter((id) => id !== projectId);
+        try {
+          localStorage.setItem(OPEN_KEY, JSON.stringify(updated));
+        } catch {
+          // Not remembered: it opens closed next time.
+        }
+        return updated;
+      }),
+    [projectId, running, openedHere],
+  );
   const [inbox, setInbox] = useState<InboxItem[]>([]);
   const next = useRef(0);
   /** Opens the panel and types `text` into the agent's input line (never Enter). */
-  const insert = useCallback((text: string) => {
-    setOpen(true);
-    setInbox((items) => [...items, { id: ++next.current, text }]);
-  }, []);
+  const insert = useCallback(
+    (text: string) => {
+      setOpen(true);
+      setInbox((items) => [...items, { id: ++next.current, text }]);
+    },
+    [setOpen],
+  );
   const consumed = useCallback(
     (ids: number[]) => setInbox((items) => items.filter((item) => !ids.includes(item.id))),
     [],

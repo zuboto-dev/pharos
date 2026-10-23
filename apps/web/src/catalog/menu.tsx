@@ -98,6 +98,7 @@ export function MenuItem({
   danger,
   disabled,
   current,
+  plain,
 }: {
   icon?: LucideIcon;
   children: ReactNode;
@@ -106,6 +107,8 @@ export function MenuItem({
   disabled?: boolean;
   /** The item for the page shown now (e.g. the active view): marked, and focused first. */
   current?: boolean;
+  /** A menu with no icons at all: no space kept for one. */
+  plain?: boolean;
 }) {
   return (
     <button
@@ -120,7 +123,11 @@ export function MenuItem({
         danger && 'text-danger',
       )}
     >
-      {Icon ? <Icon className="size-3.5 shrink-0" /> : <span className="size-3.5 shrink-0" />}
+      {Icon ? (
+        <Icon className="size-3.5 shrink-0" />
+      ) : plain ? null : (
+        <span className="size-3.5 shrink-0" />
+      )}
       <span className="min-w-0 truncate">{children}</span>
     </button>
   );

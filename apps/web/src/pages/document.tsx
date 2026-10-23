@@ -5,8 +5,10 @@ import {
   type Entity,
   type Widget,
 } from '@pharos/schema';
-import { CircleCheck, ExternalLink } from 'lucide-react';
-import { useId, useMemo, useState, type CSSProperties } from 'react';
+import clsx from 'clsx';
+import { ArrowUpRight, CircleCheck, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router';
+import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { BoardActionsProvider } from '../catalog/action-board';
 import { BoardFilesProvider, WidgetIdProvider } from '../catalog/board-files';
 import { Node } from '../catalog/renderer';
@@ -173,6 +175,102 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
         </BoardFilesProvider>
       </FileViewerProvider>
     </VariantProvider>
+  );
+}
+
+/** The page and sheet that ask a decision (R15), if a document asks it. */
+export function findDecisionSheet(
+  views: Entity<'view'>[],
+  decisionId: string,
+): { view: Entity<'view'>; sheet: Sheet } | undefined {
+  for (const view of views) {
+    if (view.data.archived) continue;
+    for (const block of view.data.doc?.blocks ?? []) {
+      if (block.kind !== 'sheet') continue;
+      const asks =
+        block.decisions?.includes(decisionId) ||
+        docLeaves(block.blocks).some(
+          (leaf) =>
+            leaf.kind === 'block' &&
+            leaf.node.component === 'DecisionBlock' &&
+            leaf.node.decision === decisionId,
+        );
+      if (asks) return { view, sheet: block };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * What the page says around a decision, for its details panel: the sheet's own blocks (its
+ * text, pictures, clips and drawings), without the decision forms, and the way to the page. The
+ * decision itself only holds the question and the options; the reasons are on the page.
+ */
+export function DecisionPageContext({
+  views,
+  decisionId,
+}: {
+  views: Entity<'view'>[];
+  decisionId: string;
+}) {
+  const found = useMemo(() => findDecisionSheet(views, decisionId), [views, decisionId]);
+  const [all, setAll] = useState(false);
+  const bodyId = useId();
+  // Whether it runs past its first screen (then "Show all" is offered).
+  const body = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  useLayoutEffect(() => {
+    const el = body.current;
+    if (el && !all) setLong(el.scrollHeight > el.clientHeight + 4);
+  }, [all, found]);
+  if (!found) return null;
+  const { view, sheet } = found;
+  const blocks = sheet.blocks.filter(
+    (b) => !(b.kind === 'block' && b.node.component === 'DecisionBlock'),
+  );
+  if (!blocks.length) return null;
+  return (
+    <section data-decision-context={sheet.id} className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold tracking-wide text-muted uppercase">On the page</h3>
+        <Link
+          to={`/projects/${view.data.projectId}/views/${view.id}#${sheetAnchor(sheet.id)}`}
+          className="inline-flex min-w-0 items-center gap-0.5 text-xs text-accent hover:underline"
+        >
+          <span className="truncate">{view.data.name}</span>
+          <ArrowUpRight aria-hidden className="size-3 shrink-0" />
+        </Link>
+      </div>
+      <div className="rounded-tile border border-line bg-surface">
+        <VariantProvider variant="document">
+          <div
+            ref={body}
+            id={bodyId}
+            className={clsx(
+              'doc doc-stack p-4 text-[0.95rem]',
+              // The first screen of it, so the options stay near; the rest on request.
+              !all &&
+                'max-h-80 overflow-hidden [mask-image:linear-gradient(to_bottom,black_70%,transparent)]',
+            )}
+          >
+            {blocks.map((block) => (
+              <DocBlockView key={block.id} view={view} block={block} />
+            ))}
+          </div>
+        </VariantProvider>
+        {(long || all) && (
+          <button
+            type="button"
+            aria-expanded={all}
+            aria-controls={bodyId}
+            onClick={() => setAll((v) => !v)}
+            className="w-full border-t border-line-soft px-4 py-2 text-left text-xs text-muted hover:bg-sunken"
+          >
+            {all ? 'Show less' : 'Show all of it'}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

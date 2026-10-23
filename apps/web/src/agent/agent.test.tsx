@@ -131,6 +131,7 @@ describe('the project bar’s terminal button', () => {
   it('says why the terminal is unavailable here, and opens it where it is', () => {
     const { rerender } = render(
       <AgentPanelButton
+        projectId="p1"
         status={{
           available: false,
           reason: 'hosted',
@@ -146,6 +147,7 @@ describe('the project bar’s terminal button', () => {
     const toggle = vi.fn();
     rerender(
       <AgentPanelButton
+        projectId="p1"
         status={{ available: true, agent: { id: 'claude', label: 'Claude Code' }, running: false }}
         open={false}
         onToggle={toggle}

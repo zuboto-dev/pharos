@@ -15,6 +15,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  SquareTerminal,
   Plus,
   SquarePlus,
   Trash2,
@@ -27,6 +28,8 @@ import { NavLink, useLocation, useNavigate } from 'react-router';
 import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
+import { TerminalDot } from '../agent/RunningAgents';
+import { useTerminalHints } from '../agent/running';
 import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
 import { usePresence } from '../lib/events';
@@ -254,6 +257,7 @@ const MORE =
 export function Sidebar() {
   // Projects an agent is working in right now (v0.2 B5): a pulsing halo on the status dot.
   const presence = usePresence();
+  const terminals = useTerminalHints().hints;
   // Projects with views changed since the reader last looked (R11).
   const changedViews = useChangedViews().projects;
   const ws = useWorkspace();
@@ -515,6 +519,25 @@ export function Sidebar() {
               </span>
               <span className="truncate">{project.data.name}</span>
               {agents.length > 0 && <span className="sr-only"> ({workingLine(agents, 'it')})</span>}
+              {terminals.get(project.id) && (
+                // Its agent terminal still runs (opened here earlier); the dot: new output.
+                <span
+                  data-terminal-mark=""
+                  title={`${terminals.get(project.id)!.agent} terminal running${terminals.get(project.id)!.unseen ? ', new output' : ''}`}
+                  className="relative inline-flex shrink-0 text-faint"
+                >
+                  <SquareTerminal aria-hidden className="size-3.5" />
+                  <span className="sr-only">
+                    {' '}
+                    ({terminals.get(project.id)!.agent} terminal running
+                    {terminals.get(project.id)!.unseen ? ', new output' : ''})
+                  </span>
+                  <TerminalDot
+                    unseen={terminals.get(project.id)!.unseen}
+                    className="-top-1 -right-1 size-1.5"
+                  />
+                </span>
+              )}
               {changedViews[project.id]?.length ? (
                 <>
                   <ChangedDot className="shrink-0" />

@@ -224,6 +224,7 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
           >
             {more.map((o) => (
               <MenuItem
+                plain
                 key={o.id}
                 onClick={() => {
                   const anchor = menu;
@@ -675,11 +676,12 @@ function DeskControls({
       </button>
       {open?.which === 'project' && (
         <Menu anchor={open.anchor} label="Project" onClose={() => setOpen(null)}>
-          <MenuItem current={!view.project} onClick={() => pick({ ...view, project: null })}>
+          <MenuItem plain current={!view.project} onClick={() => pick({ ...view, project: null })}>
             All projects <span className="text-faint tabular-nums">{total}</span>
           </MenuItem>
           {projects.map((p) => (
             <MenuItem
+              plain
               key={p.id}
               current={view.project === p.id}
               onClick={() => pick({ ...view, project: p.id })}
@@ -690,9 +692,10 @@ function DeskControls({
         </Menu>
       )}
       {open?.which === 'sort' && (
-        <Menu anchor={open.anchor} label="Sort" align="end" onClose={() => setOpen(null)}>
+        <Menu anchor={open.anchor} label="Sort" onClose={() => setOpen(null)}>
           {(Object.keys(DESK_SORTS) as DeskSort[]).map((sort) => (
             <MenuItem
+              plain
               key={sort}
               current={view.sort === sort}
               onClick={() => pick({ ...view, sort })}

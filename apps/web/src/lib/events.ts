@@ -1,7 +1,15 @@
 import type { PharosNotification, PresenceEntry, PresenceState } from '@pharos/schema';
 import { useEffect, useRef, useState } from 'react';
 
-export type RevisionEvent = { id: number; projectIds: string[] };
+export type RevisionEvent = {
+  id: number;
+  projectIds: string[];
+  /**
+   * Revisions were saved while the feed was down (the laptop slept, the server restarted for an
+   * update). Which projects they touched is unknown, so reload everything shown.
+   */
+  missed?: boolean;
+};
 
 /** Files of a report page were uploaded (not a revision): an open frame of it reloads (R13.5). */
 export type ReportAssetsEvent = { type: 'report-assets'; viewId: string; at: string };
@@ -62,6 +70,24 @@ let source: EventSource | null = null;
 /** The build this page was loaded with (the first one the server reported), and a newer one. */
 let loadedBuild: string | undefined;
 let newerBuild: string | undefined;
+/** The newest revision this page knows of, from the feed's events and its ready messages. */
+let lastRevision: number | undefined;
+
+function announceRevision(event: RevisionEvent) {
+  lastRevision = Math.max(lastRevision ?? 0, event.id);
+  for (const listener of listeners) listener(event);
+}
+
+/**
+ * On (re)connecting the server says its latest revision. Anything newer than what this page knows
+ * was saved while the feed was down, and no revision event will come for it.
+ */
+function noticeLatest(ready: ReadyEvent) {
+  if (typeof ready.latest !== 'number') return;
+  if (lastRevision === undefined) lastRevision = ready.latest;
+  else if (ready.latest > lastRevision)
+    announceRevision({ id: ready.latest, projectIds: [], missed: true });
+}
 
 /**
  * Notes the version a (re)connected server reports. The first one is taken as what this page
@@ -82,8 +108,7 @@ function connect() {
   if (source || typeof EventSource === 'undefined') return;
   source = new EventSource('/api/events');
   source.addEventListener('revision', (e) => {
-    const event = JSON.parse((e as MessageEvent<string>).data) as RevisionEvent;
-    for (const listener of listeners) listener(event);
+    announceRevision(JSON.parse((e as MessageEvent<string>).data) as RevisionEvent);
   });
   source.addEventListener('report-assets', (e) => {
     try {
@@ -115,7 +140,9 @@ function connect() {
   source.addEventListener('error', () => announcePresence({ entries: [] }));
   source.addEventListener('ready', (e) => {
     try {
-      noticeBuild(JSON.parse((e as MessageEvent<string>).data) as ReadyEvent);
+      const ready = JSON.parse((e as MessageEvent<string>).data) as ReadyEvent;
+      noticeLatest(ready);
+      noticeBuild(ready);
     } catch {
       // An unreadable ready event just isn't a version signal.
     }

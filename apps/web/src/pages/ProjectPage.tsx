@@ -280,7 +280,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   }, [dataset.data]);
   // Live updates: reload when anyone (an agent, another tab) changes this project.
   useRevisionEvents((event) => {
-    if (projectId && event.projectIds.includes(projectId)) reload();
+    if (projectId && (event.missed || event.projectIds.includes(projectId))) reload();
   });
 
   const apply = useCallback(

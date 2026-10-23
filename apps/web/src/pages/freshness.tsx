@@ -140,7 +140,7 @@ export function usePageFreshness(
     };
   }, [projectId, viewId]);
   useRevisionEvents((event) => {
-    if (!projectId || !viewId || !event.projectIds.includes(projectId)) return;
+    if (!projectId || !viewId || (!event.missed && !event.projectIds.includes(projectId))) return;
     const from = since.current?.viewId === viewId ? since.current.since : undefined;
     const request = ++order.current.started;
     void viewFreshness(projectId, viewId, from).then((f) => {

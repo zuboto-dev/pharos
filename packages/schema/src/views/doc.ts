@@ -255,6 +255,13 @@ export const DocSheetBlock = z.strictObject({
     .describe(
       'Ids of earlier decisions, tasks or views this sheet follows up on (e.g. the decision it builds on); shown as links under its title',
     ),
+  shows: z
+    .array(BlockId)
+    .max(12)
+    .optional()
+    .describe(
+      'Ids of figure or drawing blocks elsewhere in the document that this sheet asks about: shown as thumbnails inside the sheet, above its decision, so the reader never scrolls back to find them',
+    ),
   blocks: z
     .array(
       z.discriminatedUnion('kind', [...DocLeafBlock.options, DocColumnsBlock, DocDetailsBlock]),
@@ -353,6 +360,17 @@ export const ReportDoc = z
         message: `At most ${DOC_LIMITS.embeds} embeds`,
         path: ['blocks'],
       });
+    const visual = new Set(
+      leaves.filter((b) => b.kind === 'figure' || b.kind === 'drawing').map((b) => b.id),
+    );
+    for (const b of all)
+      for (const id of b.kind === 'sheet' ? (b.shows ?? []) : [])
+        if (!visual.has(id))
+          ctx.addIssue({
+            code: 'custom',
+            message: `Sheet "${b.id}" shows "${id}", which is not a figure or drawing block in this document`,
+            path: ['blocks'],
+          });
     for (const d of drawings)
       for (const name of d.reads ?? [])
         if (!doc.data?.[name])

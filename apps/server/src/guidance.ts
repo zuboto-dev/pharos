@@ -350,15 +350,15 @@ they answer in place.
   follows to check the work; a command gets a copy button; expect says what they should see.
 - \`{kind: "details", id, summary, open?, blocks}\`: closed by default. The reasoning, what you
   tried first, the full list, the raw numbers: there for whoever wants them, out of the way.
-- \`{kind: "sheet", id, title, time?, tags?, decisions?, related?, blocks}\`: one thing for the
-  reader to review or act on. time says how long it takes ("5 min"); decisions lists the ids of
-  decisions with options it asks them to answer, each shown by a DecisionBlock inside the sheet;
-  related lists earlier decisions, tasks or views it follows up on (shown as links). A sheet is
-  open until each decision has a choice or an answer. With two or more sheets Pharos shows "Needs
-  you: N items, about M min" (open ones only), a progress bar and the open sheets at the top;
-  answered sheets fold to one line, and those answered before your last update move to "Earlier
-  answers". So when you update a desk, leave answered sheets alone or remove them; don't repeat
-  them as a "done" list.
+- \`{kind: "sheet", id, title, time?, tags?, decisions?, related?, shows?, blocks}\`: one thing to
+  review or act on. time: how long it takes ("5 min"); decisions: ids of decisions with options it
+  asks, each shown by a DecisionBlock inside it; related: earlier decisions, tasks or views it
+  follows (links); shows: figure/drawing blocks it asks about, as thumbnails above its decision
+  (no scrolling back). Open until each decision has a choice or an answer. With two or more
+  sheets Pharos shows "Needs you: N items, about M min" (open ones only), a progress bar and the
+  open sheets at the top; answered sheets fold to one line, and those answered before your last
+  update move to "Earlier answers". So when you update a desk, leave answered sheets alone or
+  remove them; don't repeat them as a "done" list.
 - Nesting: figures, steps and component blocks go anywhere; columns hold those; details hold those
   and columns; sheets hold all of them and details, and sit at the top level only.
 - Screenshots: take them with your own tools (a headless browser, the simulator, the screen),

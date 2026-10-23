@@ -8,7 +8,15 @@ import {
 import clsx from 'clsx';
 import { ArrowUpRight, CircleCheck, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router';
-import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { BoardActionsProvider } from '../catalog/action-board';
 import { BoardFilesProvider, WidgetIdProvider } from '../catalog/board-files';
 import { Node } from '../catalog/renderer';
@@ -40,6 +48,7 @@ import {
   type Sheet,
 } from './document-rich';
 import { DiffView } from './document-diff';
+import { MediaPanel, SheetShows } from './document-media';
 import { Markdown } from '../catalog/ui';
 import { HandBackPrompt } from './hand-back';
 
@@ -139,6 +148,20 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
       .map((s) => s.id),
   );
   const flow = doc ? doc.blocks.filter((b) => !(b.kind === 'sheet' && cleared.has(b.id))) : [];
+  // A link to a sheet or block (#sheet-…) lands on it once the document has drawn, not at the top.
+  const landed = useRef<string | null>(null);
+  useEffect(() => {
+    const hash = typeof location === 'undefined' ? '' : decodeURIComponent(location.hash.slice(1));
+    if (!doc || !hash || landed.current === `${view.id}#${hash}`) return;
+    const frame = requestAnimationFrame(() => {
+      const el = document.getElementById(hash);
+      if (!el) return;
+      landed.current = `${view.id}#${hash}`;
+      el.scrollIntoView?.({ block: 'start' });
+      el.focus?.({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [doc, view.id]);
   const firstSheet = flow.find((b) => b.kind === 'sheet');
   if (!doc) return null;
   return (
@@ -177,6 +200,7 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
               )}
             </article>
             {allSheets.length > 0 && <HandBackPrompt view={view} sheets={allSheets} />}
+            <MediaPanel view={view} blocks={doc.blocks} />
           </BoardActionsProvider>
         </BoardFilesProvider>
       </FileViewerProvider>
@@ -407,6 +431,7 @@ function SheetView({ view, block }: { view: Entity<'view'>; block: Sheet }) {
     <section {...common} aria-labelledby={titleId} className="doc-block doc-sheet">
       <SheetHead sheet={block} state={state} titleId={titleId} />
       <SheetRelated sheet={block} />
+      <SheetShows view={view} sheet={block} blocks={view.data.doc?.blocks ?? []} />
       {body}
     </section>
   );

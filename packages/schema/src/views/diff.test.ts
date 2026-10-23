@@ -75,3 +75,20 @@ describe('the diff block', () => {
     expect(ReportDoc.safeParse(big).error?.issues[0]?.message).toMatch(/characters of diffs/);
   });
 });
+
+describe("a sheet's shows", () => {
+  const fig = { kind: 'figure', id: 'shot', items: [{ src: 'a.png', alt: 'A' }] };
+  const sheet = (shows: string[]) => ({
+    kind: 'sheet',
+    id: 's',
+    title: 'Pick one',
+    shows,
+    blocks: [{ kind: 'block', id: 't', node: { component: 'Text', content: 'Which?' } }],
+  });
+  it('names figure or drawing blocks of the document, and nothing else', () => {
+    expect(ReportDoc.safeParse({ blocks: [fig, sheet(['shot'])] }).success).toBe(true);
+    expect(
+      ReportDoc.safeParse({ blocks: [fig, sheet(['nope'])] }).error?.issues[0]?.message,
+    ).toMatch(/shows "nope", which is not a figure or drawing/);
+  });
+});

@@ -184,6 +184,11 @@ export class TerminalService {
     return this.sessions.attach(this.key(projectId), () => this.launch(projectId), client, size);
   }
 
+  /** Stops the agent of the project's folder (the owner's Stop). */
+  stopAgent(projectId: string): boolean {
+    return this.sessions?.stop(this.key(projectId, false)) ?? false;
+  }
+
   /** Restarts the project's folder session: every panel on it (other projects too) gets the new one. */
   restart(projectId: string, size: { cols: number; rows: number }): TerminalSession {
     if (!this.sessions) throw new Error('The terminal is unavailable');

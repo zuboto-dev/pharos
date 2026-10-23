@@ -58,6 +58,7 @@ const TerminalClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('restart') }),
   // The panel checks the connection is alive (a laptop asleep can leave it dead without a word).
   z.object({ t: z.literal('ping') }),
+  z.object({ t: z.literal('stop') }),
 ]);
 
 function terminalSize(cols: unknown, rows: unknown): { cols: number; rows: number } {
@@ -459,6 +460,14 @@ export function createApp(
   const projectOrThrow = (id: string) => {
     if (store.get(id)?.type !== 'project') throw new PharosError('not_found', 'project not found');
   };
+  // The owner stops a project's agent from anywhere (the rail's list); local pages only.
+  api.post('/projects/:id/terminal/stop', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Agents can’t stop the owner’s terminal');
+    const refusal = terminalSocketRefusal(header(c));
+    if (refusal) return c.json({ error: { code: 'forbidden', message: refusal.message } }, 403);
+    projectOrThrow(c.req.param('id'));
+    return c.json({ stopped: info.terminal?.stopAgent(c.req.param('id')) ?? false });
+  });
   // Which agents run now, so the app can show where one was opened (local panels only).
   api.get('/terminal/running', (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Agents can’t see the owner’s terminals');
@@ -512,6 +521,7 @@ export function createApp(
           try {
             const message = TerminalClientMessage.parse(JSON.parse(String(event.data)));
             if (message.t === 'ping') client?.send({ t: 'pong' });
+            else if (message.t === 'stop') terminal.stopAgent(projectId);
             else if (message.t === 'i') {
               if (key) terminal.sessions?.input(key, message.d);
             } else if (message.t === 'r') {

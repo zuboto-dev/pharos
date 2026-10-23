@@ -18,6 +18,10 @@ export type TerminalState = 'connecting' | 'running' | 'exited' | 'closed' | 're
 export type TerminalHandle = {
   /** Ends the agent and starts a new one (or reconnects when the connection was lost). */
   restart(): void;
+  /** Ends the agent (its conversation is kept: opening again resumes it). */
+  stop(): void;
+  /** Connects again: a stopped agent starts with its conversation resumed. */
+  resume(): void;
   focus(): void;
 };
 
@@ -114,6 +118,13 @@ export default function TerminalView({
         if (!send.current({ t: 'restart' })) setConnection();
         term.current?.focus();
       },
+      stop() {
+        send.current({ t: 'stop' });
+      },
+      resume() {
+        setConnection();
+        term.current?.focus();
+      },
       focus() {
         term.current?.focus();
       },
@@ -204,6 +215,8 @@ export default function TerminalView({
         if (message.replay) settle(150);
       } else if (message.t === 'exit') {
         ready.current = false;
+        // The rail and the sidebar drop its mark now, not at their next look.
+        terminalsChanged();
         stateRef.current('exited', message.code === null ? undefined : `exit ${message.code}`);
       } else if (message.t === 'error') stateRef.current('closed', message.message);
     };

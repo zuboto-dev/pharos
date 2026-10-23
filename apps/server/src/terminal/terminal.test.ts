@@ -489,6 +489,29 @@ describe('the terminal routes', () => {
     rmSync(fakeHome, { recursive: true, force: true });
   });
 
+  it('stops an agent when the owner asks; opening again resumes its conversation', () => {
+    const killed: string[] = [];
+    const terminal = new TerminalService({
+      store,
+      installed: { claude: '/usr/bin/claude' },
+      mcpConfigPath: join(home, 'agent-mcp.json'),
+      serverUrl: 'http://localhost:4490',
+      home: join(home, 'pharos'),
+      pty: { spawn: fakeSpawn },
+      killGroup: (_pid, signal) => killed.push(signal),
+    });
+    const a = project('Alpha', home);
+    const panel = client();
+    terminal.attach(a, panel, { cols: 80, rows: 24 });
+    expect(terminal.stopAgent(a)).toBe(true);
+    expect(panel.got.at(-1)).toEqual({ t: 'exit', code: null });
+    expect(killed.slice(0, 2)).toEqual(['SIGHUP', 'SIGTERM']);
+    expect(terminal.runningSessions()).toEqual([]);
+    expect(terminal.stopAgent(a)).toBe(false);
+    terminal.attach(a, client(), { cols: 80, rows: 24 });
+    expect(spawned).toHaveLength(2);
+  });
+
   it('lists the agents running, for the hint of where one was opened', () => {
     let now = Date.parse('2026-10-22T20:00:00Z');
     const terminal = new TerminalService({

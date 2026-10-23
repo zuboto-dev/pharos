@@ -1,12 +1,12 @@
 import type { Entity } from '@pharos/schema';
 import clsx from 'clsx';
-import { SquareTerminal } from 'lucide-react';
+import { Square, SquareTerminal } from 'lucide-react';
 import { useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
-import { Menu, MenuItem, MenuLabel } from '../catalog/menu';
+import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { Tooltip } from '../catalog/tooltip';
 import { useResource } from '../lib/api';
-import { useTerminalHints } from './running';
+import { terminalsChanged, useTerminalHints } from './running';
 
 /** A dot on a terminal mark: new output since you last looked (accent), or just running. */
 export function TerminalDot({ unseen, className }: { unseen: boolean; className?: string }) {
@@ -78,6 +78,27 @@ export function RunningAgentsButton() {
               </MenuItem>
             );
           })}
+          <MenuSeparator />
+          {running.map((r) =>
+            r.projectIds[0] ? (
+              <MenuItem
+                key={`stop-${r.projectIds.join(',')}`}
+                icon={Square}
+                onClick={() => {
+                  setAnchor(null);
+                  // Its conversation is kept: opening the panel again resumes it.
+                  void fetch(`/api/projects/${r.projectIds[0]}/terminal/stop`, {
+                    method: 'POST',
+                    headers: { 'x-pharos-author': 'human:me' },
+                  })
+                    .catch(() => {})
+                    .finally(terminalsChanged);
+                }}
+              >
+                Stop {r.projectIds.map(nameOf).join(', ')}
+              </MenuItem>
+            ) : null,
+          )}
         </Menu>
       )}
     </>

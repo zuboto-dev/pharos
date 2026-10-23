@@ -1,5 +1,15 @@
 import clsx from 'clsx';
-import { AlertTriangle, Bot, Crosshair, Loader2, RefreshCw, SquareTerminal, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  Crosshair,
+  Loader2,
+  Play,
+  RefreshCw,
+  Square,
+  SquareTerminal,
+  X,
+} from 'lucide-react';
 import {
   Suspense,
   lazy,
@@ -282,6 +292,20 @@ export function AgentPanel({
             <Crosshair className="size-4" aria-hidden />
           </button>
         </Tooltip>
+        <Tooltip
+          label={`Stop ${label}`}
+          detail="Ends the agent now; opening it again resumes the conversation"
+        >
+          <button
+            type="button"
+            onClick={() => terminal.current?.stop()}
+            aria-label={`Stop ${label}`}
+            disabled={state.state !== 'running'}
+            className={clsx(ICON_BUTTON.secondary, 'disabled:opacity-40')}
+          >
+            <Square className="size-3.5" aria-hidden />
+          </button>
+        </Tooltip>
         <Tooltip label={`Restart ${label}`} detail="Ends this conversation and starts a new one">
           <button
             type="button"
@@ -316,12 +340,25 @@ export function AgentPanel({
             {state.state === 'exited' ? `${label} ended` : 'Disconnected'}
             {state.detail && state.state === 'exited' ? ` (${state.detail})` : ''}
           </span>
+          {state.state === 'exited' && (
+            <button
+              type="button"
+              onClick={() => terminal.current?.resume()}
+              className="inline-flex items-center gap-1 font-semibold text-accent"
+            >
+              <Play className="size-3.5" aria-hidden /> Resume
+            </button>
+          )}
           <button
             type="button"
             onClick={() => terminal.current?.restart()}
-            className="inline-flex items-center gap-1 font-semibold text-accent"
+            className={clsx(
+              'inline-flex items-center gap-1',
+              state.state === 'exited' ? 'text-muted hover:text-ink' : 'font-semibold text-accent',
+            )}
           >
-            <RefreshCw className="size-3.5" aria-hidden /> Start again
+            <RefreshCw className="size-3.5" aria-hidden />{' '}
+            {state.state === 'exited' ? 'New conversation' : 'Start again'}
           </button>
         </div>
       )}

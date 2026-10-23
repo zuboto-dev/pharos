@@ -229,6 +229,21 @@ export class TerminalSessions {
     return session;
   }
 
+  /**
+   * The owner stops the agent (the panel's Stop, the rail's list): its panels hear it ended,
+   * then it goes with its process group. Its conversation is kept, so opening the panel again
+   * resumes it. Returns whether one was running.
+   */
+  stop(key: string): boolean {
+    const session = this.get(key);
+    if (!session) return false;
+    session.broadcast({ t: 'exit', code: null });
+    // Ended first: a session already marked exited isn't signalled (its pid may be reused).
+    this.end(session);
+    session.exited = true;
+    return true;
+  }
+
   /** Ends sessions that have had no panel for `idleMs`. Returns the projects ended. */
   sweep(): string[] {
     const ended: string[] = [];

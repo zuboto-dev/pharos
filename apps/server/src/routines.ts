@@ -5,11 +5,15 @@ import {
   RoutinesSave,
   currentRoutinesValue,
   describeRoutinesChange,
+  routinesOf,
   type RoutinesChange,
   type RoutinesConfig,
+  type RoutinesPharos,
   type RoutinesState,
 } from '@pharos/schema';
 import { Hono, type Context } from 'hono';
+import type { Store } from './store/store.js';
+import { folderProjects } from './terminal/command.js';
 
 // The Routines page's server side: Pharos proxies the Routines app (the engine behind the
 // evening wrap-up, night run and morning report; its own server, README in its folder) so the
@@ -51,7 +55,46 @@ const fail = (
   message: string,
 ) => c.json({ error: { code, message } }, status);
 
-export function routinesRoutes(options: RoutinesOptions = {}) {
+/**
+ * Each Routines project's Pharos projects (by repository folder: one folder can hold several,
+ * a project and its sub-projects; the `pm` project when no folder matches) and their report views
+ * named after a routine ("Night run"), the newest when there are several.
+ */
+export function pharosOf(store: Store, config: RoutinesConfig): Record<string, RoutinesPharos> {
+  const routines = routinesOf(config);
+  const out: Record<string, RoutinesPharos> = {};
+  for (const project of config.projects) {
+    let projects = project.path ? folderProjects(store, project.path) : [];
+    const ref = project.pm?.type === 'pharos' ? project.pm.project : undefined;
+    if (!projects.length && ref) {
+      const match = store.list('project').find((p) => p.id === ref || p.data.name === ref);
+      if (match) projects = [{ id: match.id, name: match.data.name }];
+    }
+    const ids = new Set(projects.map((p) => p.id));
+    const views = store
+      .list('view')
+      .filter((v) => ids.has(v.data.projectId) && !v.data.archived)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const reports = routines.flatMap((r) => {
+      const view = views.find(
+        (v) => v.data.name.trim().toLowerCase() === r.name.trim().toLowerCase(),
+      );
+      return view
+        ? [
+            {
+              routine: r.id,
+              name: view.data.name,
+              href: `/projects/${view.data.projectId}/views/${view.id}`,
+            },
+          ]
+        : [];
+    });
+    out[project.name] = { projects, reports };
+  }
+  return out;
+}
+
+export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
   const base = (options.url || DEFAULT_ROUTINES_URL).replace(/\/+$/, '');
   const doFetch = options.fetch ?? fetch;
   const timeoutMs = options.timeoutMs ?? 4000;
@@ -106,7 +149,16 @@ export function routinesRoutes(options: RoutinesOptions = {}) {
       const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
       if (!body || typeof body.config !== 'object' || !Array.isArray(body.status))
         throw new Unreachable(`Routines at ${base} sent something Pharos doesn't read.`);
-      return c.json({ available: true, ...body, url: base } as RoutinesState);
+      const conf = body.config as RoutinesConfig;
+      const editable = Array.isArray(conf.routines);
+      return c.json({
+        available: true,
+        ...body,
+        config: { ...conf, routines: routinesOf(conf) },
+        editable,
+        pharos: store && Array.isArray(conf.projects) ? pharosOf(store, conf) : {},
+        url: base,
+      } as RoutinesState);
     } catch (err) {
       if (!(err instanceof Unreachable)) throw err;
       return c.json({
@@ -154,6 +206,16 @@ export function routinesRoutes(options: RoutinesOptions = {}) {
       const missing = changes.filter(
         (ch) => 'project' in ch && !conf.projects.some((p) => p.name === ch.project),
       );
+      const routineChanges = changes.filter((ch) => ch.field === 'routine');
+      if (routineChanges.length && !Array.isArray(conf.routines))
+        return fail(
+          c,
+          400,
+          'invalid',
+          'This Routines app keeps only the three built-in routines: update it to add or change routines.',
+        );
+      const badId = routineChanges.find((ch) => ch.to && ch.to.id !== ch.id);
+      if (badId) return fail(c, 400, 'invalid', `A routine's id can't change (${badId.id})`);
       if (missing.length)
         return fail(
           c,
@@ -176,6 +238,7 @@ export function routinesRoutes(options: RoutinesOptions = {}) {
           projects: next.projects,
           schedule: next.schedule,
           dispatch: next.dispatch,
+          ...(routineChanges.length ? { routines: next.routines } : {}),
         }),
       });
       if (!res.ok) return fail(c, 502, 'upstream', `Routines didn't save (HTTP ${res.status})`);
@@ -192,6 +255,8 @@ export function routinesRoutes(options: RoutinesOptions = {}) {
       const conf = await config();
       if (!conf.projects.some((p) => p.name === body.project))
         return fail(c, 404, 'not_found', `No project named ${body.project} in routines.json`);
+      if (!routinesOf(conf).some((r) => r.id === body.routine))
+        return fail(c, 404, 'not_found', `No routine ${body.routine} in routines.json`);
       const res = await call('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -216,8 +281,19 @@ export function routinesRoutes(options: RoutinesOptions = {}) {
   return app;
 }
 
+/** JSON with sorted keys: two routines are the same whatever order their fields came in. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)))
+      : v,
+  );
+}
+
 function sameValue(a: unknown, b: unknown): boolean {
-  return a === b || (a === undefined && b === undefined);
+  if (a === b) return true;
+  if (a == null && b == null) return true;
+  return typeof a === 'object' && typeof b === 'object' && canonical(a) === canonical(b);
 }
 
 /** routines.json with the edits made; everything else stays as it was. */
@@ -243,6 +319,13 @@ export function applyChanges(conf: RoutinesConfig, changes: RoutinesChange[]): R
       case 'dispatch':
         next.dispatch[ch.kind] = { ...next.dispatch[ch.kind], [ch.level]: ch.to };
         break;
+      case 'routine': {
+        const list = (next.routines ?? []).filter((r) => r.id !== ch.id);
+        const at = (next.routines ?? []).findIndex((r) => r.id === ch.id);
+        if (ch.to) list.splice(at < 0 ? list.length : at, 0, ch.to);
+        next.routines = list;
+        break;
+      }
     }
   }
   return next;

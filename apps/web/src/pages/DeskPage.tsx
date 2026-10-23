@@ -676,7 +676,8 @@ function loadDeskView(): DeskView {
 
 /** One project's items (or all), in the chosen order; the server's order breaks ties. */
 export function arrangeDesk(items: DeskItem[], view: DeskView): DeskItem[] {
-  const shown = view.project ? items.filter((i) => i.projectId === view.project) : items;
+  const ids = projectIdsOf(view);
+  const shown = ids.length ? items.filter((i) => i.projectId && ids.includes(i.projectId)) : items;
   if (view.sort === 'waiting') return shown;
   const order = new Map(items.map((item, index) => [item.id, index]));
   const tie = (a: DeskItem, b: DeskItem) => order.get(a.id)! - order.get(b.id)!;
@@ -688,7 +689,12 @@ export function arrangeDesk(items: DeskItem[], view: DeskView): DeskItem[] {
 }
 
 /** What needs the owner now: not runs (the pill has those) and not the folded old ones. */
-const isOpen = (item: DeskItem) => item.kind !== 'run' && !item.old;
+/** What needs the owner, as the desk counts it: not runs, not the folded old ones. */
+export const isOpen = (item: DeskItem) => item.kind !== 'run' && !item.old;
+
+/** The projects a view shows: one id, or several (`a,b`: a folder's projects, from Routines). */
+const projectIdsOf = (view: { project: string | null }) =>
+  view.project ? view.project.split(',').filter(Boolean) : [];
 
 /** The projects with something open on the desk, with how many, most first. */
 export function deskProjects(items: DeskItem[]): { id: string; name: string; count: number }[] {
@@ -721,7 +727,14 @@ function DeskControls({
 }) {
   const [open, setOpen] = useState<{ which: 'project' | 'sort'; anchor: DOMRect } | null>(null);
   const projects = deskProjects(items);
-  const chosen = projects.find((p) => p.id === view.project);
+  const ids = projectIdsOf(view);
+  const picked = projects.filter((p) => ids.includes(p.id));
+  const chosen = picked.length
+    ? {
+        name: picked.map((p) => p.name).join(' + '),
+        count: picked.reduce((n, p) => n + p.count, 0),
+      }
+    : undefined;
   const total = items.filter(isOpen).length;
   const opener = (which: 'project' | 'sort') => ({
     'aria-haspopup': 'menu' as const,
@@ -744,6 +757,9 @@ function DeskControls({
           className={clsx(CONTROL, chosen && 'border-accent text-ink')}
         >
           <span className="max-w-40 truncate">{chosen ? chosen.name : 'All projects'}</span>
+          {chosen && picked.length > 1 && (
+            <span className="tabular-nums text-faint">{chosen.count}</span>
+          )}
           <ChevronDown aria-hidden className="size-3" />
         </button>
       )}
@@ -825,7 +841,7 @@ export function DeskPage() {
   const all = data?.items ?? [];
   // A project with nothing open any more shows them all again.
   const view =
-    deskView.project && !deskProjects(all).some((p) => p.id === deskView.project)
+    deskView.project && !deskProjects(all).some((p) => projectIdsOf(deskView).includes(p.id))
       ? { ...deskView, project: null }
       : deskView;
   const open = all.filter(isOpen);

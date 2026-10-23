@@ -143,6 +143,35 @@ export type RoutinesPharos = {
   reports: { routine: string; name: string; href: string }[];
 };
 
+/**
+ * A Pharos folder (a repository with a path on this computer): what the Routines page lists, so
+ * a new folder shows up there and a deleted one stops matching. `project` is the folder's main
+ * Pharos project (the one named like the folder, else its first), which a new Routines entry links.
+ */
+export type RoutinesFolder = {
+  id: string;
+  name: string;
+  path: string;
+  project?: { id: string; name: string };
+};
+
+/** A Routines project as the save adds it (fields the engine reads; others pass through). */
+export const RoutinesProjectEntry = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    path: z.string().min(1).max(1000),
+    enrolled: z.boolean(),
+    budget_usd: z.number().min(0).max(500),
+    hours: z.number().min(0).max(24),
+    pm: z
+      .object({ type: z.string().max(40), project: z.string().max(200).optional() })
+      .passthrough()
+      .nullable()
+      .optional(),
+    note: z.string().max(500).optional(),
+  })
+  .passthrough();
+
 export type RoutinesPage = { url: string; date?: string; posted?: string };
 
 /** GET /api/routines/state. */
@@ -156,6 +185,8 @@ export type RoutinesState =
       status: RoutinesProjectStatus[];
       /** By Routines project name. */
       pharos: Record<string, RoutinesPharos>;
+      /** Pharos's folders with a path, when this server has a store. */
+      folders?: RoutinesFolder[];
       report?: { text: string; date: string | null; when: string | null };
       pages?: Partial<Record<'morning' | 'evening', RoutinesPage>>;
       /** The Routines computer's local time, `YYYY-MM-DDTHH:MM`. */
@@ -210,6 +241,14 @@ export const RoutinesChange = z.discriminatedUnion('field', [
     from: RoutineDef.nullable(),
     to: RoutineDef.nullable(),
   }),
+  // A project added to routines.json (from null: a Pharos folder) or removed (to null). Removing
+  // only takes the entry out of routines.json; the folder and its files stay.
+  z.object({
+    field: z.literal('project'),
+    name: Name,
+    from: RoutinesProjectEntry.nullable(),
+    to: RoutinesProjectEntry.nullable(),
+  }),
 ]);
 export type RoutinesChange = z.infer<typeof RoutinesChange>;
 
@@ -238,6 +277,12 @@ export function describeRoutinesChange(change: RoutinesChange): string {
       return `${change.kind}, ${change.level}: ${change.from ?? 'none'} → ${change.to}`;
     case 'routine':
       return describeRoutineChange(change.from, change.to);
+    case 'project':
+      if (change.to && !change.from)
+        return `Add ${change.name} to the routines (${change.to.enrolled ? 'enrolled' : 'parked'}, ${money(change.to.budget_usd)} · ${change.to.hours} h)`;
+      if (change.from && !change.to)
+        return `Remove ${change.name} from the routines (its folder and files stay)`;
+      return `${change.name}: changed`;
   }
 }
 
@@ -272,5 +317,7 @@ export function currentRoutinesValue(config: RoutinesConfig, change: RoutinesCha
       return config.dispatch?.[change.kind]?.[change.level];
     case 'routine':
       return routinesOf(config).find((r) => r.id === change.id) ?? null;
+    case 'project':
+      return config.projects.find((p) => p.name === change.name) ?? null;
   }
 }

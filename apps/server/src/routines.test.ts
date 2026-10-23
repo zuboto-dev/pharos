@@ -482,3 +482,86 @@ describe('routines the owner defines', () => {
     expect(state.pharos.bike).toEqual({ projects: [], reports: [] });
   });
 });
+
+describe('Routines projects follow Pharos folders', () => {
+  it('lists Pharos folders with a path, each with its main project', async () => {
+    const fake = await fakeRoutines();
+    const store = new Store(openDatabase(':memory:'));
+    const me = { kind: 'human' as const, name: 'me' };
+    store.apply(me, {
+      message: 'Set up',
+      operations: [
+        { op: 'create', type: 'repository', ref: 'r', data: { name: 'Kiln', path: '/tmp/kiln' } },
+        { op: 'create', type: 'repository', ref: 'x', data: { name: 'No path' } },
+        { op: 'create', type: 'project', data: { name: 'Kiln · Glaze', repositoryId: '$r' } },
+        { op: 'create', type: 'project', data: { name: 'Kiln', repositoryId: '$r' } },
+      ],
+    });
+    const state = (await (
+      await appFor(fake.url, 2000, store).request('/api/routines/state')
+    ).json()) as RoutinesState;
+    if (!state.available) throw new Error('unavailable');
+    expect(state.folders?.map((f) => [f.name, f.path, f.project?.name])).toEqual([
+      ['Kiln', '/tmp/kiln', 'Kiln'],
+    ]);
+  });
+
+  it('adds a folder as a project, and removes one (leaving the routines that named it)', async () => {
+    const fake = await fakeRoutines({ routines: true });
+    const app = appFor(fake.url);
+    const kiln = {
+      name: 'kiln',
+      path: '/tmp/kiln',
+      enrolled: true,
+      budget_usd: 5,
+      hours: 4,
+      pm: { type: 'pharos', project: 'prj_k' },
+    };
+    // The night run names garden and bike: removing garden takes it out of that list too.
+    const night = ROUTINE_LIST()[1]!;
+    await app.request(
+      '/api/routines/save',
+      post({
+        changes: [
+          {
+            field: 'routine',
+            id: 'nightshift',
+            from: night,
+            to: { ...night, projects: ['garden', 'bike'] },
+          },
+        ],
+      }),
+    );
+    const garden = CONFIG().projects[0]!;
+    const res = await app.request(
+      '/api/routines/save',
+      post({
+        changes: [
+          { field: 'project', name: 'kiln', from: null, to: kiln },
+          { field: 'project', name: 'garden', from: garden, to: null },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { saved: string[] }).saved).toEqual([
+      'Add kiln to the routines (enrolled, $5 · 4 h)',
+      'Remove garden from the routines (its folder and files stay)',
+    ]);
+    const conf = fake.config();
+    expect(conf.projects.map((p) => p.name)).toEqual(['bike', 'kiln']);
+    expect(conf.projects[1]).toEqual(kiln);
+    expect(conf.routines!.find((r) => r.id === 'nightshift')!.projects).toEqual(['bike']);
+
+    // Adding it again is stale (it's there now); a renamed entry is refused.
+    const again = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'project', name: 'kiln', from: null, to: kiln }] }),
+    );
+    expect(again.status).toBe(409);
+    const renamed = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'project', name: 'oven', from: null, to: kiln }] }),
+    );
+    expect(renamed.status).toBe(400);
+  });
+});

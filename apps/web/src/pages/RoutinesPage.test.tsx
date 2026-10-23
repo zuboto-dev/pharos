@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   RoutinesLink,
   RoutinesPage,
+  arrangeRows,
   band,
+  entryFor,
   deskCount,
   diffConfig,
   inOrder,
@@ -496,5 +498,93 @@ describe('routine helpers', () => {
       },
       { field: 'dispatch', kind: 'develop', level: 'hard', from: 'opus', to: 'sonnet' },
     ]);
+  });
+});
+
+describe('rows follow Pharos’s folders', () => {
+  const folders = [
+    {
+      id: 'repo_g',
+      name: 'Garden',
+      path: '/tmp/garden/',
+      project: { id: 'prj_g', name: 'Garden' },
+    },
+    { id: 'repo_k', name: 'Kiln', path: '/tmp/kiln', project: { id: 'prj_k', name: 'Kiln' } },
+  ];
+
+  it('merges routines.json with the folders: rows, parked, not in Routines, not in Pharos', () => {
+    const projects = [
+      ...CONFIG().projects,
+      { name: 'gone', path: '/tmp/gone', enrolled: true, budget_usd: 8, hours: 4 },
+    ];
+    // bike's folder is in Pharos too.
+    const all = [...folders, { id: 'repo_b', name: 'Bike', path: '/tmp/bike' }];
+    const rows = arrangeRows(projects, all);
+    expect(rows.active.map((p) => p.name)).toEqual(['garden']);
+    expect(
+      rows.parked.map((r) => [
+        r.kind,
+        r.kind === 'not-in-routines' ? r.folder.name : r.project.name,
+      ]),
+    ).toEqual([
+      ['parked', 'bike'],
+      ['not-in-routines', 'Kiln'],
+      ['not-in-pharos', 'gone'],
+    ]);
+    // A server with no folders: routines.json alone, as before.
+    expect(arrangeRows(projects, undefined).active.map((p) => p.name)).toEqual(['garden', 'gone']);
+  });
+
+  it('makes a routines.json entry for a folder like the others', () => {
+    const projects = [
+      ...CONFIG().projects,
+      { name: 'kiln', path: '/elsewhere', enrolled: false, budget_usd: 8, hours: 4 },
+    ];
+    expect(entryFor(folders[1]!, projects)).toEqual({
+      name: 'kiln-2',
+      path: '/tmp/kiln',
+      enrolled: true,
+      budget_usd: 8,
+      hours: 4,
+      pm: { type: 'pharos', project: 'prj_k' },
+    });
+    expect(entryFor({ id: 'r', name: 'Bare', path: '/x/Bare' }, []).pm).toBeNull();
+  });
+
+  it('enrolls a new folder and removes a project Pharos no longer has, after confirming', async () => {
+    state = {
+      ...STATE(),
+      folders: [folders[0]!, folders[1]!],
+    } as RoutinesState;
+    // bike has no folder now: not in Pharos.
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Parked \(2\)/ }));
+    expect(screen.getByText('Not in Routines yet')).toBeTruthy();
+    expect(line('bike').getAttribute('data-missing')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Options for Kiln' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enroll in the routines' }));
+    // Now a row of its own (enrolled), waiting to be saved.
+    expect(line('kiln')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^bike/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Options for bike' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove from Routines' }));
+    const ask = screen.getByRole('dialog');
+    expect(ask.textContent).toMatch('its folder and files stay');
+    fireEvent.click(within(ask).getByRole('button', { name: 'Remove' }));
+
+    expect(await saveAll()).toEqual([
+      'Add kiln to the routines (enrolled, $8 · 4 h)',
+      'Remove bike from the routines (its folder and files stay)',
+    ]);
+    const [added, removed] = savedChanges() as { from: unknown; to: unknown }[];
+    expect(added).toMatchObject({
+      field: 'project',
+      name: 'kiln',
+      from: null,
+      to: { path: '/tmp/kiln', pm: { type: 'pharos', project: 'prj_k' } },
+    });
+    expect(removed).toMatchObject({ field: 'project', name: 'bike', to: null });
   });
 });

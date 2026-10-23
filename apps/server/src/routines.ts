@@ -8,6 +8,7 @@ import {
   routinesOf,
   type RoutinesChange,
   type RoutinesConfig,
+  type RoutinesFolder,
   type RoutinesPharos,
   type RoutinesState,
 } from '@pharos/schema';
@@ -60,6 +61,31 @@ const fail = (
  * a project and its sub-projects; the `pm` project when no folder matches) and their report views
  * named after a routine ("Night run"), the newest when there are several.
  */
+/**
+ * Pharos's folders with a path (repositories), each with its main project: the one named like
+ * the folder, else the first by order. The Routines page lists these, so new folders show up.
+ */
+export function foldersOf(store: Store): RoutinesFolder[] {
+  const projects = store.list('project');
+  return store
+    .list('repository')
+    .filter((r) => typeof r.data.path === 'string' && r.data.path.trim())
+    .map((r) => {
+      const own = projects
+        .filter((p) => p.data.repositoryId === r.id)
+        .sort((a, b) => (a.data.order ?? 0) - (b.data.order ?? 0));
+      const main =
+        own.find((p) => p.data.name.trim().toLowerCase() === r.data.name.trim().toLowerCase()) ??
+        own[0];
+      return {
+        id: r.id,
+        name: r.data.name,
+        path: r.data.path!,
+        ...(main ? { project: { id: main.id, name: main.data.name } } : {}),
+      };
+    });
+}
+
 export function pharosOf(store: Store, config: RoutinesConfig): Record<string, RoutinesPharos> {
   const routines = routinesOf(config);
   const out: Record<string, RoutinesPharos> = {};
@@ -157,6 +183,7 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
         config: { ...conf, routines: routinesOf(conf) },
         editable,
         pharos: store && Array.isArray(conf.projects) ? pharosOf(store, conf) : {},
+        ...(store ? { folders: foldersOf(store) } : {}),
         url: base,
       } as RoutinesState);
     } catch (err) {
@@ -214,6 +241,11 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
           'invalid',
           'This Routines app keeps only the three built-in routines: update it to add or change routines.',
         );
+      const badName = changes.find(
+        (ch) => ch.field === 'project' && ch.to && ch.to.name !== ch.name,
+      );
+      if (badName && badName.field === 'project')
+        return fail(c, 400, 'invalid', `A project's name can't change (${badName.name})`);
       const badId = routineChanges.find((ch) => ch.to && ch.to.id !== ch.id);
       if (badId) return fail(c, 400, 'invalid', `A routine's id can't change (${badId.id})`);
       if (missing.length)
@@ -231,6 +263,10 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
           `routines.json changed since the page loaded (${stale.map(describeRoutinesChange).join('; ')}). Reload and try again.`,
         );
       const next = applyChanges(conf, changes);
+      // A removed project also leaves the routines that named it (the engine refuses unknown names).
+      const routinesChanged =
+        routineChanges.length > 0 ||
+        (Array.isArray(conf.routines) && canonical(conf.routines) !== canonical(next.routines));
       const res = await call('/api/state', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -238,7 +274,7 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
           projects: next.projects,
           schedule: next.schedule,
           dispatch: next.dispatch,
-          ...(routineChanges.length ? { routines: next.routines } : {}),
+          ...(routinesChanged ? { routines: next.routines } : {}),
         }),
       });
       if (!res.ok) return fail(c, 502, 'upstream', `Routines didn't save (HTTP ${res.status})`);
@@ -324,6 +360,17 @@ export function applyChanges(conf: RoutinesConfig, changes: RoutinesChange[]): R
         const at = (next.routines ?? []).findIndex((r) => r.id === ch.id);
         if (ch.to) list.splice(at < 0 ? list.length : at, 0, ch.to);
         next.routines = list;
+        break;
+      }
+      case 'project': {
+        next.projects = next.projects.filter((p) => p.name !== ch.name);
+        if (ch.to) next.projects.push(ch.to as RoutinesConfig['projects'][number]);
+        else if (Array.isArray(next.routines))
+          next.routines = next.routines.map((r) =>
+            Array.isArray(r.projects)
+              ? { ...r, projects: r.projects.filter((n) => n !== ch.name) }
+              : r,
+          );
         break;
       }
     }

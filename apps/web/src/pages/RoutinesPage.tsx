@@ -13,6 +13,7 @@ import {
   type RoutineRun,
   type RoutinesChange,
   type RoutinesConfig,
+  type RoutinesFolder,
   type RoutinesPharos,
   type RoutinesProject,
   type RoutinesProjectStatus,
@@ -27,6 +28,7 @@ import {
   Check,
   ChevronRight,
   Flag,
+  FolderGit2,
   GitBranch,
   Inbox,
   Loader2,
@@ -54,6 +56,7 @@ import { Select } from '../catalog/select';
 import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, getJson, useResource } from '../lib/api';
+import { useRevisionEvents } from '../lib/events';
 import { plural } from '../lib/format';
 import { isOpen as needsOwner } from './DeskPage';
 import { LoadError } from './onboarding';
@@ -240,6 +243,13 @@ type Draft = RoutinesConfig & { routines: RoutineDef[] };
  */
 export function diffConfig(base: Draft, draft: Draft, editable = true): RoutinesChange[] {
   const changes: RoutinesChange[] = [];
+  // Projects added from a Pharos folder, or taken out of routines.json.
+  for (const p of draft.projects)
+    if (!base.projects.some((b) => b.name === p.name))
+      changes.push({ field: 'project', name: p.name, from: null, to: p });
+  for (const b of base.projects)
+    if (!draft.projects.some((p) => p.name === b.name))
+      changes.push({ field: 'project', name: b.name, from: b, to: null });
   for (const p of draft.projects) {
     const was = base.projects.find((b) => b.name === p.name);
     if (!was) continue;
@@ -299,6 +309,76 @@ export function routineId(name: string, taken: string[]): string {
 }
 
 type Edit = (change: (draft: Draft) => void) => void;
+
+// ── Rows: routines.json merged with Pharos's folders ────────────────────────────────────────
+
+const samePath = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+
+/** A line under Parked: a parked project, one whose folder Pharos no longer has, or a new folder. */
+export type ParkedRow =
+  | { kind: 'parked'; project: RoutinesProject }
+  | { kind: 'not-in-pharos'; project: RoutinesProject }
+  | { kind: 'not-in-routines'; folder: RoutinesFolder };
+
+/**
+ * The page's rows: Pharos's folders decide what exists (owner's review: new folders show up,
+ * deleted ones stop counting). An enrolled project whose path is a Pharos folder is a row; parked
+ * ones, folders routines.json doesn't have yet, and projects with no Pharos folder go under
+ * Parked. Without folders (a server with no store) routines.json alone decides, as before.
+ */
+export function arrangeRows(
+  projects: RoutinesProject[],
+  folders: RoutinesFolder[] | undefined,
+): { active: RoutinesProject[]; parked: ParkedRow[] } {
+  const inPharos = (p: RoutinesProject) =>
+    !folders || folders.some((f) => Boolean(p.path) && samePath(f.path, p.path));
+  const active = projects.filter((p) => p.enrolled && inPharos(p));
+  const parked: ParkedRow[] = [
+    ...projects
+      .filter((p) => !p.enrolled && inPharos(p))
+      .map((project) => ({ kind: 'parked' as const, project })),
+    ...(folders ?? [])
+      .filter((f) => !projects.some((p) => p.path && samePath(f.path, p.path)))
+      .map((folder) => ({ kind: 'not-in-routines' as const, folder })),
+    ...projects
+      .filter((p) => !inPharos(p))
+      .map((project) => ({ kind: 'not-in-pharos' as const, project })),
+  ];
+  return { active, parked };
+}
+
+/** The value most projects have (budgets and hours), for a new one; `fallback` when none do. */
+function usual(values: number[], fallback: number): number {
+  const counts = new Map<number, number>();
+  for (const v of values) if (v > 0) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0] ?? fallback;
+}
+
+/**
+ * The routines.json entry for a Pharos folder: named after the folder on disk (unique), enrolled,
+ * the usual night budget, and linked to the folder's main Pharos project as routines.json links.
+ */
+export function entryFor(folder: RoutinesFolder, projects: RoutinesProject[]): RoutinesProject {
+  const base =
+    folder.path.replace(/\/+$/, '').split('/').pop()?.trim().toLowerCase() ||
+    folder.name.trim().toLowerCase();
+  let name = base;
+  for (let i = 2; projects.some((p) => p.name === name); i++) name = `${base}-${i}`;
+  return {
+    name,
+    path: folder.path,
+    enrolled: true,
+    budget_usd: usual(
+      projects.map((p) => p.budget_usd),
+      5,
+    ),
+    hours: usual(
+      projects.map((p) => p.hours),
+      4,
+    ),
+    pm: folder.project ? { type: 'pharos', project: folder.project.id } : null,
+  };
+}
 
 // ── Desk counts ─────────────────────────────────────────────────────────────────────────────
 
@@ -949,6 +1029,7 @@ function ProjectLine({
   open,
   needs,
   needIds,
+  missing,
   onToggle,
   onLog,
 }: {
@@ -960,13 +1041,16 @@ function ProjectLine({
   open: boolean;
   needs: number;
   needIds: string[];
+  /** routines.json has it, Pharos has no folder at its path. */
+  missing?: boolean;
   onToggle: () => void;
   onLog: (file: string) => void;
 }) {
   return (
     <div
-      className={clsx(GRID, 'min-h-10 px-3 py-1', open && 'bg-sunken/50')}
+      className={clsx(GRID, 'min-h-10 px-3 py-1', open && 'bg-sunken/50', missing && 'opacity-60')}
       data-project-line={project.name}
+      data-missing={missing || undefined}
     >
       <button
         type="button"
@@ -982,6 +1066,17 @@ function ProjectLine({
           className={clsx('size-3.5 shrink-0 text-faint transition-transform', open && 'rotate-90')}
         />
         <span className="truncate">{project.name}</span>
+        {missing && (
+          <Tooltip
+            label="Not in Pharos"
+            detail="No Pharos folder has this path any more. Remove it from Routines in its ⋯ menu; its files stay."
+            className="flex shrink-0"
+          >
+            <span tabIndex={0} className="text-xs whitespace-nowrap text-faint">
+              Not in Pharos
+            </span>
+          </Tooltip>
+        )}
         {status && !status.exists && (
           <Tooltip label="Folder missing" className="flex">
             <span tabIndex={0} className="text-warn">
@@ -1033,6 +1128,87 @@ function ProjectLine({
   );
 }
 
+/** A Pharos folder routines.json doesn't have yet: its name, and Enroll in its ⋯ menu. */
+function FolderLine({
+  folder,
+  open,
+  onToggle,
+  onEnroll,
+}: {
+  folder: RoutinesFolder;
+  open: boolean;
+  onToggle: () => void;
+  onEnroll: () => void;
+}) {
+  const [menu, setMenu] = useState<DOMRect | null>(null);
+  return (
+    <>
+      <div
+        className={clsx(GRID, 'min-h-10 px-3 py-1', open && 'bg-sunken/50')}
+        data-folder-line={folder.name}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="flex min-w-0 items-center gap-1 rounded-control text-left text-sm text-muted hover:text-ink"
+        >
+          <ChevronRight
+            aria-hidden
+            className={clsx(
+              'size-3.5 shrink-0 text-faint transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+          <span className="truncate">{folder.name}</span>
+        </button>
+        <span className="text-xs text-faint" data-not-in-routines="">
+          Not in Routines yet
+        </span>
+        <span className="flex justify-end">
+          <Tooltip label={`Options for ${folder.name}`} className="flex">
+            <button
+              type="button"
+              aria-label={`Options for ${folder.name}`}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(menu)}
+              onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}
+              className={ICON_GHOST}
+            >
+              <MoreHorizontal className="size-4" aria-hidden />
+            </button>
+          </Tooltip>
+        </span>
+        {menu && (
+          <Menu
+            anchor={menu}
+            align="end"
+            label={`Options for ${folder.name}`}
+            onClose={() => setMenu(null)}
+          >
+            <MenuItem
+              icon={Play}
+              onClick={() => {
+                setMenu(null);
+                onEnroll();
+              }}
+            >
+              Enroll in the routines
+            </MenuItem>
+          </Menu>
+        )}
+      </div>
+      {open && (
+        <div className="border-t border-line-soft bg-sunken/50 px-3 py-3 sm:pl-[3.25rem]">
+          <Fact icon={FolderGit2} label="Folder">
+            <span className="block truncate font-mono text-xs">{folder.path}</span>
+          </Fact>
+        </div>
+      )}
+    </>
+  );
+}
+
 /** One fact in a project's detail: its symbol (the name in its tooltip), then the value. */
 function Fact({
   icon: Icon,
@@ -1066,11 +1242,14 @@ function ProjectDetail({
   edit,
   onRun,
   onLog,
+  onRemove,
 }: {
   project: RoutinesProject;
   status: RoutinesProjectStatus | undefined;
   routines: RoutineDef[];
   pharos: RoutinesPharos | undefined;
+  /** Shown for a project Pharos has no folder for: take it out of routines.json. */
+  onRemove?: () => void;
   night: DeskRun | undefined;
   needs: number;
   needIds: string[];
@@ -1154,6 +1333,21 @@ function ProjectDetail({
             >
               Open last log
             </MenuItem>
+            {onRemove && (
+              <>
+                <MenuSeparator />
+                <MenuItem
+                  icon={Trash2}
+                  danger
+                  onClick={() => {
+                    setMenu(null);
+                    onRemove();
+                  }}
+                >
+                  Remove from Routines
+                </MenuItem>
+              </>
+            )}
           </Menu>
         )}
       </div>
@@ -1494,7 +1688,14 @@ export function RoutinesPage() {
   const state = useResource<RoutinesState>('/api/routines/state');
   const desk = useResource<Desk>('/api/desk');
   const { reload } = state;
+  const reloadDesk = desk.reload;
   const data = state.data?.available ? state.data : null;
+  // Folders and projects come and go in Pharos (made, renamed, deleted): look again on every
+  // change, as the sidebar does.
+  useRevisionEvents(() => {
+    reload();
+    reloadDesk();
+  });
   // Runs move on their own: look again every 30 seconds.
   useEffect(() => {
     const timer = setInterval(reload, 30_000);
@@ -1543,6 +1744,7 @@ export function RoutinesPage() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<{ file: string; text: string | null } | null>(null);
+  const [removing, setRemoving] = useState<RoutinesProject | null>(null);
 
   const save = async () => {
     setBusy(true);
@@ -1599,8 +1801,9 @@ export function RoutinesPage() {
 
   const status = new Map((data?.status ?? []).map((s) => [s.name, s]));
   const today = data?.now.slice(0, 10) ?? '';
-  const enrolled = draft?.projects.filter((p) => p.enrolled) ?? [];
-  const resting = draft?.projects.filter((p) => !p.enrolled) ?? [];
+  const rows = draft ? arrangeRows(draft.projects, data?.folders) : { active: [], parked: [] };
+  const enrolled = rows.active;
+  const resting = rows.parked;
   const routines = draft ? inOrder(draft.routines) : [];
   const xs = band(routines.map((r) => r.time)).xs;
   const idsOf = (p: RoutinesProject) => data?.pharos?.[p.name]?.projects.map((x) => x.id) ?? [];
@@ -1608,7 +1811,7 @@ export function RoutinesPage() {
   const enrolledIds = [...new Set(enrolled.flatMap(idsOf))];
   const needsTotal = items ? deskCount(items, enrolledIds) : null;
 
-  const line = (p: RoutinesProject) => {
+  const line = (p: RoutinesProject, missing = false) => {
     const ids = idsOf(p);
     const needs = deskCount(items, ids);
     return (
@@ -1622,6 +1825,7 @@ export function RoutinesPage() {
           open={open === p.name}
           needs={needs}
           needIds={ids}
+          missing={missing}
           onToggle={() => setOpen(open === p.name ? null : p.name)}
           onLog={(file) => void openLog(file)}
         />
@@ -1637,11 +1841,31 @@ export function RoutinesPage() {
             edit={edit}
             onRun={(routine) => setPending({ routine, project: p })}
             onLog={(file) => void openLog(file)}
+            onRemove={missing ? () => setRemoving(p) : undefined}
           />
         )}
       </li>
     );
   };
+  const parkedLine = (row: ParkedRow) =>
+    row.kind === 'not-in-routines' ? (
+      <li key={`folder:${row.folder.id}`}>
+        <FolderLine
+          folder={row.folder}
+          open={open === `folder:${row.folder.id}`}
+          onToggle={() =>
+            setOpen(open === `folder:${row.folder.id}` ? null : `folder:${row.folder.id}`)
+          }
+          onEnroll={() =>
+            edit((d) => {
+              d.projects.push(entryFor(row.folder, d.projects));
+            })
+          }
+        />
+      </li>
+    ) : (
+      line(row.project, row.kind === 'not-in-pharos')
+    );
 
   return (
     <div className={clsx('mx-auto max-w-3xl space-y-4 p-4 sm:p-8', changes.length && 'pb-24')}>
@@ -1716,7 +1940,7 @@ export function RoutinesPage() {
               onAdd={() => setEditing({ routine: null })}
             />
             <ul className="divide-y divide-line-soft border-t border-line-soft">
-              {enrolled.map(line)}
+              {enrolled.map((p) => line(p))}
             </ul>
             {resting.length > 0 && (
               <div className="border-t border-line-soft">
@@ -1735,7 +1959,7 @@ export function RoutinesPage() {
                   />
                   Parked <span className="tabular-nums">({resting.length})</span>
                 </button>
-                {parked && <ul className="divide-y divide-line-soft">{resting.map(line)}</ul>}
+                {parked && <ul className="divide-y divide-line-soft">{resting.map(parkedLine)}</ul>}
               </div>
             )}
           </section>
@@ -1794,6 +2018,24 @@ export function RoutinesPage() {
           }}
           onCancel={() => setEditing(null)}
         />
+      )}
+
+      {removing && (
+        <Confirm
+          title={`Remove ${removing.name} from Routines?`}
+          action="Remove"
+          danger
+          onConfirm={() => {
+            const name = removing.name;
+            edit((d) => {
+              d.projects = d.projects.filter((p) => p.name !== name);
+            });
+            setRemoving(null);
+          }}
+          onCancel={() => setRemoving(null)}
+        >
+          <p>It leaves routines.json once you save; its folder and files stay where they are.</p>
+        </Confirm>
       )}
 
       {confirmSave && (

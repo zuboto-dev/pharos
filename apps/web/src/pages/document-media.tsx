@@ -195,13 +195,15 @@ export function SheetShows({
 }
 
 /** Where the reader last left the Pictures window. */
-const PLACE_KEY = 'pharos.picturesWindow';
+// v2: the window opens at the bottom right by default (owner's review, 10-23); a place saved by
+// the first version is dropped.
+const PLACE_KEY = 'pharos.picturesWindow.v2';
 
 /** Documents with at least this many media items get the Pictures button. */
 export const MEDIA_PANEL_MIN = 3;
 
 /**
- * The Pictures button (bottom centre) and its floating window: every picture, clip, sound and
+ * The Pictures button (bottom right) and its floating window: every picture, clip, sound and
  * drawing of the document by section, beside the page, so the reader looks while they decide.
  */
 export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: DocBlock[] }) {

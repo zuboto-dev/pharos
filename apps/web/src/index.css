@@ -1051,13 +1051,12 @@
   /* Pictures beside the page (document-media.tsx): the panel, its thumbnails, a sheet's strip. */
   .doc-media-button {
     position: fixed;
-    bottom: 1rem;
-    left: 50%;
+    right: 1.25rem;
+    bottom: 1.25rem;
     z-index: 40;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    transform: translateX(-50%);
     padding: 0.45rem 0.9rem;
     border: 1px solid var(--ph-line);
     border-radius: 999px;

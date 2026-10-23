@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { AgentRunner, agentMcpConfig, agentSetup, shellRunner } from './agent-runner.js';
 import { createApp } from './app.js';
 import { RevisionFeed } from './feed.js';
+import { RunLog } from './desk.js';
 import { FileService } from './files/service.js';
+import { Notifications } from './notifications.js';
 import { answerBrief } from './guidance.js';
 import { Presence } from './presence.js';
 import { defaultDatabasePath, openDatabase } from './store/database.js';
@@ -101,10 +103,19 @@ const terminal = new TerminalService({
   pty: await loadPty(),
 });
 terminal.startSweeping();
+// What Pharos tells the owner: the desk, runs, terminals that ended, pages out of date,
+// hand-backs nobody picked up; and, after a restart, the agents it had to stop (a modal).
+const notifications = new Notifications(store, new RunLog(store));
+notifications.watch(feed, {
+  agent,
+  ...(terminal.sessions ? { terminal: terminal.sessions } : {}),
+});
 // No agent outlives the server: its sessions go (whole process groups) when it stops.
 process.on('exit', () => terminal.stop());
 for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
   process.on(signal, () => {
+    // An update restart ends the owner's agent terminals: the next start says so.
+    notifications.noteInterrupted(terminal.runningSessions());
     terminal.stop();
     process.exit(0);
   });
@@ -120,6 +131,7 @@ const app = createApp(store, feed, agent, {
   // Behind a tunnel with a login in front, the browser's host and origin are this address.
   webUrl: process.env.PHAROS_WEB_URL,
   terminal,
+  notifications,
 });
 
 const server = serve(

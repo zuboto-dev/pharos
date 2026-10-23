@@ -67,6 +67,8 @@ export class TerminalSession {
   /** When the last panel went away (undefined while one is attached). */
   detachedAt: number | undefined;
   exited = false;
+  /** Pharos ended it: the restart button, no panel for a while, or the server stopping. */
+  endedBy: 'restart' | 'idle' | 'server' | undefined;
 
   constructor(
     readonly key: string,
@@ -126,8 +128,18 @@ export class TerminalSession {
  *
  * Every callback here catches and logs: a session must never end the server (CLAUDE.md).
  */
+/** A session's agent exited (by itself, or ended by Pharos), for notifications. */
+export type TerminalExit = {
+  session: TerminalSession;
+  exitCode: number | null;
+  signal?: number;
+  /** A panel showed it when it exited: the owner saw it happen. */
+  watched: boolean;
+};
+
 export class TerminalSessions {
   private readonly sessions = new Map<string, TerminalSession>();
+  private readonly exitListeners = new Set<(exit: TerminalExit) => void>();
   private readonly now: () => number;
   private readonly idleMs: number;
   private readonly killGroup: (pid: number, signal: NodeJS.Signals) => void;
@@ -158,6 +170,12 @@ export class TerminalSessions {
 
   get size(): number {
     return this.sessions.size;
+  }
+
+  /** Calls `fn` when a session's agent exits. Returns an unsubscribe. */
+  onExit(fn: (exit: TerminalExit) => void): () => void {
+    this.exitListeners.add(fn);
+    return () => this.exitListeners.delete(fn);
   }
 
   /**
@@ -220,7 +238,10 @@ export class TerminalSessions {
     const clients = old ? [...old.clients] : [];
     // The new one starts first: if it can't, the old one and its panels stay as they were.
     const session = this.start(key, launch(), size);
-    if (old) this.end(old);
+    if (old) {
+      old.endedBy ??= 'restart';
+      this.end(old);
+    }
     for (const client of clients) {
       session.clients.add(client);
       client.send(startMessage(session, false));
@@ -255,6 +276,7 @@ export class TerminalSessions {
         session.detachedAt !== undefined &&
         now - session.detachedAt >= this.idleMs
       ) {
+        session.endedBy ??= 'idle';
         this.end(session);
         ended.push(session.key);
       }
@@ -263,7 +285,10 @@ export class TerminalSessions {
 
   /** The server is stopping: every session goes, with its process group. */
   killAll(): void {
-    for (const session of [...this.sessions.values()]) this.end(session, true);
+    for (const session of [...this.sessions.values()]) {
+      session.endedBy ??= 'server';
+      this.end(session, true);
+    }
   }
 
   private start(
@@ -290,8 +315,16 @@ export class TerminalSessions {
     pty.onExit(({ exitCode, signal }) => {
       try {
         // Kept (exited) so its panels stay attached for a restart; `sweep` drops it once unwatched.
+        const watched = session.clients.size > 0;
         session.exited = true;
         session.broadcast({ t: 'exit', code: exitCode, ...(signal ? { signal } : {}) });
+        for (const fn of this.exitListeners) {
+          try {
+            fn({ session, exitCode, ...(signal ? { signal } : {}), watched });
+          } catch (error) {
+            console.error('[pharos] A terminal exit listener failed:', error);
+          }
+        }
       } catch (error) {
         console.error('[pharos] A terminal exit callback failed:', error);
       }

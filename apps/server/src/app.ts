@@ -8,6 +8,7 @@ import {
   Author,
   EntityType,
   agentLabel,
+  NotificationPrefs,
   type HealthResponse,
 } from '@pharos/schema';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -22,6 +23,7 @@ import {
   type AgentStatus,
 } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
+import { Notifications } from './notifications.js';
 import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
 import { folderRequestRoutes } from './files/requests.js';
 import { fileRoutes } from './files/routes.js';
@@ -193,6 +195,8 @@ export type ServerInfo = {
   webUrl?: string;
   /** The agent terminal (R17); without it the panel says it is unavailable. */
   terminal?: TerminalService;
+  /** What Pharos tells the owner (index.ts starts its sources); made here, idle, when absent. */
+  notifications?: Notifications;
 };
 
 export function createApp(
@@ -206,6 +210,7 @@ export function createApp(
   // and from the answering run. Not project data; sent on the change feed as `presence`.
   const presence = info.presence ?? new Presence();
   watchAgentRevisions(store, feed, presence);
+  const notifications = info.notifications ?? new Notifications(store, new RunLog(store));
 
   // Every response under /api/views/:id/page carries the report page's locked headers (R13.6),
   // the refusals below included.
@@ -286,11 +291,16 @@ export function createApp(
       const unwatchPresence = presence.subscribe((state) => {
         void send({ event: 'presence', data: JSON.stringify(state) });
       });
+      // What Pharos tells the owner (a desk item, a failed run, …): the bell and the toasts.
+      const unwatchNotifications = notifications.subscribe((n) => {
+        void send({ event: 'notification', data: JSON.stringify(n) });
+      });
       stream.onAbort(() => {
         unsubscribe();
         unwatchAssets();
         unwatchAgent?.();
         unwatchPresence();
+        unwatchNotifications();
       });
       await stream.writeSSE({
         event: 'ready',
@@ -312,8 +322,39 @@ export function createApp(
       unwatchAssets();
       unwatchAgent?.();
       unwatchPresence();
+      unwatchNotifications();
     }),
   );
+
+  // Notifications and how they reach the owner: the owner's own (app settings and an operational
+  // log, never revisions, never over MCP); agents are refused.
+  const ownerOnly = 'Notifications are the owner’s own';
+  api.get('/notifications', (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerOnly);
+    const q = c.req.query();
+    return c.json(
+      notifications.list({
+        since: q.since !== undefined ? IntParam.parse(q.since) : undefined,
+        limit: q.limit !== undefined ? IntParam.parse(q.limit) : undefined,
+      }),
+    );
+  });
+  api.post('/notifications/read', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerOnly);
+    const body = z
+      .object({ ids: z.array(z.number().int()).max(500).optional() })
+      .parse(await c.req.json().catch(() => ({})));
+    const changed = notifications.markRead(body.ids);
+    return c.json({ changed, unread: notifications.list({ limit: 1 }).unread });
+  });
+  api.get('/settings/notifications', (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerOnly);
+    return c.json(notifications.prefs());
+  });
+  api.put('/settings/notifications', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerOnly);
+    return c.json(notifications.setPrefs(NotificationPrefs.parse(await c.req.json())));
+  });
 
   // Which agent works where right now (also sent on the feed as `presence`).
   api.get('/presence', (c) => c.json(presence.state()));

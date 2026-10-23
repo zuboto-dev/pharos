@@ -32,3 +32,4 @@ export * from './packs/index.js';
 export * from './freshness.js';
 export * from './desk.js';
 export * from './updates.js';
+export * from './notifications.js';

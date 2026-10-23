@@ -39,7 +39,8 @@ describe('sidebar on wide screens', () => {
     renderShell();
     expect(state()).toBe('collapsed');
     expect(rail()).toBeTruthy();
-    expect(rail()!.querySelector('button')).toBeNull();
+    // Only the bell (what happened while away) sits on the rail: no toggle.
+    expect(rail()!.querySelector('button:not([data-bell])')).toBeNull();
     fireEvent.mouseEnter(rail()!);
     expect(state()).toBe('peek');
     // Moving from the rail onto the sidebar keeps it out.

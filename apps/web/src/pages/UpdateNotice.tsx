@@ -14,7 +14,7 @@ export function UpdateNotice({ reload = () => window.location.reload() }: { relo
   return (
     <div
       role="status"
-      className="fixed right-4 bottom-4 z-50 flex max-w-sm items-center gap-3 rounded-tile border border-line-strong bg-surface px-4 py-3 text-sm shadow-popover"
+      className="pointer-events-auto flex w-full items-center gap-3 rounded-tile border border-line-strong bg-surface px-4 py-3 text-sm shadow-popover"
     >
       <RefreshCw className="size-4 shrink-0 text-amber-500" aria-hidden />
       <p className="text-ink-soft">Pharos has been updated. Reload to use the new version.</p>

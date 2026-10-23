@@ -279,6 +279,29 @@ const DOT: Record<Look, string> = {
   never: 'border border-neutral-300 bg-transparent dark:border-neutral-600',
 };
 
+/** What the dots mean, in one quiet line under the timeline. */
+function DotLegend() {
+  const looks: Look[] = ['ok', 'ran', 'error', 'running', 'never'];
+  return (
+    <ul
+      data-dot-legend=""
+      aria-label="What the dots mean"
+      className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-xs text-muted"
+    >
+      {looks.map((look) => (
+        <li key={look} className="flex items-center gap-1.5">
+          <span aria-hidden className={clsx('inline-block size-2 rounded-full', DOT[look])} />
+          {RUN_WORD[look]}
+        </li>
+      ))}
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden className="inline-block size-2 rounded-full bg-emerald-500 opacity-35" />
+        faint: before today
+      </li>
+    </ul>
+  );
+}
+
 /** One routine's last result: a dot. Hover: when and how; click: its log. */
 function RunDot({
   project,
@@ -1417,6 +1440,7 @@ export function RoutinesPage() {
               </div>
             )}
           </section>
+          <DotLegend />
 
           <HowItRuns draft={draft} config={data.config} edit={edit} />
         </>

@@ -327,4 +327,11 @@ describe('routine times', () => {
       { field: 'dispatch', kind: 'develop', level: 'hard', from: 'opus', to: 'sonnet' },
     ]);
   });
+  it('says what the run dots mean', async () => {
+    show();
+    const legend = await screen.findByRole('list', { name: 'What the dots mean' });
+    expect(legend.textContent).toContain('ok');
+    expect(legend.textContent).toContain('failed');
+    expect(legend.textContent).toContain('never ran');
+  });
 });

@@ -932,18 +932,26 @@ export function Sidebar() {
     }
   }
 
-  /** A section, what it holds, then the sections inside it, each a step further in. */
-  const sectionBlock = ({ section, items: list, children }: SectionNode, depth: number) => (
+  /**
+   * A section, what it holds, then the sections inside it. A section's header lines up with what
+   * sits beside it (`at`); what it holds sits at `inside`: the same for a top-level section (its
+   * folders line up with its name), a step further in for a section inside another.
+   */
+  const sectionBlock = (
+    { section, items: list, children }: SectionNode,
+    at: number,
+    inside = at,
+  ) => (
     <div key={section.id}>
-      {sectionHeader(section, depth)}
+      {sectionHeader(section, at)}
       {!collapsed.has(section.id) && (
         <>
           <ul>
-            {items(list, depth)}
+            {items(list, inside)}
             {!list.length && !children.length && (
               <li
                 className="flex items-center gap-1 py-1 pr-2 text-xs text-faint"
-                style={{ paddingLeft: depth * 12 + 8 }}
+                style={{ paddingLeft: inside * 12 + 8 }}
               >
                 Empty
                 <InfoTip
@@ -953,7 +961,7 @@ export function Sidebar() {
               </li>
             )}
           </ul>
-          {children.map((child) => sectionBlock(child, depth + 1))}
+          {children.map((child) => sectionBlock(child, inside, inside + 1))}
         </>
       )}
     </div>

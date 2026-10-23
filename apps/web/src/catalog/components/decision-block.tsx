@@ -3,7 +3,12 @@ import {
   addUnits,
   choiceMessage,
   choiceUpdate,
+  DECLINE_REASON_CHARS,
+  declineMessage,
+  declineReason,
+  declineUpdate,
   decisionState,
+  isDeclined,
   relationLine,
   relationNotes,
   valueFor,
@@ -16,6 +21,7 @@ import clsx from 'clsx';
 import {
   CalendarClock,
   Check,
+  CircleX,
   History,
   Link2,
   ListPlus,
@@ -200,7 +206,7 @@ function OptionCard({
   );
 }
 
-type Mode = 'idle' | 'answer' | 'later' | 'note';
+type Mode = 'idle' | 'answer' | 'later' | 'note' | 'decline';
 
 export function DecisionBlock({ node }: { node: NodeOf<'DecisionBlock'> }) {
   const data = useViewData();
@@ -287,6 +293,20 @@ export function Decision({
       who.create,
     );
   };
+  /** No, whatever the options: rejected, by them today, with the reason they give. */
+  const decline = (reason: string) => {
+    const who = decider(data);
+    return save(
+      declineMessage(question, reason),
+      declineUpdate({
+        ...(reason ? { reason } : {}),
+        today: localToday(),
+        decidedById: who.id,
+        status,
+      }),
+      who.create,
+    );
+  };
   const reopen = () =>
     save(`Reopen “${question}”`, {
       chosenOptionId: null,
@@ -301,6 +321,7 @@ export function Decision({
     ? data.assigneeById.get(decision.data.decidedById)?.data.name
     : undefined;
   const answered = state.kind === 'chosen' || state.kind === 'answered';
+  const declined = state.kind === 'answered' && isDeclined(decision.data);
   const choose = (option: DecisionOption) => {
     if (option.asks) {
       setPending(option);
@@ -370,16 +391,26 @@ export function Decision({
       {answered ? (
         <div
           role="status"
+          data-declined={declined ? '' : undefined}
           className={clsx(
-            'flex flex-col gap-3 rounded-tile border border-emerald-300 bg-emerald-50/60 p-3 dark:border-emerald-800 dark:bg-emerald-950/20',
+            'flex flex-col gap-3 rounded-tile border p-3',
+            declined
+              ? 'border-rose-300 bg-rose-50/60 dark:border-rose-800 dark:bg-rose-950/20'
+              : 'border-emerald-300 bg-emerald-50/60 dark:border-emerald-800 dark:bg-emerald-950/20',
             // The panel's narrow column keeps the answer above its buttons.
             !inPanel && 'sm:flex-row sm:items-center sm:justify-between',
           )}
         >
           <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium">
-              <Check aria-hidden className="mr-1 inline size-4 text-ok" />
-              {state.kind === 'chosen' ? (
+              {declined ? (
+                <CircleX aria-hidden className="mr-1 inline size-4 text-danger" />
+              ) : (
+                <Check aria-hidden className="mr-1 inline size-4 text-ok" />
+              )}
+              {declined ? (
+                <span className="font-semibold">Declined</span>
+              ) : state.kind === 'chosen' ? (
                 <>
                   Chosen: <span className="font-semibold">{state.option.label}</span>
                 </>
@@ -391,6 +422,11 @@ export function Decision({
             </p>
             {state.kind === 'chosen' && state.option.summary && !state.note && (
               <p className="text-sm text-ink-soft">{state.option.summary}</p>
+            )}
+            {declined && state.kind === 'answered' && declineReason(state.answer) && (
+              <p data-decline-reason="" className="text-sm whitespace-pre-wrap text-ink">
+                {declineReason(state.answer)}
+              </p>
             )}
             {state.kind === 'chosen' && state.note && (
               <p data-decision-note="" className="text-sm whitespace-pre-wrap text-ink">
@@ -490,6 +526,8 @@ export function Decision({
             onCancel={() => setMode('idle')}
             onSave={(text) => answer({ answer: text }, `Answer “${question}”: ${text}`)}
           />
+        ) : mode === 'decline' ? (
+          <DeclineForm busy={busy} onCancel={() => setMode('idle')} onSave={decline} />
         ) : mode === 'later' ? (
           <LaterForm
             busy={busy}
@@ -505,6 +543,9 @@ export function Decision({
             </button>
             <button type="button" onClick={() => setMode('later')} className={BUTTON.secondary}>
               <CalendarClock aria-hidden className="size-3.5" /> Decide later
+            </button>
+            <button type="button" onClick={() => setMode('decline')} className={BUTTON.secondary}>
+              <CircleX aria-hidden className="size-3.5" /> Decline
             </button>
           </div>
         ))}
@@ -591,6 +632,45 @@ function AnswerForm({
             void onSave(text.trim());
         }}
         placeholder="None of these: …"
+        className={INPUT}
+      />
+    </FormShell>
+  );
+}
+
+function DeclineForm({
+  busy,
+  onSave,
+  onCancel,
+}: {
+  busy: boolean;
+  onSave: (reason: string) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState('');
+  const id = useId();
+  return (
+    <FormShell
+      label="Decline"
+      busy={busy}
+      submit="Decline"
+      onCancel={onCancel}
+      onSubmit={() => void onSave(text.trim())}
+    >
+      <label htmlFor={id} className="block text-sm font-medium">
+        Why not<span className="font-normal text-muted"> (optional; your agent reads it)</span>
+      </label>
+      <textarea
+        id={id}
+        autoFocus
+        rows={2}
+        maxLength={DECLINE_REASON_CHARS}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void onSave(text.trim());
+        }}
+        placeholder="Not worth it now: …"
         className={INPUT}
       />
     </FormShell>

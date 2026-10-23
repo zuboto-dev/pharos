@@ -268,6 +268,48 @@ export function choiceUpdate(
   };
 }
 
+/** The answer a decline records; a reason follows after ": ". */
+export const DECLINED = 'Declined';
+/** Room for a decline's reason within an answer (DECISION.answerChars). */
+export const DECLINE_REASON_CHARS = DECISION.answerChars - DECLINED.length - 2;
+
+/** Whether a decision was declined with Decline (any decision, whatever its options). */
+export function isDeclined(data: { answer?: string | null | undefined }): boolean {
+  return data.answer === DECLINED || Boolean(data.answer?.startsWith(`${DECLINED}: `));
+}
+
+/** The reason a decline gave, if any. */
+export function declineReason(answer: string): string | undefined {
+  return answer.startsWith(`${DECLINED}: `) ? answer.slice(DECLINED.length + 2) : undefined;
+}
+
+/**
+ * The update Decline makes on any decision, with or without a "no" among its options: rejected,
+ * decided by the person today, the reason kept as the answer ("Declined: too early").
+ */
+export function declineUpdate(input: {
+  reason?: string;
+  today: string;
+  decidedById: string;
+  status: (meaning: 'rejected') => string;
+}): Record<string, string | null> {
+  const reason = input.reason?.trim().slice(0, DECLINE_REASON_CHARS);
+  return {
+    chosenOptionId: null,
+    note: null,
+    answer: reason ? `${DECLINED}: ${reason}` : DECLINED,
+    deferredUntil: null,
+    status: input.status('rejected'),
+    decidedById: input.decidedById,
+    decisionDate: input.today,
+  };
+}
+
+/** The revision message for a decline. */
+export function declineMessage(question: string, reason?: string): string {
+  return `Decline “${question}”${reason?.trim() ? `: ${reason.trim()}` : ''}`;
+}
+
 /** The revision message for a choice. */
 export function choiceMessage(
   option: DecisionOption,

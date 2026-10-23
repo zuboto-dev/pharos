@@ -257,6 +257,33 @@ describe('DecisionBlock', () => {
     );
   });
 
+  it('declines whatever the options, with an optional reason, and shows it declined', () => {
+    const { apply, unmount } = setup(proposal());
+    fireEvent.click(screen.getByRole('button', { name: /^Decline$/ }));
+    fireEvent.change(screen.getByLabelText(/Why not/), { target: { value: 'too early' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    const [message, operations] = apply.mock.calls[0]!;
+    expect(message).toBe('Decline “Which empty state should pages use?”: too early');
+    expect(operations.at(-1)).toMatchObject({
+      op: 'update',
+      type: 'decision',
+      id: 'dec_empty',
+      data: { answer: 'Declined: too early', status: 'rejected', chosenOptionId: null },
+    });
+    unmount();
+    setup(
+      proposal({
+        status: 'rejected',
+        answer: 'Declined: too early',
+        decidedById: ALEX.id,
+        decisionDate: '2026-10-23',
+      }),
+    );
+    const box = screen.getByRole('status');
+    expect(box.hasAttribute('data-declined')).toBe(true);
+    expect(box.textContent).toMatch(/^Declinedtoo early.*Alex · Oct 23, 2026/);
+  });
+
   it('defers to a date the person picks', () => {
     const { apply } = setup(proposal());
     fireEvent.click(screen.getByRole('button', { name: /Decide later/ }));

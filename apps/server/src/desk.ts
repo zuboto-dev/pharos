@@ -4,6 +4,8 @@ import {
   DESK_OVERDUE_HOURS,
   choiceMessage,
   choiceUpdate,
+  declineMessage,
+  declineUpdate,
   decisionState,
   relationLine,
   relationNotes,
@@ -581,6 +583,8 @@ export function deskAnswer(
     wontDo?: boolean;
     later?: string;
     reply?: string;
+    /** Decline the decision, whatever its options (`note` is the reason). */
+    decline?: boolean;
   },
   now: Date = new Date(),
 ) {
@@ -611,15 +615,23 @@ export function deskAnswer(
     });
   }
   const decision = found as Entity<'decision'>;
-  const option = decision.data.options?.find((o) => o.id === input.chosenOptionId);
-  if (!option) throw new PharosError('invalid', 'chosenOptionId must be one of its options');
+  const option = input.decline
+    ? undefined
+    : decision.data.options?.find((o) => o.id === input.chosenOptionId);
+  if (!option && !input.decline)
+    throw new PharosError('invalid', 'chosenOptionId must be one of its options');
   const note = input.note?.trim();
-  if (option.asks && !note)
+  if (option?.asks && !note)
     throw new PharosError('invalid', `“${option.label}” asks for a note: ${option.asks}`);
   // The same person the owner's tasks go to (ask_owner), not just the first one listed.
   const owner = ownerAssignee(store);
+  const status = (meaning: 'proposed' | 'accepted' | 'rejected') =>
+    valueFor(project, 'decision.status', meaning);
+  const today = localToday(now);
   return store.apply(author, {
-    message: choiceMessage(option, decision.data.title, note, localToday(now)),
+    message: option
+      ? choiceMessage(option, decision.data.title, note, today)
+      : declineMessage(decision.data.title, note),
     operations: [
       ...(owner
         ? []
@@ -636,12 +648,19 @@ export function deskAnswer(
         type: 'decision',
         id: decision.id,
         // Status, who and when follow from the choice (decline → rejected, later → back in a week).
-        data: choiceUpdate(option, {
-          ...(note ? { note } : {}),
-          today: localToday(now),
-          decidedById: owner ?? '$me',
-          status: (meaning) => valueFor(project, 'decision.status', meaning),
-        }),
+        data: option
+          ? choiceUpdate(option, {
+              ...(note ? { note } : {}),
+              today,
+              decidedById: owner ?? '$me',
+              status,
+            })
+          : declineUpdate({
+              ...(note ? { reason: note } : {}),
+              today,
+              decidedById: owner ?? '$me',
+              status,
+            }),
       },
     ],
   });

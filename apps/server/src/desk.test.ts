@@ -446,6 +446,18 @@ describe('the desk (R16)', () => {
       'Ship it?',
     ]);
     expect(ids(store, runs)).not.toContainEqual(['decision', 'Link them?']);
+    // Decline works on any decision, with no "no" among its options: rejected, off the desk.
+    const declined = await post({ id: open, decline: true, note: 'not this month' });
+    expect(((await declined.json()) as { revision: { message: string } }).revision.message).toMatch(
+      /^Decline “.+”: not this month$/,
+    );
+    expect(store.getOfType('decision', open).data).toMatchObject({
+      answer: 'Declined: not this month',
+      status: 'rejected',
+      decisionDate: today,
+    });
+    expect(store.getOfType('decision', open).data.chosenOptionId).toBeUndefined();
+    expect(deskOf(store, runs).items.map((i) => i.id)).not.toContain(open);
   });
 
   it('says when a decision builds on a skipped one, and brings it back once that one changes', async () => {

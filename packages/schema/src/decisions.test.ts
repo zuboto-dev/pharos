@@ -5,6 +5,9 @@ import {
   localFileMention,
   choiceMessage,
   choiceUpdate,
+  declineReason,
+  declineUpdate,
+  isDeclined,
   optionOutcome,
   decisionIssues,
   decisionState,
@@ -152,6 +155,30 @@ describe('what choosing an option means', () => {
       decidedById: null,
       decisionDate: null,
     });
+  });
+});
+
+describe('Decline, whatever the options', () => {
+  it('rejects it, by them today, keeping the reason as the answer', () => {
+    const input = { today: '2026-10-23', decidedById: 'asg_me', status: (m: string) => `v_${m}` };
+    const plain = declineUpdate(input);
+    expect(plain).toEqual({
+      chosenOptionId: null,
+      note: null,
+      answer: 'Declined',
+      deferredUntil: null,
+      status: 'v_rejected',
+      decidedById: 'asg_me',
+      decisionDate: '2026-10-23',
+    });
+    const why = declineUpdate({ ...input, reason: '  too early ' });
+    expect(why.answer).toBe('Declined: too early');
+    expect(isDeclined({ answer: why.answer })).toBe(true);
+    expect(isDeclined({ answer: plain.answer })).toBe(true);
+    expect(isDeclined({ answer: 'Declined the offer, kept the old one' })).toBe(false);
+    expect(declineReason(why.answer!)).toBe('too early');
+    // The reason fits the answer's limit.
+    expect(declineUpdate({ ...input, reason: 'x'.repeat(400) }).answer!.length).toBe(300);
   });
 });
 

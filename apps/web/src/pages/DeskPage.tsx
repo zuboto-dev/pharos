@@ -1,4 +1,4 @@
-import type { Desk, DeskItem, DeskRun } from '@pharos/schema';
+import { DECLINE_REASON_CHARS, type Desk, type DeskItem, type DeskRun } from '@pharos/schema';
 import clsx from 'clsx';
 import {
   AlertTriangle,
@@ -22,7 +22,7 @@ import {
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
 import { Link, NavLink } from 'react-router';
 import { OtherAnswerButton } from '../catalog/components/task-answer';
-import { Menu, MenuItem } from '../catalog/menu';
+import { Menu, MenuItem, MenuSeparator } from '../catalog/menu';
 import { Popover, usePopover } from '../catalog/popover';
 import { Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
@@ -148,6 +148,48 @@ function NoteForm({
   );
 }
 
+/** Decline from the desk: the reason is optional. */
+function DeclineForm({
+  busy,
+  onSave,
+  onCancel,
+}: {
+  busy: boolean;
+  onSave: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  return (
+    <form
+      className="space-y-2"
+      onSubmit={(e: FormEvent) => {
+        e.preventDefault();
+        onSave(reason.trim());
+      }}
+    >
+      <label className="block text-sm">
+        <span className="text-muted">Why not (optional; your agent reads it)</span>
+        <textarea
+          autoFocus
+          value={reason}
+          maxLength={DECLINE_REASON_CHARS}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          className="mt-1 block w-full rounded-control border border-line-strong bg-surface p-2 text-sm"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button type="submit" disabled={busy} className={BUTTON.primary}>
+          Decline
+        </button>
+        <button type="button" onClick={onCancel} className={BUTTON.secondary}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 /**
  * The answer at the end of a row: a decision's options (on a phone only the suggested one), a
  * task's Mark done and other answers, a sheet's way in.
@@ -156,6 +198,7 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
   const { busy, error, send } = useDeskSend(onDone);
   const wide = useWide();
   const [menu, setMenu] = useState<DOMRect | null>(null);
+  const [decline, setDecline] = useState<DOMRect | null>(null);
   const [note, setNote] = useState<{
     option: NonNullable<DeskItem['options']>[number];
     anchor: DOMRect;
@@ -201,7 +244,8 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
             </button>
           );
         })}
-        {more.length > 0 && (
+        {/* Always there: the other options, and Decline whatever the options are. */}
+        {
           <button
             type="button"
             disabled={busy}
@@ -216,7 +260,7 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
           >
             <Ellipsis aria-hidden className="size-3.5" />
           </button>
-        )}
+        }
         {menu && (
           <Menu
             anchor={menu}
@@ -240,7 +284,35 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
                 )}
               </MenuItem>
             ))}
+            {more.length > 0 && <MenuSeparator />}
+            <MenuItem
+              plain
+              onClick={() => {
+                const anchor = menu;
+                setMenu(null);
+                setDecline(anchor);
+              }}
+            >
+              <span className="text-danger">Decline…</span>
+            </MenuItem>
           </Menu>
+        )}
+        {decline && (
+          <Popover
+            anchor={decline}
+            label={`Decline “${item.title}”`}
+            onClose={() => setDecline(null)}
+          >
+            <DeclineForm
+              busy={busy}
+              onCancel={() => setDecline(null)}
+              onSave={(reason) =>
+                void send({ id: item.id, decline: true, ...(reason ? { note: reason } : {}) }).then(
+                  (ok) => ok && setDecline(null),
+                )
+              }
+            />
+          </Popover>
         )}
         {note && (
           <Popover

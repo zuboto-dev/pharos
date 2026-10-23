@@ -1048,6 +1048,134 @@
     outline-offset: 2px;
   }
 
+  /* Diffs: one card per file, like a code review; − / + and line numbers beside the colour. */
+  .doc-diff-head {
+    margin-bottom: 0.75rem;
+  }
+  .doc-diff-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--ph-muted);
+  }
+  .doc-diff-summary code {
+    padding: 0.05rem 0.375rem;
+    border-radius: 0.375rem;
+    background: var(--ph-sunken);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--ph-ink);
+  }
+  .doc-diff-counts {
+    display: inline-flex;
+    gap: 0.375rem;
+    margin-left: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .doc-diff-file {
+    overflow: hidden;
+    border: 1px solid var(--ph-line);
+    border-radius: var(--radius-tile);
+    background: var(--ph-surface);
+  }
+  .doc-diff-file-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    border-bottom: 1px solid var(--ph-line);
+    background: var(--ph-sunken);
+  }
+  .doc-diff-note {
+    padding: 0.5rem 0.875rem;
+    border-bottom: 1px solid var(--ph-line);
+  }
+  .doc .doc-diff-note .md {
+    font-size: 0.875rem !important;
+    line-height: 1.5 !important;
+    color: var(--ph-muted);
+  }
+  .doc-diff-body {
+    overflow-x: auto;
+  }
+  .doc-diff-body table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78125rem;
+    line-height: 1.55;
+  }
+  .doc-diff-no {
+    width: 1%;
+    padding: 0 0.5rem;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--ph-faint, var(--ph-muted));
+    opacity: 0.75;
+    user-select: none;
+  }
+  .doc-diff-text {
+    padding: 0 0.875rem 0 0.25rem;
+    white-space: pre;
+    color: var(--ph-ink);
+  }
+  .doc-diff-sign {
+    display: inline-block;
+    width: 1.25em;
+    color: var(--ph-muted);
+    user-select: none;
+  }
+  .doc-diff-line.is-added {
+    background: color-mix(in oklab, var(--ph-ok) 11%, transparent);
+  }
+  .doc-diff-line.is-added .doc-diff-no,
+  .doc-diff-line.is-added .doc-diff-sign {
+    color: var(--ph-ok);
+    opacity: 1;
+  }
+  .doc-diff-line.is-removed {
+    background: color-mix(in oklab, var(--ph-danger) 10%, transparent);
+  }
+  .doc-diff-line.is-removed .doc-diff-no,
+  .doc-diff-line.is-removed .doc-diff-sign {
+    color: var(--ph-danger);
+    opacity: 1;
+  }
+  .doc-diff-line ins {
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--ph-ok) 30%, transparent);
+    text-decoration: none;
+  }
+  .doc-diff-line del {
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--ph-danger) 28%, transparent);
+    text-decoration: none;
+  }
+  .doc-diff-hunk td {
+    padding: 0.2rem 0.875rem;
+    background: color-mix(in oklab, var(--ph-accent) 7%, transparent);
+    color: var(--ph-muted);
+  }
+  .doc-diff-more {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.4rem;
+    border-top: 1px solid var(--ph-line);
+    font-size: 0.8125rem;
+    color: var(--ph-accent);
+  }
+  .doc-diff-more:hover {
+    background: var(--ph-sunken);
+  }
+
   /* Steps: numbered, the number in the accent; commands in a mono box with Copy. */
   .doc-steps {
     margin: 0;

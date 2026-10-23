@@ -211,6 +211,10 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   bridge limited to the names it lists in `reads` (`injectBridge(html, theme, reads)`). An embed
   gets a script-free wrapper at `/api/views/:id/embed/:blockId` whose CSP (`embedCsp`) frames only
   the embed's origin; `APP_PAGE_HEADERS` stays `frame-src 'self'`.
+- A `diff` block shows a code change like a code review (`parseDiff` in
+  `packages/schema/src/views/diff.ts`, drawn by `apps/web/src/pages/document-diff.tsx`). The guide
+  asks for every reported change as before and after: shots or a clip for a screen, the piece of
+  UI drawn twice, a diff for code, old and new values for data.
 - `view_preview` of a document runs the board checks on its components and the page checks on
   each drawing; a draft's non-https embeds and drawing reads missing from `doc.data` are warnings
   there (the save refuses them). `report_guide` leads with "Report documents" (`DOC_EXAMPLE` in

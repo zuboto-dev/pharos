@@ -8,6 +8,7 @@ import {
   docReads,
   figureMedia,
   localToday,
+  parseDiff,
   readsNothing,
   runQuery,
   sheetTasks,
@@ -439,6 +440,15 @@ export function previewDoc(
   }));
   warnings.push(...drawingChecks.flatMap((d) => d.warnings));
   warnings.push(...reviewWarnings(store, projectId, doc, have, !!viewId));
+  for (const b of leaves)
+    if (b.kind === 'diff')
+      for (const f of b.files) {
+        const parsed = parseDiff(f.patch);
+        if (!parsed.added && !parsed.removed)
+          warnings.push(
+            `Diff "${b.id}": ${f.path} shows no added or removed lines; give its \`git diff\` hunks (lines starting with + or -)`,
+          );
+      }
   // The reader's bar, whichever agent wrote it (REVIEW.md, PRODUCT's glance test).
   warnings.push(...readerChecks(doc));
   const readByDrawings = new Set(drawings.flatMap((d) => d.reads ?? []));

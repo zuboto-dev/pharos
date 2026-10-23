@@ -37,7 +37,8 @@ describe('guidance', () => {
     // R15 added the rich-documents section (44 lines) on top of R3's glance test; 200 keeps the
     // guide at one screen of sections. Raised from 180 on 2026-10-20.
     // Raised to 202 on 2026-10-22 for the dates line (a drawing's "today" and UTC dates).
-    expect(REPORT_GUIDE.split('\n').length).toBeLessThan(202);
+    // Raised to 207 on 2026-10-23 for the diff block and before-and-after by kind of change.
+    expect(REPORT_GUIDE.split('\n').length).toBeLessThan(207);
   });
 
   it("puts the glance test in the report guide: five traits, show don't tell, and what fails (R3)", () => {

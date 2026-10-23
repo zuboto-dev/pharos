@@ -16,6 +16,7 @@ export const DOC_LIMITS = {
   embeds: 6,
   figureItems: 80,
   sheets: 20,
+  diffChars: 200_000,
 } as const;
 
 const BlockId = z
@@ -155,12 +156,46 @@ export const DocStepsBlock = z.strictObject({
     .max(30),
 });
 
+/**
+ * A code change shown as a diff: one card per file, removed and added lines marked, the words
+ * changed inside an edited line marked too. For "what changed" in an update or a review of code.
+ */
+export const DocDiffBlock = z.strictObject({
+  kind: z.literal('diff'),
+  id: BlockId,
+  width,
+  title: z.string().max(200).optional(),
+  ref: z
+    .string()
+    .max(60)
+    .optional()
+    .describe('What it compares, e.g. "main..feat/notifications" or a commit "9f983f5"'),
+  files: z
+    .array(
+      z.strictObject({
+        path: z.string().min(1).max(300).describe('The file, e.g. "apps/web/src/Bell.tsx"'),
+        patch: z
+          .string()
+          .min(1)
+          .max(40_000)
+          .describe(
+            'Its change in unified diff form: `git diff` output for this file (the "diff --git", "---" and "+++" lines may stay; hunks start at "@@"). Keep only the hunks that tell the story',
+          ),
+        note: z.string().max(400).optional().describe('Markdown: why this file changed'),
+      }),
+    )
+    .min(1)
+    .max(20),
+  caption: z.string().max(600).optional().describe('Markdown under the whole diff'),
+});
+
 export const DocLeafBlock = z.discriminatedUnion('kind', [
   DocNodeBlock,
   DocDrawingBlock,
   DocEmbedBlock,
   DocFigureBlock,
   DocStepsBlock,
+  DocDiffBlock,
 ]);
 export type DocLeafBlock = z.infer<typeof DocLeafBlock>;
 
@@ -289,6 +324,16 @@ export const ReportDoc = z
       ctx.addIssue({
         code: 'custom',
         message: `At most ${DOC_LIMITS.sheets} sheets`,
+        path: ['blocks'],
+      });
+    const diffChars = leaves.reduce(
+      (n, b) => n + (b.kind === 'diff' ? b.files.reduce((m, f) => m + f.patch.length, 0) : 0),
+      0,
+    );
+    if (diffChars > DOC_LIMITS.diffChars)
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${DOC_LIMITS.diffChars} characters of diffs: keep the hunks that tell the story`,
         path: ['blocks'],
       });
     const drawings = leaves.filter((b) => b.kind === 'drawing');

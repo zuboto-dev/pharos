@@ -22,6 +22,9 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
    - A review, or anything the user must choose or do: a review desk (sheets with decisions
      that have options and a recommendation, and tasks for them), so they answer in place and
      it reaches their desk.
+   - Every change shows before and after: screenshots or a clip for a screen, the piece of UI
+     drawn twice side by side for a component, a `diff` block for code, old and new values for
+     data. Take the before shot before you change anything.
    - Updating an existing page beats making a new one (`view_list`, then `view_update`).
 6. **Check it.** `view_preview`; fix every warning you can.
 7. **Little to show is no reason to skip it.** A short page with what there is and what is

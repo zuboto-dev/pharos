@@ -112,6 +112,8 @@ function docOutline(doc: ReportDoc): string[] {
         return `${b.id}: figure${b.layout ? ` ${b.layout}` : ''} (${b.items.map((i) => i.src).join(', ')})`;
       case 'steps':
         return `${b.id}: steps${b.title ? ` "${b.title}"` : ''} (${b.items.length})`;
+      case 'diff':
+        return `${b.id}: diff${b.ref ? ` ${b.ref}` : ''} (${b.files.map((f) => f.path).join(', ')})`;
     }
   };
   const inner = (blocks: DocBlock[]): string => blocks.map(outer).join('; ');

@@ -343,6 +343,9 @@ they answer in place.
   or compare (two pictures of the same size with a slider between them). Every item has alt
   text; a caption in Markdown says what to look at ("**Before.** The banner covers two rows.").
   Pictures open full size when clicked; clips and sounds never autoplay.
+- \`{kind: "diff", id, title?, ref?, files: [{path, patch, note?}], caption?}\`: code drawn like a
+  code review. patch is the file's \`git diff\` output (only the hunks that tell the story); ref
+  says what it compares ("main..feat/x"); note says why the file changed.
 - \`{kind: "steps", id, title?, items: [{text, command?, expect?}]}\`: numbered steps the reader
   follows to check the work; a command gets a copy button; expect says what they should see.
 - \`{kind: "details", id, summary, open?, blocks}\`: closed by default. The reasoning, what you
@@ -360,8 +363,11 @@ they answer in place.
   and columns; sheets hold all of them and details, and sit at the top level only.
 - Screenshots: take them with your own tools (a headless browser, the simulator, the screen),
   save the view, upload each with report_asset_put {viewId, path: "shots/after.png", base64},
-  then refer to that path in a figure. Show a change as before and after: a pair, or compare when
-  both are the same size. Record a clip or a sound the same way.
+  then refer to that path in a figure. Record a clip or a sound the same way.
+- Every change shows its before and after, in the form that fits: a screen as two shots (compare
+  when the same size, else pair) or a clip when it moves; a piece of UI drawn twice, a drawing in
+  each of two columns, so the reader can hover and click it; code as a diff block; data or
+  settings as old and new values in a table. Take the before shot first (or from main).
 - Decisions: create each with apply first (title, 2–5 options, your recommendedOptionId and
   recommendationReason, status proposed), then list it in the sheet and put a DecisionBlock for
   it inside. The owner chooses, writes their own answer or defers in Pharos; you never set those.

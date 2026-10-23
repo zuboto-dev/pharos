@@ -39,6 +39,7 @@ import {
   useSheetTasks,
   type Sheet,
 } from './document-rich';
+import { DiffView } from './document-diff';
 import { HandBackPrompt } from './hand-back';
 
 // Report documents (R14, docs/reframe/r14-report-documents.md): blocks in reading order that
@@ -446,6 +447,12 @@ function Leaf({
     return (
       <div {...common} data-doc-steps="">
         <StepsView block={block} />
+      </div>
+    );
+  if (block.kind === 'diff')
+    return (
+      <div {...common} data-doc-diff="">
+        <DiffView block={block} />
       </div>
     );
   return (

@@ -14,6 +14,8 @@ report instructions here while Pharos is available).
 - A report or "more details": a report document (`view_create` with `doc`), pictures before
   words, numbers read from Pharos data. A review or a choice for the user: a review desk (sheets
   with decisions and tasks). Prefer updating an existing page.
+- Every change shows before and after: screenshots or a clip for a screen, the piece of UI drawn
+  twice side by side for a component, a `diff` block for code, old and new values for data.
 - `view_preview`, fix the warnings, then answer in chat with one or two lines and the link.
 - Little to show is no reason to skip it: a short page with what there is and what is missing
   is the report. Only a one-line factual answer stays in chat.

@@ -7,12 +7,16 @@ type Ordered = Project | Repository | Section;
 
 export type Folder = { kind: 'folder'; repository: Repository; projects: Project[] };
 export type Item = Folder | { kind: 'project'; project: Project };
+/** A section with what it holds: folders and projects, then the sections inside it. */
+export type SectionNode = { section: Section; items: Item[]; children: SectionNode[] };
+
 export type SidebarTree = {
   /** Pinned projects, shown together at the top (and not repeated in their folders). */
   pinned: Project[];
   /** Folders and loose projects outside any section. */
   root: Item[];
-  sections: { section: Section; items: Item[] }[];
+  /** Top-level sections, each with the sections inside it. */
+  sections: SectionNode[];
   /** Archived projects, out of every list above and kept together at the bottom, by name. */
   archived: Project[];
 };
@@ -75,14 +79,100 @@ export function buildTree(
       .sort(byOrder)
       .map((project) => ({ kind: 'project' as const, project })),
   ];
+  const parent = sectionParents(sections);
+  const nodesIn = (parentId: string | undefined): SectionNode[] =>
+    sections
+      .filter((s) => parent.get(s.id) === parentId)
+      .sort(byOrder)
+      .map((section) => ({
+        section,
+        items: itemsIn(section.id),
+        children: nodesIn(section.id),
+      }));
   return {
     pinned: live.filter((p) => p.data.pinned).sort(byOrder),
     root: itemsIn(undefined),
-    sections: [...sections]
-      .sort(byOrder)
-      .map((section) => ({ section, items: itemsIn(section.id) })),
+    sections: nodesIn(undefined),
     archived: projects.filter(isArchived).sort((a, b) => a.data.name.localeCompare(b.data.name)),
   };
+}
+
+/**
+ * Each section's parent as the sidebar shows it: its `parentId` when that section exists and
+ * doesn't lead back to itself; else none (the top level), so a loop never hides a section.
+ */
+export function sectionParents(sections: Section[]): Map<string, string | undefined> {
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const parent = new Map<string, string | undefined>();
+  for (const s of sections) {
+    let p = s.data.parentId && byId.has(s.data.parentId) ? s.data.parentId : undefined;
+    const seen = new Set([s.id]);
+    for (let at = p; at; at = byId.get(at)?.data.parentId)
+      if (seen.has(at)) {
+        p = undefined;
+        break;
+      } else seen.add(at);
+    parent.set(s.id, p);
+  }
+  return parent;
+}
+
+/** A section and every section inside it, at any depth. */
+export function sectionAndInside(sections: Section[], sectionId: string): Set<string> {
+  const parent = sectionParents(sections);
+  const out = new Set([sectionId]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const s of sections) {
+      const p = parent.get(s.id);
+      if (p && out.has(p) && !out.has(s.id)) {
+        out.add(s.id);
+        grew = true;
+      }
+    }
+  }
+  return out;
+}
+
+/** "business › g-do": a section's name after those of the sections it sits in. */
+export function sectionPath(sections: Section[], sectionId: string): string {
+  const parent = sectionParents(sections);
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const names: string[] = [];
+  for (let at: string | undefined = sectionId; at; at = parent.get(at))
+    names.unshift(byId.get(at)?.data.name ?? at);
+  return names.join(' › ');
+}
+
+/** The sections sharing a parent, in order. */
+export function sectionSiblings(sections: Section[], parentId: string | undefined): Section[] {
+  const parent = sectionParents(sections);
+  return sections.filter((s) => parent.get(s.id) === parentId).sort(byOrder);
+}
+
+/**
+ * Removing a section keeps what it held: its folders, projects and sections move up to where the
+ * section was (its parent, or the top level), then it goes.
+ */
+export function removeSectionOps(
+  section: Section,
+  sections: Section[],
+  repositories: Repository[],
+  projects: Project[],
+): Operation[] {
+  const up = sectionParents(sections).get(section.id) ?? null;
+  const ops: Operation[] = [];
+  for (const r of repositories)
+    if (r.data.sectionId === section.id)
+      ops.push({ op: 'update', type: 'repository', id: r.id, data: { sectionId: up } });
+  for (const p of projects)
+    if (p.data.sectionId === section.id)
+      ops.push({ op: 'update', type: 'project', id: p.id, data: { sectionId: up } });
+  for (const s of sections)
+    if (s.data.parentId === section.id)
+      ops.push({ op: 'update', type: 'section', id: s.id, data: { parentId: up } });
+  ops.push({ op: 'delete', type: 'section', id: section.id });
+  return ops;
 }
 
 /**

@@ -1,7 +1,8 @@
 ## Pharos: reports, reviews and details go in Pharos
 
-When the `pharos` MCP server is available (Pharos is installed), and the user asks for a report,
-a review, a status or progress update, a summary of work, or more details on a project: write it
+When the `pharos` MCP server is available (Pharos is installed), and you report finished work, or
+the user asks for a report, a review, research results, a status or progress update, a summary of
+work, or more details on a project: write it
 in Pharos, not as a long chat answer or a separate web page (this takes priority over other
 report instructions here while Pharos is available).
 

@@ -124,7 +124,11 @@ function OptionCard({
   chosen,
   onChoose,
   busy,
+  decisionId,
+  question,
 }: {
+  decisionId: string;
+  question: string;
   option: DecisionOption;
   recommended: boolean;
   chosen: boolean;
@@ -135,6 +139,10 @@ function OptionCard({
   return (
     <li
       aria-labelledby={headingId}
+      // The agent panel's picker can point at one option ("Decision › option …").
+      data-entity={decisionId}
+      data-entity-type="decision"
+      data-pick-title={`${question} › option “${option.label}”`}
       className={clsx(
         'flex min-w-0 flex-col gap-2.5 rounded-tile border p-3 sm:p-4',
         chosen
@@ -446,6 +454,8 @@ export function Decision({
             {options.map((option) => (
               <OptionCard
                 key={option.id}
+                decisionId={decision.id}
+                question={question}
                 option={option}
                 recommended={option.id === recommended?.id}
                 chosen={state.kind === 'chosen' && state.option.id === option.id}

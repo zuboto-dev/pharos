@@ -3,6 +3,7 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { markTerminalSeen, terminalsChanged } from './running';
+import { webLinks } from './links';
 import { wheelSteps } from './wheel';
 
 /** What the server sends (apps/server/src/terminal/sessions.ts). */
@@ -235,6 +236,9 @@ export default function TerminalView({
       retry = setTimeout(setConnection, wait);
     };
     const typing = terminal.onData((data) => send.current({ t: 'i', d: data }));
+    // ⌘-click (Ctrl-click elsewhere) on a web address the agent printed opens it in a new tab; a
+    // plain click stays the agent's (its own mouse handling).
+    const links = terminal.registerLinkProvider(webLinks(terminal));
     // Whether the agent asked for SGR mouse reports; the parser goes on to handle the mode.
     let sgr = false;
     const sgrMode = (on: boolean) => (params: (number | number[])[]) => {
@@ -278,6 +282,7 @@ export default function TerminalView({
       clearTimeout(sizing);
       observer.disconnect();
       sgrOn.dispose();
+      links.dispose();
       sgrOff.dispose();
       themeWatch.disconnect();
       typing.dispose();

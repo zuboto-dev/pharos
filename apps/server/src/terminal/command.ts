@@ -119,8 +119,8 @@ export function terminalBrief(projects: TerminalProject[], serverUrl: string): s
 
 /** Reports, reviews and details go in Pharos, as its MCP instructions say for every agent. */
 const REPORTS_LINE =
-  'When the user asks for a report, a review, a status update or more details, write it in ' +
-  'Pharos (a report document, or a review desk when they must decide) and answer with its link.';
+  'Updates on your work, reviews, research results, reports and more details go in ' +
+  'Pharos (a report document, or a review desk when the user must decide); answer with its link.';
 
 /** The agent the panel runs: the one chosen for answering in Settings while installed, else the first installed. */
 export function terminalPreset(store: Store, installed: AgentPreset[]): AgentPreset | undefined {

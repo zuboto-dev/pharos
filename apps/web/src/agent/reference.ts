@@ -4,8 +4,12 @@
  * (`view_get`, `get`).
  */
 
-/** Things on a page the picker can point at, innermost first wins (`closest`). */
-export const PICK_SELECTOR = '[data-entity], [data-doc-block], [data-widget]';
+/**
+ * Things on a page the picker can point at, innermost first wins (`closest`). `data-pick` marks
+ * any other part, its value the kind ("review desk", "sheet"), with `data-pick-title` and, when
+ * it stands for a block elsewhere, `data-pick-block`.
+ */
+export const PICK_SELECTOR = '[data-entity], [data-doc-block], [data-widget], [data-pick]';
 
 /** Where the agent panel and other chrome live: never a target. */
 export const NOT_PICKABLE = '[data-agent-panel], [role="dialog"], [data-pick-ignore]';
@@ -53,7 +57,11 @@ export type PickTarget = {
 /** What a page element is, for the reference. */
 export function describeTarget(el: Element): PickTarget {
   const block = el.closest('[data-doc-block], [data-widget]');
-  const blockId = block?.getAttribute('data-doc-block') ?? block?.getAttribute('data-widget');
+  // A part that stands for a block elsewhere (a review desk chip for its sheet) names it.
+  const blockId =
+    el.getAttribute('data-pick-block') ??
+    block?.getAttribute('data-doc-block') ??
+    block?.getAttribute('data-widget');
   if (el.hasAttribute('data-entity')) {
     const type = el.getAttribute('data-entity-type') ?? 'item';
     return {
@@ -63,7 +71,9 @@ export function describeTarget(el: Element): PickTarget {
       entity: { type, id: el.getAttribute('data-entity')! },
     };
   }
-  const kind = el.getAttribute('data-doc-kind') ?? el.getAttribute('data-component') ?? 'block';
+  const kind =
+    el.getAttribute('data-pick') ||
+    (el.getAttribute('data-doc-kind') ?? el.getAttribute('data-component') ?? 'block');
   return { kind: kindLabel(kind), title: titleOf(el), ...(blockId ? { blockId } : {}) };
 }
 

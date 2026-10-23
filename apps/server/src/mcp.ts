@@ -67,7 +67,7 @@ const AgentApplyInput = applyInputFor(
 
 const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, scope, stages, tasks, assignees, artifacts, decisions, claims) with git-like history, and shows it to the user as visual views made of widgets. You can both change the data and generate the views.
 
-Reports go here: when the user asks for a report, a review, a status or progress update, a summary of work, or more details on a project, write it in Pharos instead of a long chat answer: a report document (view_create with doc; report_guide first) that shows before it tells, or a review desk (sheets with decisions and tasks) when they must choose or act. Then answer in chat with one or two lines and the page's link. Little to show is no reason to skip it: a short page with what there is and what is missing is the report. Only a one-line factual answer stays in chat.
+Reports go here: an update on work you did, a review, research results or findings, a status or progress update, a summary, or more details on a project (asked for, or at the end of a piece of work) are written in Pharos instead of a long chat answer: a report document (view_create with doc; report_guide first) that shows before it tells, or a review desk (sheets with decisions and tasks) when they must choose or act. Then answer in chat with one or two lines and the page's link. Little to show is no reason to skip it: a short page with what there is and what is missing is the report. Only a one-line factual answer stays in chat.
 
 Getting oriented:
 - list {type: "project"} to find projects, then project_snapshot for the full picture in one call (including its views, custom options, and open requests from people).

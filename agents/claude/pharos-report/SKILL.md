@@ -1,6 +1,6 @@
 ---
 name: pharos-report
-description: Use when the user asks for a report, a review, a status or progress update, a summary of what was done, or more details or an explanation about a project, and Pharos's MCP tools (mcp__pharos__*) are available. Writes it in Pharos as a report document or a review desk, with pictures before words, and answers in chat with the link. Not for quick factual answers or code changes.
+description: Use when you finish a piece of work and report it, or the user asks for a report, a review, research results or findings, a status or progress update, a summary of what was done, or more details or an explanation about a project, and Pharos's MCP tools (mcp__pharos__*) are available. Writes it in Pharos as a report document or a review desk, with pictures before words, and answers in chat with the link. Not for quick factual answers or code changes.
 ---
 
 <!-- Installed by Pharos (pnpm agents install); `pnpm agents remove` takes it out. -->

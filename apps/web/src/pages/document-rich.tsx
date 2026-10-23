@@ -693,6 +693,9 @@ export function ReviewDeskHeader({ sheets }: { sheets: Sheet[] }) {
         href={`#${sheetAnchor(sheet.id)}`}
         data-chip={sheet.id}
         data-state={state}
+        data-pick="sheet"
+        data-pick-block={sheet.id}
+        data-pick-title={sheet.title}
         onClick={(e) => scrollToSheet(e, sheet.id)}
         className="doc-chip"
       >
@@ -705,7 +708,13 @@ export function ReviewDeskHeader({ sheets }: { sheets: Sheet[] }) {
     </li>
   );
   return (
-    <header data-review-desk="" className="doc-desk" aria-label="Review desk">
+    <header
+      data-review-desk=""
+      data-pick="review desk"
+      data-pick-title={`${desk.open} open of ${desk.asked}`}
+      className="doc-desk"
+      aria-label="Review desk"
+    >
       <p className="doc-eyebrow">Review desk</p>
       <p data-needs-you="" className="doc-needs-you">
         {desk.open > 0 || desk.asked === 0 ? (

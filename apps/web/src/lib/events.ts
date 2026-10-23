@@ -1,4 +1,4 @@
-import type { PresenceEntry, PresenceState } from '@pharos/schema';
+import type { PharosNotification, PresenceEntry, PresenceState } from '@pharos/schema';
 import { useEffect, useRef, useState } from 'react';
 
 export type RevisionEvent = { id: number; projectIds: string[] };
@@ -56,6 +56,8 @@ const agentListeners = new Set<(status: AgentStatus) => void>();
 const updateListeners = new Set<(build: string | undefined) => void>();
 const presenceListeners = new Set<(entries: PresenceEntry[]) => void>();
 const assetListeners = new Set<(event: ReportAssetsEvent) => void>();
+const notificationListeners = new Set<(n: PharosNotification) => void>();
+const readyListeners = new Set<() => void>();
 let source: EventSource | null = null;
 /** The build this page was loaded with (the first one the server reported), and a newer one. */
 let loadedBuild: string | undefined;
@@ -90,6 +92,13 @@ function connect() {
       // An unreadable event reloads nothing.
     }
   });
+  source.addEventListener('notification', (e) => {
+    try {
+      announceNotification(JSON.parse((e as MessageEvent<string>).data) as PharosNotification);
+    } catch {
+      // An unreadable notification tells nothing.
+    }
+  });
   source.addEventListener('agent', (e) => {
     const status = JSON.parse((e as MessageEvent<string>).data) as AgentStatus;
     for (const listener of agentListeners) listener(status);
@@ -110,6 +119,8 @@ function connect() {
     } catch {
       // An unreadable ready event just isn't a version signal.
     }
+    // (Re)connected: whatever was missed while away is fetched again.
+    for (const listener of readyListeners) listener();
   });
   // EventSource reconnects by itself after network errors or server restarts.
 }
@@ -121,6 +132,7 @@ function disconnect() {
     updateListeners.size ||
     presenceListeners.size ||
     assetListeners.size ||
+    notificationListeners.size ||
     !source
   )
     return;
@@ -262,4 +274,36 @@ export function usePresence(): PresenceEntry[] {
     };
   }, []);
   return entries;
+}
+
+/** Passes on a notification from the feed (or a test) to whoever listens. */
+export function announceNotification(n: PharosNotification): void {
+  if (typeof n?.id !== 'number') return;
+  for (const listener of notificationListeners) listener(n);
+}
+
+/**
+ * Calls `onNotification` for each notification the server sends while the page is open, and
+ * `onReconnect` each time the feed (re)connects, so what came while it was away can be fetched.
+ */
+export function useNotificationEvents(
+  onNotification: (n: PharosNotification) => void,
+  onReconnect?: () => void,
+): void {
+  const latest = useRef({ onNotification, onReconnect });
+  useEffect(() => {
+    latest.current = { onNotification, onReconnect };
+  });
+  useEffect(() => {
+    const listener = (n: PharosNotification) => latest.current.onNotification(n);
+    const ready = () => latest.current.onReconnect?.();
+    notificationListeners.add(listener);
+    readyListeners.add(ready);
+    connect();
+    return () => {
+      notificationListeners.delete(listener);
+      readyListeners.delete(ready);
+      disconnect();
+    };
+  }, []);
 }

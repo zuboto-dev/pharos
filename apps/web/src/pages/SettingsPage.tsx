@@ -41,6 +41,8 @@ import {
 import { plural, timeAgo } from '../lib/format';
 import { useTheme, type Theme } from '../lib/theme';
 import { ConnectAgent } from './ConnectAgent';
+import { NotificationSettings } from './settings-notifications';
+import { Section, Switch } from './settings-ui';
 import { LoadError } from './onboarding';
 
 type ServerSettings = {
@@ -59,33 +61,6 @@ const THEMES: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
 ];
-
-/** A settings card: its symbol and title lead; what it's for waits behind the (i). */
-function Section({
-  title,
-  icon: Icon,
-  description,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-label={title}
-      className="space-y-4 rounded-block border border-line bg-surface p-5"
-    >
-      <h2 className="flex items-center gap-2 text-base font-semibold">
-        <Icon className="size-4 text-faint" aria-hidden />
-        {title}
-        {description && <InfoTip label={`About ${title.toLowerCase()}`} detail={description} />}
-      </h2>
-      {children}
-    </section>
-  );
-}
 
 function Row({ label, info, children }: { label: string; info?: string; children: ReactNode }) {
   return (
@@ -151,43 +126,6 @@ function ThemeChoice() {
         </button>
       ))}
     </div>
-  );
-}
-
-function Switch({
-  checked,
-  disabled,
-  label,
-  describedBy,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  describedBy?: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      aria-describedby={describedBy}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={clsx(
-        'tap-area relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-40',
-        checked ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700',
-      )}
-    >
-      <span
-        className={clsx(
-          'inline-block size-5 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-5.5' : 'translate-x-0.5',
-        )}
-      />
-    </button>
   );
 }
 
@@ -851,6 +789,7 @@ export function SettingsPage() {
         <ThemeChoice />
       </Section>
       <AnsweringAgent waiting={requests.data?.length ?? 0} />
+      <NotificationSettings />
       <Folders />
       <Section
         title="Data and connection"

@@ -64,6 +64,7 @@ Lucide icons. One line each: icon → meaning.
 - `ChevronRight` → a group that opens and closes
 - `ChevronDown` → more of the same row (overflow menu, select)
 - `Inbox` → the desk (what waits on you)
+- `Bell` / `BellOff` → notifications / quiet hours (nothing yet)
 - `Settings` → Settings
 - `PanelLeftClose` / `PanelLeftOpen` → hide / show the sidebar
 - `FolderGit2` → a sidebar folder (a repository that groups projects)

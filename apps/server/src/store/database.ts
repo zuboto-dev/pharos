@@ -185,6 +185,26 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX runs_name ON runs(name);
   `,
+  // Notifications: what Pharos told the owner (desk items, failed runs, agents that finished, pages
+  // out of date, hand-backs nobody picked up). An operational log like runs: no revisions. `key`
+  // makes each one happen once, across restarts.
+  `
+  CREATE TABLE notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT,
+    project_id TEXT,
+    href TEXT,
+    action TEXT,
+    gate INTEGER NOT NULL DEFAULT 0,
+    modal INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+  );
+  CREATE INDEX notifications_unread ON notifications(read_at, kind);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

@@ -31,6 +31,13 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
   - `src/agent-runner.ts` — runs an agent (Claude Code by default) for new questions
   - `src/feed.ts` — announces new revisions (including ones from other processes, by polling) to
     `GET /api/events` (SSE); the web app reloads affected data from it
+  - `src/notifications.ts` — what Pharos tells the owner (desk items, failed runs, agent terminals
+    that ended unwatched, pages an agent's change made stale, hand-backs nobody picked up, and one
+    modal after a restart ended an agent terminal): the `notifications` table (no revisions), pushed
+    on the feed as `notification`, listed at `GET /api/notifications`; preferences are the
+    `notifications.prefs` app setting (`/api/settings/notifications`, owner only, never over MCP).
+    Kinds, defaults and `deliveryOf` are in `packages/schema/src/notifications.ts`; the web side is
+    `apps/web/src/notifications/` (bell, toasts, modal) and `pages/settings-notifications.tsx`
   - `src/presence.ts` — who is working where right now (v0.2 B5): view tool calls, agents'
     revisions and the answering run mark a project, view or block for 20 s (the run until it
     ends); sent on the feed as `presence`. In memory only: not project data, never a revision

@@ -611,6 +611,10 @@ function Tonight({
   const zone = zoneName(timeZone);
   const first = line.xs[0] ?? 0;
   const last = line.xs[line.xs.length - 1] ?? 1;
+  // "Now" shows only while tonight is under way (between the first and the last routine); in the
+  // daytime the ringed next routine and its countdown say it, and a dot left of the band looked
+  // like a misplaced icon (owner's review, 10-23).
+  const underway = now > first && now < last;
   return (
     <div className={clsx(GRID, 'items-start px-3 pt-3 pb-2')} data-tonight="">
       <div className="space-y-0.5 pt-1">
@@ -638,21 +642,28 @@ function Tonight({
           className="absolute top-[13px] h-0.5 rounded-full bg-line"
           style={{ left: `${first * 100}%`, right: `${(1 - last) * 100}%` }}
         />
-        <div
-          aria-hidden
-          className="absolute top-[13px] left-0 h-0.5 rounded-full bg-sky-300/70 dark:bg-sky-700/70"
-          style={{ width: `${now * 100}%` }}
-        />
-        <div className="absolute top-[9px] z-10 -translate-x-1/2" style={{ left: `${now * 100}%` }}>
-          <Tooltip label={`Now${zone ? ` (${zone})` : ''}`} className="flex">
-            <span
-              tabIndex={0}
-              data-now=""
-              aria-label="Now"
-              className="block size-2.5 rounded-full border-2 border-surface bg-sky-500 shadow"
-            />
-          </Tooltip>
-        </div>
+        {underway && (
+          <div
+            aria-hidden
+            className="absolute top-[13px] h-0.5 rounded-full bg-sky-300/70 dark:bg-sky-700/70"
+            style={{ left: `${first * 100}%`, width: `${(now - first) * 100}%` }}
+          />
+        )}
+        {underway && (
+          <div
+            className="absolute top-[9px] z-10 -translate-x-1/2"
+            style={{ left: `${now * 100}%` }}
+          >
+            <Tooltip label={`Now${zone ? ` (${zone})` : ''}`} className="flex">
+              <span
+                tabIndex={0}
+                data-now=""
+                aria-label="Now"
+                className="block size-2.5 rounded-full border-2 border-surface bg-sky-500 shadow"
+              />
+            </Tooltip>
+          </div>
+        )}
         {ordered.map((r, i) => {
           const Icon = routineIcon(r);
           const isNext = next?.routine.id === r.id;

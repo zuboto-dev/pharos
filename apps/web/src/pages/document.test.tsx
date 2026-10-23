@@ -259,7 +259,9 @@ describe('report document (R14)', () => {
     const ref = block('ref');
     const frame = ref.querySelector('iframe')!;
     expect(frame.getAttribute('src')).toBe(embedUrl(docView, 'ref'));
-    expect(frame.getAttribute('src')).toBe('/api/views/view_doc/embed/ref');
+    expect(frame.getAttribute('src')).toBe(
+      `/api/views/view_doc/embed/ref?v=${encodeURIComponent(docView.updatedAt)}`,
+    );
     expect(frame.getAttribute('sandbox')!.split(' ').sort()).toEqual(
       [
         'allow-forms',
@@ -282,6 +284,36 @@ describe('report document (R14)', () => {
     // Without a caption, the site's host says what it is; its own height wins.
     expect(block('bare').textContent).toContain('example.com');
     expect(block('bare').querySelector('iframe')!.style.height).toBe('300px');
+  });
+
+  it('loads an embed again when the view is updated under the same block id', () => {
+    const { rerender } = render(
+      <Providers>
+        <DocumentView view={docView} />
+      </Providers>,
+    );
+    const before = block('ref').querySelector('iframe')!.getAttribute('src');
+    const moved: Entity<'view'> = {
+      ...docView,
+      updatedAt: '2026-10-19T10:00:00.000Z',
+      data: {
+        ...docView.data,
+        doc: ReportDoc.parse({
+          ...doc,
+          blocks: doc.blocks.map((b) =>
+            b.kind === 'embed' && b.id === 'ref' ? { ...b, url: 'https://example.org/new' } : b,
+          ),
+        }),
+      },
+    };
+    rerender(
+      <Providers>
+        <DocumentView view={moved} />
+      </Providers>,
+    );
+    const after = block('ref').querySelector('iframe')!.getAttribute('src');
+    expect(after).toBe(embedUrl(moved, 'ref'));
+    expect(after).not.toBe(before);
   });
 
   it('says so in place of an embed whose route is not there, keeping the link', async () => {

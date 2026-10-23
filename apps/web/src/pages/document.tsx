@@ -83,9 +83,13 @@ export function drawingUrl(view: Entity<'view'>, blockId: string, reload = 0): s
   return `/api/views/${encodeURIComponent(view.id)}/doc/${encodeURIComponent(blockId)}/?v=${encodeURIComponent(version)}`;
 }
 
-/** Where the server serves an embed's wrapper page (a frame of the site, no script of its own). */
+/**
+ * Where the server serves an embed's wrapper page (a frame of the site, no script of its own); a
+ * new version of the view loads it fresh, so an embed whose site changed under the same block id
+ * isn't left showing the old one.
+ */
 export function embedUrl(view: Entity<'view'>, blockId: string): string {
-  return `/api/views/${encodeURIComponent(view.id)}/embed/${encodeURIComponent(blockId)}`;
+  return `/api/views/${encodeURIComponent(view.id)}/embed/${encodeURIComponent(blockId)}?v=${encodeURIComponent(view.updatedAt)}`;
 }
 
 /**

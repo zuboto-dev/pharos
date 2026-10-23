@@ -23,6 +23,7 @@ import {
   type AgentStatus,
 } from './agent-runner.js';
 import { RevisionFeed } from './feed.js';
+import { search } from './search.js';
 import { Notifications } from './notifications.js';
 import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
 import { folderRequestRoutes } from './files/requests.js';
@@ -427,6 +428,18 @@ export function createApp(
     const seen = entity?.type === type ? new AgentFiles(store).entity(entity) : null;
     if (!seen) throw new PharosError('not_found', `${type} not found`);
     return c.json(seen);
+  });
+
+  // Search everything (⌘K): projects and their items by their words, never files' contents.
+  // Agents see what AgentFiles shows them (no files at all).
+  api.get('/search', (c) => {
+    const q = c.req.query();
+    return c.json(
+      search(store, q.q ?? '', {
+        limit: q.limit !== undefined ? IntParam.parse(q.limit) : undefined,
+        forAgent: declaresAgent(c),
+      }),
+    );
   });
 
   // Project files (R7.2): scan, serve read-only, reveal and open.

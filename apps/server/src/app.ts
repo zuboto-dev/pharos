@@ -384,7 +384,7 @@ export function createApp(
   });
 
   // The Routines page: the owner's daily routines, proxied to the Routines app (owner only).
-  api.route('/routines', routinesRoutes(info.routines));
+  api.route('/routines', routinesRoutes(info.routines, store));
 
   // Which agent works where right now (also sent on the feed as `presence`).
   api.get('/presence', (c) => c.json(presence.state()));

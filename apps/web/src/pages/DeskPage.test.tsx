@@ -203,6 +203,20 @@ describe('the desk page (R16)', () => {
     expect(screen.queryByText('Which seeds?')).toBeNull();
   });
 
+  it('opens on several projects at once (a folder’s projects, ?project=a,b)', async () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter initialEntries={['/desk?project=p1,p3']}>
+        <DeskPage />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Pick the tiles')).toBeTruthy();
+    expect(screen.getByText('Which seeds?')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Garden \+ Kitchen|Kitchen \+ Garden/ }),
+    ).toBeTruthy();
+  });
+
   it('orders by waiting, newest or quickest, keeping the server’s order for ties', () => {
     const items = DESK.items;
     const ids = (sort: DeskSort, project: string | null = null) =>

@@ -17,6 +17,61 @@ export const ROUTINE_NAMES: Record<Routine, string> = {
   daybreak: 'Morning report',
 };
 
+/** What the three built-in routines do, for routines.json from before `routines` existed. */
+export const ROUTINE_INSTRUCTIONS: Record<Routine, string> = {
+  wrapup: 'Close the day, update Pharos, and hand code-doable work to the night.',
+  nightshift: 'Work the handoff: each task on its model, verified, landed in small slices.',
+  daybreak: 'Verify the night and write what was done, the results and today’s plan.',
+};
+
+/** A routine id: lower case, digits and dashes. */
+export const ROUTINE_ID = /^[a-z0-9-]{1,32}$/;
+
+const Time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'a time as HH:MM');
+
+/**
+ * One routine as the owner defines it (routines.json `routines`): a name, a daily time, what to
+ * do in the owner's words, and which projects it covers. The three built-ins also name the skill
+ * they run (wrapup, nightshift, daybreak); a custom one has only its instructions.
+ */
+export const RoutineDef = z.object({
+  id: z.string().regex(ROUTINE_ID, 'an id of a-z, 0-9 and -'),
+  name: z.string().trim().min(1).max(60),
+  time: Time,
+  enabled: z.boolean(),
+  skill: z.string().max(40).optional(),
+  instructions: z.string().max(2000),
+  projects: z.union([z.literal('enrolled'), z.array(z.string().min(1).max(120)).max(100)]),
+});
+export type RoutineDef = z.infer<typeof RoutineDef>;
+
+/** The routines a routines.json defines; the three built-ins from `schedule` when it has none. */
+export function routinesOf(config: Pick<RoutinesConfig, 'schedule' | 'routines'>): RoutineDef[] {
+  if (Array.isArray(config.routines)) return config.routines;
+  return ROUTINES.flatMap((id) => {
+    const time = config.schedule?.[id];
+    if (!time) return [];
+    return [
+      {
+        id,
+        name: ROUTINE_NAMES[id],
+        time,
+        enabled: true,
+        skill: id,
+        instructions: ROUTINE_INSTRUCTIONS[id],
+        projects: 'enrolled' as const,
+      },
+    ];
+  });
+}
+
+/** Whether a routine covers a project (its own list, or every enrolled one). */
+export function routineCovers(routine: RoutineDef, project: RoutinesProject): boolean {
+  return routine.projects === 'enrolled'
+    ? project.enrolled
+    : routine.projects.includes(project.name);
+}
+
 /** The Routines app's planning files a row can open (its `/api/file` list). */
 export const ROUTINE_FILES = [
   'NEXT.md',
@@ -55,6 +110,8 @@ export type RoutinesConfig = {
   dispatch: Record<string, Partial<Record<Difficulty, string>>>;
   cleanup?: { level?: number; scratch_days?: number };
   projects: RoutinesProject[];
+  /** The owner's routines (newer Routines apps); see `routinesOf` for older ones. */
+  routines?: RoutineDef[];
   [key: string]: unknown;
 };
 
@@ -73,7 +130,17 @@ export type RoutinesProjectStatus = {
   files?: Partial<Record<RoutineFile, { when: string | null; first: string | null }>>;
   git?: { dirty: number; head: string; ahead: string };
   queue?: { auto: number; review: number; needs_you: number; ship: string };
-  runs?: Partial<Record<Routine, RoutineRun | null>>;
+  /** The last run of each routine, by routine id. */
+  runs?: Record<string, RoutineRun | null | undefined>;
+};
+
+/**
+ * What Pharos knows of a Routines project: its Pharos projects (those whose repository folder is
+ * the project's path) and their report views named after a routine ("Night run").
+ */
+export type RoutinesPharos = {
+  projects: { id: string; name: string }[];
+  reports: { routine: string; name: string; href: string }[];
 };
 
 export type RoutinesPage = { url: string; date?: string; posted?: string };
@@ -82,17 +149,21 @@ export type RoutinesPage = { url: string; date?: string; posted?: string };
 export type RoutinesState =
   | {
       available: true;
-      config: RoutinesConfig;
+      /** routines.json, with `routines` always filled (derived from `schedule` when missing). */
+      config: RoutinesConfig & { routines: RoutineDef[] };
+      /** The Routines app keeps a `routines` list: routines can be added and removed. */
+      editable: boolean;
       status: RoutinesProjectStatus[];
-      report: { text: string; date: string | null; when: string | null };
-      pages: Partial<Record<'morning' | 'evening', RoutinesPage>>;
+      /** By Routines project name. */
+      pharos: Record<string, RoutinesPharos>;
+      report?: { text: string; date: string | null; when: string | null };
+      pages?: Partial<Record<'morning' | 'evening', RoutinesPage>>;
       /** The Routines computer's local time, `YYYY-MM-DDTHH:MM`. */
       now: string;
       url: string;
     }
   | { available: false; reason: string; url: string };
 
-const Time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'a time as HH:MM');
 const Model = z.string().regex(/^[a-z0-9][a-z0-9.-]{0,39}$/, 'a model name');
 const Name = z.string().min(1).max(120);
 
@@ -132,6 +203,13 @@ export const RoutinesChange = z.discriminatedUnion('field', [
     from: z.string().optional(),
     to: Model,
   }),
+  // A routine added (from null), changed, or removed (to null).
+  z.object({
+    field: z.literal('routine'),
+    id: z.string().regex(ROUTINE_ID),
+    from: RoutineDef.nullable(),
+    to: RoutineDef.nullable(),
+  }),
 ]);
 export type RoutinesChange = z.infer<typeof RoutinesChange>;
 
@@ -139,7 +217,7 @@ export type RoutinesChange = z.infer<typeof RoutinesChange>;
 export const RoutinesSave = z.object({ changes: z.array(RoutinesChange).min(1).max(200) });
 
 /** POST /api/routines/run: one routine for one project, now. */
-export const RoutinesRun = z.object({ routine: z.enum(ROUTINES), project: Name });
+export const RoutinesRun = z.object({ routine: z.string().regex(ROUTINE_ID), project: Name });
 
 const money = (n: number) => `$${n}`;
 
@@ -158,7 +236,25 @@ export function describeRoutinesChange(change: RoutinesChange): string {
       return `Timezone ${change.from ?? 'none'} → ${change.to}`;
     case 'dispatch':
       return `${change.kind}, ${change.level}: ${change.from ?? 'none'} → ${change.to}`;
+    case 'routine':
+      return describeRoutineChange(change.from, change.to);
   }
+}
+
+const who = (r: RoutineDef) =>
+  r.projects === 'enrolled' ? 'enrolled projects' : r.projects.join(', ') || 'no projects';
+
+function describeRoutineChange(from: RoutineDef | null, to: RoutineDef | null): string {
+  if (!from && to) return `New routine “${to.name}” at ${to.time} for ${who(to)}`;
+  if (from && !to) return `Remove the routine “${from.name}”`;
+  if (!from || !to) return 'No change';
+  const parts: string[] = [];
+  if (from.name !== to.name) parts.push(`renamed “${to.name}”`);
+  if (from.time !== to.time) parts.push(`at ${from.time} → ${to.time}`);
+  if (from.enabled !== to.enabled) parts.push(to.enabled ? 'on' : 'off');
+  if (from.instructions !== to.instructions) parts.push('new instructions');
+  if (JSON.stringify(from.projects) !== JSON.stringify(to.projects)) parts.push(`for ${who(to)}`);
+  return `${from.name}: ${parts.join(', ') || 'no change'}`;
 }
 
 /** The value a change's field holds in `config` now (undefined when it isn't there). */
@@ -174,5 +270,7 @@ export function currentRoutinesValue(config: RoutinesConfig, change: RoutinesCha
       return config.schedule?.timezone;
     case 'dispatch':
       return config.dispatch?.[change.kind]?.[change.level];
+    case 'routine':
+      return routinesOf(config).find((r) => r.id === change.id) ?? null;
   }
 }

@@ -36,8 +36,29 @@ const CONFIG = (): RoutinesConfig => ({
 
 type Seen = { method: string; url: string; body: string };
 
-async function fakeRoutines(opts: { hang?: boolean; runStatus?: number } = {}) {
-  let config = CONFIG();
+const ROUTINE_LIST = () => [
+  {
+    id: 'wrapup',
+    name: 'Wrap-up',
+    time: '00:00',
+    enabled: true,
+    skill: 'wrapup',
+    instructions: 'Close the day.',
+    projects: 'enrolled' as const,
+  },
+  {
+    id: 'nightshift',
+    name: 'Night run',
+    time: '01:00',
+    enabled: true,
+    skill: 'nightshift',
+    instructions: 'Work the handoff.',
+    projects: 'enrolled' as const,
+  },
+];
+
+async function fakeRoutines(opts: { hang?: boolean; runStatus?: number; routines?: boolean } = {}) {
+  let config: RoutinesConfig = opts.routines ? { ...CONFIG(), routines: ROUTINE_LIST() } : CONFIG();
   const seen: Seen[] = [];
   const read = (req: IncomingMessage) =>
     new Promise<string>((resolve) => {
@@ -100,8 +121,7 @@ afterEach(async () => {
   }
 });
 
-function appFor(url: string, timeoutMs = 2000) {
-  const store = new Store(openDatabase(':memory:'));
+function appFor(url: string, timeoutMs = 2000, store = new Store(openDatabase(':memory:'))) {
   return createApp(store, undefined, undefined, { routines: { url, timeoutMs } });
 }
 
@@ -251,9 +271,14 @@ describe('the Routines proxy', () => {
     expect(run.status).toBe(404);
     const badRoutine = await app.request(
       '/api/routines/run',
-      post({ routine: 'rm', project: 'garden' }),
+      post({ routine: '../rm -rf', project: 'garden' }),
     );
     expect(badRoutine.status).toBe(400);
+    const unknownRoutine = await app.request(
+      '/api/routines/run',
+      post({ routine: 'weekly', project: 'garden' }),
+    );
+    expect(unknownRoutine.status).toBe(404);
     expect(fake.seen.some((s) => s.method === 'POST')).toBe(false);
   });
 
@@ -309,5 +334,151 @@ describe('applyChanges', () => {
     expect(next.dispatch.search).toEqual({ easy: 'haiku' });
     expect(next.schedule.timezone).toBe('Europe/Berlin');
     expect(next.projects[1]!.hours).toBe(2);
+  });
+});
+
+describe('routines the owner defines', () => {
+  const weekly = {
+    id: 'weekly',
+    name: 'Weekly review',
+    time: '18:00',
+    enabled: true,
+    instructions: 'Read the week and list what slipped.',
+    projects: ['garden'],
+  };
+
+  it('derives the three built-ins from an older routines.json, and says it cannot add', async () => {
+    const fake = await fakeRoutines();
+    const app = appFor(fake.url);
+    const state = (await (await app.request('/api/routines/state')).json()) as RoutinesState;
+    if (!state.available) throw new Error('unavailable');
+    expect(state.editable).toBe(false);
+    expect(state.config.routines.map((r) => [r.id, r.time])).toEqual([
+      ['wrapup', '00:00'],
+      ['nightshift', '01:00'],
+      ['daybreak', '07:00'],
+    ]);
+    const add = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'routine', id: 'weekly', from: null, to: weekly }] }),
+    );
+    expect(add.status).toBe(400);
+    expect(fake.seen.some((s) => s.method === 'POST')).toBe(false);
+  });
+
+  it('adds, changes and removes routines, checked against what the page saw', async () => {
+    const fake = await fakeRoutines({ routines: true });
+    const app = appFor(fake.url);
+    const state = (await (await app.request('/api/routines/state')).json()) as RoutinesState;
+    if (!state.available) throw new Error('unavailable');
+    expect(state.editable).toBe(true);
+    const night = state.config.routines[1]!;
+    const res = await app.request(
+      '/api/routines/save',
+      post({
+        changes: [
+          { field: 'routine', id: 'weekly', from: null, to: weekly },
+          // Fields in another order than routines.json: still the same routine.
+          {
+            field: 'routine',
+            id: 'nightshift',
+            from: { ...night, projects: 'enrolled', id: 'nightshift' },
+            to: { ...night, time: '02:00' },
+          },
+          { field: 'routine', id: 'wrapup', from: state.config.routines[0], to: null },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { saved: string[] }).saved).toEqual([
+      'New routine “Weekly review” at 18:00 for garden',
+      'Night run: at 01:00 → 02:00',
+      'Remove the routine “Wrap-up”',
+    ]);
+    const posted = JSON.parse(fake.seen.find((s) => s.method === 'POST')!.body) as RoutinesConfig;
+    expect(posted.routines!.map((r) => [r.id, r.time])).toEqual([
+      ['nightshift', '02:00'],
+      ['weekly', '18:00'],
+    ]);
+
+    // The page saw 02:00? No: it still shows 01:00, so the next save is refused.
+    const stale = await app.request(
+      '/api/routines/save',
+      post({
+        changes: [
+          { field: 'routine', id: 'nightshift', from: night, to: { ...night, enabled: false } },
+        ],
+      }),
+    );
+    expect(stale.status).toBe(409);
+    // Adding an id that exists now is stale too.
+    const again = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'routine', id: 'weekly', from: null, to: weekly }] }),
+    );
+    expect(again.status).toBe(409);
+  });
+
+  it('runs any routine routines.json has, and only those', async () => {
+    const fake = await fakeRoutines({ routines: true });
+    const app = appFor(fake.url);
+    expect(
+      (await app.request('/api/routines/run', post({ routine: 'nightshift', project: 'garden' })))
+        .status,
+    ).toBe(200);
+    expect(
+      (await app.request('/api/routines/run', post({ routine: 'daybreak', project: 'garden' })))
+        .status,
+    ).toBe(404);
+  });
+
+  it('maps each project to its Pharos projects by folder, with report views by routine name', async () => {
+    const fake = await fakeRoutines();
+    const store = new Store(openDatabase(':memory:'));
+    const me = { kind: 'human' as const, name: 'me' };
+    const { created } = store.apply(me, {
+      message: 'Set up',
+      operations: [
+        {
+          op: 'create',
+          type: 'repository',
+          ref: 'repo',
+          data: { name: 'garden', path: '/tmp/garden' },
+        },
+        {
+          op: 'create',
+          type: 'project',
+          ref: 'a',
+          data: { name: 'Garden', repositoryId: '$repo' },
+        },
+        {
+          op: 'create',
+          type: 'project',
+          ref: 'b',
+          data: { name: 'Garden · Beds', repositoryId: '$repo' },
+        },
+        { op: 'create', type: 'project', ref: 'c', data: { name: 'Elsewhere' } },
+      ],
+    });
+    store.apply(me, {
+      message: 'Report',
+      operations: [
+        { op: 'create', type: 'view', data: { projectId: created.b!, name: 'Night run' } },
+      ],
+    });
+    const state = (await (
+      await appFor(fake.url, 2000, store).request('/api/routines/state')
+    ).json()) as RoutinesState;
+    if (!state.available) throw new Error('unavailable');
+    const garden = state.pharos.garden!;
+    expect(garden.projects.map((p) => p.name).sort()).toEqual(['Garden', 'Garden · Beds']);
+    expect(garden.reports).toEqual([
+      {
+        routine: 'nightshift',
+        name: 'Night run',
+        href: expect.stringMatching(new RegExp(`^/projects/${created.b}/views/`)),
+      },
+    ]);
+    expect(state.pharos.bike).toEqual({ projects: [], reports: [] });
   });
 });

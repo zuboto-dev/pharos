@@ -270,6 +270,18 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   every MCP read and every REST read with an `X-Pharos-Author` other than `human:…`. That header is
   a declared role, not authentication; agents are refused the owner's file and folder routes.
 
+## Claude Code permissions (Settings → Agent permissions)
+
+- `apps/server/src/permissions/` reads Claude Code transcripts (`~/.claude/projects/*/*.jsonl` and
+  subagents', read-only, cached by size and mtime) for tool calls that needed approval or were
+  refused (`permissionDecision`, `toolDenialKind`, or the older error texts; see `transcripts.ts`),
+  groups them per folder into a rule (`rules.ts`: shells, `rm`, `git push`, `curl`, `.claude/**`
+  edits and the like are Deny only), and writes Allow / Deny into the folder's
+  `.claude/settings.local.json` or `.claude/settings.json` with a backup (last 5) and Undo.
+- Agents never write their own permissions: `/api/permissions*` needs `X-Pharos-Author: human:…`
+  from the Pharos page, writes only rules it suggested, and has no MCP tool. Tests use a temp home;
+  `PHAROS_CLAUDE_HOME` points a test server at fixture transcripts. Never test against `~/.claude`.
+
 ## Options
 
 - Option fields (task status/priority, stage/goal/artifact/decision status, scope kind, artifact

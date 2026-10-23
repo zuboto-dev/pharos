@@ -53,6 +53,8 @@ import { PharosError, formatPath } from './store/errors.js';
 import { projectSnapshot } from './store/snapshot.js';
 import type { Store } from './store/store.js';
 import { VERSION } from './version.js';
+import { permissionRoutes } from './permissions/routes.js';
+import { PermissionService } from './permissions/service.js';
 import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
@@ -199,6 +201,8 @@ export type ServerInfo = {
   terminal?: TerminalService;
   /** What Pharos tells the owner (index.ts starts its sources); made here, idle, when absent. */
   notifications?: Notifications;
+  /** Claude Code permissions (Settings): tests pass one with a temp home; never the real one. */
+  permissions?: PermissionService;
 };
 
 /** Responses that stream and must never be held back for compression. */
@@ -811,6 +815,15 @@ export function createApp(
           );
       },
     }),
+  );
+
+  // Claude Code permissions (Settings → Agent permissions): what agents keep asking for, and the
+  // owner's Allow / Deny written to the folder's settings. Owner only, never over MCP.
+  api.route(
+    '/permissions',
+    permissionRoutes(
+      info.permissions ?? new PermissionService(store, { home: info.folders?.home }),
+    ),
   );
 
   app.route('/api', api);

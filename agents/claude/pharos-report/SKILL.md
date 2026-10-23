@@ -22,4 +22,6 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
      it reaches their desk.
    - Updating an existing page beats making a new one (`view_list`, then `view_update`).
 5. **Check it.** `view_preview`; fix every warning you can.
-6. **Answer in chat** with one or two lines (the claim, what needs them) and the page's link.
+6. **Little to show is no reason to skip it.** A short page with what there is and what is
+   missing is the report; only a one-line factual answer stays in chat.
+7. **Answer in chat** with one or two lines (the claim, what needs them) and the page's link.

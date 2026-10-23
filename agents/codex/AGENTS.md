@@ -14,6 +14,8 @@ report instructions here while Pharos is available).
 - A report or "more details": a report document (`view_create` with `doc`), pictures before
   words, numbers read from Pharos data. A review or a choice for the user: a review desk (sheets
   with decisions and tasks). Prefer updating an existing page.
+- Always a document, never an HTML report page (`page`): Pharos refuses one. Another website goes
+  in an `embed` block of the document; a `drawing` block only for one visual no component can draw.
 - After merged work, a night run, research or an evaluation: add a dated section at the top of the
   project's "Updates" report document (newest first); never a new page per update.
 - Every change shows before and after: screenshots or a clip for a screen, the piece of UI drawn

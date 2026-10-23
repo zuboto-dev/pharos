@@ -17,6 +17,7 @@ import {
   OWNER_TASK_FIELDS,
   type ApplyInput,
   type Author,
+  type Entity,
   PACK_GUIDE,
 } from '@pharos/schema';
 import { z } from 'zod';
@@ -109,7 +110,7 @@ Generating views (what the user sees):
 - Query checks: every filter, sort, group, sum and column in a view is checked against the project's fields (record fields included) before it is saved. An unknown field, record type or option value, a sum over something that isn't a number, an unreadable relative date, or a value that doesn't fit its field (e.g. a range on money; use "fields.amount.amount" in cents) refuses the save; the error gives the JSON path, the allowed values, the closest match and a corrected example, so fix exactly that and retry. A record query without recordType, or a field only some of its record types have, only warns. Empty results, custom option values and mixed currencies are fine.
 - People can rearrange views too, so read a view with view_get before editing it, keep widget ids stable, and pass its revision as view_update's expectedRevision: if a person changed the view since, nothing is saved and you read it again and redo your change on what it shows now.
 - Actions (R10): an Action block is a button and a short form people use to change records from a page ("Log a service", "Mark paid"); the form is built from the record type. Offer one only on a page about records the owner keeps up by hand, for what they do often (pack pages have theirs; pharos://guide/packs). project_snapshot.actions lists them; action_run submits one that only adds a record as one revision. Marking a record done (Mark paid, Log a service with its reminder) is the owner's to do on the page: agents are refused, also with apply (interval.lastDate/lastMeter) and Undo.
-- Kinds of pages. A board (widgets) is a live working page the owner uses day to day: tasks, money this month, files, quick answers. A report, something to read (an explanation, research, a summary of work, a story with its evidence), is a report document: view_create or view_update with doc, blocks in reading order (Text with live values, Stat, charts, Callout, columns; figures of screenshots or recordings you upload, numbered steps, details) that Pharos draws in its own style; anything that needs the owner's review or answer goes in sheets (one per item, with its pictures, how to check it and a DecisionBlock), and view_get reads their answers back; a drawing block (your HTML, live data through pharos.data) is for one visual no component can draw. Write a report page (page: HTML you design whole, live data from named reads through pharos.data) only when the whole page needs a design no document can give. Both are marked out of date when their data changes. Call report_guide before writing either; upload pictures and fonts with report_asset_put. A refresh request is answered with view_update and the whole document as doc (or the whole page as page).
+- Kinds of pages. A board (widgets) is a live working page the owner uses day to day: tasks, money this month, files, quick answers. A report, something to read (an explanation, research, a summary of work, a story with its evidence), is a report document: view_create or view_update with doc, blocks in reading order (Text with live values, Stat, charts, Callout, columns; figures of screenshots or recordings you upload, numbered steps, details) that Pharos draws in its own style; anything that needs the owner's review or answer goes in sheets (one per item, with its pictures, how to check it and a DecisionBlock), and view_get reads their answers back; an embed block shows another website in place; a drawing block (your HTML, live data through pharos.data) is for one visual no component can draw. Documents are the only way to write a report: HTML report pages (page) are refused, and the original content is made with Pharos's blocks. A document is marked out of date when its data changes. Call report_guide before writing one; upload pictures with report_asset_put. A refresh request is answered with view_update and the whole document as doc. A few older views are HTML report pages: a refresh of one may send the whole page as page again, but when you rewrite one, write it as doc.
 - A request with mode "block" asks you to change one block (its widgetId) in place: view_update with requestId and ops on that block only (other blocks and the view are refused while it is open), and a short reply. If it can't be done in that block, dismiss the request with a reply saying why.
 
 History:
@@ -128,6 +129,38 @@ function run(fn: () => unknown): CallToolResult {
       return { isError: true, content: [{ type: 'text', text: err.message }] };
     throw err;
   }
+}
+
+/**
+ * The owner's call (2026-10-23): agents write every report as a document (doc), never as an HTML
+ * report page (page). view_create and view_answer refuse page; view_update changes only a view
+ * that already is a page (the owner's existing pages and their refresh). REST is unchanged.
+ */
+export const PAGE_REFUSED =
+  'Reports are documents now: use doc (report_guide). To show another website inside a report, use an embed block in a doc.';
+/** Added to view_update's result when an agent writes an existing page as page again. */
+export const PAGE_WRITTEN_NOTE =
+  'This view is an HTML page; write it as doc next time (send doc instead of page to turn it into a document).';
+
+const refusedPage = z
+  .unknown()
+  .optional()
+  .describe(
+    'Not accepted: reports are documents (doc). To show another website, use an embed block in a doc',
+  );
+const AgentViewCreateInput = ViewCreateInput.extend({ page: refusedPage });
+const AgentViewAnswerInput = ViewAnswerInput.extend({ page: refusedPage });
+const AgentViewUpdateInput = ViewUpdateInput.extend({
+  page: z
+    .unknown()
+    .optional()
+    .describe(
+      'Only for a view that already is an HTML report page: replaces it whole, {html, data?, summary?} (e.g. to refresh it). Refused on a board or a document. When you rewrite a page, send doc instead: it turns the page into a document',
+    ),
+});
+
+function refuse(text: string): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text }] };
 }
 
 /** Said when a file's text can't be read; never names where the file is. */
@@ -536,10 +569,11 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     {
       title: 'Create view',
       description:
-        'Add a saved view (a new tab): a board of widgets, a report document (doc) or a report page (page); to answer a question, use view_answer instead. Example widget: {"id": "work", "w": 8, "node": {"component": "KanbanBoard", "filter": {"where": {"stageId": "$currentStage"}}}}. For a report, write doc (blocks Pharos draws in its own style: text, charts, figures of uploaded screenshots, steps, and sheets for what the owner should review or answer; a drawing block for one visual no component can draw); page (HTML you design whole) only when the whole page needs a design no document can give. Call report_guide first for either. Returns a preview with warnings that did not block the save; fix them.',
-      inputSchema: ViewCreateInput.shape,
+        'Add a saved view (a new tab): a board of widgets or a report document (doc); to answer a question, use view_answer instead. Example widget: {"id": "work", "w": 8, "node": {"component": "KanbanBoard", "filter": {"where": {"stageId": "$currentStage"}}}}. For a report, write doc (blocks Pharos draws in its own style: text, charts, figures of uploaded screenshots, steps, and sheets for what the owner should review or answer; an embed block to show another website; a drawing block for one visual no component can draw). Call report_guide first. HTML report pages (page) are refused. Returns a preview with warnings that did not block the save; fix them.',
+      inputSchema: AgentViewCreateInput.shape,
     },
     (input) => {
+      if (input.page !== undefined) return refuse(PAGE_REFUSED);
       mark(() => [{ projectId: input.projectId, activity: 'editing' }]);
       return run(() => createView(store, author(), input));
     },
@@ -550,10 +584,11 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     {
       title: 'Answer with a view',
       description:
-        'Answer a question about the project with a focused view (shown to the user as an answer, apart from saved views). Lead with the answer, then the evidence. Pick the kind by the question: a quick status lookup ("what\'s blocked?", "what\'s due this week?") gets widgets; a question asking to explain, report on or compare something ("why …", "how did … go", "compare …") gets doc, a report document (call report_guide first); page only when the person asks for a whole bespoke design. Returns the view, its URL, and a preview of what it shows. Expires after 7 days unless kept.',
-      inputSchema: ViewAnswerInput.shape,
+        'Answer a question about the project with a focused view (shown to the user as an answer, apart from saved views). Lead with the answer, then the evidence. Pick the kind by the question: a quick status lookup ("what\'s blocked?", "what\'s due this week?") gets widgets; a question asking to explain, report on or compare something ("why …", "how did … go", "compare …") gets doc, a report document (call report_guide first). HTML report pages (page) are refused. Returns the view, its URL, and a preview of what it shows. Expires after 7 days unless kept.',
+      inputSchema: AgentViewAnswerInput.shape,
     },
     (input) => {
+      if (input.page !== undefined) return refuse(PAGE_REFUSED);
       mark(() => [{ projectId: input.projectId, activity: 'editing' }]);
       return run(() => answerView(store, author(), input));
     },
@@ -585,8 +620,8 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     {
       title: 'Update view',
       description:
-        'Change a view: rename, pin, archive, reorder, and edit widgets with ops (add, update props/size, move, remove), replace all widgets, or reset to its template. A report document is replaced whole with doc, a report page whole with page (doc for reports, with figures and sheets for what the owner reviews; page only for a whole bespoke design; a drawing block for one visual). One call = one revision.',
-      inputSchema: ViewUpdateInput.shape,
+        'Change a view: rename, pin, archive, reorder, and edit widgets with ops (add, update props/size, move, remove), replace all widgets, or reset to its template. A report document is replaced whole with doc (with figures and sheets for what the owner reviews, an embed block for another website, a drawing block for one visual). page only changes a view that already is an HTML report page (to refresh it); when you rewrite one, send doc instead, which turns it into a document. One call = one revision.',
+      inputSchema: AgentViewUpdateInput.shape,
       annotations: { destructiveHint: true },
     },
     (input) => {
@@ -603,7 +638,15 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
         );
         return [view, ...ids.map((widgetId) => ({ ...view, widgetId }))];
       });
-      return run(() => updateView(store, author(), input));
+      if (input.page !== undefined) {
+        const current = store.get(input.viewId);
+        if (current?.type === 'view' && !(current as Entity<'view'>).data.page)
+          return refuse(PAGE_REFUSED);
+      }
+      return run(() => {
+        const result = updateView(store, author(), input);
+        return input.page !== undefined ? { ...result, note: PAGE_WRITTEN_NOTE } : result;
+      });
     },
   );
 
@@ -629,7 +672,7 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     {
       title: 'How to write a report',
       description:
-        'The guide to reports: report documents (doc: blocks Pharos draws in its own style, the default for a report, with a complete example; figures, steps, details and sheets for the review desk, with a complete example; drawing blocks for one visual) and report pages (page: HTML you design whole, only when the whole page needs it), the pharos API, assets, the frame’s limits, and a skeleton. Read it before view_create or view_update with doc or page.',
+        'The guide to reports: report documents (doc: blocks Pharos draws in its own style, the one way to write a report, with a complete example; figures, steps, details and sheets for the review desk, with a complete example; embed blocks for another website; drawing blocks for one visual, with the pharos API, assets and the frame’s limits). Read it before view_create, view_answer or view_update with doc.',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -640,7 +683,7 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
   server.registerTool(
     'report_asset_put',
     {
-      title: 'Upload a report page asset',
+      title: 'Upload a report asset',
       description: `Save (or replace) a picture, clip, sound, font, stylesheet or script a report page or document ships, by its relative path (e.g. "shots/after.png"). A report document's figure blocks show pictures, clips and sounds by that path (screenshots before and after, a recording); its drawings and a report page refer to files with that relative URL. Types: png jpg jpeg gif webp avif svg css js json woff woff2 ttf otf mp4 webm mp3 m4a ogg wav; at most 10 MB each and 64 MB per page. ${MCP_ASSET_NOTE} Assets are page files, not project data: they have no history; after the view is deleted they are kept for 30 days, so undoing the delete restores the page.`,
       inputSchema: {
         viewId: z.string().describe('A report page or document (a view with page or doc)'),
@@ -660,8 +703,9 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
   server.registerTool(
     'report_asset_list',
     {
-      title: 'List report page assets',
-      description: "A report page's assets: path, type, size and when each was saved.",
+      title: 'List report assets',
+      description:
+        "A report document's or report page's assets: path, type, size and when each was saved.",
       inputSchema: { viewId: z.string() },
       annotations: { readOnlyHint: true },
     },

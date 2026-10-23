@@ -274,7 +274,7 @@ export function reportView(store: Store, viewId: string, author?: Author): Entit
   if (!pageOf(view) && !view.data.doc)
     throw new PharosError(
       'invalid',
-      `View "${view.data.name}" is a board, not a report page or document: assets belong to report pages and documents (view_create or view_update with page or doc)`,
+      `View "${view.data.name}" is a board, not a report page or document: assets belong to report documents and pages (write it as a document with view_create or view_update with doc)`,
     );
   store.getOfType('project', view.data.projectId);
   if (author?.kind === 'agent' && openBlockRequests(store, view).length)

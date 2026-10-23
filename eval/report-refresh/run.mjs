@@ -136,6 +136,7 @@ try {
   scope.ids.add(projectId);
   const [row] = await r13.run({
     call,
+    base,
     samples: { id: projectId, name: SAMPLES_PROJECT },
     log: (line) => log(`sample: ${line}`),
   });

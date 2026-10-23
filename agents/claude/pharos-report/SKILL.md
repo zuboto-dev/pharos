@@ -19,6 +19,9 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
      as the heading, 3–5 key numbers, then sections that each lead with something to see (stats,
      a chart, a table, a figure, a drawing, a clip), words only for the claim and the so-what.
      Facts the page shows are Pharos data it reads, not numbers copied into it.
+   - Always a document, never an HTML report page (`page`): Pharos refuses one, and the content
+     is made with Pharos's blocks. To show another website inside the report, use an `embed`
+     block; a `drawing` block is only for one visual no component can draw.
    - A review, or anything the user must choose or do: a review desk (sheets with decisions
      that have options and a recommendation, and tasks for them), so they answer in place and
      it reaches their desk.

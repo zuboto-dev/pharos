@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { MCP_ASSET_NOTE, REPORT_GUIDE } from '../guidance.js';
+import { PAGE_REFUSED, PAGE_WRITTEN_NOTE } from '../mcp.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { BRIDGE_SCRIPT } from './bridge.js';
@@ -446,12 +447,54 @@ describe('report tools over MCP (R13)', () => {
     expect(ok.saved.size).toBe(Math.floor(2.9 * 1024 * 1024));
   });
 
-  it('creates a page, uploads and lists assets, previews, gets the guide', async () => {
+  it('refuses a new report page from view_create and view_answer, saving nothing (2026-10-23)', async () => {
+    const client = await connect();
+    const page = { html: '<!doctype html><h1>Decisions</h1>', summary: 'S' };
+    const before = store.list('view', { projectId }).length;
+    await expect(
+      call(client, 'view_create', { projectId, name: 'Decisions', message: 'A page', page }),
+    ).rejects.toThrow(PAGE_REFUSED);
+    await expect(
+      call(client, 'view_answer', { projectId, question: 'What did we decide?', page }),
+    ).rejects.toThrow(PAGE_REFUSED);
+    // Turning a board into a page is making a new one too.
+    await expect(
+      call(client, 'view_update', { viewId: board, message: 'As a page', page }),
+    ).rejects.toThrow(PAGE_REFUSED);
+    expect(store.list('view', { projectId })).toHaveLength(before);
+    expect(store.get(board)?.data).not.toHaveProperty('page');
+    expect(PAGE_REFUSED).toContain('embed block');
+  });
+
+  it('view_update still rewrites an existing report page, with a note to write doc next time', async () => {
+    const client = await connect();
+    const got = await call(client, 'view_get', { viewId: pageView });
+    const updated = await call(client, 'view_update', {
+      viewId: pageView,
+      expectedRevision: got.revision,
+      message: 'Refresh the page',
+      page: { html: '<!doctype html><p>Again</p>', summary: 'Again' },
+    });
+    expect(updated.note).toBe(PAGE_WRITTEN_NOTE);
+    expect(updated.view.page.summary).toBe('Again');
+    const view = store.get(pageView)?.data as { page?: { html: string } };
+    expect(view.page?.html).toContain('Again');
+    // A rename of a page carries no note: only writing page does.
+    const renamed = await call(client, 'view_update', {
+      viewId: pageView,
+      message: 'Rename',
+      name: 'Story again',
+    });
+    expect(renamed.note).toBeUndefined();
+  });
+
+  it('uploads and lists assets of a page, previews, gets the guide', async () => {
     const client = await connect();
     expect(client.getInstructions()).toContain('report_guide');
     const guide = await call(client, 'report_guide', {});
     expect(guide).toBe(REPORT_GUIDE);
-    const made = await call(client, 'view_create', {
+    // Agents can't create pages over MCP any more; the owner's existing ones keep their tools.
+    const made = createView(store, agent, {
       projectId,
       name: 'Story',
       message: 'A report page',

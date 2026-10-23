@@ -185,6 +185,9 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
 
 ## Report pages (R13)
 
+- Agents can no longer create report pages (owner's call 2026-10-23): MCP view_create and
+  view_answer refuse `page`, and view_update writes `page` only on a view that already is one.
+  Reports are documents (R14); other websites go in an `embed` block. REST is unchanged.
 - A view with `page` (`packages/schema/src/views/report.ts`) is a report page: HTML an agent
   wrote whole, served by `apps/server/src/views/report-routes.ts` at `/api/views/:id/page/` in a
   locked frame (CSP with `sandbox`, no network, no popups) with the bridge from `views/bridge.ts`

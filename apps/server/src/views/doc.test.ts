@@ -608,8 +608,8 @@ describe('the report guide (R14)', () => {
     expect(ReportDoc.safeParse(DOC_EXAMPLE).success).toBe(true);
     for (const part of [
       '## Report documents',
-      'the default for a report',
-      'Only when the whole page',
+      'the one way to write one',
+      'embed block',
       'one visual no component can draw',
       JSON.stringify(DOC_EXAMPLE),
     ])
@@ -633,7 +633,7 @@ describe('report documents over MCP (R14)', () => {
     return JSON.parse(text);
   }
 
-  it('says doc for reports, page for a whole bespoke design, drawing for one visual', async () => {
+  it('says doc for reports (pages refused), embed for other sites, drawing for one visual', async () => {
     const { store } = setup();
     const client = await connect(createApp(store));
     const tools = (await client.listTools()).tools;
@@ -642,11 +642,17 @@ describe('report documents over MCP (R14)', () => {
       expect(Object.keys(tool(name).inputSchema.properties ?? {}), name).toContain('doc');
     for (const name of ['view_create', 'view_update']) {
       const text = tool(name).description!;
-      expect(text, name).toMatch(/doc for reports|For a report, write doc/);
+      expect(text, name).toMatch(/For a report, write doc|A report document is replaced whole/);
       expect(text, name).toContain('drawing');
-      expect(text, name).toMatch(/page.*only (when|for) .*whole/);
+      expect(text, name).toContain('embed block');
+      expect(text, name).not.toContain('bespoke');
     }
-    expect(tool('report_guide').description).toContain('report documents');
+    expect(tool('view_create').description).toContain('HTML report pages (page) are refused');
+    expect(tool('view_answer').description).toContain('HTML report pages (page) are refused');
+    expect(tool('view_update').description).toContain('send doc instead');
+    expect(tool('report_guide').description).toContain('the one way to write a report');
+    expect(client.getInstructions()).toContain('HTML report pages (page) are refused');
+    expect(client.getInstructions()).not.toContain('bespoke');
     expect(client.getInstructions()).toContain('is a report document');
   });
 

@@ -9,7 +9,7 @@
 //
 // Idempotent: the record type, the records, the page and its asset are each made only when
 // missing; a page that is there is left as it is (the owner may have changed it).
-import { StepError, viewNamed, warningsOf } from '../lib.mjs';
+import { AGENT, StepError, viewNamed, warningsOf } from '../lib.mjs';
 
 export const key = 'R13';
 export const title = 'Report pages: a story written as HTML, with live numbers';
@@ -354,7 +354,7 @@ export async function ensureSpending({ call, projectId, log }) {
   }
 }
 
-export async function run({ call, samples, log }) {
+export async function run({ call, samples, log, base }) {
   const projectId = samples.id;
   const tools = (await call.tools()).map((t) => t.name);
   if (!tools.includes('report_asset_put'))
@@ -377,15 +377,41 @@ export async function run({ call, samples, log }) {
       throw new StepError(
         `view_preview warns for "${VIEW}", so it wasn't saved:\n- ${blocking.join('\n- ')}`,
       );
-    const res = await call('view_create', {
-      projectId,
-      name: VIEW,
-      description: 'R13 sample: a report page written as HTML, with live numbers',
-      page,
-      message:
-        'R13 sample: a report page that tells the spending story with live numbers, a what-if slider and a chart',
+    // Agents can't create report pages over MCP (since 2026-10-23: reports are documents), so the
+    // sample saves its page through REST, as the web app can; the page's tools still work on it.
+    if (!base) throw new StepError('The report page sample needs the server address (base).');
+    const res = await fetch(`${base}/api/apply`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-pharos-author': `agent:${AGENT}` },
+      body: JSON.stringify({
+        message:
+          'R13 sample: a report page that tells the spending story with live numbers, a what-if slider and a chart',
+        operations: [
+          {
+            op: 'create',
+            type: 'view',
+            ref: 'view',
+            data: {
+              projectId,
+              name: VIEW,
+              description: 'R13 sample: a report page written as HTML, with live numbers',
+              page,
+            },
+          },
+        ],
+      }),
     });
-    view = res.view;
+    const text = await res.text();
+    if (!res.ok) throw new StepError(`Saving "${VIEW}" failed: ${res.status} ${text}`);
+    const viewId = JSON.parse(text).created.view;
+    // view_update writes an existing page and records what data it was built from (R11), which
+    // REST can't set: without it the page would never be marked out of date.
+    await call('view_update', {
+      viewId,
+      page,
+      message: 'R13 sample: the page as built from the data now',
+    });
+    view = await call('view_get', { viewId });
     made = true;
   }
   const assets = await call('report_asset_list', { viewId: view.id });

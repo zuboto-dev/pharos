@@ -18,13 +18,17 @@ import { answerView, effectiveBoard, previewView, requestContext } from './views
 import { projectSnapshot } from './store/snapshot.js';
 
 describe('guidance', () => {
-  it('has a short, practical report guide with a tokens-and-pharos.data skeleton (R13)', () => {
+  it('has a short, practical report guide: documents only, and what a drawing can do (R13, R14)', () => {
     for (const part of [
-      'when to write one',
-      ':root {',
-      '[data-theme=dark] {',
+      // 2026-10-23: documents are the one way to write a report; pages are refused.
+      'the one way to write one',
+      'HTML report pages (`page`) are refused',
+      'an embed block',
+      '## Existing report pages',
+      ':root',
+      '[data-theme=dark]',
       'await pharos.data("spend")',
-      'pharos.onData(render)',
+      'pharos.onData(',
       'report_asset_put',
       '390 px',
       'honesty box',
@@ -34,6 +38,8 @@ describe('guidance', () => {
       'Never navigate the page',
     ])
       expect(REPORT_GUIDE).toContain(part);
+    for (const gone of ['## Skeleton', '<html lang="en">', 'when to write one', 'bespoke'])
+      expect(REPORT_GUIDE, gone).not.toContain(gone);
     // R15 added the rich-documents section (44 lines) on top of R3's glance test; 200 keeps the
     // guide at one screen of sections. Raised from 180 on 2026-10-20.
     // Raised to 202 on 2026-10-22 for the dates line (a drawing's "today" and UTC dates).
@@ -222,10 +228,11 @@ describe('guidance', () => {
     for (const part of [
       'Pick the kind of answer by the question',
       'Call report_guide first and follow it, then view_answer with doc',
-      'A report page (page) only when the person asks for a whole bespoke design',
+      'Never an HTML report page (page): it is refused',
       'A quick status lookup ("what\'s blocked?", "what\'s due this week?"): a board',
     ])
       expect(brief, part).toContain(part);
+    expect(brief).not.toContain('bespoke');
     // The glance test lives in report_guide only; the brief points there.
     expect(brief).not.toContain('## The glance test');
   });

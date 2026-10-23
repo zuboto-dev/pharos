@@ -4,7 +4,6 @@ import {
   COMPONENT_INFO,
   FILE_TEXT_TOOL,
   PACK_GUIDE,
-  REPORT_LIMITS,
   similarAnswers,
   type ComponentName,
   type Entity,
@@ -22,8 +21,8 @@ import { isExpired, requestContext } from './views/service.js';
  * The same rules back the catalog tools; this adds the judgement about what makes a good view.
  */
 /**
- * How to write a report page (R13): returned by report_guide and served as
- * pharos://guide/reports. docs/reframe/r13-report-pages.md has the contract.
+ * How to write a report (R14 documents; since 2026-10-23 agents can't create R13 pages):
+ * returned by report_guide and served as pharos://guide/reports.
  */
 /**
  * What an MCP request can carry (R13.6): the HTTP transport refuses bodies over 4 MB, and base64
@@ -263,13 +262,15 @@ export const REVIEW_EXAMPLE = {
 
 export const REPORT_GUIDE = `# Writing a Pharos report
 
-Two ways to write a report, both read live data and are marked out of date when it changes:
+A report is a report document (\`doc\`), the one way to write one. It reads live data and is
+marked out of date when the data changes.
 
-- **A report document** (\`doc\`): the default for a report. You write the structure (blocks in
-  reading order); Pharos draws it as a well-set document in its own style, light and dark, at any
-  width. Use it for an explanation, research, a summary of work, "what we found".
-- **A report page** (\`page\`): a whole HTML page you design yourself. Only when the whole page
-  needs a design no document can give (a bespoke interactive, its own visual world).
+- **A report document** (\`doc\`): you write the structure (blocks in reading order); Pharos
+  draws it as a well-set document in its own style, light and dark, at any width. Use it for an
+  explanation, research, a summary of work, "what we found". The content is made with Pharos's
+  blocks: HTML report pages (\`page\`) are refused.
+- To show another website (a reference, a live demo, a dashboard elsewhere), an embed block in
+  the document.
 - For one visual no component can draw (a map, a diagram), a drawing block in a document. Its facts
   stay data it \`reads\` (a plan's dates are stages; Timeline draws them, today marked); today is
   \`new Date()\`, and '2026-11-01' is UTC midnight (1 Nov reads as Oct here): build dates as local.
@@ -282,8 +283,8 @@ The reader should know where they stand in one glance (worked examples, weak and
 by side: pharos://examples/reports). Check every report against these five:
 
 1. **Its own visual world**: a palette, a type pairing and one motif that fit the subject, not
-   the Pharos look. For a report page and a drawing; a document is drawn in Pharos's style, so
-   it gets its look from the other four.
+   the Pharos look. For a drawing only; a document is drawn in Pharos's style, so it gets its
+   look from the other four.
 2. **The claim and 3–5 key numbers first**: a heading that states the claim, then the numbers.
 3. **Headings are claims, not topics**: "Groceries climbed every month", not "Spending".
 4. **Interactives only where they answer the reader's question**: a slider, a toggle, a filter,
@@ -310,8 +311,8 @@ fails as a section of words only, a log of what the workers did, or a table of f
   - \`{kind: "columns", id, columns: [[blocks], [blocks]], widths?: [2, 1]}\`: 2–4 columns side by
     side (one column on a phone), e.g. a row of Stats. No columns inside columns.
   - \`{kind: "drawing", id, html, reads: ["spend"], height, caption?}\`: HTML for one section,
-    in the same locked frame as a report page; \`pharos.data(name)\` gives only the named reads
-    it lists (from doc.data). Use colour tokens with a [data-theme=dark] set.
+    in a locked frame; \`pharos.data(name)\` gives only the named reads it lists (from
+    doc.data). "Drawings" below has what the frame allows.
   - \`{kind: "embed", id, url: "https://…", caption?, height?}\`: another site shown in place,
     with a link to open it (many sites refuse to be framed).
 - \`width\`: "text" (the reading column; default for Text, Markdown, Callout), "wide" (charts and
@@ -387,85 +388,31 @@ they answer in place.
 ${JSON.stringify(REVIEW_EXAMPLE)}
 \`\`\`
 
-## Report pages: when to write one
+## Drawings
 
-- A report page is a whole HTML document you write, with its own look, story and
-  interactives, shown in a locked frame beside the project with live data through named reads.
-  Write one only when the whole page needs a design a document can't give; otherwise write a
-  document.
-
-## How it fits
-
-- view_create {projectId, name, page: {html, data, summary}, message}. view_update {viewId,
-  expectedRevision, page, message} replaces the whole page; view_get shows it and its assets.
-- data: named reads, {"spend": {"type": "record", "filter": {"where": {"recordType": "spending"}}}}.
-  The same filters as blocks, checked the same way; at most ${REPORT_LIMITS.reads}.
-- In the page, \`await pharos.data("spend")\` returns the rows: items as {id, type, data} (a record's
-  values are in data.fields; money is {amount in cents, currency}).
+- A drawing's HTML runs in a locked frame inside the document, with live data through the
+  named reads it lists. \`await pharos.data("spend")\` returns the rows: items as {id, type,
+  data} (a record's values are in data.fields; money is {amount in cents, currency}).
   \`pharos.onData(fresh => …)\` runs again when the project data changes (fresh: rows by name).
 - \`pharos.theme\` is "light" or "dark" and \`pharos.onTheme(cb)\` tells you when it changes; Pharos
-  also sets data-theme on <html>. \`pharos.openFile(fileId)\` opens a project file in the viewer.
-- Pictures, fonts and scripts you ship are assets: report_asset_put {viewId, path, base64} after
-  the page is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif webp avif
-  svg css js json woff woff2 ttf otf mp4 webm mp3 m4a ogg wav; 10 MB each, 64 MB per page. ${MCP_ASSET_NOTE}
+  also sets data-theme on <html>. Colour tokens on :root with a dark set under [data-theme=dark];
+  check both. \`pharos.openFile(fileId)\` opens a project file in the viewer.
+- Pictures, fonts and scripts a drawing ships are assets: report_asset_put {viewId, path, base64}
+  after the document is saved, then refer to them relatively ("img/map.svg"). Types: png jpg gif
+  webp avif svg css js json woff woff2 ttf otf mp4 webm mp3 m4a ogg wav; 10 MB each, 64 MB per
+  view. ${MCP_ASSET_NOTE}
 - The frame has no network: no fetch, no forms, no other sites. Allowed: scripts from
   cdnjs.cloudflare.com, cdn.jsdelivr.net and unpkg.com, Google Fonts.
-- Sources are plain links, \`<a href="https://…">\`: they open through Pharos in a new tab (a link
-  with a query or a long path asks the reader first, showing where it goes). From a script, use
-  \`pharos.openLink(url)\`. Never navigate the page: no location.href = …, window.open or meta
-  refresh; Pharos refuses them and stops the page.
-- view_preview {viewId} (or {projectId, page} for a draft) checks the size, the reads (rows now,
-  query findings), assets the HTML names that aren't uploaded, hosts the frame will block, and
-  scripts that would navigate the page.
+- Sources are plain links, \`<a href="https://…">\`: they open through Pharos in a new tab. From a
+  script, use \`pharos.openLink(url)\`. Never navigate the page: no location.href = …, window.open
+  or meta refresh; Pharos refuses them and stops the drawing.
+- Live numbers come from pharos.data, never typed into the HTML. Works at 390 px wide.
 
-## Write it well
+## Existing report pages
 
-- Pass the glance test (above): its own visual world, the claim and 3–5 key numbers first,
-  claim headings, a source on every number, an honesty box, interactives only where they answer.
-- Live numbers come from pharos.data, never typed into the HTML when the project has them.
-  Charts drawn in SVG or canvas from the rows.
-- Real pictures with credits (as assets, or data: URLs).
-- Colour tokens on :root with a dark set under [data-theme=dark]; check both.
-- Works at 390 px wide: one column, no horizontal scroll, tap targets of 44 px.
-- A summary (one or two sentences: what the page says), shown in lists and to agents.
-
-## Skeleton
-
-\`\`\`html
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-  :root { --bg: #fbf7f0; --ink: #1d1a16; --accent: #c2410c; --muted: #6b6257; }
-  [data-theme=dark] { --bg: #16130f; --ink: #f3ece2; --accent: #fb923c; --muted: #a39686; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 Georgia, serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
-  .num { font: 600 2.4rem/1 system-ui, sans-serif; color: var(--accent); }
-</style>
-</head>
-<body>
-<main>
-  <h1>Groceries took a third of September's spending</h1>
-  <p><span class="num" id="total">…</span> spent, from <span id="count">…</span> records.</p>
-  <aside><strong>What this doesn't say:</strong> cash payments aren't recorded.</aside>
-</main>
-<script>
-  const euros = (cents) => (cents / 100).toLocaleString('en', { style: 'currency', currency: 'EUR' });
-  async function render() {
-    const rows = await pharos.data('spend');
-    const total = rows.reduce((n, r) => n + (r.data.fields.amount?.amount ?? 0), 0);
-    document.getElementById('total').textContent = euros(total);
-    document.getElementById('count').textContent = rows.length;
-  }
-  render();
-  pharos.onData(render);
-</script>
-</body>
-</html>
-\`\`\`
-
-with page.data = {"spend": {"type": "record", "filter": {"where": {"recordType": "spending"}}}}.
+A few older views are HTML report pages (\`page\`). view_create and view_answer refuse \`page\`.
+A refresh of an existing page may send it whole as \`page\` again (view_update, same page.data);
+when you rewrite one, write it as a document instead: view_update with \`doc\` turns it into one.
 `;
 
 export const VIEW_GUIDELINES = `# Designing Pharos views
@@ -1111,7 +1058,8 @@ export function answerBrief(
     'again instead: call report_guide, view_get it (its html, page.data and summary), read what',
     'each named read selects now, and view_update with expectedRevision, the requestId and the',
     'whole page as page: new html and summary worked out from the data now, the same page.data.',
-    'Its assets stay. Never send widgets for a report page.',
+    'Its assets stay. Never send widgets for a report page. (Writing it as doc instead, a',
+    'document with the same content, is also fine and turns it into a report document.)',
     'When the view is a report document (the request says "Refresh this report document"), write',
     'the document again the same way: report_guide ("Report documents"), view_get it (its doc),',
     'view_preview it to see what every block shows now, and view_update with expectedRevision, the',
@@ -1133,7 +1081,8 @@ export function answerBrief(
     'Pick the kind of answer by the question ("Kind" above is a first guess; the question wins):',
     '- Asked to explain, report on or compare something ("why …", "how did … go", "compare …"):',
     '  a report document. Call report_guide first and follow it, then view_answer with doc, not',
-    '  widgets. A report page (page) only when the person asks for a whole bespoke design.',
+    '  widgets. Never an HTML report page (page): it is refused; another website goes in an embed',
+    '  block of the document.',
     '- A quick status lookup ("what\'s blocked?", "what\'s due this week?"): a board, view_answer',
     '  with widgets, as below.',
     '',
@@ -1196,7 +1145,7 @@ export function registerGuidance(server: McpServer, store: Store): void {
     {
       title: 'Writing a report',
       description:
-        'Report documents (R14, the default for a report) and report pages (R13): blocks Pharos draws, or a whole HTML page with live data through pharos.data; assets and the frame’s limits',
+        'Report documents (R14), the one way to write a report: blocks Pharos draws in its own style, embeds for other websites, drawings for one visual (live data through pharos.data, assets and the frame’s limits)',
       mimeType: 'text/markdown',
     },
     (uri) => text(uri.href, REPORT_GUIDE),

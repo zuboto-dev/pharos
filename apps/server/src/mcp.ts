@@ -21,6 +21,7 @@ import {
 import { z } from 'zod';
 import { VERSION } from './version.js';
 import { RunLog, answersSince, askOwner, deskOf } from './desk.js';
+import { LOOKUP_TOOLS, LookupLog } from './lookups.js';
 import { ActionService } from './actions/service.js';
 import { forAgent, requestFolder, savedRequests } from './files/requests.js';
 import {
@@ -147,6 +148,22 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
     kind: 'agent',
     name: server.server.getClientVersion()?.name ?? 'mcp-agent',
   });
+
+  // "Looked up" on the Updates page: every read tool below logs its call (LOOKUP_TOOLS) before
+  // it runs. The log never fails the call; it isn't a revision.
+  const lookups = new LookupLog(store);
+  const register = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
+  server.registerTool = ((name: string, config: unknown, handler: (...a: unknown[]) => unknown) =>
+    register(
+      name,
+      config,
+      LOOKUP_TOOLS[name]
+        ? (...a: unknown[]) => {
+            lookups.record(author().name, name, a[0]);
+            return handler(...a);
+          }
+        : handler,
+    )) as unknown as typeof server.registerTool;
 
   // Presence (v0.2 B5): a view tool call marks the agent as working on that view (and the
   // blocks an update names) for a short while. Never stops the call: a bad id is the tool's

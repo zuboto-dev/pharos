@@ -25,3 +25,6 @@ eval/results/
 
 # Written by samples/install/install-samples.mjs
 samples/install/samples.json
+
+# Local screenshots and their scratch data
+shots/

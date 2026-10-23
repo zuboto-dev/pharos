@@ -185,6 +185,21 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX runs_name ON runs(name);
   `,
+  // The Updates page: agents' MCP read calls (get, list, project_snapshot, view_get, ...), for
+  // "looked up". An operational log like runs, not project data: never revisions. LookupLog
+  // keeps it to the last 30 days and 5000 rows.
+  `
+  CREATE TABLE lookups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    project_id TEXT,
+    tool TEXT NOT NULL,
+    target_id TEXT,
+    target_type TEXT
+  );
+  CREATE INDEX lookups_at ON lookups(at);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

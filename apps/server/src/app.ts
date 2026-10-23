@@ -32,6 +32,7 @@ import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
 import { RunLog, askOwner, deskAnswer, deskOf } from './desk.js';
 import { landedSince, markDeskSeen } from './landed.js';
+import { updatesOf } from './updates.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -623,6 +624,19 @@ export function createApp(
     }
     const body = z.object({ revision: z.number().int().nonnegative().optional() }).parse(json);
     return c.json({ seen: markDeskSeen(store, body.revision) });
+  });
+  // The Updates page: work sessions from revisions and agents' read calls (lookups), with a
+  // week of counts for the tiles and timeline. Bounded: one page of revisions, older with `before`.
+  api.get('/updates', (c) => {
+    const q = c.req.query();
+    return c.json(
+      updatesOf(store, {
+        since: q.since || undefined,
+        before: q.before || undefined,
+        projectId: q.projectId || undefined,
+        author: q.author || undefined,
+      }),
+    );
   });
   api.get('/runs', (c) => {
     const q = c.req.query();

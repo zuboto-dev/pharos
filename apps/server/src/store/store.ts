@@ -258,7 +258,7 @@ function netChanges(changes: Change[]): Map<string, NetChange> {
 }
 
 /** Folds a sequence of changes into the net effect per entity. */
-function foldChanges(changes: Change[]): EntityDiff[] {
+export function foldChanges(changes: Change[]): EntityDiff[] {
   const diffs: EntityDiff[] = [];
   for (const [id, { type, before, after }] of netChanges(changes)) {
     if (!before && !after) continue;

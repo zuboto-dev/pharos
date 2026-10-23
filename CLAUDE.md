@@ -28,6 +28,10 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
   - `src/mcp.ts` — MCP tools and the instructions agents see
   - `src/views/` — catalog tools (`catalog.ts`), board widget operations (`board-ops.ts`), and the
     view service behind the `view_*` tools (`service.ts`)
+  - `src/updates.ts` — the Updates page's data (`GET /api/updates`): revisions and agents' reads
+    grouped into work sessions (one author, one project, gaps under 30 min), a week of counts;
+    `src/lookups.ts` logs agents' MCP read calls (`LOOKUP_TOOLS`) in the `lookups` table (30 days,
+    5000 rows; never revisions) for "looked up"
   - `src/agent-runner.ts` — runs an agent (Claude Code by default) for new questions
   - `src/feed.ts` — announces new revisions (including ones from other processes, by polling) to
     `GET /api/events` (SSE); the web app reloads affected data from it

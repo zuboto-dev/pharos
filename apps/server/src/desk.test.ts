@@ -378,6 +378,76 @@ describe('the desk (R16)', () => {
     expect(deskOf(store, runs).items).toEqual([]);
   });
 
+  it('a choice that declines or puts off sets the status for it: rejected, or back in a week', async () => {
+    const { store, runs, open } = setup();
+    const projectId = store.getOfType('decision', open).data.projectId;
+    const created = store.apply(
+      { kind: 'agent', name: 'a' },
+      {
+        message: 'two more',
+        operations: [
+          {
+            op: 'create',
+            type: 'decision',
+            ref: 'link',
+            data: {
+              projectId,
+              title: 'Link them?',
+              options: [
+                { id: 'yes', label: 'Link them' },
+                { id: 'no', label: 'Leave as is' },
+              ],
+            },
+          },
+          {
+            op: 'create',
+            type: 'decision',
+            ref: 'ship',
+            data: {
+              projectId,
+              title: 'Ship it?',
+              options: [
+                { id: 'go', label: 'Ship' },
+                { id: 'hold', label: 'Not now' },
+              ],
+            },
+          },
+        ],
+      },
+    );
+    const [link, ship] = created.changes.filter((c) => c.type === 'decision').map((c) => c.id);
+    const app = createApp(store);
+    const post = (body: unknown) =>
+      app.request('/api/desk/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': 'human:me' },
+        body: JSON.stringify(body),
+      });
+    const today = localToday();
+    expect((await post({ id: link, chosenOptionId: 'no' })).status).toBe(200);
+    expect(store.getOfType('decision', link!).data).toMatchObject({
+      chosenOptionId: 'no',
+      status: 'rejected',
+      decisionDate: today,
+    });
+    expect(store.getOfType('decision', link!).data.decidedById).toBeTruthy();
+    const later = await post({ id: ship, chosenOptionId: 'hold' });
+    expect(((await later.json()) as { revision: { message: string } }).revision.message).toBe(
+      `Later (${addDays(today, 7)}): “Ship it?” (chose “Not now”)`,
+    );
+    const held = store.getOfType('decision', ship!).data;
+    expect(held).toMatchObject({ status: 'proposed', deferredUntil: addDays(today, 7) });
+    expect(held.chosenOptionId).toBeUndefined();
+    expect(held.decidedById).toBeUndefined();
+    // Off the desk until its day, then back.
+    expect(ids(store, runs)).not.toContainEqual(['decision', 'Ship it?']);
+    expect(ids(store, runs, new Date(`${addDays(today, 7)}T12:00:00Z`))).toContainEqual([
+      'decision',
+      'Ship it?',
+    ]);
+    expect(ids(store, runs)).not.toContainEqual(['decision', 'Link them?']);
+  });
+
   it("a task's other answers: won't do, later (back on its day) and a reply, one revision each", async () => {
     const { store, runs, mine } = setup();
     const app = createApp(store);

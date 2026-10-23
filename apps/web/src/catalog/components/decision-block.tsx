@@ -1,6 +1,8 @@
 import {
   DECISION,
   addUnits,
+  choiceMessage,
+  choiceUpdate,
   decisionState,
   valueFor,
   type DecisionOption,
@@ -203,6 +205,19 @@ export function Decision({
     message: string,
   ) => {
     const who = decider(data);
+    const option = decision.data.options?.find((o) => o.id === patch.chosenOptionId);
+    // A choice settles status, who and when with it (decline → rejected, later → back in a week).
+    if (option)
+      return save(
+        choiceMessage(option, question, patch.note, localToday()),
+        choiceUpdate(option, {
+          ...(patch.note ? { note: patch.note } : {}),
+          today: localToday(),
+          decidedById: who.id,
+          status,
+        }),
+        who.create,
+      );
     return save(
       message,
       {
@@ -299,7 +314,11 @@ export function Decision({
       {answered ? (
         <div
           role="status"
-          className="flex flex-col gap-3 rounded-tile border border-emerald-300 bg-emerald-50/60 p-3 sm:flex-row sm:items-center sm:justify-between dark:border-emerald-800 dark:bg-emerald-950/20"
+          className={clsx(
+            'flex flex-col gap-3 rounded-tile border border-emerald-300 bg-emerald-50/60 p-3 dark:border-emerald-800 dark:bg-emerald-950/20',
+            // The panel's narrow column keeps the answer above its buttons.
+            !inPanel && 'sm:flex-row sm:items-center sm:justify-between',
+          )}
         >
           <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium">

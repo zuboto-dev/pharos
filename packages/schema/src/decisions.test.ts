@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  LATER_DAYS,
+  choiceUpdate,
+  optionOutcome,
   decisionIssues,
   decisionState,
   decisionWarnings,
@@ -90,5 +93,57 @@ describe('a smaller apply schema (C1)', () => {
       false,
     );
     expect(patchSchema('decision').safeParse({ options: null }).success).toBe(true);
+  });
+});
+
+describe('what choosing an option means', () => {
+  it('reads the outcome from the option, else from its label', () => {
+    const o = (label: string, outcome?: 'go' | 'decline' | 'later') =>
+      optionOutcome({ label, ...(outcome ? { outcome } : {}) });
+    expect(
+      ['Link them', 'Keep, judge again', 'Day branch only', 'Nothing else'].map((l) => o(l)),
+    ).toEqual(['go', 'go', 'go', 'go']);
+    expect(
+      ['Leave as is', 'Keep it as it is', 'No', "Don't link", 'Skip'].map((l) => o(l)),
+    ).toEqual(['decline', 'decline', 'decline', 'decline', 'decline']);
+    expect(['Not now', 'Hold', 'Later', 'Decide later'].map((l) => o(l))).toEqual([
+      'later',
+      'later',
+      'later',
+      'later',
+    ]);
+    // The agent's word wins over the label.
+    expect(o('Hold the line', 'go')).toBe('go');
+  });
+
+  it('sets status, who and when to agree with the choice', () => {
+    const input = {
+      today: '2026-10-22',
+      decidedById: 'asg_me',
+      status: (meaning: string) => `v_${meaning}`,
+    };
+    expect(choiceUpdate({ id: 'a', label: 'Link them' }, input)).toMatchObject({
+      chosenOptionId: 'a',
+      status: 'v_accepted',
+      decidedById: 'asg_me',
+      decisionDate: '2026-10-22',
+      deferredUntil: null,
+    });
+    expect(choiceUpdate({ id: 'b', label: 'Leave as is' }, input)).toMatchObject({
+      chosenOptionId: 'b',
+      status: 'v_rejected',
+      decidedById: 'asg_me',
+      decisionDate: '2026-10-22',
+    });
+    expect(LATER_DAYS).toBe(7);
+    expect(choiceUpdate({ id: 'c', label: 'Not now' }, input)).toEqual({
+      chosenOptionId: null,
+      note: null,
+      answer: null,
+      deferredUntil: '2026-10-29',
+      status: 'v_proposed',
+      decidedById: null,
+      decisionDate: null,
+    });
   });
 });

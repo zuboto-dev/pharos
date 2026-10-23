@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import {
   DESK_OLD_DAYS,
   DESK_OVERDUE_HOURS,
+  choiceMessage,
+  choiceUpdate,
   decisionState,
   TASK_ANSWER,
   isCalendarDate,
@@ -557,7 +559,7 @@ export function deskAnswer(
     throw new PharosError('invalid', `“${option.label}” asks for a note: ${option.asks}`);
   const person = store.list('assignee').find((a) => a.data.kind === 'human');
   return store.apply(author, {
-    message: `Choose “${option.label}”: ${decision.data.title}${note ? ` (${note})` : ''}`,
+    message: choiceMessage(option, decision.data.title, note, localToday()),
     operations: [
       ...(person
         ? []
@@ -573,15 +575,13 @@ export function deskAnswer(
         op: 'update',
         type: 'decision',
         id: decision.id,
-        data: {
-          chosenOptionId: option.id,
-          note: note || null,
-          answer: null,
-          deferredUntil: null,
-          status: valueFor(project, 'decision.status', 'accepted'),
+        // Status, who and when follow from the choice (decline → rejected, later → back in a week).
+        data: choiceUpdate(option, {
+          ...(note ? { note } : {}),
+          today: localToday(),
           decidedById: person?.id ?? '$me',
-          decisionDate: localToday(),
-        },
+          status: (meaning) => valueFor(project, 'decision.status', meaning),
+        }),
       },
     ],
   });

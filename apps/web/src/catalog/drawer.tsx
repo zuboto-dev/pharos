@@ -171,6 +171,13 @@ function Fields({ entity }: { entity: Entity }) {
       continue;
     } else if (
       entity.type === 'decision' &&
+      ANSWER_FIELDS.has(field) &&
+      (entity as Entity<'decision'>).data.options?.length
+    ) {
+      // The owner's answer sets these (the form shows who and when; the header, the status).
+      continue;
+    } else if (
+      entity.type === 'decision' &&
       field === 'recommendationReason' &&
       decisionState((entity as Entity<'decision'>).data).kind !== 'chosen' &&
       decisionState((entity as Entity<'decision'>).data).kind !== 'answered'
@@ -259,6 +266,9 @@ const DECISION_FIELDS = new Set([
   'note',
   'deferredUntil',
 ]);
+
+/** Set by the owner's answer on a decision with options, so never edited by hand there. */
+const ANSWER_FIELDS = new Set(['status', 'decidedById', 'decisionDate']);
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (

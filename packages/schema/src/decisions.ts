@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { addDays } from './views/dates.js';
 
 /**
  * A decision the owner makes on a page (R10.19): the question (the decision's title), 2–5
@@ -48,6 +49,12 @@ export const DecisionOption = z
       .optional()
       .describe(
         'Ask the owner to write a note when they choose this option, e.g. "Which steps failed, and what did you see?"; the note is required for it',
+      ),
+    outcome: z
+      .enum(['go', 'decline', 'later'])
+      .optional()
+      .describe(
+        'What choosing it means: go (default: the decision is accepted), decline ("No", "Leave as is": rejected), later ("Not now": back on the desk in a week)',
       ),
   })
   .meta({ id: 'DecisionOption' });
@@ -142,4 +149,76 @@ export function decisionState(data: DecisionLike): DecisionState {
   if (data.answer) return { kind: 'answered', answer: data.answer };
   if (data.deferredUntil) return { kind: 'deferred', until: data.deferredUntil };
   return { kind: 'open' };
+}
+
+export type OptionOutcome = 'go' | 'decline' | 'later';
+
+/** How long a "later" option puts a decision off: it comes back on the desk that day. */
+export const LATER_DAYS = 7;
+
+const LATER_LABEL =
+  /^(?:not now|not yet|later|hold|wait|postpone|defer|decide later|ask (?:me )?again)\b/i;
+const DECLINE_LABEL =
+  /^(?:no\b|none\b|decline|reject|don['’]?t\b|do not\b|skip\b|cancel\b|drop\b|(?:leave|keep|stay)(?: it)? as (?:it )?is\b)/i;
+
+/**
+ * What choosing an option means: its `outcome` when the agent set one, else read from its label
+ * ("Not now", "Hold" → later; "No", "Leave as is", "Keep it as it is" → decline), else go.
+ */
+export function optionOutcome(option: Pick<DecisionOption, 'label' | 'outcome'>): OptionOutcome {
+  if (option.outcome) return option.outcome;
+  const label = option.label.trim();
+  if (LATER_LABEL.test(label)) return 'later';
+  if (DECLINE_LABEL.test(label)) return 'decline';
+  return 'go';
+}
+
+/**
+ * The update a person's choice makes, so status, who and when always agree with the choice (the
+ * page's block, the details panel and the desk share it): go → accepted, decline → rejected,
+ * both decided by them today; later → still proposed, back on the desk in LATER_DAYS days.
+ */
+export function choiceUpdate(
+  option: DecisionOption,
+  input: {
+    note?: string;
+    /** YYYY-MM-DD, the person's today. */
+    today: string;
+    decidedById: string;
+    /** The project's status value for a meaning (valueFor(project, 'decision.status', …)). */
+    status: (meaning: 'proposed' | 'accepted' | 'rejected') => string;
+  },
+): Record<string, string | null> {
+  const outcome = optionOutcome(option);
+  if (outcome === 'later')
+    return {
+      chosenOptionId: null,
+      note: null,
+      answer: null,
+      deferredUntil: addDays(input.today, LATER_DAYS),
+      status: input.status('proposed'),
+      decidedById: null,
+      decisionDate: null,
+    };
+  return {
+    chosenOptionId: option.id,
+    note: input.note || null,
+    answer: null,
+    deferredUntil: null,
+    status: input.status(outcome === 'decline' ? 'rejected' : 'accepted'),
+    decidedById: input.decidedById,
+    decisionDate: input.today,
+  };
+}
+
+/** The revision message for a choice. */
+export function choiceMessage(
+  option: DecisionOption,
+  question: string,
+  note?: string,
+  today?: string,
+): string {
+  if (optionOutcome(option) === 'later')
+    return `Later (${today ? addDays(today, LATER_DAYS) : `${LATER_DAYS} days`}): “${question}” (chose “${option.label}”)`;
+  return `Choose “${option.label}”: ${question}${note ? ` (${note})` : ''}`;
 }

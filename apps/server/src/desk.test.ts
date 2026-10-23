@@ -448,6 +448,68 @@ describe('the desk (R16)', () => {
     expect(ids(store, runs)).not.toContainEqual(['decision', 'Link them?']);
   });
 
+  it('says when a decision builds on a skipped one, and brings it back once that one changes', async () => {
+    const { store, runs, open } = setup();
+    const projectId = store.getOfType('decision', open).data.projectId;
+    const created = store.apply(
+      { kind: 'agent', name: 'a' },
+      {
+        message: 'two that hang together',
+        operations: [
+          {
+            op: 'create',
+            type: 'decision',
+            ref: 'pay',
+            data: {
+              projectId,
+              title: 'Which payment provider?',
+              options: [
+                { id: 'stripe', label: 'Stripe' },
+                { id: 'paddle', label: 'Paddle' },
+              ],
+            },
+          },
+          {
+            op: 'create',
+            type: 'decision',
+            ref: 'price',
+            data: {
+              projectId,
+              title: 'What price for Plus?',
+              dependsOn: ['$pay'],
+              options: [
+                { id: 'five', label: '$5' },
+                { id: 'eight', label: '$8' },
+              ],
+            },
+          },
+        ],
+      },
+    );
+    const [pay, price] = created.changes.filter((c) => c.type === 'decision').map((c) => c.id);
+    const item = (id: string) => deskOf(store, runs).items.find((i) => i.id === id);
+    expect(item(price!)!.note).toBe(
+      "Builds on “Which payment provider?”, which isn't answered yet",
+    );
+    const app = createApp(store);
+    const post = (body: unknown) =>
+      app.request('/api/desk/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': 'human:me' },
+        body: JSON.stringify(body),
+      });
+    // The price is decided while the provider is skipped: the provider says so.
+    expect((await post({ id: price, chosenOptionId: 'five' })).status).toBe(200);
+    expect(item(pay!)!.note).toBe('“What price for Plus?” was decided assuming this one');
+    expect(item(price!)).toBeUndefined();
+    // The provider is answered later: the price comes back, maybe outdated.
+    expect((await post({ id: pay, chosenOptionId: 'paddle' })).status).toBe(200);
+    expect(item(price!)).toMatchObject({
+      note: 'May be outdated: “Which payment provider?” changed after this was settled',
+    });
+    expect(item(price!)!.options).toBeUndefined();
+  });
+
   it("a task's other answers: won't do, later (back on its day) and a reply, one revision each", async () => {
     const { store, runs, mine } = setup();
     const app = createApp(store);

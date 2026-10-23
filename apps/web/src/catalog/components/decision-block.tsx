@@ -161,7 +161,17 @@ export function DecisionBlock({ node }: { node: NodeOf<'DecisionBlock'> }) {
   return <Decision decision={decision} />;
 }
 
-function Decision({ decision }: { decision: Entity<'decision'> }) {
+/**
+ * The decision and its answers. `inPanel` is the details panel's form: the panel already shows the
+ * title, and its narrow column takes the options one under another.
+ */
+export function Decision({
+  decision,
+  inPanel = false,
+}: {
+  decision: Entity<'decision'>;
+  inPanel?: boolean;
+}) {
   const data = useViewData();
   const { project, actions } = data;
   const [mode, setMode] = useState<Mode>('idle');
@@ -259,14 +269,19 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
 
   return (
     <section
-      aria-labelledby={titleId}
+      {...(inPanel ? { 'aria-label': question } : { 'aria-labelledby': titleId })}
       data-entity={decision.id}
       data-entity-type="decision"
       data-pick-title={question}
       className="space-y-4"
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-1">
+      <div
+        className={clsx(
+          'flex flex-wrap items-start justify-between gap-2',
+          inPanel && state.kind !== 'deferred' && 'hidden',
+        )}
+      >
+        <div className={clsx('min-w-0 space-y-1', inPanel && 'hidden')}>
           <p className="text-xs font-semibold tracking-wide text-muted uppercase">
             {answered ? 'Decided' : 'Decision for you'}
           </p>
@@ -357,8 +372,8 @@ function Decision({ decision }: { decision: Entity<'decision'> }) {
             aria-label="Options"
             className={clsx(
               'grid gap-3',
-              options.length === 2 && 'sm:grid-cols-2',
-              options.length >= 3 && 'sm:grid-cols-2 lg:grid-cols-3',
+              !inPanel && options.length === 2 && 'sm:grid-cols-2',
+              !inPanel && options.length >= 3 && 'sm:grid-cols-2 lg:grid-cols-3',
             )}
           >
             {options.map((option) => (

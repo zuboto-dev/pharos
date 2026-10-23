@@ -1,5 +1,6 @@
 import {
   ENTITIES,
+  decisionState,
   optionKeyOf,
   optionsFor,
   type Entity,
@@ -19,6 +20,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import { FileDetails } from '../files/FileDetails';
 import { Loading, SkeletonShape, SkeletonRows } from './skeleton';
+import { Decision } from './components/decision-block';
 import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
 import { humanize, plural, timeAgo } from '../lib/format';
@@ -166,8 +168,15 @@ function Fields({ entity }: { entity: Entity }) {
     } else if (entity.type === 'artifact' && field === 'tags') {
       content = <EditableList entity={entity} field={field} />;
     } else if (entity.type === 'decision' && DECISION_FIELDS.has(field)) {
-      if (value === undefined) continue;
-      content = <DecisionField decision={entity as Entity<'decision'>} field={field} />;
+      continue;
+    } else if (
+      entity.type === 'decision' &&
+      field === 'recommendationReason' &&
+      decisionState((entity as Entity<'decision'>).data).kind !== 'chosen' &&
+      decisionState((entity as Entity<'decision'>).data).kind !== 'answered'
+    ) {
+      // The open decision says it under its options.
+      continue;
     } else if (optionKey) {
       const choices = optionsFor(data.project, optionKey).map((o) => ({
         value: o.value,
@@ -241,30 +250,15 @@ function Fields({ entity }: { entity: Entity }) {
   return <dl className="divide-y divide-line-soft">{rows}</dl>;
 }
 
-/** A decision's options and the owner's choice (R10.19), read here; answered in a DecisionBlock. */
-const DECISION_FIELDS = new Set(['options', 'recommendedOptionId', 'chosenOptionId']);
-
-function DecisionField({ decision, field }: { decision: Entity<'decision'>; field: string }) {
-  const options = decision.data.options ?? [];
-  const label = (id: string | undefined) => options.find((o) => o.id === id)?.label ?? id;
-  if (field !== 'options')
-    return <span>{label((decision.data as Record<string, unknown>)[field] as string)}</span>;
-  return (
-    <ul className="list-disc space-y-0.5 pl-4">
-      {options.map((o) => (
-        <li key={o.id}>
-          {o.label}
-          {o.id === decision.data.recommendedOptionId && (
-            <span className="text-muted"> · recommended</span>
-          )}
-          {o.id === decision.data.chosenOptionId && (
-            <span className="text-emerald-700 dark:text-emerald-400"> · chosen</span>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
+/** A decision's options and the owner's answer, answered in the panel's own form (R10.19). */
+const DECISION_FIELDS = new Set([
+  'options',
+  'recommendedOptionId',
+  'chosenOptionId',
+  'answer',
+  'note',
+  'deferredUntil',
+]);
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -399,6 +393,8 @@ function EntityDetails({ entity }: { entity: Entity }) {
       {entity.type === 'artifact' && (
         <ArtifactSourcePanel artifact={entity as Entity<'artifact'>} />
       )}
+      {/* Choose, write another answer or decide later, as on the page (R10.19). */}
+      {entity.type === 'decision' && <Decision decision={entity as Entity<'decision'>} inPanel />}
       {longText.map((field) => (
         <EditableMarkdown key={field} entity={entity} field={field} />
       ))}

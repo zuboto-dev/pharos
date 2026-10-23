@@ -265,10 +265,31 @@ export function byteRange(
   return { start, end };
 }
 
-/** A file with its type, served whole or as the one range asked for (206). */
-export function mediaResponse(bytes: Uint8Array, mime: string, range?: string): Response {
+/** A file's version tag: it changes whenever the file is uploaded again. */
+export function assetTag(updatedAt: string, size: number): string {
+  return `"${size.toString(36)}-${Date.parse(updatedAt).toString(36)}"`;
+}
+
+/**
+ * A file with its type, served whole or as the one range asked for (206). With its version tag,
+ * a browser that already has this version gets 304 and no bytes ("no-cache" still makes it ask
+ * each time, so a new upload shows at once).
+ */
+export function mediaResponse(
+  bytes: Uint8Array,
+  mime: string,
+  range?: string,
+  version?: { etag: string; ifNoneMatch?: string | undefined },
+): Response {
   const size = bytes.byteLength;
-  const headers = { ...ASSET_HEADERS, 'Content-Type': mime, 'Accept-Ranges': 'bytes' };
+  const headers = {
+    ...ASSET_HEADERS,
+    'Content-Type': mime,
+    'Accept-Ranges': 'bytes',
+    ...(version ? { ETag: version.etag } : {}),
+  };
+  if (version?.ifNoneMatch && version.ifNoneMatch.split(/\s*,\s*/).includes(version.etag))
+    return new Response(null, { status: 304, headers });
   const part = byteRange(range, size);
   if (part === 'unsatisfiable')
     return new Response(null, {
@@ -334,11 +355,23 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
     }
     const asset = assets.get(view.id, path);
     if (!asset) return notFoundPage('No such file in this page.');
+    const etag = assetTag(asset.updatedAt, asset.bytes.byteLength);
+    if (
+      c.req
+        .header('if-none-match')
+        ?.split(/\s*,\s*/)
+        .includes(etag)
+    )
+      return new Response(null, {
+        status: 304,
+        headers: { ETag: etag, 'Cache-Control': 'no-cache' },
+      });
     return new Response(asset.bytes as Uint8Array<ArrayBuffer>, {
       headers: {
         'Content-Type': asset.mime,
         'Content-Length': String(asset.bytes.byteLength),
         'Cache-Control': 'no-cache',
+        ETag: etag,
         ...(CORS_TYPES.test(asset.mime) ? { 'Access-Control-Allow-Origin': '*' } : {}),
       },
     });
@@ -411,7 +444,10 @@ export function reportRoutes(store: Store, authorOf: (c: Context) => Author) {
       return assetNotFound();
     const asset = assets.get(view.id, path);
     if (!asset) return assetNotFound();
-    return mediaResponse(asset.bytes, assetMime(path), c.req.header('range'));
+    return mediaResponse(asset.bytes, assetMime(path), c.req.header('range'), {
+      etag: assetTag(asset.updatedAt, asset.bytes.byteLength),
+      ifNoneMatch: c.req.header('if-none-match'),
+    });
   });
 
   return routes;

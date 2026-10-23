@@ -647,6 +647,14 @@ describe('the assets route (R15)', () => {
     expect(res.headers.get('content-security-policy')).toBe(ASSET_CSP);
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(PNG);
+    // Its version tag: a browser that has this version gets 304 and no bytes.
+    const etag = res.headers.get('etag')!;
+    expect(etag).toMatch(/^".+"$/);
+    const again = await app.request(`/api/views/${ctx.viewId}/assets/shots/before.png`, {
+      headers: { 'if-none-match': etag },
+    });
+    expect(again.status).toBe(304);
+    expect(again.headers.get('etag')).toBe(etag);
     // The list of the view's files is still at /assets.
     const list = await app.request(`/api/views/${ctx.viewId}/assets`);
     expect(((await list.json()) as { path: string }[]).map((a) => a.path)).toEqual([

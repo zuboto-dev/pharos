@@ -628,6 +628,32 @@ describe('serving the built web app', () => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   });
 
+  it('compresses text for a browser that accepts it, never the live feed', async () => {
+    const store = new Store(openDatabase(':memory:'));
+    store.apply(
+      { kind: 'agent', name: 'a' },
+      {
+        message: 'many tasks',
+        operations: [
+          { op: 'create', type: 'project', ref: 'p', data: { name: 'Garden' } },
+          ...Array.from({ length: 40 }, (_, i) => ({
+            op: 'create' as const,
+            type: 'task' as const,
+            data: { projectId: '$p', title: `Water bed ${i}` },
+          })),
+        ],
+      },
+    );
+    const app = createApp(store);
+    const gz = { 'accept-encoding': 'gzip' };
+    const list = await app.request('/api/entities/task', { headers: gz });
+    expect(list.headers.get('content-encoding')).toBe('gzip');
+    const events = new AbortController();
+    const feed = await app.request('/api/events', { headers: gz, signal: events.signal });
+    expect(feed.headers.get('content-encoding')).toBeNull();
+    events.abort();
+  });
+
   it('serves files, answers page routes with index.html, and keeps the API separate', async () => {
     const webDir = mkdtempSync(join(tmpdir(), 'pharos-web-'));
     dirs.push(webDir);
@@ -645,6 +671,9 @@ describe('serving the built web app', () => {
     const asset = await served.request('/assets/app.js');
     expect(asset.status).toBe(200);
     expect(asset.headers.get('content-type')).toMatch(/javascript/);
+    // Named by content: kept for good. The page itself is asked for each time.
+    expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(home.headers.get('cache-control') ?? '').not.toContain('immutable');
     // The app's pages may frame only Pharos addresses (R13.6); other files carry no such header.
     expect(home.headers.get('content-security-policy')).toContain("frame-src 'self'");
     expect(page.headers.get('content-security-policy')).toContain("frame-src 'self'");

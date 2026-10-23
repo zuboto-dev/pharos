@@ -174,10 +174,12 @@ export class ReportAssets {
     ).map((r) => ({ path: r.path, mime: r.mime, size: r.size, updatedAt: r.updated_at }));
   }
 
-  get(viewId: string, path: string): { mime: string; bytes: Uint8Array } | null {
+  get(viewId: string, path: string): { mime: string; bytes: Uint8Array; updatedAt: string } | null {
     const row = this.store.database
-      .prepare('SELECT mime, bytes FROM report_assets WHERE view_id = ? AND path = ?')
-      .get(viewId, path) as { mime: string; bytes: Uint8Array } | undefined;
+      .prepare(
+        'SELECT mime, bytes, updated_at AS updatedAt FROM report_assets WHERE view_id = ? AND path = ?',
+      )
+      .get(viewId, path) as { mime: string; bytes: Uint8Array; updatedAt: string } | undefined;
     return row ?? null;
   }
 

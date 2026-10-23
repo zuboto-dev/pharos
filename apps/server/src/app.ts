@@ -12,6 +12,7 @@ import {
   type HealthResponse,
 } from '@pharos/schema';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { compress } from 'hono/compress';
 import { upgradeWebSocket } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -200,6 +201,9 @@ export type ServerInfo = {
   notifications?: Notifications;
 };
 
+/** Responses that stream and must never be held back for compression. */
+const STREAMED = /^\/(?:mcp|api\/events|api\/projects\/[^/]+\/terminal\/socket)(?:\/|$)/;
+
 export function createApp(
   store: Store,
   feed = new RevisionFeed(store),
@@ -212,6 +216,14 @@ export function createApp(
   const presence = info.presence ?? new Presence();
   watchAgentRevisions(store, feed, presence);
   const notifications = info.notifications ?? new Notifications(store, new RunLog(store));
+
+  // Text goes compressed when the browser accepts it (project data, the app's scripts and styles:
+  // about a fifth of the size over the network, to a phone). Never the live feed, the terminal
+  // socket or MCP, which stream; `compress` leaves pictures and other binary types alone.
+  const squeeze = compress();
+  app.use('*', (c, next) =>
+    STREAMED.test(c.req.path) || c.req.header('upgrade') ? next() : squeeze(c, next),
+  );
 
   // Every response under /api/views/:id/page carries the report page's locked headers (R13.6),
   // the refusals below included.
@@ -866,6 +878,12 @@ export function createApp(
       if (c.req.path.startsWith('/api/')) return;
       if (!(c.res.headers.get('content-type') ?? '').startsWith('text/html')) return;
       for (const [name, value] of Object.entries(APP_PAGE_HEADERS)) c.header(name, value);
+    });
+    // Vite names the app's scripts and styles by their content (/assets/name-hash.js): a new build
+    // gets new names, so the browser keeps these for good; index.html is asked for each time.
+    app.use('/assets/*', async (c, next) => {
+      await next();
+      if (c.res.status === 200) c.header('Cache-Control', 'public, max-age=31536000, immutable');
     });
     const files = serveStatic({ root: info.webDir });
     const page = serveStatic({ root: info.webDir, path: 'index.html' });

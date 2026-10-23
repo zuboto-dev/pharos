@@ -29,7 +29,7 @@ import { Loading, SkeletonShape } from '../catalog/skeleton';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { workingLine } from '../catalog/presence';
 import { TerminalDot } from '../agent/RunningAgents';
-import { useTerminalHints } from '../agent/running';
+import { useTerminalHints, type TerminalHint } from '../agent/running';
 import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
 import { BUTTON, Dot, toneOf } from '../catalog/ui';
 import { usePresence } from '../lib/events';
@@ -258,6 +258,21 @@ export function Sidebar() {
   // Projects an agent is working in right now (v0.2 B5): a pulsing halo on the status dot.
   const presence = usePresence();
   const terminals = useTerminalHints().hints;
+  /** The agent running for a folder's projects (they share one), if any. */
+  const folderHint = (projects: Project[]) =>
+    projects.map((p) => terminals.get(p.id)).find(Boolean);
+  /** An agent running for any project in a section (shown while it is closed). */
+  const sectionHint = (sectionId: string) =>
+    terminals.size
+      ? folderHint(
+          w.projects.filter(
+            (p) =>
+              p.data.sectionId === sectionId ||
+              (p.data.repositoryId &&
+                repositoryById.get(p.data.repositoryId)?.data.sectionId === sectionId),
+          ),
+        )
+      : undefined;
   // Projects with views changed since the reader last looked (R11).
   const changedViews = useChangedViews().projects;
   const ws = useWorkspace();
@@ -519,25 +534,14 @@ export function Sidebar() {
               </span>
               <span className="truncate">{project.data.name}</span>
               {agents.length > 0 && <span className="sr-only"> ({workingLine(agents, 'it')})</span>}
-              {terminals.get(project.id) && (
-                // Its agent terminal still runs (opened here earlier); the dot: new output.
-                <span
-                  data-terminal-mark=""
-                  title={`${terminals.get(project.id)!.agent} terminal running${terminals.get(project.id)!.unseen ? ', new output' : ''}`}
-                  className="relative inline-flex shrink-0 text-faint"
-                >
-                  <SquareTerminal aria-hidden className="size-3.5" />
-                  <span className="sr-only">
-                    {' '}
-                    ({terminals.get(project.id)!.agent} terminal running
-                    {terminals.get(project.id)!.unseen ? ', new output' : ''})
-                  </span>
-                  <TerminalDot
-                    unseen={terminals.get(project.id)!.unseen}
-                    className="-top-1 -right-1 size-1.5"
-                  />
-                </span>
-              )}
+              {terminals.get(project.id) &&
+                !(
+                  project.data.repositoryId &&
+                  repositoryById.get(project.data.repositoryId)?.data.path
+                ) && (
+                  // Its own agent (no folder): the mark is on the project.
+                  <TerminalMark hint={terminals.get(project.id)!} />
+                )}
               {changedViews[project.id]?.length ? (
                 <>
                   <ChangedDot className="shrink-0" />
@@ -648,6 +652,10 @@ export function Sidebar() {
                 <FolderGit2 className="size-3.5 shrink-0" aria-hidden />
                 <span className="truncate">{repository.data.name}</span>
                 {!open && <span className="font-normal text-faint">{projects.length}</span>}
+                {folderHint(projects) && (
+                  // One agent runs for the whole folder (its projects share it).
+                  <TerminalMark hint={folderHint(projects)!} where="this folder" />
+                )}
               </button>
             </Tooltip>
           )}
@@ -919,6 +927,10 @@ export function Sidebar() {
             />
             <Layers className="size-3 shrink-0" aria-hidden />
             <span className="truncate">{section.data.name}</span>
+            {!open && sectionHint(section.id) && (
+              // Closed: the agent running in a folder inside still shows.
+              <TerminalMark hint={sectionHint(section.id)!} where="this section" />
+            )}
           </button>
         )}
         <Tooltip label="Options">
@@ -1124,5 +1136,21 @@ export function Sidebar() {
         document.body,
       )}
     </>
+  );
+}
+
+/** A running agent terminal's mark: the dot says it printed since a panel here showed it. */
+function TerminalMark({ hint, where }: { hint: TerminalHint; where?: string }) {
+  const label = `${hint.agent} terminal running${where ? ` in ${where}` : ''}${hint.unseen ? ', new output' : ''}`;
+  return (
+    <span
+      data-terminal-mark=""
+      title={label}
+      className="relative ml-auto inline-flex shrink-0 text-faint"
+    >
+      <SquareTerminal aria-hidden className="size-3.5" />
+      <span className="sr-only"> ({label})</span>
+      <TerminalDot unseen={hint.unseen} className="-top-1 -right-1 size-1.5" />
+    </span>
   );
 }

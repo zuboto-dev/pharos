@@ -132,6 +132,7 @@ const app = createApp(store, feed, agent, {
   webUrl: process.env.PHAROS_WEB_URL,
   terminal,
   notifications,
+  routines: { url: process.env.PHAROS_ROUTINES_URL },
 });
 
 const server = serve(

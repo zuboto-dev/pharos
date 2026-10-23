@@ -1,4 +1,5 @@
 import {
+  agentLabel,
   ENTITIES,
   UPDATE_KINDS,
   type UpdateCounts,
@@ -97,6 +98,11 @@ const hourFormat = new Intl.DateTimeFormat(undefined, {
 });
 
 /** "Today", "Yesterday", "Mon, Oct 19". */
+/** An agent as people know it ("Claude Code", not its client name); a person by their name. */
+function whoName(author: { kind: string; name: string }): string {
+  return author.kind === 'human' ? author.name : agentLabel(author.name);
+}
+
 export function dayLabel(iso: string, now = new Date()): string {
   const d = new Date(iso);
   const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
@@ -656,7 +662,7 @@ function SessionCard({
         />
         <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
           <span className="flex min-w-0 items-center gap-1.5 text-sm">
-            <span className="shrink-0 font-medium text-ink">{session.author.name}</span>
+            <span className="shrink-0 font-medium text-ink">{whoName(session.author)}</span>
             {session.project && (
               <span className="min-w-0 truncate text-muted">· {session.project}</span>
             )}
@@ -753,6 +759,7 @@ export function matchesSession(
   if (!words) return true;
   const hay = [
     session.author.name,
+    whoName(session.author),
     session.project ?? '',
     ...session.revisions.map((r) => r.message),
     ...session.entities.map((e) => e.label ?? ''),
@@ -907,7 +914,7 @@ export function UpdatesPage() {
     if (last?.day === day) last.sessions.push(s);
     else groups.push({ day, sessions: [s] });
   }
-  const authors = (data?.authors ?? []).map((a) => ({ id: a.name, name: a.name }));
+  const authors = (data?.authors ?? []).map((a) => ({ id: a.name, name: whoName(a) }));
   const projects = data?.projects ?? [];
 
   return (

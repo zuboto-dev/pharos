@@ -45,10 +45,22 @@ function startMessage(session: TerminalSession, replay: boolean): TerminalServer
 /** How much recent output a session keeps, so a reopened panel shows the conversation. */
 const SCROLLBACK = 256 * 1024;
 
+/** A DEC private mode set or reset (`ESC [ ? 1049 h`): screen, mouse, paste and cursor modes. */
+// eslint-disable-next-line no-control-regex -- ESC starts the sequence
+const PRIVATE_MODE = /\x1b\[\?([\d;]+)([hl])/g;
+/** The alternate screen modes, replayed before the others (switching screens resets some). */
+const SCREEN_MODES = new Set([47, 1047, 1049]);
+
 export class TerminalSession {
   readonly clients = new Set<TerminalClient>();
-  /** Recent output, replayed to a panel that (re)attaches. */
+  /** Recent output (up to twice SCROLLBACK, trimmed in one go), replayed to a panel that (re)attaches. */
   scrollback = '';
+  /** Output was dropped from the front of `scrollback`. */
+  private trimmed = false;
+  /** The last value of each private mode the agent set, so a replay that starts after it keeps it. */
+  private readonly modes = new Map<number, 'h' | 'l'>();
+  /** The end of the last output, so a mode sequence split across two outputs is still seen. */
+  private modeTail = '';
   /** When the last panel went away (undefined while one is attached). */
   detachedAt: number | undefined;
   exited = false;
@@ -58,6 +70,37 @@ export class TerminalSession {
     readonly launch: TerminalLaunch,
     readonly pty: Pty,
   ) {}
+
+  /** Keeps output for replay and notes the modes it sets. */
+  record(data: string): void {
+    const text = this.modeTail + data;
+    for (const match of text.matchAll(PRIVATE_MODE))
+      for (const mode of match[1]!.split(';'))
+        if (mode) this.modes.set(Number(mode), match[2] as 'h' | 'l');
+    this.modeTail = text.slice(-32);
+    this.scrollback += data;
+    if (this.scrollback.length > 2 * SCROLLBACK) {
+      this.scrollback = this.scrollback.slice(-SCROLLBACK);
+      this.trimmed = true;
+    }
+  }
+
+  /**
+   * What a reattached panel is sent: the last SCROLLBACK of output. When older output was
+   * dropped, it starts at an escape sequence rather than inside one (or inside a character), and
+   * is preceded by the modes set before it, so a full-screen agent (Claude Code) still draws on
+   * its alternate screen and gets the mouse wheel after a long conversation.
+   */
+  replay(): string {
+    if (!this.trimmed && this.scrollback.length <= SCROLLBACK) return this.scrollback;
+    let text = this.scrollback.slice(-SCROLLBACK);
+    const start = text.indexOf('\x1b');
+    if (start > 0 && start < 4096) text = text.slice(start);
+    const modes = [...this.modes].sort(
+      ([a], [b]) => Number(SCREEN_MODES.has(b)) - Number(SCREEN_MODES.has(a)),
+    );
+    return modes.map(([mode, value]) => `\x1b[?${mode}${value}`).join('') + text;
+  }
 
   broadcast(message: TerminalServerMessage): void {
     for (const client of this.clients) {
@@ -131,7 +174,8 @@ export class TerminalSessions {
     session.clients.add(client);
     session.detachedAt = undefined;
     client.send(startMessage(session, replay));
-    if (session.scrollback) client.send({ t: 'o', d: session.scrollback });
+    const output = session.replay();
+    if (output) client.send({ t: 'o', d: output });
     try {
       session.pty.resize(size.cols, size.rows);
     } catch (error) {
@@ -211,7 +255,7 @@ export class TerminalSessions {
     this.sessions.set(projectId, session);
     pty.onData((data) => {
       try {
-        session.scrollback = (session.scrollback + data).slice(-SCROLLBACK);
+        session.record(data);
         session.broadcast({ t: 'o', d: data });
       } catch (error) {
         console.error('[pharos] A terminal output callback failed:', error);

@@ -2,6 +2,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { wheelSteps } from './wheel';
 
 /** What the server sends (apps/server/src/terminal/sessions.ts). */
 type ServerMessage =
@@ -187,19 +188,47 @@ export default function TerminalView({
       stateRef.current('closed', event.code === 1006 ? undefined : event.reason || undefined);
     };
     const typing = terminal.onData((data) => send.current({ t: 'i', d: data }));
+    // Whether the agent asked for SGR mouse reports; the parser goes on to handle the mode.
+    let sgr = false;
+    const sgrMode = (on: boolean) => (params: (number | number[])[]) => {
+      if (params.includes(1006)) sgr = on;
+      return false;
+    };
+    const sgrOn = terminal.parser.registerCsiHandler({ prefix: '?', final: 'h' }, sgrMode(true));
+    const sgrOff = terminal.parser.registerCsiHandler({ prefix: '?', final: 'l' }, sgrMode(false));
+    terminal.attachCustomWheelEventHandler(
+      wheelSteps(
+        terminal,
+        el,
+        () => sgr,
+        (data) => send.current({ t: 'i', d: data }),
+      ),
+    );
+    // The agent redraws everything it shows for each new size, so dragging the panel's edge
+    // sends only the size it settles on, and only when the columns or rows changed.
+    let sent = { cols: terminal.cols, rows: terminal.rows };
+    let sizing: ReturnType<typeof setTimeout> | undefined;
     const observer = new ResizeObserver(() => {
       try {
         fit.fit();
       } catch {
         return;
       }
-      send.current({ t: 'r', cols: terminal.cols, rows: terminal.rows });
+      clearTimeout(sizing);
+      sizing = setTimeout(() => {
+        const { cols, rows } = terminal;
+        if (cols === sent.cols && rows === sent.rows) return;
+        if (send.current({ t: 'r', cols, rows })) sent = { cols, rows };
+      }, 150);
     });
     observer.observe(el);
     terminal.focus();
     return () => {
       clearTimeout(quiet);
+      clearTimeout(sizing);
       observer.disconnect();
+      sgrOn.dispose();
+      sgrOff.dispose();
       themeWatch.disconnect();
       typing.dispose();
       send.current = () => false;

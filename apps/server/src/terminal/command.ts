@@ -21,17 +21,48 @@ export type TerminalCommand = { file: string; args: string[] };
  *   (`--strict-mcp-config`), so a "pharos" server in the owner's own config can't point the
  *   panel at another Pharos.
  * - Codex: this server as `mcp_servers.pharos`, overriding a "pharos" entry of the owner's own.
+ *
+ * `brief` (terminalBrief) tells the agent which project its panel belongs to: Claude Code as an
+ * appended system prompt, Codex as its developer instructions.
  */
 export function terminalCommand(
   preset: AgentPreset,
-  options: { mcpConfigPath: string; serverUrl: string },
+  options: { mcpConfigPath: string; serverUrl: string; brief?: string },
 ): TerminalCommand {
   if (preset === 'codex')
-    return { file: 'codex', args: ['-c', `mcp_servers.pharos.url="${options.serverUrl}/mcp"`] };
+    return {
+      file: 'codex',
+      args: [
+        '-c',
+        `mcp_servers.pharos.url="${options.serverUrl}/mcp"`,
+        // A JSON string is a valid TOML string.
+        ...(options.brief ? ['-c', `developer_instructions=${JSON.stringify(options.brief)}`] : []),
+      ],
+    };
   return {
     file: 'claude',
-    args: ['--mcp-config', options.mcpConfigPath, '--strict-mcp-config'],
+    args: [
+      '--mcp-config',
+      options.mcpConfigPath,
+      '--strict-mcp-config',
+      ...(options.brief ? ['--append-system-prompt', options.brief] : []),
+    ],
   };
+}
+
+/**
+ * Which project the panel's agent works for. Several projects can share a repository folder, and
+ * the agent can't tell them apart from the folder: without this it guesses, or asks.
+ */
+export function terminalBrief(store: Store, projectId: string, serverUrl: string): string {
+  const project = store.get(projectId);
+  const name = project?.type === 'project' ? (project as Entity<'project'>).data.name : undefined;
+  const which = name ? `${JSON.stringify(name)} (${projectId})` : projectId;
+  return (
+    `You are running in the agent panel of the Pharos project ${which}, opened from its page in ` +
+    `Pharos at ${serverUrl}. "This project" means that Pharos project unless the user names ` +
+    `another one; other Pharos projects may share this folder, so read and update that one.`
+  );
 }
 
 /** The agent the panel runs: the one chosen for answering in Settings while installed, else the first installed. */
@@ -77,11 +108,13 @@ export function terminalCwd(
 
 /**
  * The environment of the agent: PATH and HOME of the server (and the few variables a terminal
- * program expects from the login), the terminal type, and where Pharos is. Nothing from the client.
+ * program expects from the login), the terminal type, and where Pharos is and which project
+ * (`PHAROS_PROJECT_ID`). Nothing from the client.
  */
 export function terminalEnv(
   serverEnv: NodeJS.ProcessEnv,
   serverUrl: string,
+  projectId?: string,
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG']) {
@@ -92,5 +125,6 @@ export function terminalEnv(
   env.TERM = 'xterm-256color';
   env.COLORTERM = 'truecolor';
   env.PHAROS_URL = serverUrl;
+  if (projectId) env.PHAROS_PROJECT_ID = projectId;
   return env;
 }

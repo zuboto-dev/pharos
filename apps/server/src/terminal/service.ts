@@ -2,6 +2,7 @@ import type { AgentPreset } from '../agent-runner.js';
 import type { Store } from '../store/store.js';
 import {
   presetLabel,
+  terminalBrief,
   terminalCommand,
   terminalCwd,
   terminalEnv,
@@ -97,6 +98,7 @@ export class TerminalService {
     const { file, args } = terminalCommand(preset, {
       mcpConfigPath: this.options.mcpConfigPath,
       serverUrl: this.options.serverUrl,
+      brief: terminalBrief(this.options.store, projectId, this.options.serverUrl),
     });
     return {
       preset,
@@ -104,7 +106,7 @@ export class TerminalService {
       file: this.options.installed[preset] || file,
       args,
       cwd: terminalCwd(this.options.store, projectId, this.options.home).cwd,
-      env: terminalEnv(this.options.serverEnv ?? process.env, this.options.serverUrl),
+      env: terminalEnv(this.options.serverEnv ?? process.env, this.options.serverUrl, projectId),
     };
   }
 

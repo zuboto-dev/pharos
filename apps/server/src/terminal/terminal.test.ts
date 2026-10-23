@@ -8,7 +8,13 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
-import { terminalCommand, terminalCwd, terminalEnv, terminalPreset } from './command.js';
+import {
+  terminalBrief,
+  terminalCommand,
+  terminalCwd,
+  terminalEnv,
+  terminalPreset,
+} from './command.js';
 import { terminalPlaceRefusal, terminalSocketRefusal } from './guard.js';
 import { TerminalService } from './service.js';
 import {
@@ -179,6 +185,29 @@ describe('what the terminal runs', () => {
     });
   });
 
+  it('tells the agent which project its panel belongs to', () => {
+    const brief = 'You are running in the agent panel of the Pharos project "Garden" (prj_1)';
+    expect(terminalCommand('claude', { ...target, brief }).args).toEqual([
+      '--mcp-config',
+      '/h/.pharos/agent-mcp.json',
+      '--strict-mcp-config',
+      '--append-system-prompt',
+      brief,
+    ]);
+    expect(terminalCommand('codex', { ...target, brief }).args).toEqual([
+      '-c',
+      'mcp_servers.pharos.url="http://localhost:4490/mcp"',
+      '-c',
+      `developer_instructions=${JSON.stringify(brief)}`,
+    ]);
+    // Two projects in one folder get different briefs.
+    const a = project('Alpha', home);
+    const b = project('Beta', home);
+    expect(terminalBrief(store, a, 'http://localhost:4490')).toContain(`"Alpha" (${a})`);
+    expect(terminalBrief(store, b, 'http://localhost:4490')).toContain(`"Beta" (${b})`);
+    expect(terminalEnv({}, 'http://localhost:4490', a).PHAROS_PROJECT_ID).toBe(a);
+  });
+
   it('follows the agent chosen in Settings while it is installed', () => {
     expect(terminalPreset(store, ['claude', 'codex'])).toBe('claude');
     store.setSetting('agent.preset', 'codex');
@@ -242,6 +271,30 @@ describe('terminal sessions', () => {
     sessions.input('p2', 'hello');
     expect(spawned[0]!.written).toEqual([]);
     expect(spawned[1]!.written).toEqual(['hello']);
+  });
+
+  it('replays a long conversation from a sequence boundary, with the modes set before it', () => {
+    const sessions = new TerminalSessions(fakeSpawn, { killGroup: () => {} });
+    sessions.attach('p1', launch, client(), size);
+    const pty = spawned[0]!;
+    // A full-screen agent: alternate screen, SGR mouse reports (split across two outputs).
+    pty.emit('\x1b[?1049h\x1b[?1000h\x1b[?10');
+    pty.emit('06h');
+    const frame = 'word '.repeat(200) + '\x1b[H';
+    for (let i = 0; i < 600; i++) pty.emit(frame);
+    const again = client();
+    sessions.attach('p1', launch, again, size);
+    const replay = (again.got[1] as { d: string }).d;
+    // The modes first (the screen before the mouse), then the output from an escape sequence on,
+    // not from the middle of a word.
+    expect(replay.startsWith('\x1b[?1049h\x1b[?1000h\x1b[?1006h\x1b[Hword ')).toBe(true);
+    expect(replay.length).toBeLessThanOrEqual(256 * 1024 + 64);
+    // A short conversation is replayed as it was.
+    sessions.attach('p2', launch, client(), size);
+    spawned[1]!.emit('\x1b[?1049hhello');
+    const short = client();
+    sessions.attach('p2', launch, short, size);
+    expect(short.got[1]).toEqual({ t: 'o', d: '\x1b[?1049hhello' });
   });
 
   it('ends a session 30 minutes after its last panel left, killing its process group', () => {
@@ -414,7 +467,14 @@ describe('the terminal routes', () => {
     expect(got[0]).toMatchObject({ t: 'start', agent: 'claude' });
     const pty = spawned[0]!;
     expect(pty.file).toBe('/usr/bin/claude');
-    expect(pty.args).toEqual(['--mcp-config', join(home, 'agent-mcp.json'), '--strict-mcp-config']);
+    expect(pty.args.slice(0, 4)).toEqual([
+      '--mcp-config',
+      join(home, 'agent-mcp.json'),
+      '--strict-mcp-config',
+      '--append-system-prompt',
+    ]);
+    expect(pty.args[4]).toContain(`(${id})`);
+    expect(pty.options.env.PHAROS_PROJECT_ID).toBe(id);
     expect(pty.options.cwd).toBe(join(home, 'pharos', 'agent-home', id));
     expect(pty.size).toEqual([90, 20]);
     ws.send(JSON.stringify({ t: 'i', d: 'hello' }));

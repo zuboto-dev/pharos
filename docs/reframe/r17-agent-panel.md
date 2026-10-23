@@ -42,11 +42,15 @@ The panel starts a process from the browser, so:
 - **Never an agent.** A request declaring an agent author (`X-Pharos-Author` other than `human:…`)
   is refused, on the status route and the socket.
 - **Fixed commands.** Only the two presets, run without a shell from the path found at start:
-  - Claude Code: `claude --mcp-config <PHAROS_HOME>/agent-mcp.json --strict-mcp-config`
-    (interactive; only this Pharos as MCP server, so a "pharos" entry in the owner's own config
-    can't point it at another Pharos).
-  - Codex: `codex -c mcp_servers.pharos.url="http://localhost:<port>/mcp"` (interactive; overrides a
-    "pharos" entry of the owner's own config).
+  - Claude Code: `claude --mcp-config <PHAROS_HOME>/agent-mcp.json --strict-mcp-config
+--append-system-prompt <brief>` (interactive; only this Pharos as MCP server, so a "pharos"
+    entry in the owner's own config can't point it at another Pharos).
+  - Codex: `codex -c mcp_servers.pharos.url="http://localhost:<port>/mcp" -c
+developer_instructions=<brief>` (interactive; overrides a "pharos" entry, and any
+    `developer_instructions`, of the owner's own config).
+  - The brief (`terminalBrief`) names the project the panel belongs to, by name and id: several
+    projects can share a repository folder, and without it the agent couldn't tell which one
+    "this project" is.
     The client sends only typed input, a size, or "restart"; any other message closes the socket.
     `PHAROS_AGENT_COMMAND` doesn't apply here (it is for headless answering). With neither CLI
     installed the panel says so.
@@ -56,9 +60,11 @@ The panel starts a process from the browser, so:
   too: the panel then starts there, which is no more than any agent writing to the store can do.)
 - **Environment.** PATH and HOME of the server, plus USER, LOGNAME, SHELL, TMPDIR and LANG (which
   terminal programs and the macOS keychain expect), `TERM=xterm-256color`, `COLORTERM=truecolor`
-  and `PHAROS_URL`. Nothing from the client, no other server variables.
+  `PHAROS_URL` and `PHAROS_PROJECT_ID`. Nothing from the client, no other server variables.
 - **Sessions.** One per project, never shared across projects, reused when the panel reopens (the
-  last 256 KB of output is replayed, so the conversation is still there). Killed with its whole
+  last 256 KB of output is replayed, so the conversation is still there; once older output is
+  dropped, the replay starts at an escape sequence and is preceded by the private modes the agent
+  set before it, so Claude Code's full screen and mouse reports survive a long conversation). Killed with its whole
   process group (SIGHUP, SIGTERM, then SIGKILL) when the server stops (`SIGTERM`, `SIGINT`,
   `SIGHUP`, exit) and after 30 minutes with no panel attached. Restart ends the session and starts
   a new one.
@@ -67,6 +73,12 @@ The panel starts a process from the browser, so:
 
 node-pty 1.1.0's macOS prebuilds lose their `spawn-helper` executable bit when unpacked; the
 server restores it on that one file in node-pty's folder before the first spawn (`terminal/pty.ts`).
+
+**Long output in the panel.** Claude Code draws full screen and scrolls its own conversation
+from mouse wheel reports. xterm.js sends one report per wheel event however far it went, so the
+panel's `wheelSteps` (`apps/web/src/agent/wheel.ts`) sends one SGR report per line scrolled while
+the agent asked for SGR mouse reports. The agent redraws everything for each new size, so the
+panel sends a size only once dragging its edge settles (150 ms), and only when it changed.
 
 ## Not done
 

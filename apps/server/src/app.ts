@@ -38,6 +38,7 @@ import { RunLog, askOwner, deskAnswer, deskOf } from './desk.js';
 import { landedSince, markDeskSeen } from './landed.js';
 import { folderBriefs, projectBrief } from './brief.js';
 import { updatesOf } from './updates.js';
+import { routinesRoutes, type RoutinesOptions } from './routines.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -199,6 +200,8 @@ export type ServerInfo = {
   terminal?: TerminalService;
   /** What Pharos tells the owner (index.ts starts its sources); made here, idle, when absent. */
   notifications?: Notifications;
+  /** The Routines app the Routines page manages (`PHAROS_ROUTINES_URL`); tests pass a stub fetch. */
+  routines?: RoutinesOptions;
 };
 
 /** Responses that stream and must never be held back for compression. */
@@ -368,6 +371,9 @@ export function createApp(
     if (declaresAgent(c)) return forbidden(c, ownerOnly);
     return c.json(notifications.setPrefs(NotificationPrefs.parse(await c.req.json())));
   });
+
+  // The Routines page: the owner's daily routines, proxied to the Routines app (owner only).
+  api.route('/routines', routinesRoutes(info.routines));
 
   // Which agent works where right now (also sent on the feed as `presence`).
   api.get('/presence', (c) => c.json(presence.state()));

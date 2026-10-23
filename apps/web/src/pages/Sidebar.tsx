@@ -1,5 +1,6 @@
 import { DeskLink } from './DeskPage';
 import { UpdatesLink } from './UpdatesPage';
+import { RoutinesLink } from './RoutinesPage';
 import type { Entity, Operation } from '@pharos/schema';
 import clsx from 'clsx';
 import {
@@ -1036,6 +1037,7 @@ export function Sidebar() {
       <div className="px-2 pb-1">
         <DeskLink />
         <UpdatesLink />
+        <RoutinesLink />
         {/* One plus for everything new in the sidebar: a project, a folder or a section. */}
         <div className="mt-2 flex items-center justify-between pl-2">
           <span className="text-[11px] font-semibold tracking-wide text-faint uppercase">

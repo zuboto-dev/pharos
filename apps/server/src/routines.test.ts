@@ -1,0 +1,313 @@
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { RoutinesConfig, RoutinesState } from '@pharos/schema';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createApp } from './app.js';
+import { applyChanges } from './routines.js';
+import { openDatabase } from './store/database.js';
+import { Store } from './store/store.js';
+
+// A fake Routines server, in this process: never the owner's real one (its POSTs rewrite
+// routines.json and /api/run starts paid work).
+
+const CONFIG = (): RoutinesConfig => ({
+  schedule: {
+    wrapup: '00:00',
+    nightshift: '01:00',
+    daybreak: '07:00',
+    timezone: 'America/Chicago',
+  },
+  master: { model: 'opus', effort: 'high' },
+  dispatch: { develop: { easy: 'sonnet', medium: 'sonnet', hard: 'opus' } },
+  cleanup: { level: 1, scratch_days: 7 },
+  handoff_never: ['tax'],
+  projects: [
+    {
+      name: 'garden',
+      path: '/tmp/garden',
+      enrolled: true,
+      budget_usd: 8,
+      hours: 4,
+      note: 'slot 1',
+    },
+    { name: 'bike', path: '/tmp/bike', enrolled: false, budget_usd: 5, hours: 3 },
+  ],
+});
+
+type Seen = { method: string; url: string; body: string };
+
+async function fakeRoutines(opts: { hang?: boolean; runStatus?: number } = {}) {
+  let config = CONFIG();
+  const seen: Seen[] = [];
+  const read = (req: IncomingMessage) =>
+    new Promise<string>((resolve) => {
+      let data = '';
+      req.on('data', (chunk) => (data += chunk));
+      req.on('end', () => resolve(data));
+    });
+  const server: Server = createServer((req, res) => {
+    void (async () => {
+      const body = await read(req);
+      seen.push({ method: req.method!, url: req.url!, body });
+      if (opts.hang) return; // never answers
+      const url = new URL(req.url!, 'http://x');
+      const json = (code: number, value: unknown) => {
+        res.writeHead(code, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(value));
+      };
+      if (req.method === 'GET' && url.pathname === '/api/state')
+        return json(200, {
+          config,
+          status: [{ name: 'garden', exists: true, runs: { wrapup: null } }],
+          report: { text: '', date: null, when: null },
+          pages: {},
+          now: '2026-10-23T14:00',
+        });
+      if (req.method === 'POST' && url.pathname === '/api/state') {
+        const patch = JSON.parse(body) as Partial<RoutinesConfig>;
+        config = { ...config, ...patch };
+        return json(200, { ok: true });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/run') {
+        if (opts.runStatus === 409)
+          return json(409, { error: 'wrapup is already running for garden' });
+        return json(200, { ok: true, started: ['run.sh'] });
+      }
+      if (url.pathname === '/api/file') {
+        if (url.searchParams.get('project') !== 'garden')
+          return json(404, { error: 'no such file' });
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        return res.end('# NEXT · garden\n- [ ] A1 auto water');
+      }
+      if (url.pathname === '/api/log') {
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        return res.end(`log ${url.searchParams.get('file')}`);
+      }
+      json(404, { error: 'not found' });
+    })();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  servers.push(server);
+  return { url, seen, config: () => config };
+}
+
+const servers: Server[] = [];
+afterEach(async () => {
+  for (const s of servers.splice(0)) {
+    s.closeAllConnections();
+    await new Promise((resolve) => s.close(resolve));
+  }
+});
+
+function appFor(url: string, timeoutMs = 2000) {
+  const store = new Store(openDatabase(':memory:'));
+  return createApp(store, undefined, undefined, { routines: { url, timeoutMs } });
+}
+
+const OWNER = { 'x-pharos-author': 'human:me', 'content-type': 'application/json' };
+const post = (body: unknown, headers: Record<string, string> = OWNER) => ({
+  method: 'POST',
+  headers,
+  body: JSON.stringify(body),
+});
+
+describe('the Routines proxy', () => {
+  it('passes the state through, marked available', async () => {
+    const fake = await fakeRoutines();
+    const res = await appFor(fake.url).request('/api/routines/state');
+    const state = (await res.json()) as RoutinesState;
+    expect(state.available).toBe(true);
+    if (!state.available) return;
+    expect(state.config.projects.map((p) => p.name)).toEqual(['garden', 'bike']);
+    expect(state.now).toBe('2026-10-23T14:00');
+    expect(state.url).toBe(fake.url);
+  });
+
+  it('says clearly when Routines is not running, and how to start it', async () => {
+    const fake = await fakeRoutines();
+    const url = fake.url;
+    for (const s of servers.splice(0)) await new Promise((r) => s.close(r));
+    const app = appFor(url);
+    const state = (await (await app.request('/api/routines/state')).json()) as RoutinesState;
+    expect(state).toMatchObject({ available: false, url });
+    if (state.available) return;
+    expect(state.reason).toContain("isn't running");
+    expect(state.reason).toContain('server.py');
+    const save = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'enrolled', project: 'bike', from: false, to: true }] }),
+    );
+    expect(save.status).toBe(503);
+    expect(((await save.json()) as { error: { code: string } }).error.code).toBe('unavailable');
+  });
+
+  it('gives up quickly on a Routines server that never answers', async () => {
+    const fake = await fakeRoutines({ hang: true });
+    const started = Date.now();
+    const state = (await (await appFor(fake.url, 150).request('/api/routines/state')).json()) as {
+      available: boolean;
+      reason: string;
+    };
+    expect(state.available).toBe(false);
+    expect(state.reason).toContain("didn't answer");
+    expect(Date.now() - started).toBeLessThan(1500);
+  });
+
+  it('refuses agents everything, and writes without an owner header', async () => {
+    const fake = await fakeRoutines();
+    const app = appFor(fake.url);
+    const agent = { 'x-pharos-author': 'agent:Claude Code', 'content-type': 'application/json' };
+    expect((await app.request('/api/routines/state', { headers: agent })).status).toBe(403);
+    expect(
+      (
+        await app.request(
+          '/api/routines/run',
+          post({ routine: 'wrapup', project: 'garden' }, agent),
+        )
+      ).status,
+    ).toBe(403);
+    // No header at all reads as the owner for GETs, but a write or a run must say human:….
+    expect(
+      (
+        await app.request(
+          '/api/routines/run',
+          post({ routine: 'wrapup', project: 'garden' }, { 'content-type': 'application/json' }),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await app.request(
+          '/api/routines/save',
+          post(
+            { changes: [{ field: 'enrolled', project: 'bike', from: false, to: true }] },
+            { 'content-type': 'application/json' },
+          ),
+        )
+      ).status,
+    ).toBe(403);
+    expect(fake.seen.filter((s) => s.method === 'POST')).toEqual([]);
+  });
+
+  it('saves the edits into routines.json, keeping every other field', async () => {
+    const fake = await fakeRoutines();
+    const res = await appFor(fake.url).request(
+      '/api/routines/save',
+      post({
+        changes: [
+          { field: 'enrolled', project: 'bike', from: false, to: true },
+          { field: 'budget_usd', project: 'garden', from: 8, to: 10 },
+          { field: 'schedule', routine: 'daybreak', from: '07:00', to: '06:30' },
+          { field: 'dispatch', kind: 'develop', level: 'hard', from: 'opus', to: 'sonnet' },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { saved: string[] }).saved).toEqual([
+      'bike: enrolled',
+      'garden: night budget $8 → $10',
+      'Morning report at 07:00 → 06:30',
+      'develop, hard: opus → sonnet',
+    ]);
+    const posted = JSON.parse(fake.seen.find((s) => s.method === 'POST')!.body) as RoutinesConfig;
+    // Only what the Routines page saves: never master, never other keys.
+    expect(Object.keys(posted).sort()).toEqual(['dispatch', 'projects', 'schedule']);
+    const conf = fake.config();
+    expect(conf.projects[1]).toMatchObject({ name: 'bike', enrolled: true, path: '/tmp/bike' });
+    expect(conf.projects[0]).toMatchObject({ budget_usd: 10, note: 'slot 1', hours: 4 });
+    expect(conf.schedule).toMatchObject({ daybreak: '06:30', timezone: 'America/Chicago' });
+    expect(conf.dispatch.develop).toEqual({ easy: 'sonnet', medium: 'sonnet', hard: 'sonnet' });
+    expect(conf.handoff_never).toEqual(['tax']);
+  });
+
+  it('refuses a save when routines.json changed since the page loaded', async () => {
+    const fake = await fakeRoutines();
+    const res = await appFor(fake.url).request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'budget_usd', project: 'garden', from: 6, to: 10 }] }),
+    );
+    expect(res.status).toBe(409);
+    expect(fake.seen.some((s) => s.method === 'POST')).toBe(false);
+  });
+
+  it('refuses bad values and unknown projects before they reach Routines', async () => {
+    const fake = await fakeRoutines();
+    const app = appFor(fake.url);
+    const bad = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'schedule', routine: 'daybreak', from: '07:00', to: '25:00' }] }),
+    );
+    expect(bad.status).toBe(400);
+    const unknown = await app.request(
+      '/api/routines/save',
+      post({ changes: [{ field: 'hours', project: 'nope', from: 1, to: 2 }] }),
+    );
+    expect(unknown.status).toBe(400);
+    const run = await app.request(
+      '/api/routines/run',
+      post({ routine: 'wrapup', project: 'nope' }),
+    );
+    expect(run.status).toBe(404);
+    const badRoutine = await app.request(
+      '/api/routines/run',
+      post({ routine: 'rm', project: 'garden' }),
+    );
+    expect(badRoutine.status).toBe(400);
+    expect(fake.seen.some((s) => s.method === 'POST')).toBe(false);
+  });
+
+  it('starts a routine for one project, and passes on "already running"', async () => {
+    const fake = await fakeRoutines();
+    const res = await appFor(fake.url).request(
+      '/api/routines/run',
+      post({ routine: 'nightshift', project: 'garden' }),
+    );
+    expect(res.status).toBe(200);
+    const runs = fake.seen.filter((s) => s.url === '/api/run');
+    expect(runs.map((r) => JSON.parse(r.body))).toEqual([
+      { routine: 'nightshift', project: 'garden' },
+    ]);
+
+    const busy = await fakeRoutines({ runStatus: 409 });
+    const again = await appFor(busy.url).request(
+      '/api/routines/run',
+      post({ routine: 'wrapup', project: 'garden' }),
+    );
+    expect(again.status).toBe(409);
+    expect(((await again.json()) as { error: { message: string } }).error.message).toContain(
+      'already running',
+    );
+  });
+
+  it('reads planning files and logs, and only those', async () => {
+    const fake = await fakeRoutines();
+    const app = appFor(fake.url);
+    const file = await app.request('/api/routines/file?project=garden&name=NEXT.md');
+    expect(await file.json()).toEqual({
+      project: 'garden',
+      name: 'NEXT.md',
+      text: '# NEXT · garden\n- [ ] A1 auto water',
+    });
+    expect((await app.request('/api/routines/file?project=garden&name=.env')).status).toBe(400);
+    expect((await app.request('/api/routines/file?project=nope&name=NEXT.md')).status).toBe(404);
+    const log = await app.request('/api/routines/log?file=2026-10-23-garden-wrapup.log');
+    expect(((await log.json()) as { text: string }).text).toBe('log 2026-10-23-garden-wrapup.log');
+    expect((await app.request('/api/routines/log?file=../routines.json')).status).toBe(400);
+  });
+});
+
+describe('applyChanges', () => {
+  it('leaves the original alone and adds a missing dispatch row', () => {
+    const conf = CONFIG();
+    const next = applyChanges(conf, [
+      { field: 'dispatch', kind: 'search', level: 'easy', to: 'haiku' },
+      { field: 'timezone', from: 'America/Chicago', to: 'Europe/Berlin' },
+      { field: 'hours', project: 'bike', from: 3, to: 2 },
+    ]);
+    expect(conf.dispatch.search).toBeUndefined();
+    expect(next.dispatch.search).toEqual({ easy: 'haiku' });
+    expect(next.schedule.timezone).toBe('Europe/Berlin');
+    expect(next.projects[1]!.hours).toBe(2);
+  });
+});

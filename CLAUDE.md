@@ -33,6 +33,10 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
     `src/lookups.ts` logs agents' MCP read calls (`LOOKUP_TOOLS`) in the `lookups` table (30 days,
     5000 rows; never revisions) for "looked up"
   - `src/agent-runner.ts` — runs an agent (Claude Code by default) for new questions
+  - `src/routines.ts` — the Routines page's proxy (`/api/routines/*`) to the owner's Routines app
+    (`PHAROS_ROUTINES_URL`, default http://127.0.0.1:4777): state, save (field edits checked
+    against routines.json), run, file, log. Owner only; writes and runs need `human:…`. Tests use
+    an in-process fake; never POST to the real one (it rewrites routines.json and starts paid runs)
   - `src/feed.ts` — announces new revisions (including ones from other processes, by polling) to
     `GET /api/events` (SSE); the web app reloads affected data from it
   - `src/notifications.ts` — what Pharos tells the owner (desk items, failed runs, agent terminals

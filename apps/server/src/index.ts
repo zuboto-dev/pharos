@@ -20,6 +20,7 @@ import { scheduleAssetPurge } from './views/report.js';
 import { webBuildId } from './version.js';
 import { loadPty } from './terminal/pty.js';
 import { TerminalService } from './terminal/service.js';
+import { PermissionService } from './permissions/service.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
 // `pnpm dev` waits for a file change). A stray rejection is logged and doesn't end it.
@@ -119,6 +120,11 @@ for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
     terminal.stop();
     process.exit(0);
   });
+// Claude Code permissions (Settings): its transcripts and settings live in ~/.claude, or in
+// PHAROS_CLAUDE_HOME (for a test server with fixture transcripts). Read-only until the owner clicks.
+const permissions = new PermissionService(store, {
+  ...(process.env.PHAROS_CLAUDE_HOME ? { claudeHome: process.env.PHAROS_CLAUDE_HOME } : {}),
+});
 const app = createApp(store, feed, agent, {
   dataPath: dbPath,
   port,
@@ -133,6 +139,7 @@ const app = createApp(store, feed, agent, {
   terminal,
   notifications,
   routines: { url: process.env.PHAROS_ROUTINES_URL },
+  permissions,
 });
 
 const server = serve(
@@ -162,6 +169,8 @@ const server = serve(
     // moment after start, one at a time (R7.9). It logs its own errors and never stops the server.
     setTimeout(() => {
       files.rescanAll().catch((error: unknown) => console.error('[pharos] rescan failed:', error));
+      // And read Claude Code's transcripts once, so Settings → Agent permissions opens fast.
+      permissions.warm();
     }, 3000);
   },
 );

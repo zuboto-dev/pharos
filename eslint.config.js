@@ -15,6 +15,7 @@ export default defineConfig([
       '*.js',
       'samples/**/*.mjs',
       'scripts/**/*.mjs',
+      'agents/**/*.mjs',
       'eval/compat/**/*.mjs',
       'eval/report-refresh/**/*.mjs',
       'eval/report-doc/**/*.mjs',

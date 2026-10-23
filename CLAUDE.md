@@ -274,6 +274,24 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   every MCP read and every REST read with an `X-Pharos-Author` other than `human:…`. That header is
   a declared role, not authentication; agents are refused the owner's file and folder routes.
 
+## Claude Code permissions (Settings → Agent permissions)
+
+- `apps/server/src/permissions/` reads Claude Code transcripts (`~/.claude/projects/*/*.jsonl` and
+  subagents', read-only, cached by size and mtime) for tool calls that needed approval or were
+  refused (`permissionDecision`, `toolDenialKind`, or the older error texts; see `transcripts.ts`),
+  groups them per folder into a rule (`rules.ts`: shells, `rm`, `git push`, `curl`, `.claude/**`
+  edits and the like are Deny only), and writes Allow / Deny into the folder's
+  `.claude/settings.local.json` or `.claude/settings.json` with a backup (last 5) and Undo.
+- Agents never write their own permissions: `/api/permissions*` needs `X-Pharos-Author: human:…`
+  from the Pharos page, writes only rules it suggested, and has no MCP tool. Tests use a temp home;
+  `PHAROS_CLAUDE_HOME` points a test server at fixture transcripts. Never test against `~/.claude`.
+- Live asks: `agents/claude/hooks/permission-ask.mjs` is a Claude Code `PermissionRequest` hook
+  (installed only by the owner with `pnpm agents install`, into `~/.claude/settings.json` after a
+  backup; `pnpm agents remove` takes it out). It posts the prompt to `POST /api/permission-asks`
+  (no browser headers allowed), waits on `GET /api/permission-asks/:id/wait`, and prints allow or
+  deny; otherwise exit 2 leaves Claude Code's own prompt. `permissions/asks.ts` keeps asks in
+  memory, notifies (a desk gate), and takes the owner's answer on `/api/permissions/asks/:id/*`.
+
 ## Options
 
 - Option fields (task status/priority, stage/goal/artifact/decision status, scope kind, artifact

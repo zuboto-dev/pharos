@@ -42,6 +42,7 @@ import { plural, timeAgo } from '../lib/format';
 import { useTheme, type Theme } from '../lib/theme';
 import { ConnectAgent } from './ConnectAgent';
 import { NotificationSettings } from './settings-notifications';
+import { AgentPermissions } from './settings-permissions';
 import { Section, Switch } from './settings-ui';
 import { LoadError } from './onboarding';
 
@@ -791,6 +792,7 @@ export function SettingsPage() {
       <AnsweringAgent waiting={requests.data?.length ?? 0} />
       <NotificationSettings />
       <Folders />
+      <AgentPermissions />
       <Section
         title="Data and connection"
         icon={Database}

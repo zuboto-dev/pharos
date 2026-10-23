@@ -71,6 +71,8 @@ const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, sc
 
 Reports go here: an update on work you did, a review, research results or findings, a status or progress update, a summary, or more details on a project (asked for, or at the end of a piece of work) are written in Pharos instead of a long chat answer: a report document (view_create with doc; report_guide first) that shows before it tells, or a review desk (sheets with decisions and tasks) when they must choose or act. Then answer in chat with one or two lines and the page's link. Little to show is no reason to skip it: a short page with what there is and what is missing is the report. Only a one-line factual answer stays in chat.
 
+Every project keeps one report document named "Updates", newest first: after a version or batch of merged work, a night run, a search or research pass, or an evaluation, add a dated section at its top (what changed, before and after; the numbers; what needs the owner) with view_update. Create it once if missing; never a new page per update.
+
 Getting oriented:
 - Start with project_brief: the project's brief (where it stands, the owner's rules, recent answers, hand-backs, what waits on them). When the owner gives a standing rule or feedback, add it to project.rules (apply) so every session gets it.
 - First, what the owner answered or handed back: project_snapshot's handedBack and desk_list({since}) answersSince. Act on those before new work; a review handed back to you is yours to pick up.

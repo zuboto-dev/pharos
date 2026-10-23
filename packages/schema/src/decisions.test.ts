@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
   LATER_DAYS,
+  localFileMention,
   choiceMessage,
   choiceUpdate,
   optionOutcome,
@@ -159,5 +160,23 @@ describe('a later choice keeps its note', () => {
     expect(
       choiceMessage({ id: 'h', label: 'Not now' }, 'Ship it?', 'after the trip', '2026-10-22'),
     ).toBe('Later (2026-10-29): “Ship it?” (chose “Not now”: after the trip)');
+  });
+});
+
+describe('texts the owner reads', () => {
+  it('finds a file on the agent’s computer, which Pharos can’t open', () => {
+    expect(localFileMention('Index: scratchpad r1/shots/index.html. One word.')).toBe('scratchpad');
+    expect(localFileMention('open file:///private/tmp/x/shots/index.html')).toMatch(/^file:\/\//);
+    expect(localFileMention('see /tmp/claude-501/run/a.png')).toBe('/tmp/claude-501/run/a.png');
+    expect(localFileMention('the clip ~/Lumisyl-breath/pass1.wav')).toBe(
+      '~/Lumisyl-breath/pass1.wav',
+    );
+    // A page in Pharos, a web link or a repo path is fine.
+    expect(
+      localFileMention('Screenshots: [R1 fidelity review](/projects/p/views/v)'),
+    ).toBeUndefined();
+    expect(
+      localFileMention('docs/recording-breath.md in PR #12, https://example.com/a.png'),
+    ).toBeUndefined();
   });
 });

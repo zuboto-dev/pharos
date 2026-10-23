@@ -8,6 +8,7 @@ import {
   OWNER_TASK_FIELDS,
   decisionIssues,
   decisionWarnings,
+  localFileWarning,
   type ApplyInput,
   type Author,
   type Change,
@@ -1423,6 +1424,13 @@ class Transaction {
         const data = (entity as Entity<'decision'>).data;
         if (data.options && !data.chosenOptionId && !data.answer)
           out.push(...decisionWarnings(data).map((w) => `decision ${id} ("${data.title}") ${w}`));
+        continue;
+      }
+      if (entity?.type === 'task') {
+        // A task the owner is asked to do reads its description on the desk.
+        const data = (entity as Entity<'task'>).data;
+        const local = data.desk ? localFileWarning(data.description) : undefined;
+        if (local) out.push(`task ${id} ("${data.title}") ${local}`);
         continue;
       }
       if (entity?.type !== 'claim') continue;

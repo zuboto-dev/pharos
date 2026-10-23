@@ -120,8 +120,30 @@ export function decisionIssues(data: DecisionLike): string[] {
 }
 
 /** Things to fix in a proposed decision that don't block the save (apply and preview warnings). */
-export function decisionWarnings(data: DecisionLike): string[] {
+const LOCAL_FILE =
+  /file:\/\/\S+|(?:\/private)?\/tmp\/\S+|\bscratchpad\b\S*|(?:~|\/Users\/[^\s/]+)\/\S+\.(?:png|jpe?g|gif|webp|svg|mp4|mov|webm|wav|mp3|html?|pdf)\b/i;
+
+/**
+ * The first place in a text that points the owner at a file on the agent's computer (a temp
+ * folder, a scratchpad, a picture on disk). The owner reads Pharos, which can't open it: the
+ * R1 fidelity decision asked to "review the screenshots" at such a path (2026-10-23).
+ */
+export function localFileMention(text: string | undefined): string | undefined {
+  return text?.match(LOCAL_FILE)?.[0];
+}
+
+/** The warning for a text the owner reads that points at a file on the agent's computer. */
+export function localFileWarning(text: string | undefined): string | undefined {
+  const at = localFileMention(text);
+  return at
+    ? `points the owner at a file on this computer (${at.slice(0, 60)}), which Pharos can't open: upload the pictures (report_asset_put) and show them in the page's sheet that asks it, or link the Pharos page`
+    : undefined;
+}
+
+export function decisionWarnings(data: DecisionLike & { body?: string }): string[] {
   const out: string[] = [];
+  const local = localFileWarning(data.body);
+  if (local) out.push(local);
   const n = data.options?.length ?? 0;
   if (n < DECISION.minOptions)
     out.push(

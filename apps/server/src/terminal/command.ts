@@ -152,7 +152,9 @@ export function terminalCwd(
   const repository = repositoryId ? store.get(repositoryId) : null;
   const path =
     repository?.type === 'repository' ? (repository as Entity<'repository'>).data.path : undefined;
-  if (path && isAbsolute(path) && isDirectory(path)) return { cwd: path, kind: 'repository' };
+  // resolve: "/x/app/" and "/x/app" are one folder, so one session.
+  if (path && isAbsolute(path) && isDirectory(path))
+    return { cwd: resolve(path), kind: 'repository' };
   const cwd = join(home, 'agent-home', projectId.replace(/[^A-Za-z0-9_-]/g, '_'));
   if (make) mkdirSync(cwd, { recursive: true });
   return { cwd, kind: 'home' };

@@ -43,7 +43,15 @@ const INPUT =
 
 /** The person deciding: the first person among the assignees, or a new "me" created with it. */
 function decider(data: ViewData): { id: string; create: Operation[] } {
-  const person = data.assignees.find((a) => a.data.kind === 'human');
+  // The person the owner's tasks go to, as the desk names them (desk.ts ownerAssignee).
+  const counts = new Map<string, number>();
+  for (const t of data.tasks) {
+    const id = t.data.assigneeId;
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const person = data.assignees
+    .filter((a) => a.data.kind === 'human')
+    .sort((a, b) => (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0))[0];
   if (person) return { id: person.id, create: [] };
   return {
     id: '$me',

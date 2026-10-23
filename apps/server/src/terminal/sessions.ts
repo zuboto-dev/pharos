@@ -218,8 +218,9 @@ export class TerminalSessions {
   ): TerminalSession {
     const old = this.sessions.get(key);
     const clients = old ? [...old.clients] : [];
-    if (old) this.end(old);
+    // The new one starts first: if it can't, the old one and its panels stay as they were.
     const session = this.start(key, launch(), size);
+    if (old) this.end(old);
     for (const client of clients) {
       session.clients.add(client);
       client.send(startMessage(session, false));

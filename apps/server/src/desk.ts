@@ -557,11 +557,12 @@ export function deskAnswer(
   const note = input.note?.trim();
   if (option.asks && !note)
     throw new PharosError('invalid', `“${option.label}” asks for a note: ${option.asks}`);
-  const person = store.list('assignee').find((a) => a.data.kind === 'human');
+  // The same person the owner's tasks go to (ask_owner), not just the first one listed.
+  const owner = ownerAssignee(store);
   return store.apply(author, {
-    message: choiceMessage(option, decision.data.title, note, localToday()),
+    message: choiceMessage(option, decision.data.title, note, localToday(now)),
     operations: [
-      ...(person
+      ...(owner
         ? []
         : [
             {
@@ -578,8 +579,8 @@ export function deskAnswer(
         // Status, who and when follow from the choice (decline → rejected, later → back in a week).
         data: choiceUpdate(option, {
           ...(note ? { note } : {}),
-          today: localToday(),
-          decidedById: person?.id ?? '$me',
+          today: localToday(now),
+          decidedById: owner ?? '$me',
           status: (meaning) => valueFor(project, 'decision.status', meaning),
         }),
       },

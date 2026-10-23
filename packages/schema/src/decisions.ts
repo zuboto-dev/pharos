@@ -156,20 +156,55 @@ export type OptionOutcome = 'go' | 'decline' | 'later';
 /** How long a "later" option puts a decision off: it comes back on the desk that day. */
 export const LATER_DAYS = 7;
 
-const LATER_LABEL =
-  /^(?:not now|not yet|later|hold|wait|postpone|defer|decide later|ask (?:me )?again)\b/i;
-const DECLINE_LABEL =
-  /^(?:no\b|none\b|decline|reject|don['’]?t\b|do not\b|skip\b|cancel\b|drop\b|(?:leave|keep|stay)(?: it)? as (?:it )?is\b)/i;
+/** Whole answers that put a decision off or decline it; a longer label ("Cancel the membership",
+ * "Wait for the M5 model") is an option of its own, so it counts as go. */
+const LATER_LABELS = new Set([
+  'not now',
+  'not yet',
+  'later',
+  'hold',
+  'hold off',
+  'wait',
+  'postpone',
+  'defer',
+  'decide later',
+  'ask again',
+  'ask me again',
+]);
+const DECLINE_LABELS = new Set([
+  'no',
+  'none',
+  'neither',
+  'decline',
+  'reject',
+  'skip',
+  'cancel',
+  "don't",
+  'do not',
+  'leave as is',
+  'leave it as is',
+  'keep as is',
+  'keep it as is',
+  'keep it as it is',
+  'stay as is',
+]);
 
 /**
- * What choosing an option means: its `outcome` when the agent set one, else read from its label
- * ("Not now", "Hold" → later; "No", "Leave as is", "Keep it as it is" → decline), else go.
+ * What choosing an option means: its `outcome` when the agent set one, else read from a label
+ * that is only such an answer ("Not now", "Hold" → later; "No", "Leave as is" → decline), with a
+ * reason after a comma or dash allowed ("No, keep it"); anything else is go.
  */
 export function optionOutcome(option: Pick<DecisionOption, 'label' | 'outcome'>): OptionOutcome {
   if (option.outcome) return option.outcome;
-  const label = option.label.trim();
-  if (LATER_LABEL.test(label)) return 'later';
-  if (DECLINE_LABEL.test(label)) return 'decline';
+  const label = option.label
+    .trim()
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .split(/\s*[,;:—–(]|\s+-\s+/)[0]!
+    .replace(/[.!?]+$/, '')
+    .trim();
+  if (LATER_LABELS.has(label)) return 'later';
+  if (DECLINE_LABELS.has(label)) return 'decline';
   return 'go';
 }
 
@@ -219,6 +254,7 @@ export function choiceMessage(
   today?: string,
 ): string {
   if (optionOutcome(option) === 'later')
-    return `Later (${today ? addDays(today, LATER_DAYS) : `${LATER_DAYS} days`}): “${question}” (chose “${option.label}”)`;
+    // The note a later choice may carry stays in the history (the decision keeps no choice).
+    return `Later (${today ? addDays(today, LATER_DAYS) : `${LATER_DAYS} days`}): “${question}” (chose “${option.label}”${note ? `: ${note}` : ''})`;
   return `Choose “${option.label}”: ${question}${note ? ` (${note})` : ''}`;
 }

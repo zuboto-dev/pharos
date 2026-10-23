@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
   LATER_DAYS,
+  choiceMessage,
   choiceUpdate,
   optionOutcome,
   decisionIssues,
@@ -104,14 +105,19 @@ describe('what choosing an option means', () => {
       ['Link them', 'Keep, judge again', 'Day branch only', 'Nothing else'].map((l) => o(l)),
     ).toEqual(['go', 'go', 'go', 'go']);
     expect(
-      ['Leave as is', 'Keep it as it is', 'No', "Don't link", 'Skip'].map((l) => o(l)),
-    ).toEqual(['decline', 'decline', 'decline', 'decline', 'decline']);
-    expect(['Not now', 'Hold', 'Later', 'Decide later'].map((l) => o(l))).toEqual([
-      'later',
-      'later',
-      'later',
-      'later',
-    ]);
+      ['Leave as is', 'Keep it as it is', 'No', "Don't", 'Skip', 'No, keep it', 'No.'].map((l) =>
+        o(l),
+      ),
+    ).toEqual(Array(7).fill('decline'));
+    expect(
+      ['Not now', 'Hold', 'Later', 'Decide later', 'Not now — next week'].map((l) => o(l)),
+    ).toEqual(Array(5).fill('later'));
+    // A longer label is an option of its own (A43 #1): go.
+    expect(
+      ['Cancel the membership', 'Drop-in replacement', 'Wait for the M5 model', "Don't link"].map(
+        (l) => o(l),
+      ),
+    ).toEqual(Array(4).fill('go'));
     // The agent's word wins over the label.
     expect(o('Hold the line', 'go')).toBe('go');
   });
@@ -145,5 +151,13 @@ describe('what choosing an option means', () => {
       decidedById: null,
       decisionDate: null,
     });
+  });
+});
+
+describe('a later choice keeps its note', () => {
+  it('says the note in the revision message', () => {
+    expect(
+      choiceMessage({ id: 'h', label: 'Not now' }, 'Ship it?', 'after the trip', '2026-10-22'),
+    ).toBe('Later (2026-10-29): “Ship it?” (chose “Not now”: after the trip)');
   });
 });

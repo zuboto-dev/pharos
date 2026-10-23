@@ -227,6 +227,8 @@ describe('what the terminal runs', () => {
   });
 
   it('starts in the repository folder when it exists, else a folder of its own', () => {
+    // A path written with a trailing slash is the same folder (one session).
+    expect(terminalCwd(store, project('Slash', `${home}/`), join(home, 'pharos')).cwd).toBe(home);
     const withRepo = project('Code', home);
     expect(terminalCwd(store, withRepo, join(home, 'pharos'))).toEqual({
       cwd: home,
@@ -305,6 +307,23 @@ describe('terminal sessions', () => {
     const short = client();
     sessions.attach('p2', launch, short, size);
     expect(short.got[1]).toEqual({ t: 'o', d: '\x1b[?1049hhello' });
+  });
+
+  it('keeps the old session and its panels when Start again cannot start a new one', () => {
+    const sessions = new TerminalSessions(fakeSpawn, { killGroup: () => {} });
+    const panel = client();
+    const first = sessions.attach('p1', launch, panel, size);
+    expect(() =>
+      sessions.restart(
+        'p1',
+        () => {
+          throw new Error('no agent');
+        },
+        size,
+      ),
+    ).toThrow('no agent');
+    expect(sessions.get('p1')).toBe(first);
+    expect(first.clients.has(panel)).toBe(true);
   });
 
   it('ends a session 30 minutes after its last panel left, killing its process group', () => {

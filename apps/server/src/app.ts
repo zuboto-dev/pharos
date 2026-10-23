@@ -32,6 +32,7 @@ import { MCP_ASSET_NOTE } from './guidance.js';
 import { createMcpServer } from './mcp.js';
 import { RunLog, askOwner, deskAnswer, deskOf } from './desk.js';
 import { landedSince, markDeskSeen } from './landed.js';
+import { folderBriefs, projectBrief } from './brief.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -595,6 +596,17 @@ export function createApp(
   // routine without MCP may report its run here. Only a person marks a run seen.
   const runs = new RunLog(store);
   api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
+  // A project's brief (or every project's in a folder: a session's start hook), as text.
+  api.get('/projects/:id/brief', (c) => {
+    if (store.get(c.req.param('id'))?.type !== 'project')
+      throw new PharosError('not_found', 'project not found');
+    return c.text(projectBrief(store, c.req.param('id'), { presence, runs }));
+  });
+  api.get('/brief', (c) => {
+    const folder = c.req.query('folder');
+    if (!folder) throw new PharosError('invalid', 'folder is required');
+    return c.text(folderBriefs(store, folder, { presence, runs }).join('\n\n---\n\n'));
+  });
   // What MCP ask_owner does, for runners without MCP (the routines): one call puts a decision
   // (with options) or a task on the owner's desk. projectId may be a project's id or its name.
   api.post('/desk/ask', async (c) => {

@@ -1,5 +1,9 @@
 ## Pharos: reports, reviews and details go in Pharos
 
+Start work in a project with Pharos's `project_brief` (where it stands, the owner's standing
+rules, recent answers, hand-backs to pick up). When the owner gives a lasting rule or feedback,
+add it to that project's `rules`.
+
 When the `pharos` MCP server is available (Pharos is installed), and you report finished work, or
 the user asks for a report, a review, research results, a status or progress update, a summary of
 work, or more details on a project: write it

@@ -11,8 +11,10 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
 2. **Find the project.** `PHAROS_PROJECT_IDS` in the environment names it when you run in
    Pharos's panel; else `list {type: "project"}` and match this folder's repository or the
    project the user named. Then `project_snapshot`.
-3. **Read the guide once.** `report_guide` (report documents, the glance test, examples).
-4. **Write it.**
+3. **Read its brief.** `project_brief` gives the owner's rules for it and what they answered lately;
+   follow them.
+4. **Read the guide once.** `report_guide` (report documents, the glance test, examples).
+5. **Write it.**
    - A report, status or "more details": a report document (`view_create` with `doc`): a claim
      as the heading, 3–5 key numbers, then sections that each lead with something to see (stats,
      a chart, a table, a figure, a drawing, a clip), words only for the claim and the so-what.
@@ -21,7 +23,7 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
      that have options and a recommendation, and tasks for them), so they answer in place and
      it reaches their desk.
    - Updating an existing page beats making a new one (`view_list`, then `view_update`).
-5. **Check it.** `view_preview`; fix every warning you can.
-6. **Little to show is no reason to skip it.** A short page with what there is and what is
+6. **Check it.** `view_preview`; fix every warning you can.
+7. **Little to show is no reason to skip it.** A short page with what there is and what is
    missing is the report; only a one-line factual answer stays in chat.
-7. **Answer in chat** with one or two lines (the claim, what needs them) and the page's link.
+8. **Answer in chat** with one or two lines (the claim, what needs them) and the page's link.

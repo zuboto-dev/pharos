@@ -1,3 +1,4 @@
+import { projectBrief } from './brief.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -70,6 +71,7 @@ const INSTRUCTIONS = `Pharos stores structured project data (projects, goals, sc
 Reports go here: an update on work you did, a review, research results or findings, a status or progress update, a summary, or more details on a project (asked for, or at the end of a piece of work) are written in Pharos instead of a long chat answer: a report document (view_create with doc; report_guide first) that shows before it tells, or a review desk (sheets with decisions and tasks) when they must choose or act. Then answer in chat with one or two lines and the page's link. Little to show is no reason to skip it: a short page with what there is and what is missing is the report. Only a one-line factual answer stays in chat.
 
 Getting oriented:
+- Start with project_brief: the project's brief (where it stands, the owner's rules, recent answers, hand-backs, what waits on them). When the owner gives a standing rule or feedback, add it to project.rules (apply) so every session gets it.
 - First, what the owner answered or handed back: project_snapshot's handedBack and desk_list({since}) answersSince. Act on those before new work; a review handed back to you is yours to pick up.
 - list {type: "project"} to find projects, then project_snapshot for the full picture in one call (including its views, custom options, and open requests from people).
 - get {id} for one entity's full details (descriptions are left out of snapshots).
@@ -253,6 +255,24 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       inputSchema: AskOwner.shape,
     },
     (input) => run(() => askOwner(store, author(), AskOwner.parse(input))),
+  );
+
+  server.registerTool(
+    'project_brief',
+    {
+      title: 'Project brief',
+      description:
+        "Start here: one project's brief in a few lines: what it is and where it stands, the owner's standing rules, what they answered lately, reviews handed back to pick up, what waits on them, and who is working on what. Every session (Claude Code, Codex, night runs) reads the same one.",
+      inputSchema: { projectId: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    ({ projectId }) =>
+      run(() =>
+        projectBrief(store, projectId, {
+          runs,
+          ...(options.presence ? { presence: options.presence } : {}),
+        }),
+      ),
   );
 
   server.registerTool(

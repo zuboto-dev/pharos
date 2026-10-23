@@ -77,6 +77,9 @@ export const ProjectData = z.strictObject({
     'Kinds of records this project keeps (R8), e.g. a car service; usually set by a pack',
   ),
   pinned: z.boolean().optional().describe('Pinned projects are listed first in the sidebar'),
+  // The owner's standing rules and feedback for this project, in their words: every session's
+  // brief carries them (project_brief), so all agents and machines share them.
+  rules: z.array(z.string().min(1).max(300)).max(40).optional(),
   sectionId: Id.optional().describe('Sidebar section, for projects without a repository'),
   order: Order.describe('Position among its sibling projects in the sidebar'),
 });

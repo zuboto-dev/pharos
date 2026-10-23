@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pharos — generative UI project management</title>
+    <meta
+      name="description"
+      content="Pharos is a local-first project tracker for people working with AI agents. Your agent keeps the project's structure over MCP and explains it with views composed from a component catalog."
+    />
+    <meta property="og:title" content="Pharos" />
+    <meta
+      property="og:description"
+      content="Generative UI project management for people working with AI agents."
+    />
+    <meta property="og:url" content="https://pharos.zuboto.com/" />
+    <meta
+      property="og:image"
+      content="https://pharos.zuboto.com/images/report-page-spending-story.png"
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://pharos.zuboto.com/" />
+    <style>
+      :root {
+        --canvas: #fafafa;
+        --surface: #ffffff;
+        --sunken: #f5f5f5;
+        --line: #e5e5e5;
+        --ink: #171717;
+        --ink-soft: #404040;
+        --muted: #737373;
+        --accent: #0369a1;
+        --accent-strong: #075985;
+        --beam: #f59e0b;
+        --beam-ink: #b45309;
+        --code-bg: #171717;
+        --code-ink: #f5f5f5;
+        --radius: 12px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #0a0a0a;
+          --surface: #171717;
+          --sunken: #111111;
+          --line: #262626;
+          --ink: #f5f5f5;
+          --ink-soft: #d4d4d4;
+          --muted: #a3a3a3;
+          --accent: #38bdf8;
+          --accent-strong: #7dd3fc;
+          --beam-ink: #fbbf24;
+          --code-bg: #000000;
+          --code-ink: #e5e5e5;
+          color-scheme: dark;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          16px/1.6 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+      }
+      a:hover {
+        color: var(--accent-strong);
+      }
+      code,
+      pre {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.875rem;
+      }
+      :not(pre) > code {
+        background: var(--sunken);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.05em 0.35em;
+        overflow-wrap: anywhere;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+      header.top {
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+      }
+      header.top .wrap {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 60px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 650;
+        color: var(--ink);
+        text-decoration: none;
+        margin-right: auto;
+      }
+      .brand img {
+        width: 28px;
+        height: 28px;
+      }
+      nav a {
+        color: var(--ink-soft);
+        text-decoration: none;
+        font-size: 0.95rem;
+      }
+      nav {
+        display: flex;
+        gap: 20px;
+      }
+      @media (max-width: 640px) {
+        nav a.optional {
+          display: none;
+        }
+      }
+      .hero {
+        padding: 72px 20px 48px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--beam-ink);
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        padding: 2px 10px;
+        margin-bottom: 20px;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5vw, 3.4rem);
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        margin: 0 0 20px;
+        max-width: 18ch;
+      }
+      .lede {
+        font-size: 1.2rem;
+        color: var(--ink-soft);
+        max-width: 60ch;
+        margin: 0 0 32px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid var(--line);
+        color: var(--ink);
+        background: var(--surface);
+      }
+      .btn.primary {
+        background: var(--ink);
+        border-color: var(--ink);
+        color: var(--canvas);
+      }
+      .btn.primary:hover {
+        color: var(--canvas);
+        opacity: 0.9;
+      }
+      section {
+        padding: 56px 0;
+        border-top: 1px solid var(--line);
+      }
+      h2 {
+        font-size: 1.75rem;
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        margin: 0 0 12px;
+      }
+      .sub {
+        color: var(--muted);
+        margin: 0 0 32px;
+        max-width: 65ch;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+      .card h3 {
+        font-size: 1.05rem;
+        margin: 0 0 6px;
+      }
+      .card p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+      .step-num {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        background: var(--beam);
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+      }
+      .split {
+        display: grid;
+        gap: 40px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: start;
+      }
+      @media (max-width: 820px) {
+        .split {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      ul.plain {
+        padding-left: 1.2em;
+        margin: 0;
+        color: var(--ink-soft);
+      }
+      ul.plain li {
+        margin-bottom: 8px;
+      }
+      figure {
+        margin: 0;
+      }
+      figure img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+      }
+      figcaption {
+        color: var(--muted);
+        font-size: 0.875rem;
+        margin-top: 10px;
+      }
+      pre {
+        background: var(--code-bg);
+        color: var(--code-ink);
+        border-radius: 10px;
+        padding: 16px 18px;
+        overflow-x: auto;
+        margin: 0 0 16px;
+        line-height: 1.5;
+      }
+      pre .c {
+        color: #a3a3a3;
+      }
+      .diagram {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+        text-align: center;
+      }
+      .diagram .node {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 14px;
+      }
+      .diagram .node strong {
+        display: block;
+      }
+      .diagram .node span {
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      .diagram .arrow {
+        color: var(--muted);
+        font-size: 0.8rem;
+        line-height: 1.3;
+      }
+      @media (max-width: 720px) {
+        .diagram {
+          grid-template-columns: 1fr;
+        }
+        .diagram .arrow {
+          transform: none;
+        }
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 32px 0 48px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      footer .wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap">
+        <a class="brand" href="#"><img src="favicon.svg" alt="" /> Pharos</a>
+        <nav>
+          <a class="optional" href="#how">How it works</a>
+          <a class="optional" href="#features">Features</a>
+          <a href="#start">Get started</a>
+          <a href="https://github.com/zuboto-dev/pharos">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap hero">
+        <span class="badge">v0.2 · early development preview</span>
+        <h1>Project management your AI agent can explain.</h1>
+        <p class="lede">
+          Pharos keeps a project's goals, scope, stages, tasks, artifacts and decisions as
+          structured data that your agent reads and writes over MCP. Instead of walls of text, the
+          agent explains the project with live views it composes from a catalog of
+          project-management components. Everything runs on your machine.
+        </p>
+        <div class="actions">
+          <a class="btn primary" href="#start">Get started</a>
+          <a class="btn" href="https://github.com/zuboto-dev/pharos">View on GitHub</a>
+        </div>
+      </div>
+
+      <section>
+        <div class="wrap split">
+          <div>
+            <h2>Long projects drown in prose</h2>
+            <p class="sub">
+              Plans, status updates, task lists and explanations from agents all arrive as text. As
+              a project grows, both you and the agent lose track.
+            </p>
+            <ul class="plain">
+              <li>
+                <strong>Traditional trackers</strong> impose a fixed framework, and not every
+                project fits it.
+              </li>
+              <li>
+                <strong>Flexible tools</strong> like docs and whiteboards are hard for an agent to
+                understand, produce or keep up to date.
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h2>Generative UI over real data</h2>
+            <p class="sub">
+              The agent builds the interface that best explains <em>this</em> project, but it never
+              draws from scratch.
+            </p>
+            <ul class="plain">
+              <li>
+                <strong>Structured data first.</strong> Views are built over project data, so
+                changing a task updates every view that shows it.
+              </li>
+              <li>
+                <strong>Compose, don't draw.</strong> Views are typed JSON specs from a component
+                catalog: consistent, safe and editable.
+              </li>
+              <li>
+                <strong>Ask with a click.</strong> Ask a question from any widget and the agent
+                answers with a focused view instead of paragraphs.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="how">
+        <div class="wrap">
+          <h2>How it works</h2>
+          <p class="sub">
+            One local server holds the data and speaks MCP to your agent. A local web app renders
+            the views and updates live as the agent works.
+          </p>
+          <div
+            class="diagram"
+            role="img"
+            aria-label="AI agent talks to the Pharos server over MCP; the server sends live updates to the web app"
+          >
+            <div class="node">
+              <strong>Your AI agent</strong>
+              <span>Claude Code, Codex, Cursor, Claude Desktop…</span>
+            </div>
+            <div class="arrow">MCP tools<br />⇄</div>
+            <div class="node">
+              <strong>Pharos server</strong>
+              <span>SQLite project data, view specs, component catalog, full history</span>
+            </div>
+            <div class="arrow">HTTP + live events<br />⇄</div>
+            <div class="node">
+              <strong>Pharos web app</strong>
+              <span>Renders views on localhost; you read, edit and ask</span>
+            </div>
+          </div>
+          <div class="grid" style="margin-top: 32px">
+            <div class="card">
+              <div class="step-num">1</div>
+              <h3>Connect your agent</h3>
+              <p>Add Pharos as an MCP server. Any MCP client works, over HTTP or stdio.</p>
+            </div>
+            <div class="card">
+              <div class="step-num">2</div>
+              <h3>Let it set up the project</h3>
+              <p>
+                The agent records goals, scope, stages and tasks from your repo or brief, and keeps
+                them current as it works.
+              </p>
+            </div>
+            <div class="card">
+              <div class="step-num">3</div>
+              <h3>Read views, ask questions</h3>
+              <p>
+                Open the web app to see stage trackers, timelines and boards. Ask from any widget;
+                the answer arrives as a new view.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <div class="wrap">
+          <h2>What's in v0.2</h2>
+          <p class="sub">
+            Pharos now reads more like a set of pages about your project than a tracker.
+          </p>
+          <div class="grid">
+            <div class="card">
+              <h3>Component catalog</h3>
+              <p>
+                Stage trackers, timelines, kanban boards, goal trees, tables, charts, decision
+                blocks, galleries, before-and-after and more, bound to live data.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Report documents and pages</h3>
+              <p>
+                Agents write reports from catalog blocks in Pharos's style, or a whole bespoke HTML
+                page in a locked frame that reads live project data.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Every change is a revision</h3>
+              <p>
+                All writes are recorded with full before and after snapshots. Inspect history and
+                revert anything, whoever made the change.
+              </p>
+            </div>
+            <div class="card">
+              <h3>What changed, and what's stale</h3>
+              <p>
+                Pages show what changed since you last looked, and agent-built views are marked out
+                of date when the data they read changes.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Actions and block asks</h3>
+              <p>
+                Action blocks like "Log a service" or "Mark paid" act on records with one revision
+                and Undo. Ask an agent to change just one block.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Automatic answers</h3>
+              <p>
+                With Claude Code installed, questions asked in the web app are answered
+                automatically. Bring your own command, pause it, or turn it off.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Project files, read-only</h3>
+              <p>
+                Show the files a project is about from folders you choose. Files stay on your disk;
+                agents see details only, never contents.
+              </p>
+            </div>
+            <div class="card">
+              <h3>Records and packs</h3>
+              <p>
+                Record types with money, date and text fields, plus ready-made packs for cars,
+                money, music, study and company documents.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <figure>
+            <img
+              src="images/report-page-spending-story.png"
+              width="1400"
+              height="1250"
+              loading="lazy"
+              alt="A report page called Spending story in the Pharos web app, with totals and a chart"
+            />
+            <figcaption>
+              A report page an agent wrote from a made-up sample project. The numbers and the chart
+              come from the project's records as the page loads.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="start">
+        <div class="wrap split">
+          <div>
+            <h2>Get started</h2>
+            <p class="sub">
+              Requires Node.js 22.13+, 24 (recommended) or 26+, and pnpm 12.9.1 (or
+              <code>npx pnpm@12.9.1</code>).
+            </p>
+            <pre><code>git clone https://github.com/zuboto-dev/pharos
+cd pharos
+pnpm install --frozen-lockfile
+pnpm dev</code></pre>
+            <p class="sub">
+              The server runs on <code>localhost:4300</code> (REST at <code>/api</code>, MCP at
+              <code>/mcp</code>) and the web app on <code>localhost:5173</code>. On macOS,
+              <code>pnpm service install</code> keeps it running and up to date in the background.
+            </p>
+          </div>
+          <div>
+            <h2>Connect your agent</h2>
+            <pre><code><span class="c"># Claude Code</span>
+claude mcp add --transport http pharos http://localhost:4300/mcp
+
+<span class="c"># Codex</span>
+codex mcp add pharos --url http://localhost:4300/mcp</code></pre>
+            <p class="sub">
+              Cursor and other streamable HTTP clients use the same URL; stdio clients like Claude
+              Desktop run <code>apps/server/dist/stdio.js</code>. Then try asking:
+            </p>
+            <ul class="plain">
+              <li>“Set up a project in Pharos for this repo from its docs.”</li>
+              <li>“What's blocking the current stage? Answer with a Pharos view.”</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Tested with real agents</h2>
+          <p class="sub">
+            Compatibility scenarios run a real agent CLI against an isolated Pharos server: set up a
+            project, mark a task done, answer with a checked view, start from a pack, ask for a
+            folder, and write a report document.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Result</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Claude Code</td>
+                  <td>6 of 6 passed</td>
+                  <td>2026-10-20</td>
+                </tr>
+                <tr>
+                  <td>Codex</td>
+                  <td>5 of 5 passed</td>
+                  <td>2026-10-14</td>
+                </tr>
+                <tr>
+                  <td>OpenCode</td>
+                  <td>Planned</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap split">
+          <div>
+            <h2>Local-first, no account</h2>
+            <p class="sub" style="margin-bottom: 0">
+              Data lives in one SQLite file on your machine. There is no account and no cloud
+              service. v0.2 has no authentication, so keep the server and web app local. See
+              <a href="https://github.com/zuboto-dev/pharos/blob/main/SECURITY.md">SECURITY.md</a>
+              for the trust model.
+            </p>
+          </div>
+          <div>
+            <h2>Open source</h2>
+            <p class="sub" style="margin-bottom: 0">
+              Pharos is MIT licensed and in early development: APIs and saved view formats may
+              change. Read the
+              <a href="https://github.com/zuboto-dev/pharos/blob/main/CHANGELOG.md"
+                >release notes</a
+              >
+              and
+              <a href="https://github.com/zuboto-dev/pharos/blob/main/CONTRIBUTING.md"
+                >contributing guide</a
+              >, or open an issue with feedback.
+            </p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>Pharos · MIT License</span>
+        <span>
+          <a href="https://github.com/zuboto-dev/pharos">GitHub</a> ·
+          <a href="https://github.com/zuboto-dev/pharos/blob/main/docs/OVERVIEW.md">Overview</a> ·
+          <a href="https://github.com/zuboto-dev/pharos/blob/main/docs/PLAN.md">Roadmap</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>

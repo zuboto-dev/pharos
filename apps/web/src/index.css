@@ -1072,34 +1072,35 @@
   }
   .doc-media-panel {
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    right: 1.25rem;
+    bottom: 1.25rem;
     z-index: 40;
     display: flex;
-    width: min(24rem, 100vw);
+    width: min(23rem, calc(100vw - 2rem));
+    height: min(36rem, calc(100dvh - 2.5rem));
     flex-direction: column;
-    border-left: 1px solid var(--ph-line);
+    overflow: hidden;
+    border: 1px solid var(--ph-line);
+    border-radius: var(--radius-block, 0.875rem);
     background: var(--ph-surface);
     box-shadow: var(--shadow-overlay);
+    resize: both;
   }
   @media (max-width: 639px) {
     /* A phone: the lower half, so the decision above stays in view. */
     .doc-media-panel {
-      top: auto;
-      height: 55dvh;
+      inset: auto 0 0 0 !important;
       width: 100vw;
-      border-top: 1px solid var(--ph-line);
-      border-left: 0;
+      height: 55dvh;
+      border-width: 1px 0 0;
       border-radius: 1rem 1rem 0 0;
-    }
-  }
-  @media (min-width: 1024px) {
-    html.has-media-panel main {
-      padding-right: min(24rem, 100vw);
+      resize: none;
     }
   }
   .doc-media-panel-head {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
     display: flex;
     align-items: center;
     gap: 0.5rem;

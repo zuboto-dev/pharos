@@ -1,6 +1,6 @@
 import { figureMedia, type DocBlock, type Entity } from '@pharos/schema';
 import { Film, Images, LocateFixed, Music, PenTool, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Markdown } from '../catalog/ui';
 import { useAssetReloads } from './frame-bridge';
@@ -194,22 +194,56 @@ export function SheetShows({
   );
 }
 
+/** Where the reader last left the Pictures window. */
+const PLACE_KEY = 'pharos.picturesWindow';
+
 /** Documents with at least this many media items get the Pictures button. */
 export const MEDIA_PANEL_MIN = 3;
 
 /**
- * The Pictures button (bottom centre) and its panel: every picture, clip, sound and drawing of
- * the document by section, beside the page, so the reader looks while they decide.
+ * The Pictures button (bottom centre) and its floating window: every picture, clip, sound and
+ * drawing of the document by section, beside the page, so the reader looks while they decide.
  */
 export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: DocBlock[] }) {
   const items = useMemo(() => docMedia(blocks), [blocks]);
   const [open, setOpen] = useState(false);
-  // Open on a wide screen, the page makes room for the panel instead of going under it.
-  useEffect(() => {
-    if (!open) return;
-    document.documentElement.classList.add('has-media-panel');
-    return () => document.documentElement.classList.remove('has-media-panel');
-  }, [open]);
+  // A floating window the reader drags by its title bar; the page under it stays usable, and the
+  // window comes back where they left it (this browser only).
+  const [at, setAt] = useState<{ x: number; y: number } | null>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PLACE_KEY) ?? 'null') as {
+        x: number;
+        y: number;
+      } | null;
+      return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : null;
+    } catch {
+      return null;
+    }
+  });
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const onDragStart = (e: PointerEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    drag.current = { dx: e.clientX - box.left, dy: e.clientY - box.top };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onDragMove = (e: PointerEvent<HTMLElement>) => {
+    if (!drag.current) return;
+    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    setAt({
+      x: Math.max(0, Math.min(window.innerWidth - box.width, e.clientX - drag.current.dx)),
+      y: Math.max(0, Math.min(window.innerHeight - 48, e.clientY - drag.current.dy)),
+    });
+  };
+  const onDragEnd = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    try {
+      if (at) localStorage.setItem(PLACE_KEY, JSON.stringify(at));
+    } catch {
+      // Not remembered: it opens in its default corner next time.
+    }
+  };
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -243,8 +277,20 @@ export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: Doc
         </button>
       )}
       {open && (
-        <aside data-media-panel="" aria-label="Pictures and clips" className="doc-media-panel">
-          <header className="doc-media-panel-head">
+        <aside
+          data-media-panel=""
+          aria-label="Pictures and clips"
+          className="doc-media-panel"
+          style={at ? { left: at.x, top: at.y, right: 'auto', bottom: 'auto' } : undefined}
+        >
+          <header
+            className="doc-media-panel-head"
+            title="Drag to move"
+            onPointerDown={onDragStart}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragEnd}
+            onPointerCancel={onDragEnd}
+          >
             <Images aria-hidden className="size-4 text-muted" />
             <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
               Pictures and clips <span className="font-normal text-muted">{items.length}</span>

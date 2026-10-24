@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+import { PANEL_WORKING_MS, type PanelState } from '@pharos/schema';
 import type { AgentPreset } from '../agent-runner.js';
 
 /** What the sessions need of a pseudo-terminal (node-pty in the server, a fake in tests). */
@@ -23,6 +25,11 @@ export type TerminalLaunch = {
   args: string[];
   cwd: string;
   env: Record<string, string>;
+  /**
+   * The agent says when its turn ends (Claude Code's Stop hook posts to Pharos with the
+   * session's `PHAROS_TERMINAL_TOKEN`); otherwise output going quiet after input says it.
+   */
+  hooked?: boolean;
 };
 
 /** Messages to the panel. */
@@ -69,12 +76,49 @@ export class TerminalSession {
   exited = false;
   /** Who ended it: the restart button, no panel for a while, the server stopping, or the owner's Stop. */
   endedBy: 'restart' | 'idle' | 'server' | 'owner' | undefined;
+  /** Stable while it runs, for the Agents page (its key is a folder path). */
+  readonly id = randomBytes(6).toString('hex');
+  /** When the owner last typed in a panel of it (any key, the wheel, a pasted reference). */
+  lastInputAt: number | undefined;
+  /** When the owner last sent something (input with Enter): a turn starts. */
+  lastSubmitAt: number | undefined;
+  /** When its last turn ended (the hook, or output gone quiet after input). */
+  turnEndedAt: number | undefined;
+  /** Panels attached in a tab the owner can't see (a hidden browser tab). */
+  readonly hidden = new Set<TerminalClient>();
 
   constructor(
     readonly key: string,
     readonly launch: TerminalLaunch,
     readonly pty: Pty,
+    readonly startedAt: number = Date.now(),
   ) {}
+
+  /** A panel shows it now, in a tab that is in front. */
+  get watched(): boolean {
+    for (const client of this.clients) if (!this.hidden.has(client)) return true;
+    return false;
+  }
+
+  /**
+   * What it is doing: waiting for the owner once its turn ended (and nothing was sent since),
+   * working while it printed in the last PANEL_WORKING_MS after being asked something, else idle.
+   */
+  state(now: number): { state: PanelState; since: number } {
+    const submit = this.lastSubmitAt ?? -Infinity;
+    if (this.turnEndedAt !== undefined && this.turnEndedAt >= submit)
+      return { state: 'waiting', since: this.turnEndedAt };
+    if (
+      this.lastSubmitAt !== undefined &&
+      this.lastOutputAt !== undefined &&
+      now - this.lastOutputAt < PANEL_WORKING_MS
+    )
+      return { state: 'working', since: this.lastSubmitAt };
+    return {
+      state: 'idle',
+      since: Math.max(this.lastOutputAt ?? this.startedAt, this.turnEndedAt ?? this.startedAt),
+    };
+  }
 
   /** Keeps output for replay and notes the modes it sets. */
   record(data: string, at?: number): void {
@@ -137,9 +181,26 @@ export type TerminalExit = {
   watched: boolean;
 };
 
+/** A session's agent finished its turn: it waits for the owner. */
+export type TerminalTurn = {
+  session: TerminalSession;
+  /** How Pharos knows: the agent's hook, or output gone quiet after the owner's input. */
+  via: 'hook' | 'quiet';
+  /** A panel showed it in a visible tab when the turn ended. */
+  watched: boolean;
+  /** The owner typed in a panel of it in the last TYPING_MS. */
+  typing: boolean;
+};
+
+/** Typing in a panel this recently means the owner is at it. */
+export const TYPING_MS = 5000;
+/** Output quiet this long after the owner's input ends the turn (agents without a hook). */
+export const QUIET_TURN_MS = 8000;
+
 export class TerminalSessions {
   private readonly sessions = new Map<string, TerminalSession>();
   private readonly exitListeners = new Set<(exit: TerminalExit) => void>();
+  private readonly turnListeners = new Set<(turn: TerminalTurn) => void>();
   private readonly now: () => number;
   private readonly idleMs: number;
   private readonly killGroup: (pid: number, signal: NodeJS.Signals) => void;
@@ -176,6 +237,67 @@ export class TerminalSessions {
   onExit(fn: (exit: TerminalExit) => void): () => void {
     this.exitListeners.add(fn);
     return () => this.exitListeners.delete(fn);
+  }
+
+  /** Calls `fn` when a session's agent finishes a turn. Returns an unsubscribe. */
+  onTurn(fn: (turn: TerminalTurn) => void): () => void {
+    this.turnListeners.add(fn);
+    return () => this.turnListeners.delete(fn);
+  }
+
+  /** The running session started with this hook token (PHAROS_TERMINAL_TOKEN). */
+  byToken(token: string): TerminalSession | undefined {
+    if (!token) return undefined;
+    return this.running().find((s) => s.launch.env.PHAROS_TERMINAL_TOKEN === token);
+  }
+
+  /** The session's agent finished its turn (its hook said so, or its output went quiet). */
+  turnEnded(session: TerminalSession, via: TerminalTurn['via']): TerminalTurn | undefined {
+    if (session.exited) return undefined;
+    const now = this.now();
+    session.turnEndedAt = now;
+    const turn: TerminalTurn = {
+      session,
+      via,
+      watched: session.watched,
+      typing: session.lastInputAt !== undefined && now - session.lastInputAt < TYPING_MS,
+    };
+    for (const fn of this.turnListeners) {
+      try {
+        fn(turn);
+      } catch (error) {
+        console.error('[pharos] A terminal turn listener failed:', error);
+      }
+    }
+    return turn;
+  }
+
+  /**
+   * Agents without a hook (Codex): a turn ends when the owner sent something, the agent printed
+   * after it, and then nothing for `quietMs`. Run every few seconds by the service.
+   */
+  checkQuiet(quietMs = QUIET_TURN_MS): TerminalTurn[] {
+    const now = this.now();
+    const ended: TerminalTurn[] = [];
+    for (const session of this.running()) {
+      if (session.launch.hooked) continue;
+      const submit = session.lastSubmitAt;
+      const output = session.lastOutputAt;
+      if (submit === undefined || output === undefined || output <= submit) continue;
+      if ((session.turnEndedAt ?? -Infinity) >= submit) continue;
+      if (now - output < quietMs) continue;
+      const turn = this.turnEnded(session, 'quiet');
+      if (turn) ended.push(turn);
+    }
+    return ended;
+  }
+
+  /** Whether a panel's tab is in front (it says so on connect and when it changes). */
+  visibility(key: string, client: TerminalClient, visible: boolean): void {
+    const session = this.sessions.get(key);
+    if (!session?.clients.has(client)) return;
+    if (visible) session.hidden.delete(client);
+    else session.hidden.add(client);
   }
 
   /**
@@ -216,12 +338,19 @@ export class TerminalSessions {
   detach(key: string, client: TerminalClient): void {
     const session = this.sessions.get(key);
     if (!session?.clients.delete(client)) return;
+    session.hidden.delete(client);
     if (session.clients.size === 0) session.detachedAt = this.now();
   }
 
-  /** Typing in the panel: to the project's running session only. */
+  /** Typing in the panel: to the project's running session only. Enter starts a turn. */
   input(key: string, data: string): void {
-    this.get(key)?.pty.write(data);
+    const session = this.get(key);
+    if (!session) return;
+    const now = this.now();
+    session.lastInputAt = now;
+    // Enter sends a carriage return (a pasted newline does not submit).
+    if (data.includes('\r')) session.lastSubmitAt = now;
+    session.pty.write(data);
   }
 
   resize(key: string, size: { cols: number; rows: number }): void {
@@ -303,7 +432,7 @@ export class TerminalSessions {
       cols: size.cols,
       rows: size.rows,
     });
-    const session = new TerminalSession(key, launch, pty);
+    const session = new TerminalSession(key, launch, pty, this.now());
     this.sessions.set(key, session);
     pty.onData((data) => {
       try {

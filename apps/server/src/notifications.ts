@@ -12,7 +12,7 @@ import { deskOf, type RunLog } from './desk.js';
 import type { RevisionFeed } from './feed.js';
 import type { Store } from './store/store.js';
 import { presetLabel } from './terminal/command.js';
-import type { TerminalExit } from './terminal/sessions.js';
+import type { TerminalExit, TerminalTurn } from './terminal/sessions.js';
 import { projectFreshness } from './views/freshness.js';
 
 /**
@@ -21,6 +21,7 @@ import { projectFreshness } from './views/freshness.js';
  * - desk: a decision, sheet or task new on the desk (or back from "later")
  * - run: a run in the run log failed or was partly done; the answering agent failed
  * - terminal: an agent in a panel finished, or was stopped after a while with no panel
+ * - agent-answered: an agent in a panel ended its turn while the owner wasn't looking at it
  * - stale: an agent's change made a page an agent wrote out of date (R11)
  * - handback: a review handed back that no agent picked up for `handbackHours`
  * - system: Pharos restarted under a running agent terminal (the one modal)
@@ -72,7 +73,18 @@ type AgentLike = {
   ): () => void;
 };
 
-type TerminalLike = { onExit(fn: (exit: TerminalExit) => void): () => void };
+type TerminalLike = {
+  onExit(fn: (exit: TerminalExit) => void): () => void;
+  onTurn?(fn: (turn: TerminalTurn) => void): () => void;
+};
+
+/**
+ * Whether the end of a panel agent's turn notifies: only when the owner isn't looking at it (no
+ * panel attached, or only in hidden tabs) and isn't typing in it.
+ */
+export function answeredNotifies(turn: Pick<TerminalTurn, 'watched' | 'typing'>): boolean {
+  return !turn.watched && !turn.typing;
+}
 
 const clip = (text: string, max = 160) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
@@ -283,6 +295,27 @@ export class Notifications {
     });
   }
 
+  /** An agent in a panel finished its turn: "Claude Code answered in Tutti", unless watched. */
+  agentAnswered(turn: TerminalTurn): PharosNotification | null {
+    if (!answeredNotifies(turn)) return null;
+    const { session } = turn;
+    const projectIds = (session.launch.env.PHAROS_PROJECT_IDS ?? '').split(',').filter(Boolean);
+    const names = projectIds
+      .map((id) => this.store.get(id))
+      .filter((p): p is Entity<'project'> => p?.type === 'project')
+      .map((p) => p.data.name);
+    const first = projectIds[0];
+    const agent = presetLabel(session.launch.preset);
+    return this.add({
+      key: `answered:${session.id}:${session.turnEndedAt ?? this.now().getTime()}`,
+      kind: 'agent-answered',
+      title: names.length ? `${agent} answered in ${names.join(', ')}` : `${agent} answered`,
+      detail: 'It waits for you in the agent panel',
+      ...(first ? { projectId: first, href: `/projects/${first}?terminal=1` } : {}),
+      action: 'Open',
+    });
+  }
+
   /** Pages of these projects that an agent's change just made out of date. */
   checkStale(projectIds: Iterable<string>): PharosNotification[] {
     const added: PharosNotification[] = [];
@@ -456,12 +489,17 @@ export class Notifications {
           this.safely('the answering check', () => this.agentRun(status.lastRun)),
         ),
       );
-    if (sources.terminal)
+    if (sources.terminal) {
       this.stops.push(
         sources.terminal.onExit((exit) =>
           this.safely('the terminal check', () => this.terminalExited(exit)),
         ),
       );
+      const onTurn = sources.terminal.onTurn?.((turn) =>
+        this.safely('the answered check', () => this.agentAnswered(turn)),
+      );
+      if (onTurn) this.stops.push(onTurn);
+    }
     const everyMs = sources.everyMs ?? 30_000;
     this.interval = setInterval(() => {
       this.safely('the desk check', () => this.checkDesk());

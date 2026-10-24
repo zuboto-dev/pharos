@@ -1,7 +1,8 @@
 import type { AgentPreset } from '../agent-runner.js';
 import type { Entity } from '@pharos/schema';
 import type { Store } from '../store/store.js';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import type { AgentPanelRow } from '@pharos/schema';
 import {
   CONVERSATIONS_SETTING,
   folderProjects,
@@ -48,6 +49,8 @@ export type TerminalServiceOptions = {
   /** The installed agent CLIs and where each is (its absolute path when known). */
   installed: Partial<Record<AgentPreset, string>>;
   mcpConfigPath: string;
+  /** Claude Code settings with the Stop hook (`terminalHookSettings`); without it, quiet output ends a turn. */
+  hookSettingsPath?: string;
   serverUrl: string;
   /** The Pharos home (PHAROS_HOME or ~/.pharos): agent folders go under it. */
   home: string;
@@ -63,6 +66,7 @@ export type TerminalServiceOptions = {
 export class TerminalService {
   readonly sessions: TerminalSessions | undefined;
   private sweeper: ReturnType<typeof setInterval> | undefined;
+  private quietChecker: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: TerminalServiceOptions) {
     this.sessions =
@@ -146,14 +150,19 @@ export class TerminalService {
       projects.map((p) => p.id),
     );
     const conversation = preset === 'claude' ? this.conversation(cwd, env.HOME, fresh) : undefined;
+    // The Stop hook says which session ended its turn with this (never sent to a client).
+    env.PHAROS_TERMINAL_TOKEN = randomBytes(16).toString('hex');
+    const hooked = preset === 'claude' && Boolean(this.options.hookSettingsPath);
     const { file, args } = terminalCommand(preset, {
       mcpConfigPath: this.options.mcpConfigPath,
       serverUrl: this.options.serverUrl,
       brief: terminalBrief(projects, this.options.serverUrl),
       ...(conversation ? { conversation } : {}),
+      ...(hooked ? { settingsPath: this.options.hookSettingsPath } : {}),
     });
     return {
       preset,
+      hooked,
       // The CLI found at start (`command -v`), so the PATH given to the agent can't swap it.
       file: this.options.installed[preset] || file,
       args,
@@ -211,9 +220,53 @@ export class TerminalService {
     }));
   }
 
-  /** Ends idle sessions every minute (30 minutes with no panel). */
+  /** The Stop hook of a session posted: its turn ended. False when no running session has the token. */
+  hookTurn(token: string): boolean {
+    const session = this.sessions?.byToken(token);
+    if (!session || !this.sessions) return false;
+    this.sessions.turnEnded(session, 'hook');
+    return true;
+  }
+
+  /** One row per running agent panel, for the Agents page. */
+  panels(now = (this.options.now ?? Date.now)()): AgentPanelRow[] {
+    const iso = (ms: number | undefined) =>
+      ms === undefined ? undefined : new Date(ms).toISOString();
+    return (this.sessions?.running() ?? []).map((session) => {
+      const ids = (session.launch.env.PHAROS_PROJECT_IDS ?? '').split(',').filter(Boolean);
+      const projects = ids.map((id) => {
+        const p = this.options.store.get(id);
+        return { id, name: p?.type === 'project' ? (p as Entity<'project'>).data.name : id };
+      });
+      const { state, since } = session.state(now);
+      const lastOutputAt = iso(session.lastOutputAt);
+      const turnEndedAt = iso(session.turnEndedAt);
+      return {
+        id: session.id,
+        agent: presetLabel(session.launch.preset),
+        cwd: session.launch.cwd,
+        projects,
+        state,
+        since: new Date(since).toISOString(),
+        startedAt: new Date(session.startedAt).toISOString(),
+        ...(lastOutputAt ? { lastOutputAt } : {}),
+        ...(turnEndedAt ? { turnEndedAt } : {}),
+        watched: session.watched,
+      };
+    });
+  }
+
+  /** Ends idle sessions every minute (30 minutes with no panel); checks quiet turns every 2 s. */
   startSweeping(): void {
     if (!this.sessions || this.sweeper) return;
+    this.quietChecker = setInterval(() => {
+      try {
+        this.sessions?.checkQuiet();
+      } catch (error) {
+        console.error('[pharos] Checking the terminals for ended turns failed:', error);
+      }
+    }, 2000);
+    this.quietChecker.unref?.();
     this.sweeper = setInterval(() => {
       try {
         this.sessions?.sweep();
@@ -227,6 +280,7 @@ export class TerminalService {
   /** The server is stopping. */
   stop(): void {
     clearInterval(this.sweeper);
+    clearInterval(this.quietChecker);
     try {
       this.sessions?.killAll();
     } catch (error) {

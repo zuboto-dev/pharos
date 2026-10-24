@@ -603,6 +603,71 @@ describe('project page with a report document (R14)', () => {
     const tab = screen.getByRole('link', { name: /Where it stands/ });
     expect(tab.querySelector('[aria-label="Report"]')).toBeTruthy();
   });
+
+  it('redraws an open document when an agent changes it, without a reload', async () => {
+    /** A stand-in EventSource the test drives: `emit` sends a named event to the page. */
+    class FakeSource {
+      static last: FakeSource | undefined;
+      handlers = new Map<string, ((e: MessageEvent<string>) => void)[]>();
+      constructor() {
+        FakeSource.last = this;
+      }
+      addEventListener(name: string, fn: (e: MessageEvent<string>) => void) {
+        this.handlers.set(name, [...(this.handlers.get(name) ?? []), fn]);
+      }
+      close() {}
+      emit(name: string, payload: object) {
+        for (const fn of this.handlers.get(name) ?? [])
+          fn({ data: JSON.stringify(payload) } as MessageEvent<string>);
+      }
+    }
+    vi.stubGlobal('EventSource', FakeSource);
+    let current = withDoc;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) =>
+      init?.method === 'HEAD'
+        ? new Response(null, { status: 200 })
+        : url.includes('/data')
+          ? Response.json(current)
+          : new Response('[]', { status: 200 }),
+    );
+    render(
+      <MemoryRouter initialEntries={[`/projects/${data.project.id}/views/${docView.id}`]}>
+        <Routes>
+          <Route path="/projects/:projectId/views/:viewId" element={<ProjectPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByText('Two tasks are left.');
+    const article = document.querySelector('article[data-document]');
+
+    // An agent rewrites one block over MCP; the feed announces the revision for this project.
+    const rewritten: Entity<'view'> = {
+      ...docView,
+      updatedAt: '2026-10-24T06:00:00.000Z',
+      data: {
+        ...docView.data,
+        doc: ReportDoc.parse({
+          ...doc,
+          blocks: doc.blocks.map((b) =>
+            b.kind === 'block' && b.id === 'more'
+              ? { ...b, node: { component: 'Text', content: 'One task is left.' } }
+              : b,
+          ),
+        }),
+      },
+    };
+    current = { ...withDoc, views: [rewritten, ...data.views] };
+    await waitFor(() => expect(FakeSource.last).toBeTruthy());
+    act(() => {
+      FakeSource.last!.emit('ready', { latest: 30 });
+      FakeSource.last!.emit('revision', { id: 31, projectIds: [data.project.id] });
+    });
+
+    await screen.findByText('One task is left.');
+    expect(screen.queryByText('Two tasks are left.')).toBeNull();
+    // The same document element was redrawn in place, not mounted again by a page load.
+    expect(document.querySelector('article[data-document]')).toBe(article);
+  });
 });
 
 describe('a document is read-only but for answers (R14, R15)', () => {

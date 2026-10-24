@@ -14,6 +14,8 @@ report instructions here while Pharos is available).
 - A report or "more details": a report document (`view_create` with `doc`), pictures before
   words, numbers read from Pharos data. A review or a choice for the user: a review desk (sheets
   with decisions and tasks). Prefer updating an existing page.
+- Every task you add carries `actions` (the steps), `acceptance` ("done when" checks) and
+  `deliverables` (`{label, kind, ref}`), so a person could check the work without asking.
 - Always a document, never an HTML report page (`page`): Pharos refuses one. Another website goes
   in an `embed` block of the document; a `drawing` block only for one visual no component can draw.
 - After merged work, a night run, research or an evaluation: add a dated section at the top of the

@@ -453,7 +453,13 @@ export function askOwner(
   store: Store,
   author: Author,
   input: AskOwner,
-): { id: string; kind: 'decision' | 'task'; revision: number; href: string } {
+): {
+  id: string;
+  kind: 'decision' | 'task';
+  revision: number;
+  href: string;
+  warnings?: string[];
+} {
   const project = store.get(input.projectId);
   if (project?.type !== 'project')
     throw new PharosError('not_found', `Project ${input.projectId} not found`);
@@ -518,6 +524,9 @@ export function askOwner(
           desk: true,
           ...(input.minutes ? { estimate: `${input.minutes} min` } : {}),
           ...(input.gate ? { priority: valueFor(p, 'task.priority', 'high') } : {}),
+          ...(input.actions?.length ? { actions: input.actions } : {}),
+          ...(input.acceptance?.length ? { acceptance: input.acceptance } : {}),
+          ...(input.deliverables?.length ? { deliverables: input.deliverables } : {}),
         },
       },
     ],
@@ -528,6 +537,7 @@ export function askOwner(
     kind: 'task',
     revision: result.revision?.id ?? store.latestRevisionId(),
     href: projectHref(p.id, id),
+    ...(result.warnings.length ? { warnings: result.warnings } : {}),
   };
 }
 

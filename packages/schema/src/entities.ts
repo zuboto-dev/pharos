@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DECISION_CHOICE_FIELDS } from './decisions.js';
 import { TASK_ANSWER } from './task-answers.js';
+import { TASK_DETAIL_FIELDS } from './task-details.js';
 import { FilePath, FolderId } from './files.js';
 import { OPTION_FIELDS, ProjectOptions, defaultOptions, type OptionKey } from './options.js';
 import { FieldValue, Interval, RecordKey, RecordTypes } from './records.js';
@@ -122,6 +123,8 @@ export const TaskData = z.strictObject({
   goalIds: z.array(Id).optional(),
   title: Text,
   description: Markdown.optional(),
+  // What to do, what makes it done, and what it produces (agents are warned without them).
+  ...TASK_DETAIL_FIELDS,
   status: optionField('task.status'),
   priority: optionField('task.priority'),
   assigneeId: Id.optional(),

@@ -3,6 +3,7 @@ import {
   stripWorkCode,
   taskAnswerChange,
   taskAnswerState,
+  taskDetailSummary,
   type Entity,
   type NodeOf,
   type TaskAnswer,
@@ -99,7 +100,10 @@ function TaskCard({ task, show }: { task: Task; show: { stage: boolean; status: 
     >
       <Clickable
         id={task.id}
-        title={task.data.description}
+        title={
+          [taskDetailSummary(task.data), task.data.description].filter(Boolean).join('\n\n') ||
+          undefined
+        }
         className={clsx(
           'space-y-2 rounded-tile border border-line bg-surface p-3 shadow-xs transition hover:border-neutral-300 hover:shadow-sm dark:hover:border-neutral-700',
           meaning === 'blocked' && 'border-l-2 border-l-rose-500',
@@ -428,6 +432,7 @@ function TaskRow({ task, title, children }: { task: Task; title: ReactNode; chil
       data-entity={task.id}
       data-entity-type="task"
       data-pick-title={task.data.title}
+      title={taskDetailSummary(task.data)}
       onClick={(e) => {
         if (!(e.target as HTMLElement).closest('button, a, select'))
           actions.open({ entity: task.id });
@@ -540,6 +545,7 @@ export function TaskChecklist({ node }: { node: NodeOf<'TaskChecklist'> }) {
             <li key={task.id}>
               <Clickable
                 id={task.id}
+                title={taskDetailSummary(task.data)}
                 className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-sunken"
               >
                 <TaskCheck task={task} answer />

@@ -79,7 +79,8 @@ describe('MCP', () => {
     // lists, record types, intervals and decision options are shared once in definitions, and an
     // update's fields are described once, in the create of the same type.
     // Raised from 50 000 on 2026-10-23 for decision.dependsOn, task.goalIds and project.rules
-    // (connections and the owner's standing rules).
+    // (connections and the owner's standing rules). 2026-10-23: task actions, acceptance and
+    // deliverables (about 1.1k) fit after a create's ref was shared once in definitions (-1.5k).
     expect(apply.length).toBeLessThan(51_000);
     expect(apply).toContain('"#/definitions/ProjectOptions"');
     expect(client.getInstructions()).toContain('apply');

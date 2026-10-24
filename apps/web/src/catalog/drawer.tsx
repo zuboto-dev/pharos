@@ -8,6 +8,7 @@ import {
   type RevisionSummary,
   connectionsOf,
   groupConnections,
+  taskDetailSummary,
 } from '@pharos/schema';
 import clsx from 'clsx';
 import {
@@ -40,10 +41,13 @@ import { AUTHOR_ICONS, ProjectHistory, RevertButton, RevisionItem } from './hist
 import { QuickAdd, useCreate } from './quickadd';
 import { ArtifactSourcePanel } from './source-file';
 import { ArtifactPicture } from './artifact-picture';
+import { TaskDetails } from './task-details';
 import { Select, type SelectOption } from './select';
 import { Badge, Empty, toneOf } from './ui';
 
 const HIDDEN = new Set(['projectId', 'order', 'spec', 'template']);
+/** A task's steps, checks and results, drawn above the fields by TaskDetails. */
+const TASK_DETAIL_FIELDS = new Set(['actions', 'acceptance', 'deliverables']);
 /** Long text, edited as markdown above the fields. */
 const MARKDOWN = new Set(['description', 'body', 'rationale']);
 /** One-line text people can edit in place (shown even when empty, to add it). */
@@ -159,6 +163,7 @@ function Fields({ entity }: { entity: Entity }) {
   const rows: ReactNode[] = [];
   for (const field of Object.keys(def.data.shape)) {
     if (HIDDEN.has(field) || field === def.label || MARKDOWN.has(field)) continue;
+    if (entity.type === 'task' && TASK_DETAIL_FIELDS.has(field)) continue;
     const value = record[field];
     const optional = (def.data.shape as Record<string, z.ZodType>)[field] instanceof z.ZodOptional;
     const schema = fieldSchema(entity.type, field);
@@ -289,6 +294,7 @@ function TaskList({ tasks }: { tasks: Entity<'task'>[] }) {
         <li key={task.id}>
           <Clickable
             id={task.id}
+            title={taskDetailSummary(task.data)}
             className="flex items-center gap-2 rounded-control px-1.5 py-1 hover:bg-sunken"
           >
             <TaskCheck task={task} />
@@ -445,6 +451,7 @@ function EntityDetails({ entity }: { entity: Entity }) {
       {longText.map((field) => (
         <EditableMarkdown key={field} entity={entity} field={field} />
       ))}
+      {entity.type === 'task' && <TaskDetails task={entity as Entity<'task'>} />}
       <Fields entity={entity} />
       <Related entity={entity} />
       <Section title="History">

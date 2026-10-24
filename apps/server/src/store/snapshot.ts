@@ -193,6 +193,14 @@ export function projectSnapshot(store: Store, projectId: string) {
       dependsOn: t.data.dependsOn.length ? t.data.dependsOn : undefined,
       estimate: t.data.estimate,
       dueDate: t.data.dueDate,
+      // What to do, when it's done, what it leaves: for the work under way only, to keep it short.
+      ...(meaningOf(project, 'task.status', t.data.status) === 'in_progress'
+        ? {
+            actions: t.data.actions,
+            acceptance: t.data.acceptance,
+            deliverables: t.data.deliverables,
+          }
+        : {}),
       ...linked(t.data),
     })),
     // Agents see no local paths, nor sources (or findings) copied from hidden files (R7.9).

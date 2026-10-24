@@ -1364,11 +1364,14 @@ function ProjectDetail({
   onRun,
   onLog,
   onRemove,
+  onEnrolled,
 }: {
   project: RoutinesProject;
   status: RoutinesProjectStatus | undefined;
   routines: RoutineDef[];
   pharos: RoutinesPharos | undefined;
+  /** Enroll or Pause: saved at once (owner's review), not left as an unsaved edit. */
+  onEnrolled: (enrolled: boolean) => void;
   /** Shown for a project Pharos has no folder for: take it out of routines.json. */
   onRemove?: () => void;
   night: DeskRun | undefined;
@@ -1439,7 +1442,7 @@ function ProjectDetail({
               icon={project.enrolled ? Pause : Play}
               onClick={() => {
                 setMenu(null);
-                set({ enrolled: !project.enrolled });
+                onEnrolled(!project.enrolled);
               }}
             >
               {project.enrolled ? 'Pause (leave the routines)' : 'Enroll in the routines'}
@@ -1943,6 +1946,87 @@ export function RoutinesPage() {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<{ file: string; text: string | null } | null>(null);
   const [removing, setRemoving] = useState<RoutinesProject | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 8000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  /**
+   * Saves one small change right away (Enroll, Pause): through the same checked save, then the
+   * page shows it at once (both the loaded config and the draft take it, so other unsaved edits
+   * stay as they were) and reloads. On a refusal nothing moves and the error shows.
+   */
+  const saveNow = async (
+    changes: RoutinesChange[],
+    apply: (d: Draft) => void,
+    done: {
+      text: string;
+      undo?: { changes: RoutinesChange[]; apply: (d: Draft) => void; text: string };
+    },
+  ): Promise<void> => {
+    try {
+      await ownerPost('/api/routines/save', { changes });
+    } catch (err) {
+      setToast(null);
+      setNotice({ tone: 'error', text: (err as Error).message });
+      return;
+    }
+    const take = (d: Draft | null) => {
+      if (!d) return d;
+      const next = structuredClone(d);
+      apply(next);
+      return next;
+    };
+    setBase(take);
+    setDraft(take);
+    const undo = done.undo;
+    setToast({
+      text: done.text,
+      ...(undo ? { undo: () => void saveNow(undo.changes, undo.apply, { text: undo.text }) } : {}),
+    });
+    reload();
+  };
+  const setEnrolled = (project: RoutinesProject, enrolled: boolean) => {
+    const was = base?.projects.find((p) => p.name === project.name);
+    if (!was) return;
+    const to = (value: boolean) => (d: Draft) => {
+      const p = d.projects.find((x) => x.name === project.name);
+      if (p) p.enrolled = value;
+    };
+    const change = (from: boolean, next: boolean): RoutinesChange[] => [
+      { field: 'enrolled', project: project.name, from, to: next },
+    ];
+    void saveNow(change(was.enrolled, enrolled), to(enrolled), {
+      text: `${project.name} ${enrolled ? 'enrolled' : 'paused'}`,
+      undo: {
+        changes: change(enrolled, was.enrolled),
+        apply: to(was.enrolled),
+        text: `${project.name} ${was.enrolled ? 'enrolled' : 'paused'} again`,
+      },
+    });
+  };
+  const enrollFolder = (folder: RoutinesFolder) => {
+    if (!base) return;
+    const entry = entryFor(folder, base.projects);
+    void saveNow(
+      [{ field: 'project', name: entry.name, from: null, to: entry }],
+      (d) => {
+        d.projects.push(entry);
+      },
+      {
+        text: `${entry.name} enrolled`,
+        undo: {
+          changes: [{ field: 'project', name: entry.name, from: entry, to: null }],
+          apply: (d) => {
+            d.projects = d.projects.filter((p) => p.name !== entry.name);
+          },
+          text: `${entry.name} taken out again`,
+        },
+      },
+    );
+  };
 
   const save = async () => {
     setBusy(true);
@@ -2040,6 +2124,7 @@ export function RoutinesPage() {
             onRun={(routine) => setPending({ routine, project: p })}
             onLog={(file) => void openLog(file)}
             onRemove={missing ? () => setRemoving(p) : undefined}
+            onEnrolled={(enrolled) => setEnrolled(p, enrolled)}
           />
         )}
       </li>
@@ -2054,11 +2139,7 @@ export function RoutinesPage() {
           onToggle={() =>
             setOpen(open === `folder:${row.folder.id}` ? null : `folder:${row.folder.id}`)
           }
-          onEnroll={() =>
-            edit((d) => {
-              d.projects.push(entryFor(row.folder, d.projects));
-            })
-          }
+          onEnroll={() => enrollFolder(row.folder)}
         />
       </li>
     ) : (
@@ -2229,6 +2310,30 @@ export function RoutinesPage() {
           }}
           onCancel={() => setEditing(null)}
         />
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          data-toast=""
+          className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 animate-pop-in items-center gap-3 rounded-control bg-inverse px-3 py-2 text-sm text-on-inverse shadow-overlay"
+        >
+          <Check aria-hidden className="size-3.5" />
+          <span>{toast.text}</span>
+          {toast.undo && (
+            <button
+              type="button"
+              onClick={() => {
+                const undo = toast.undo!;
+                setToast(null);
+                undo();
+              }}
+              className="font-medium underline-offset-2 hover:underline"
+            >
+              Undo
+            </button>
+          )}
+        </div>
       )}
 
       {removing && (

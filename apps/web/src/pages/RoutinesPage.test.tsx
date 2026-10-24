@@ -157,9 +157,12 @@ const DESK: Desk = {
 type Call = { url: string; init?: RequestInit };
 let calls: Call[] = [];
 let state: RoutinesState;
+/** Set to make the next saves fail as Routines would refuse them. */
+let saveError: string | null = null;
 
 beforeEach(() => {
   calls = [];
+  saveError = null;
   state = STATE();
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
@@ -168,7 +171,24 @@ beforeEach(() => {
     if (url.startsWith('/api/routines/log'))
       return Response.json({ file: 'x', text: 'the whole log' });
     if (url === '/api/routines/save') {
-      const body = JSON.parse(String(init?.body)) as { changes: unknown[] };
+      if (saveError)
+        return Response.json({ error: { code: 'conflict', message: saveError } }, { status: 409 });
+      const body = JSON.parse(String(init?.body)) as { changes: Record<string, unknown>[] };
+      // Like Routines: the next state has the saved projects (a fresh copy, so React sees it).
+      if (state.available) {
+        const config = structuredClone(state.config);
+        for (const ch of body.changes) {
+          if (ch.field === 'enrolled') {
+            const project = config.projects.find((x) => x.name === ch.project);
+            if (project) project.enrolled = ch.to as boolean;
+          }
+          if (ch.field === 'project') {
+            config.projects = config.projects.filter((x) => x.name !== ch.name);
+            if (ch.to) config.projects.push(ch.to as RoutinesConfig['projects'][number]);
+          }
+        }
+        state = { ...state, config };
+      }
       return Response.json({ ok: true, saved: body.changes.map(() => 'saved it') });
     }
     if (url === '/api/routines/run') return Response.json({ ok: true });
@@ -400,13 +420,52 @@ describe('the Routines page', () => {
     ]);
   });
 
-  it('pauses a project from the ⋯ menu as an unsaved change', async () => {
+  it('pauses a project at once: saved, the row moves, Undo saves it back', async () => {
     show();
     await openGarden();
     fireEvent.click(screen.getByRole('button', { name: 'Options for garden' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Pause/ }));
-    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    const toast = await screen.findByText('garden paused');
+    expect(savedChanges()).toEqual([
+      { field: 'enrolled', project: 'garden', from: true, to: false },
+    ]);
+    // No Save bar for it, and garden is under Parked now.
+    expect(screen.queryByText(/unsaved change/)).toBeNull();
     expect(screen.getByRole('button', { name: /Parked \(2\)/ })).toBeTruthy();
+    expect(line('garden')).toBeNull();
+    // A reload is asked for after the save.
+    expect(calls.filter((c) => c.url === '/api/routines/state').length).toBeGreaterThan(1);
+
+    fireEvent.click(
+      within(toast.closest('[data-toast]') as HTMLElement).getByRole('button', { name: 'Undo' }),
+    );
+    await screen.findByText('garden enrolled again');
+    const saves = posts().filter((c) => c.url === '/api/routines/save');
+    expect(JSON.parse(String(saves[1]!.init!.body))).toEqual({
+      changes: [{ field: 'enrolled', project: 'garden', from: false, to: true }],
+    });
+    expect(line('garden')).toBeTruthy();
+  });
+
+  it('enrolls a parked project at once, and leaves it parked when the save fails', async () => {
+    saveError = 'routines.json changed since the page loaded. Reload and try again.';
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: /Parked \(1\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'bike' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Options for bike' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enroll in the routines' }));
+    expect(await screen.findByText(/routines.json changed since the page loaded/)).toBeTruthy();
+    expect(screen.queryByText('bike enrolled')).toBeNull();
+    expect(screen.getByRole('button', { name: /Parked \(1\)/ })).toBeTruthy();
+
+    saveError = null;
+    fireEvent.click(screen.getByRole('button', { name: 'Options for bike' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enroll in the routines' }));
+    await screen.findByText('bike enrolled');
+    expect(savedChanges()).toEqual([{ field: 'enrolled', project: 'bike', from: false, to: true }]);
+    // Its row is with the enrolled ones now, and Parked is gone.
+    expect(screen.queryByRole('button', { name: /Parked/ })).toBeNull();
+    expect(line('bike')).toBeTruthy();
   });
 
   it('keeps how it runs folded, with cleanup and models to edit on click', async () => {
@@ -566,8 +625,17 @@ describe('rows follow Pharos’s folders', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Options for Kiln' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Enroll in the routines' }));
-    // Now a row of its own (enrolled), waiting to be saved.
+    // Saved at once: a row of its own (enrolled).
+    await screen.findByText('kiln enrolled');
     expect(line('kiln')).toBeTruthy();
+    const [enrolled] = savedChanges() as { from: unknown; to: unknown }[];
+    expect(enrolled).toMatchObject({
+      field: 'project',
+      name: 'kiln',
+      from: null,
+      to: { path: '/tmp/kiln', pm: { type: 'pharos', project: 'prj_k' } },
+    });
+    calls = [];
 
     fireEvent.click(screen.getByRole('button', { name: /^bike/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Options for bike' }));
@@ -576,17 +644,8 @@ describe('rows follow Pharos’s folders', () => {
     expect(ask.textContent).toMatch('its folder and files stay');
     fireEvent.click(within(ask).getByRole('button', { name: 'Remove' }));
 
-    expect(await saveAll()).toEqual([
-      'Add kiln to the routines (enrolled, $8 · 4 h)',
-      'Remove bike from the routines (its folder and files stay)',
-    ]);
-    const [added, removed] = savedChanges() as { from: unknown; to: unknown }[];
-    expect(added).toMatchObject({
-      field: 'project',
-      name: 'kiln',
-      from: null,
-      to: { path: '/tmp/kiln', pm: { type: 'pharos', project: 'prj_k' } },
-    });
+    expect(await saveAll()).toEqual(['Remove bike from the routines (its folder and files stay)']);
+    const [removed] = savedChanges() as { from: unknown; to: unknown }[];
     expect(removed).toMatchObject({ field: 'project', name: 'bike', to: null });
   });
 });

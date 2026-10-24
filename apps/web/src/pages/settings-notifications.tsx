@@ -36,6 +36,10 @@ const KINDS: Record<NotificationPrefKind, { label: string; info: string }> = {
     label: 'Agent finished',
     info: 'An agent in a panel exited, or was stopped after a while with no panel open.',
   },
+  'agent-answered': {
+    label: 'Agent answered',
+    info: 'An agent in a panel finished its turn and waits for you, while the panel was closed or its tab in the background.',
+  },
   stale: {
     label: 'Page out of date',
     info: 'An agent’s change made a page an agent wrote out of date.',

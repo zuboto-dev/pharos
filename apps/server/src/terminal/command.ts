@@ -33,6 +33,8 @@ export function terminalCommand(
     brief?: string;
     /** Claude Code's conversation: a new one with this id, or the one to resume after a restart. */
     conversation?: { id: string; resume: boolean };
+    /** Claude Code's extra settings with Pharos's Stop hook (`terminalHookSettings`). */
+    settingsPath?: string;
   },
 ): TerminalCommand {
   if (preset === 'codex')
@@ -51,12 +53,37 @@ export function terminalCommand(
       '--mcp-config',
       options.mcpConfigPath,
       '--strict-mcp-config',
+      // Added to the owner's own settings for this session only; never written to ~/.claude.
+      ...(options.settingsPath ? ['--settings', options.settingsPath] : []),
       ...(options.brief ? ['--append-system-prompt', options.brief] : []),
       ...(options.conversation
         ? [options.conversation.resume ? '--resume' : '--session-id', options.conversation.id]
         : []),
     ],
   };
+}
+
+/** Where the Stop hook posts: the end of a panel agent's turn. */
+export const TURN_ROUTE = '/api/terminal/turn';
+/** The header carrying a session's hook token. */
+export const TURN_TOKEN_HEADER = 'x-pharos-terminal';
+
+/**
+ * Claude Code settings for the panel's sessions (`--settings`): a Stop hook (the end of every
+ * turn, when Claude Code returns to its prompt) that posts the hook's input (session id, cwd) to
+ * this server with the session's token, both from the environment Pharos gave it. It never fails
+ * the agent: a short timeout, and the result ignored.
+ */
+export function terminalHookSettings(): string {
+  const command =
+    `curl -sS -m 3 -o /dev/null -X POST -H 'content-type: application/json' ` +
+    `-H "${TURN_TOKEN_HEADER}: $PHAROS_TERMINAL_TOKEN" --data-binary @- ` +
+    `"$PHAROS_URL${TURN_ROUTE}" >/dev/null 2>&1 || true`;
+  return `${JSON.stringify(
+    { hooks: { Stop: [{ hooks: [{ type: 'command', command, timeout: 5 }] }] } },
+    null,
+    2,
+  )}\n`;
 }
 
 /** The app setting keeping each folder's panel conversation, so a restart resumes it. */

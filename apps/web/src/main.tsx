@@ -7,6 +7,7 @@ import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { UpdatesPage } from './pages/UpdatesPage';
+import { AgentsPage } from './pages/AgentsPage';
 import { RoutinesPage } from './pages/RoutinesPage';
 import { preloadBlocks } from './catalog/lazy-block';
 import './index.css';
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="projects/:projectId/files" element={<ProjectPage page="files" />} />
             <Route path="desk" element={<DeskPage />} />
             <Route path="updates" element={<UpdatesPage />} />
+            <Route path="agents" element={<AgentsPage />} />
             <Route path="routines" element={<RoutinesPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

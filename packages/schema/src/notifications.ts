@@ -11,6 +11,7 @@ export const NOTIFICATION_KINDS = [
   'desk',
   'run',
   'terminal',
+  'agent-answered',
   'stale',
   'handback',
   'system',
@@ -18,7 +19,14 @@ export const NOTIFICATION_KINDS = [
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
 /** The kinds the owner can tune in Settings (`system` is Pharos itself: always on, a modal). */
-export const NOTIFICATION_PREF_KINDS = ['desk', 'run', 'terminal', 'stale', 'handback'] as const;
+export const NOTIFICATION_PREF_KINDS = [
+  'desk',
+  'run',
+  'terminal',
+  'agent-answered',
+  'stale',
+  'handback',
+] as const;
 export type NotificationPrefKind = (typeof NOTIFICATION_PREF_KINDS)[number];
 
 /** Where a notification shows: only in the bell's list, as a toast too, or as a system banner. */
@@ -62,6 +70,8 @@ export const NotificationPrefs = z.strictObject({
     desk: KindPref,
     run: KindPref,
     terminal: KindPref,
+    /** An agent in a panel finished its turn while no one looked at the panel. */
+    'agent-answered': KindPref,
     stale: KindPref,
     handback: KindPref,
   }),
@@ -77,12 +87,13 @@ export type NotificationPrefs = z.infer<typeof NotificationPrefs>;
 /** The app setting key the preferences are saved under (Store.setSetting). */
 export const NOTIFICATION_PREFS_SETTING = 'notifications.prefs';
 
-/** Desk items and failed runs as toasts, the rest in the bell only; browser notifications off. */
+/** Desk items, failed runs and answers in an unwatched panel as toasts, the rest in the bell only; browser notifications off. */
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   kinds: {
     desk: { on: true, delivery: 'toast' },
     run: { on: true, delivery: 'toast' },
     terminal: { on: true, delivery: 'bell' },
+    'agent-answered': { on: true, delivery: 'toast' },
     stale: { on: true, delivery: 'bell' },
     handback: { on: true, delivery: 'bell' },
   },

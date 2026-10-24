@@ -20,6 +20,7 @@ import { scheduleAssetPurge } from './views/report.js';
 import { webBuildId } from './version.js';
 import { loadPty } from './terminal/pty.js';
 import { TerminalService } from './terminal/service.js';
+import { terminalHookSettings } from './terminal/command.js';
 import { PermissionService } from './permissions/service.js';
 
 // Whatever ends this process should say why in its log first (a background service restarts it;
@@ -95,12 +96,26 @@ const agent = new AgentRunner(store, {
 if (agent.configured) agent.watch(feed);
 const files = new FileService(store);
 // The agent terminal (R17): the owner's agent CLI in a panel beside a project, on this computer.
+const pharosHome = process.env.PHAROS_HOME ?? join(homedir(), '.pharos');
+// Claude Code's Stop hook for the panel's sessions (`--settings`, this file only; the owner's
+// ~/.claude settings are never touched): the end of each turn, for "Claude Code answered".
+const hookSettingsPath = join(pharosHome, 'terminal-settings.json');
+let hooks = false;
+if (cli.claude)
+  try {
+    mkdirSync(pharosHome, { recursive: true });
+    writeFileSync(hookSettingsPath, terminalHookSettings(), { mode: 0o600 });
+    hooks = true;
+  } catch (error) {
+    console.error('[pharos] Could not write the agent panel’s hook settings:', error);
+  }
 const terminal = new TerminalService({
   store,
   installed: cli,
   mcpConfigPath,
+  ...(hooks ? { hookSettingsPath } : {}),
   serverUrl,
-  home: process.env.PHAROS_HOME ?? join(homedir(), '.pharos'),
+  home: pharosHome,
   pty: await loadPty(),
 });
 terminal.startSweeping();

@@ -64,6 +64,9 @@ import { PermissionService } from './permissions/service.js';
 import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
+import { TURN_TOKEN_HEADER } from './terminal/command.js';
+import { agentsOverview } from './agents.js';
+import { LookupLog } from './lookups.js';
 
 /** What the panel sends: typed input, its size, or a restart. Never a command. */
 const TerminalClientMessage = z.discriminatedUnion('t', [
@@ -73,6 +76,8 @@ const TerminalClientMessage = z.discriminatedUnion('t', [
   // The panel checks the connection is alive (a laptop asleep can leave it dead without a word).
   z.object({ t: z.literal('ping') }),
   z.object({ t: z.literal('stop') }),
+  // Whether the panel's tab is in front: an answer in a hidden tab notifies.
+  z.object({ t: z.literal('v'), v: z.boolean() }),
 ]);
 
 function terminalSize(cols: unknown, rows: unknown): { cols: number; rows: number } {
@@ -570,6 +575,21 @@ export function createApp(
     if (terminalPlaceRefusal(header(c))) return c.json([]);
     return c.json(info.terminal?.runningSessions() ?? []);
   });
+  // A panel agent's turn ended: Claude Code's Stop hook (terminal/command.ts) posts here with the
+  // token Pharos gave that session. Local only; an unknown token is refused.
+  api.post('/terminal/turn', async (c) => {
+    if (terminalPlaceRefusal(header(c)))
+      return forbidden(c, 'Only an agent on this computer reports its turn');
+    const token = c.req.header(TURN_TOKEN_HEADER) ?? '';
+    const hook = z
+      .object({ hook_event_name: z.string().max(100).optional() })
+      .passthrough()
+      .parse(await c.req.json().catch(() => ({})));
+    if (hook.hook_event_name !== undefined && hook.hook_event_name !== 'Stop')
+      return c.json({ ok: true, ignored: true });
+    if (!info.terminal?.hookTurn(token)) return notFound(c, 'No agent panel has that token');
+    return c.json({ ok: true });
+  });
   api.get('/projects/:id/terminal', (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Agents can’t open the owner’s terminal');
     projectOrThrow(c.req.param('id'));
@@ -620,6 +640,8 @@ export function createApp(
             else if (message.t === 'stop') terminal.stopAgent(projectId);
             else if (message.t === 'i') {
               if (key) terminal.sessions?.input(key, message.d);
+            } else if (message.t === 'v') {
+              if (key && client) terminal.sessions?.visibility(key, client, message.v);
             } else if (message.t === 'r') {
               size = terminalSize(message.cols, message.rows);
               if (key) terminal.sessions?.resize(key, size);
@@ -788,6 +810,23 @@ export function createApp(
       }),
     );
   });
+  // The Agents page: every agent working with Pharos now (panels, MCP agents, answering,
+  // routines). Owner and agents may read it; agents don't see the panels' folders.
+  const lookupLog = new LookupLog(store);
+  api.get('/agents', (c) =>
+    c.json(
+      agentsOverview({
+        store,
+        presence,
+        runs,
+        lookups: lookupLog,
+        panels: () => info.terminal?.panels() ?? [],
+        answering: () => agent?.status(),
+        forAgent: declaresAgent(c),
+        local: !declaresAgent(c) && !terminalPlaceRefusal(header(c)),
+      }),
+    ),
+  );
   api.get('/runs', (c) => {
     const q = c.req.query();
     return c.json(

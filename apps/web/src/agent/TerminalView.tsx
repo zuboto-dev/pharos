@@ -171,6 +171,8 @@ export default function TerminalView({
       ws.send(JSON.stringify(message));
       return true;
     };
+    const visible = () => send.current({ t: 'v', v: document.visibilityState !== 'hidden' });
+    document.addEventListener('visibilitychange', visible);
     // What this panel shows counts as seen (the "new output" hint elsewhere), noted at most every 2 s.
     let noted = 0;
     const seen = () => {
@@ -209,6 +211,8 @@ export default function TerminalView({
         if (!ready.current) settle(700);
       } else if (message.t === 'start') {
         attempts.current = 0;
+        // Whether this tab is in front: an answer in a hidden tab notifies (server-side rule).
+        visible();
         terminal.reset();
         ready.current = false;
         stateRef.current('running', message.cwd);
@@ -276,6 +280,7 @@ export default function TerminalView({
     terminal.focus();
     return () => {
       markTerminalSeen(projectId);
+      document.removeEventListener('visibilitychange', visible);
       clearInterval(alive);
       clearTimeout(retry);
       clearTimeout(quiet);

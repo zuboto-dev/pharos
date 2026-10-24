@@ -105,6 +105,28 @@ describe('toast stack', () => {
     );
   });
 
+  it('an agent that answered in an unwatched panel shows as a toast; Open goes to its panel', async () => {
+    renderShell();
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.startsWith('/api/notifications?'))).toBe(true),
+    );
+    send(
+      note(7, {
+        kind: 'agent-answered',
+        title: 'Claude Code answered in Tutti',
+        project: 'Tutti',
+        href: '/projects/p1?terminal=1',
+        action: 'Open',
+      }),
+    );
+    const toast = await screen.findByRole('status');
+    expect(toast.getAttribute('data-toast')).toBe('agent-answered');
+    expect(toast.querySelector('[data-icon="agent-answered"]')).not.toBeNull();
+    expect(within(toast).getByText('Claude Code answered in Tutti')).toBeTruthy();
+    fireEvent.click(within(toast).getByRole('button', { name: 'Open' }));
+    expect(screen.getByTestId('where').textContent).toBe('/projects/p1?terminal=1');
+  });
+
   it('a gate shows the lock; dismiss closes it; it goes by itself after a while', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     renderShell();
@@ -248,6 +270,7 @@ describe('settings form', () => {
       ['Needs you', 'Toast'],
       ['Run failed', 'Toast'],
       ['Agent finished', 'Bell only'],
+      ['Agent answered', 'Toast'],
       ['Page out of date', 'Bell only'],
       ['Hand-back waiting', 'Bell only'],
     ]) {

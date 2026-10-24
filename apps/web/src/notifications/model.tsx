@@ -15,6 +15,7 @@ import {
   Lock,
   RefreshCw,
   Send,
+  SquareTerminal,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -42,6 +43,7 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   desk: Inbox,
   run: AlertTriangle,
   terminal: Bot,
+  'agent-answered': SquareTerminal,
   stale: RefreshCw,
   handback: Send,
   system: Cog,
@@ -51,6 +53,7 @@ export const KIND_TONE: Record<NotificationKind, string> = {
   desk: 'text-sky-600 dark:text-sky-400',
   run: 'text-danger',
   terminal: 'text-ok',
+  'agent-answered': 'text-accent',
   stale: 'text-warn',
   handback: 'text-violet-600 dark:text-violet-400',
   system: 'text-muted',

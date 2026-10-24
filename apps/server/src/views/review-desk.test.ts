@@ -24,7 +24,7 @@ const agent: Author = { kind: 'agent', name: 'Opus 5.5' };
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
 const WAV = new Uint8Array(Array.from({ length: 64 }, (_, i) => i));
 
-function setup() {
+function setup(decisionExtra: Record<string, unknown> = {}) {
   const store = new Store(openDatabase(':memory:'));
   const { created } = store.apply(agent, {
     message: 'Set up',
@@ -52,6 +52,7 @@ function setup() {
           ],
           recommendedOptionId: 'ship',
           recommendationReason: 'Every row shows at 390 px.',
+          ...decisionExtra,
         },
       },
     ],
@@ -203,6 +204,22 @@ describe("the reader's answers don't make a document out of date (R15)", () => {
       ],
     });
     expect(state(ctx)).toBe('fresh');
+  });
+
+  it('a choice that saves a selection of items keeps it fresh, and view_get lists the ids', () => {
+    const list = [
+      { id: 'a', label: 'Banner A' },
+      { id: 'b', label: 'Banner B' },
+    ];
+    const ctx = setup({ items: { list } });
+    expect(state(ctx)).toBe('fresh');
+    choose(ctx, { chosenOptionId: 'ship', items: { list, selected: ['b'] } });
+    expect(state(ctx)).toBe('fresh');
+    expect(getView(ctx.store, ctx.viewId).sheets![0]!.decisions[0]).toMatchObject({
+      state: 'chosen',
+      selected: ['b'],
+      of: 2,
+    });
   });
 
   it("ticking a task in the document's TaskChecklist keeps it fresh", () => {

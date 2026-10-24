@@ -725,4 +725,148 @@ describe('the desk (R16)', () => {
     );
     expect((await ask({ projectId: 'Nowhere', title: 'x' })).status).toBe(404);
   });
+
+  describe('picking which items a choice applies to', () => {
+    const TRASH = [
+      { id: 'move', label: 'Move to Trash' },
+      { id: 'keep', label: 'Keep them' },
+    ];
+    const LIST = [
+      { id: 'web/dist', label: 'web/dist', detail: '200 MB · untouched 9 days · build output' },
+      { id: 'node_modules/.cache', label: 'node_modules/.cache', detail: '80 MB' },
+      { id: 'tmp/shots', label: 'tmp/shots', detail: '32 MB' },
+    ];
+    const ask = (store: Store, p: string) =>
+      askOwner(store, agent, {
+        projectId: p,
+        title: 'Clean up 3 items (312 MB) in tutti: move them to the Trash?',
+        options: TRASH,
+        recommendedOptionId: 'move',
+        items: { list: LIST },
+      });
+    const post = (app: ReturnType<typeof createApp>, body: unknown, who = 'human:me') =>
+      app.request('/api/desk/answer', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-pharos-author': who },
+        body: JSON.stringify(body),
+      });
+
+    it('ask_owner puts the items on the desk; the owner chooses for some of them', async () => {
+      const { store, runs, p } = setup();
+      const { id } = ask(store, p);
+      const item = deskOf(store, runs).items.find((i) => i.id === id)!;
+      expect(item.items).toEqual({ list: LIST, appliesTo: 'move' });
+      const since = store.latestRevisionId();
+      const app = createApp(store);
+      expect((await post(app, { id, chosenOptionId: 'move', selected: ['nope'] })).status).toBe(
+        400,
+      );
+      expect((await post(app, { id, chosenOptionId: 'move', selected: [] })).status).toBe(400);
+      const res = await post(app, {
+        id,
+        chosenOptionId: 'move',
+        selected: ['web/dist', 'tmp/shots'],
+      });
+      expect(res.status).toBe(200);
+      const { revision } = (await res.json()) as { revision: { id: number; message: string } };
+      expect(revision.message).toBe(
+        'Choose “Move to Trash”: 2 of 3 · Clean up 3 items (312 MB) in tutti: move them to the Trash?',
+      );
+      // One revision: the choice and the selection together.
+      const summary = store.revision(revision.id)!;
+      expect(summary.changes).toHaveLength(1);
+      expect(Object.keys(summary.changes[0]!.fields).sort()).toEqual(
+        ['chosenOptionId', 'decidedById', 'decisionDate', 'items', 'status'].sort(),
+      );
+      // A script (the Routines cleanup) reads the route; an agent reads the entity or the desk.
+      const got = await app.request(`/api/entities/decision/${id}`, {
+        headers: { 'x-pharos-author': 'agent:Routines' },
+      });
+      const data = ((await got.json()) as { data: { items: { selected: string[] } } }).data;
+      expect(data.items.selected).toEqual(['web/dist', 'tmp/shots']);
+      expect(answersSince(store, since)).toEqual([
+        expect.objectContaining({
+          revision: revision.id,
+          selections: [
+            { decisionId: id, chosenOptionId: 'move', selected: ['web/dist', 'tmp/shots'] },
+          ],
+        }),
+      ]);
+    });
+
+    it('without a selection the choice takes them all; another option takes none', async () => {
+      const { store, p } = setup();
+      const app = createApp(store);
+      const a = ask(store, p);
+      await post(app, { id: a.id, chosenOptionId: 'move' });
+      expect(store.getOfType('decision', a.id).data.items?.selected).toEqual(LIST.map((i) => i.id));
+      const b = ask(store, p);
+      const res = await post(app, { id: b.id, chosenOptionId: 'keep', selected: ['tmp/shots'] });
+      expect(((await res.json()) as { revision: { message: string } }).revision.message).toMatch(
+        /^Choose “Keep them”: Clean up/,
+      );
+      expect(store.getOfType('decision', b.id).data.items?.selected).toBeUndefined();
+      const c = ask(store, p);
+      await post(app, { id: c.id, decline: true });
+      expect(store.getOfType('decision', c.id).data.items).toEqual({ list: LIST });
+    });
+
+    it("an agent sets the list and appliesTo but never the owner's selection", () => {
+      const { store, p } = setup();
+      const { id } = ask(store, p);
+      expect(() =>
+        store.apply(agent, {
+          message: 'Pick for them',
+          operations: [
+            {
+              op: 'update',
+              type: 'decision',
+              id,
+              data: { items: { list: LIST, selected: ['web/dist'] } },
+            },
+          ],
+        }),
+      ).toThrow(/items\.selected/);
+      expect(() =>
+        store.apply(agent, {
+          message: 'Bad target',
+          operations: [
+            { op: 'update', type: 'decision', id, data: { items: { list: LIST, appliesTo: 'x' } } },
+          ],
+        }),
+      ).toThrow(/appliesTo/);
+      store.apply(agent, {
+        message: 'Fewer items',
+        operations: [
+          {
+            op: 'update',
+            type: 'decision',
+            id,
+            data: { items: { list: LIST.slice(0, 2), appliesTo: 'move' } },
+          },
+        ],
+      });
+      // Once the owner chose, the items stay as they were.
+      store.apply(me, {
+        message: 'Choose',
+        operations: [
+          {
+            op: 'update',
+            type: 'decision',
+            id,
+            data: {
+              chosenOptionId: 'move',
+              items: { list: LIST.slice(0, 2), appliesTo: 'move', selected: ['web/dist'] },
+            },
+          },
+        ],
+      });
+      expect(() =>
+        store.apply(agent, {
+          message: 'Change after',
+          operations: [{ op: 'update', type: 'decision', id, data: { items: { list: LIST } } }],
+        }),
+      ).toThrow(/only the owner|already chose/);
+    });
+  });
 });

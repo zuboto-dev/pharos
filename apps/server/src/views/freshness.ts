@@ -372,7 +372,21 @@ const ANSWER_FIELDS = new Set<string>([
 function isAnswer(change: ChangeLike): boolean {
   if (change.type !== 'decision' || !change.before || !change.after) return false;
   const fields = changedFields(change);
-  return fields.some((f) => OWNER_FIELDS.has(f)) && fields.every((f) => ANSWER_FIELDS.has(f));
+  return (
+    fields.some((f) => OWNER_FIELDS.has(f)) &&
+    fields.every((f) => ANSWER_FIELDS.has(f) || (f === 'items' && onlySelection(change)))
+  );
+}
+
+/** The items changed only in the owner's selection (a choice saves it with the choice). */
+function onlySelection(change: ChangeLike): boolean {
+  const strip = (items: unknown) => {
+    if (!items || typeof items !== 'object') return items;
+    const rest = { ...(items as Record<string, unknown>) };
+    delete rest.selected;
+    return rest;
+  };
+  return isDeepStrictEqual(strip(change.before?.items), strip(change.after?.items));
 }
 
 /** What answering a task writes: its status (done, won't do), a reply, a later day. */

@@ -69,7 +69,7 @@ function choiceOf(data: EntityDataMap['decision']): Record<string, unknown> {
     recommendedOptionId: data.recommendedOptionId,
     ownerAnswer:
       state.kind === 'chosen'
-        ? `chose "${state.option.label}"${state.note ? `, with the note: ${state.note}` : ''}`
+        ? `chose "${state.option.label}"${data.items?.selected ? ` for ${data.items.selected.length} of ${data.items.list.length} items (get it for items.selected)` : ''}${state.note ? `, with the note: ${state.note}` : ''}`
         : state.kind === 'answered'
           ? `answered: ${state.answer}`
           : state.kind === 'deferred'

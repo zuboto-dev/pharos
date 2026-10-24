@@ -725,13 +725,16 @@ function agentDecisionIssue(store: Store, changes: Change[]): string | undefined
     const owner = OWNER_DECISION_FIELDS.find(changed);
     if (owner)
       return `${what}: only the owner chooses, answers or defers a decision (${owner}); they do it in Pharos on a page with a DecisionBlock`;
+    const selection = (data: Data) => (data.items as { selected?: unknown } | undefined)?.selected;
+    if (!isDeepStrictEqual(selection(before), selection(after)))
+      return `${what}: only the owner picks which items a choice applies to (items.selected); send items with list and appliesTo only`;
     const options = after.options as unknown[] | undefined;
     if (!options?.length) continue;
     if (
       before.chosenOptionId &&
-      ['options', 'recommendedOptionId', 'recommendationReason'].some(changed)
+      ['options', 'recommendedOptionId', 'recommendationReason', 'items'].some(changed)
     )
-      return `${what}: the owner already chose; its options and recommendation can't change`;
+      return `${what}: the owner already chose; its options, items and recommendation can't change`;
     const project = store.get(after.projectId as string) as Entity<'project'> | null;
     if (
       changed('status') &&

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DECISION, DecisionOption } from './decisions.js';
+import { DECISION, DecisionItemsInput, DecisionOption, type DecisionItem } from './decisions.js';
 
 /**
  * The desk (R16, docs/reframe/r16-desk.md): everything waiting on the owner in every project, in
@@ -40,6 +40,8 @@ export type DeskItem = {
   /** A decision's options, so the desk can answer it in place. */
   options?: { id: string; label: string; asks?: string }[];
   recommendedOptionId?: string;
+  /** Items the owner picks from, and the option (id) the selection goes with. */
+  items?: { list: DecisionItem[]; appliesTo: string };
 };
 
 export const RUN_KINDS = ['night', 'routine', 'answer', 'other'] as const;
@@ -148,6 +150,9 @@ export const AskOwner = z.strictObject({
       'Choices: makes a decision the owner answers in one tap; without them it is a task for the owner',
     ),
   recommendedOptionId: z.string().optional(),
+  items: DecisionItemsInput.optional().describe(
+    'Items the choice applies to (e.g. the folders a cleanup would move): each {id, label, detail?}; the owner unticks the ones to keep, and their answer lists the ids they kept in items.selected (get the decision, or desk_list since). appliesTo: the option the selection goes with (default your recommendedOptionId)',
+  ),
   dependsOn: z.array(z.string()).optional().describe('Decisions this builds on'),
   viewId: z.string().optional().describe('A page that explains it (the desk links there)'),
 });

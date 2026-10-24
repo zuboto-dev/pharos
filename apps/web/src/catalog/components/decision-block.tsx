@@ -9,6 +9,9 @@ import {
   declineUpdate,
   decisionState,
   isDeclined,
+  itemsOptionId,
+  selectionCount,
+  withoutSelection,
   relationLine,
   relationNotes,
   valueFor,
@@ -38,6 +41,7 @@ import { useViewData, type ViewData } from '../context';
 import { Clickable, EntityRef } from '../interactive';
 import { AskAgentButton, EmptyState } from '../empty-state';
 import { BUTTON, Badge } from '../ui';
+import { ItemChecklist, tickedIds, useTicked } from './decision-items';
 
 /**
  * A decision the reader makes on the page (R10.19): the question, its options side by side with
@@ -132,6 +136,7 @@ function OptionCard({
   busy,
   decisionId,
   question,
+  selection,
 }: {
   decisionId: string;
   question: string;
@@ -140,6 +145,8 @@ function OptionCard({
   chosen: boolean;
   onChoose?: () => void;
   busy: boolean;
+  /** "5 of 7" when choosing it goes with the items ticked above; 0 ticked can't be chosen. */
+  selection?: { count: string; empty: boolean };
 }) {
   const headingId = useId();
   return (
@@ -189,17 +196,23 @@ function OptionCard({
         <div className="mt-auto pt-1">
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || selection?.empty}
             onClick={onChoose}
             // "Choose this" on the card (no quotes inside quotes); the option's name for screen readers.
-            aria-label={`Choose ${option.label}`}
+            aria-label={`Choose ${option.label}${selection ? ` for ${selection.count}` : ''}`}
             className={clsx(
               recommended ? BUTTON.primary : BUTTON.secondary,
               'min-h-11 w-full sm:min-h-0 sm:w-auto',
             )}
           >
             {option.asks ? 'Choose and explain' : 'Choose this'}
+            {selection && !selection.empty && (
+              <span className="font-normal opacity-80 tabular-nums"> · {selection.count}</span>
+            )}
           </button>
+          {selection?.empty && (
+            <p className="mt-1.5 text-xs text-muted">Tick at least one item above.</p>
+          )}
         </div>
       )}
     </li>
@@ -247,6 +260,11 @@ export function Decision({
   const state = decisionState(decision.data);
   const recommended = options.find((o) => o.id === decision.data.recommendedOptionId);
   const question = decision.data.title;
+  const items = decision.data.items;
+  const itemsTarget = itemsOptionId(decision.data);
+  const targetOption = options.find((o) => o.id === itemsTarget);
+  const [ticked, setTicked] = useTicked(items?.list);
+  const selected = items ? tickedIds(items.list, ticked) : [];
 
   const save = async (message: string, patch: Record<string, unknown>, extra: Operation[] = []) => {
     setBusy(true);
@@ -268,20 +286,32 @@ export function Decision({
     const who = decider(data);
     const option = decision.data.options?.find((o) => o.id === patch.chosenOptionId);
     // A choice settles status, who and when with it (decline → rejected, later → back in a week).
-    if (option)
+    if (option) {
+      const picks = items && option.id === itemsTarget;
       return save(
-        choiceMessage(option, question, patch.note, localToday()),
+        choiceMessage(
+          option,
+          question,
+          patch.note,
+          localToday(),
+          picks ? selectionCount(items, selected) : undefined,
+        ),
         choiceUpdate(option, {
           ...(patch.note ? { note: patch.note } : {}),
           today: localToday(),
           decidedById: who.id,
           status,
+          items,
+          itemsOptionId: itemsTarget,
+          selected,
         }),
         who.create,
       );
+    }
     return save(
       message,
       {
+        ...(items ? { items: withoutSelection(items) } : {}),
         chosenOptionId: patch.chosenOptionId ?? null,
         note: patch.note ?? null,
         answer: patch.answer ?? null,
@@ -303,12 +333,14 @@ export function Decision({
         today: localToday(),
         decidedById: who.id,
         status,
+        items,
       }),
       who.create,
     );
   };
   const reopen = () =>
     save(`Reopen “${question}”`, {
+      ...(items ? { items: withoutSelection(items) } : {}),
       chosenOptionId: null,
       note: null,
       answer: null,
@@ -420,6 +452,9 @@ export function Decision({
                 </>
               )}
             </p>
+            {state.kind === 'chosen' && items?.selected && (
+              <ChosenItems list={items.list} selected={items.selected} />
+            )}
             {state.kind === 'chosen' && state.option.summary && !state.note && (
               <p className="text-sm text-ink-soft">{state.option.summary}</p>
             )}
@@ -477,6 +512,16 @@ export function Decision({
 
       {answered && noteForm}
 
+      {items && !answered && (
+        <ItemChecklist
+          list={items.list}
+          ticked={ticked}
+          onChange={setTicked}
+          disabled={busy}
+          {...(targetOption ? { optionLabel: targetOption.label } : {})}
+        />
+      )}
+
       {(!answered || showOptions) &&
         (options.length ? (
           <ul
@@ -497,6 +542,14 @@ export function Decision({
                 chosen={state.kind === 'chosen' && state.option.id === option.id}
                 busy={busy}
                 onChoose={answered ? undefined : () => choose(option)}
+                {...(items && option.id === itemsTarget
+                  ? {
+                      selection: {
+                        count: selectionCount(items, selected),
+                        empty: selected.length === 0,
+                      },
+                    }
+                  : {})}
               />
             ))}
           </ul>
@@ -550,6 +603,34 @@ export function Decision({
           </div>
         ))}
     </section>
+  );
+}
+
+/** After the choice: how many items it applies to, and which, one tap away. */
+function ChosenItems({
+  list,
+  selected,
+}: {
+  list: { id: string; label: string; detail?: string }[];
+  selected: string[];
+}) {
+  const kept = new Set(selected);
+  const left = list.filter((i) => !kept.has(i.id));
+  return (
+    <details data-chosen-items="" className="text-sm">
+      <summary className="cursor-pointer text-ink-soft">
+        For {selected.length} of {list.length} items
+        {left.length ? ` (${left.length} left out)` : ''}
+      </summary>
+      <ul className="mt-1 space-y-0.5 pl-4">
+        {list.map((i) => (
+          <li key={i.id} className={clsx('list-disc', !kept.has(i.id) && 'text-muted')}>
+            {i.label}
+            {!kept.has(i.id) && <span className="text-xs"> · left out</span>}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

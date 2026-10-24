@@ -24,6 +24,11 @@ export const DECISION = {
   /** The question an option asks when it's chosen, and the note that answers it. */
   asksChars: 160,
   noteChars: 2000,
+  /** Items the owner picks from (a cleanup's folders): how many, and how long each line is. */
+  maxItems: 200,
+  itemIdChars: 200,
+  itemLabelChars: 200,
+  itemDetailChars: 300,
 } as const;
 
 /** The fields only a person writes: the choice, an own answer, and a deferral. */
@@ -60,6 +65,90 @@ export const DecisionOption = z
   .meta({ id: 'DecisionOption' });
 export type DecisionOption = z.infer<typeof DecisionOption>;
 
+/** One thing the owner can leave out of a choice: a folder to clean up, a file to send. */
+export const DecisionItem = z
+  .strictObject({
+    id: z
+      .string()
+      .regex(/^[A-Za-z0-9._:/-]{1,200}$/)
+      .describe('Stable, e.g. a path'),
+    label: z.string().min(1).max(DECISION.itemLabelChars),
+    detail: z
+      .string()
+      .min(1)
+      .max(DECISION.itemDetailChars)
+      .optional()
+      .describe('e.g. "312 MB · 9 days old"'),
+  })
+  .meta({ id: 'DecisionItem' });
+export type DecisionItem = z.infer<typeof DecisionItem>;
+
+const ITEMS_LIST = z.array(DecisionItem).min(1).max(DECISION.maxItems);
+const ITEMS_APPLIES_TO = z
+  .string()
+  .regex(/^[a-z0-9-]{1,24}$/)
+  .optional()
+  .describe('Option it goes with (default: recommended)');
+
+/**
+ * Items a choice applies to (a cleanup's folders): the owner unticks the ones to keep, and
+ * choosing `appliesTo` records the ticked ids as `selected` with the choice. Agents set the list
+ * and appliesTo; only the owner's choice sets selected.
+ */
+export const DecisionItems = z
+  .strictObject({
+    list: ITEMS_LIST,
+    appliesTo: ITEMS_APPLIES_TO,
+    selected: z
+      .array(z.string().min(1).max(DECISION.itemIdChars))
+      .max(DECISION.maxItems)
+      .optional()
+      .describe('Owner only: ids kept'),
+  })
+  .meta({ id: 'DecisionItems' });
+export type DecisionItems = z.infer<typeof DecisionItems>;
+
+/** What an agent sends (ask_owner): the list and the option it applies to. */
+export const DecisionItemsInput = z.strictObject({ list: ITEMS_LIST, appliesTo: ITEMS_APPLIES_TO });
+
+/** The option a decision's item selection goes with: appliesTo, else the recommended option. */
+export function itemsOptionId(data: {
+  items?: Partial<DecisionItems> | undefined;
+  recommendedOptionId?: string | undefined;
+  options?: Pick<DecisionOption, 'id' | 'label' | 'outcome'>[] | undefined;
+}): string | undefined {
+  if (!data.items) return undefined;
+  return (
+    data.items.appliesTo ??
+    data.recommendedOptionId ??
+    data.options?.find((o) => optionOutcome(o) === 'go')?.id
+  );
+}
+
+const SIZE = /(\d+(?:[.,]\d+)?)\s*(B|KB|MB|GB|TB)\b/i;
+const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+/**
+ * The total size of some items when every one of them names a size in its detail ("312 MB · …"),
+ * as "280 MB"; undefined when one doesn't, so the count stands alone.
+ */
+export function itemsSize(list: DecisionItem[]): string | undefined {
+  if (!list.length) return undefined;
+  let bytes = 0;
+  for (const item of list) {
+    const m = item.detail?.match(SIZE);
+    if (!m) return undefined;
+    bytes += Number(m[1]!.replace(',', '.')) * 1024 ** UNITS.indexOf(m[2]!.toUpperCase());
+  }
+  let unit = 0;
+  while (bytes >= 1024 && unit < UNITS.length - 1) {
+    bytes /= 1024;
+    unit++;
+  }
+  const n = bytes >= 100 || unit === 0 ? Math.round(bytes) : Math.round(bytes * 10) / 10;
+  return `${n} ${UNITS[unit]}`;
+}
+
 /** The decision fields R10.19 adds, spread into DecisionData. */
 export const DECISION_CHOICE_FIELDS = {
   options: z
@@ -83,6 +172,9 @@ export const DECISION_CHOICE_FIELDS = {
     .optional()
     .describe("Owner only: an answer that isn't an option"),
   deferredUntil: z.iso.date().optional().describe('Owner only'),
+  items: DecisionItems.optional().describe(
+    'What the choice applies to (e.g. folders to clean up); the owner unticks some',
+  ),
 };
 
 type DecisionLike = {
@@ -93,6 +185,7 @@ type DecisionLike = {
   note?: string;
   answer?: string;
   deferredUntil?: string;
+  items?: DecisionItems;
 };
 
 /** Problems that make a decision's choice data inconsistent; the store refuses these. */
@@ -116,6 +209,29 @@ export function decisionIssues(data: DecisionLike): string[] {
     );
   if (data.note !== undefined && data.chosenOptionId === undefined)
     issues.push('note: a note goes with a chosen option; an answer of their own goes in answer');
+  if (data.items) {
+    const listed = new Set<string>();
+    for (const item of data.items.list) {
+      if (listed.has(item.id)) issues.push(`items: id "${item.id}" is used twice`);
+      listed.add(item.id);
+    }
+    const { appliesTo, selected } = data.items;
+    if (appliesTo !== undefined && !seen.has(appliesTo))
+      issues.push(`items.appliesTo: "${appliesTo}" isn't one of the options${known}`);
+    if (selected) {
+      const target = itemsOptionId(data);
+      if (data.chosenOptionId === undefined || data.chosenOptionId !== target)
+        issues.push(
+          `items.selected: a selection goes with choosing "${target ?? '?'}", the option the items apply to`,
+        );
+      const picked = new Set<string>();
+      for (const id of selected) {
+        if (!listed.has(id)) issues.push(`items.selected: "${id}" isn't one of the items`);
+        else if (picked.has(id)) issues.push(`items.selected: "${id}" is listed twice`);
+        picked.add(id);
+      }
+    }
+  }
   return issues;
 }
 
@@ -230,6 +346,18 @@ export function optionOutcome(option: Pick<DecisionOption, 'label' | 'outcome'>)
   return 'go';
 }
 
+/** The fields a person's answer writes on a decision (null removes one). */
+export type DecisionPatch = {
+  chosenOptionId: string | null;
+  note: string | null;
+  answer: string | null;
+  deferredUntil: string | null;
+  status: string;
+  decidedById: string | null;
+  decisionDate: string | null;
+  items?: DecisionItems;
+};
+
 /**
  * The update a person's choice makes, so status, who and when always agree with the choice (the
  * page's block, the details panel and the desk share it): go → accepted, decline → rejected,
@@ -244,11 +372,25 @@ export function choiceUpdate(
     decidedById: string;
     /** The project's status value for a meaning (valueFor(project, 'decision.status', …)). */
     status: (meaning: 'proposed' | 'accepted' | 'rejected') => string;
+    /** The decision's items and the target option (itemsOptionId), when it has items. */
+    items?: DecisionItems | undefined;
+    itemsOptionId?: string | undefined;
+    /** The ids the person kept ticked (default: all), recorded when they choose the target. */
+    selected?: string[] | undefined;
   },
-): Record<string, string | null> {
+): DecisionPatch {
   const outcome = optionOutcome(option);
+  const items = input.items
+    ? {
+        items:
+          outcome !== 'later' && option.id === input.itemsOptionId
+            ? { ...input.items, selected: input.selected ?? input.items.list.map((i) => i.id) }
+            : withoutSelection(input.items),
+      }
+    : {};
   if (outcome === 'later')
     return {
+      ...items,
       chosenOptionId: null,
       note: null,
       answer: null,
@@ -258,6 +400,7 @@ export function choiceUpdate(
       decisionDate: null,
     };
   return {
+    ...items,
     chosenOptionId: option.id,
     note: input.note || null,
     answer: null,
@@ -266,6 +409,18 @@ export function choiceUpdate(
     decidedById: input.decidedById,
     decisionDate: input.today,
   };
+}
+
+/** The items without the owner's selection (a reopen, another option, a decline). */
+export function withoutSelection(items: DecisionItems): DecisionItems {
+  const rest = { ...items };
+  delete rest.selected;
+  return rest;
+}
+
+/** "5 of 7": how many of a decision's items a selection keeps. */
+export function selectionCount(items: DecisionItems, selected: string[] = items.selected ?? []) {
+  return `${selected.length} of ${items.list.length}`;
 }
 
 /** The answer a decline records; a reason follows after ": ". */
@@ -292,9 +447,12 @@ export function declineUpdate(input: {
   today: string;
   decidedById: string;
   status: (meaning: 'rejected') => string;
-}): Record<string, string | null> {
+  /** The decision's items, so a selection from an earlier choice goes with it. */
+  items?: DecisionItems | undefined;
+}): DecisionPatch {
   const reason = input.reason?.trim().slice(0, DECLINE_REASON_CHARS);
   return {
+    ...(input.items ? { items: withoutSelection(input.items) } : {}),
     chosenOptionId: null,
     note: null,
     answer: reason ? `${DECLINED}: ${reason}` : DECLINED,
@@ -316,9 +474,11 @@ export function choiceMessage(
   question: string,
   note?: string,
   today?: string,
+  /** "5 of 7" when the choice goes with a selection of the decision's items. */
+  selection?: string,
 ): string {
   if (optionOutcome(option) === 'later')
     // The note a later choice may carry stays in the history (the decision keeps no choice).
     return `Later (${today ? addDays(today, LATER_DAYS) : `${LATER_DAYS} days`}): “${question}” (chose “${option.label}”${note ? `: ${note}` : ''})`;
-  return `Choose “${option.label}”: ${question}${note ? ` (${note})` : ''}`;
+  return `Choose “${option.label}”: ${selection ? `${selection} · ` : ''}${question}${note ? ` (${note})` : ''}`;
 }

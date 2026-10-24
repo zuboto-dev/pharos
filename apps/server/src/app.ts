@@ -752,6 +752,7 @@ export function createApp(
         later: z.string().optional(),
         reply: z.string().max(4000).optional(),
         decline: z.boolean().optional(),
+        selected: z.array(z.string().max(200)).max(200).optional(),
       })
       .parse(await c.req.json().catch(() => ({})));
     return c.json(deskAnswer(store, authorOf(c), body));

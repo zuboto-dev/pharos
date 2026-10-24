@@ -4,6 +4,8 @@ import {
   DESK_OVERDUE_HOURS,
   choiceMessage,
   choiceUpdate,
+  itemsOptionId,
+  selectionCount,
   declineMessage,
   declineUpdate,
   decisionState,
@@ -324,6 +326,7 @@ export function deskOf(
           ...(d.data.recommendedOptionId
             ? { recommendedOptionId: d.data.recommendedOptionId }
             : {}),
+          ...itemsOf(d.data),
         });
       }
       const people = new Set(
@@ -480,6 +483,7 @@ export function askOwner(
               : {}),
             ...(input.minutes ? { minutes: input.minutes } : {}),
             ...(input.gate ? { gate: true } : {}),
+            ...(input.items ? { items: input.items } : {}),
           },
         },
       ],
@@ -531,11 +535,44 @@ export function askOwner(
   };
 }
 
-/** What people did since a revision (the owner's answers), for an agent's next turn. */
+/** A decision's items for the desk: the list and the option a selection goes with. */
+function itemsOf(data: Entity<'decision'>['data']): Pick<DeskItem, 'items'> {
+  const appliesTo = itemsOptionId(data);
+  return data.items && appliesTo ? { items: { list: data.items.list, appliesTo } } : {};
+}
+
+/**
+ * What people did since a revision (the owner's answers), for an agent's next turn. A choice
+ * that goes with a selection of items carries it: the decision, the option, and the ids the owner
+ * kept (items.selected), so a script acts on exactly those.
+ */
 export function answersSince(store: Store, since: number, projectId?: string) {
   return store
     .history({ after: since, authorKind: 'human', limit: 50, ...(projectId ? { projectId } : {}) })
-    .map((r) => ({ revision: r.id, at: r.createdAt, message: r.message }));
+    .map((r) => {
+      const selections = r.changes.flatMap((c) => {
+        if (c.type !== 'decision' || !('items' in c.fields)) return [];
+        const after = c.fields.items?.after as { selected?: string[] } | undefined;
+        if (!after?.selected) return [];
+        // The option chosen in that revision (or kept from before, when only the selection changed).
+        const chosen =
+          (c.fields.chosenOptionId?.after as string | undefined) ??
+          (store.get(c.id) as Entity<'decision'> | null)?.data.chosenOptionId;
+        return [
+          {
+            decisionId: c.id,
+            ...(chosen ? { chosenOptionId: chosen } : {}),
+            selected: after.selected,
+          },
+        ];
+      });
+      return {
+        revision: r.id,
+        at: r.createdAt,
+        message: r.message,
+        ...(selections.length ? { selections } : {}),
+      };
+    });
 }
 
 /**
@@ -585,6 +622,8 @@ export function deskAnswer(
     reply?: string;
     /** Decline the decision, whatever its options (`note` is the reason). */
     decline?: boolean;
+    /** The items the owner kept ticked, when the option chosen is the one they apply to. */
+    selected?: string[];
   },
   now: Date = new Date(),
 ) {
@@ -628,9 +667,30 @@ export function deskAnswer(
   const status = (meaning: 'proposed' | 'accepted' | 'rejected') =>
     valueFor(project, 'decision.status', meaning);
   const today = localToday(now);
+  const items = decision.data.items;
+  const target = itemsOptionId(decision.data);
+  const picks = option && items && option.id === target;
+  let selected: string[] | undefined;
+  if (picks) {
+    const known = new Set(items.list.map((i) => i.id));
+    selected = input.selected ? [...new Set(input.selected)] : items.list.map((i) => i.id);
+    const unknown = selected.find((id) => !known.has(id));
+    if (unknown) throw new PharosError('invalid', `selected: "${unknown}" isn't one of its items`);
+    if (!selected.length)
+      throw new PharosError(
+        'invalid',
+        `selected: pick at least one item for “${option.label}”, or choose another answer`,
+      );
+  }
   return store.apply(author, {
     message: option
-      ? choiceMessage(option, decision.data.title, note, today)
+      ? choiceMessage(
+          option,
+          decision.data.title,
+          note,
+          today,
+          picks && selected ? selectionCount(items, selected) : undefined,
+        )
       : declineMessage(decision.data.title, note),
     operations: [
       ...(owner
@@ -654,12 +714,16 @@ export function deskAnswer(
               today,
               decidedById: owner ?? '$me',
               status,
+              items,
+              itemsOptionId: target,
+              selected,
             })
           : declineUpdate({
               ...(note ? { reason: note } : {}),
               today,
               decidedById: owner ?? '$me',
               status,
+              items,
             }),
       },
     ],

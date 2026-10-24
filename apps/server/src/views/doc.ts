@@ -284,6 +284,9 @@ export type SheetDecision = {
   chosen?: { id: string; label: string };
   /** The owner's note with that choice, in their words. */
   note?: string;
+  /** The items the choice applies to that the owner kept ticked (items.selected), of `of`. */
+  selected?: string[];
+  of?: number;
   /** The owner's own answer, in their words. */
   answer?: string;
   /** Decide later: the day it comes back. */
@@ -348,6 +351,7 @@ export function sheetSummaries(
           ? {
               chosen: { id: state.option.id, label: state.option.label },
               ...(state.note ? { note: state.note } : {}),
+              ...(d.items?.selected ? { selected: d.items.selected, of: d.items.list.length } : {}),
             }
           : {}),
         ...(state.kind === 'answered' ? { answer: state.answer } : {}),

@@ -131,6 +131,9 @@ const MCP_WORDS: Record<string, string> = {
   execute: 'run code',
 };
 
+/** A path rule's folder as people write it: `//Volumes/x/**` → `/Volumes/x`. */
+const plainPath = (body: string) => body.replace(/\/\*\*$/, '').replace(/^\/\//, '/');
+
 /** The plain-words summary and risk of a suggested rule. */
 export function explain(s: Pick<Suggested, 'rule' | 'tool' | 'allowable' | 'reason'>): Explained {
   const { content } = parseRule(s.rule);
@@ -165,13 +168,13 @@ export function explain(s: Pick<Suggested, 'rule' | 'tool' | 'allowable' | 'reas
     };
   } else if (s.tool === 'Edit') {
     found = {
-      summary: `Edits files in ${body.replace(/\/\*\*$/, '')}`,
+      summary: `Edits files in ${plainPath(body)}`,
       risk: 'medium',
       riskWhy: 'Can change any file in that folder.',
     };
   } else if (s.tool === 'Read' || s.tool === 'Glob' || s.tool === 'Grep') {
     found = {
-      summary: `Reads files in ${body.replace(/\/\*\*$/, '') || 'any folder'}`,
+      summary: `Reads files in ${plainPath(body) || 'any folder'}`,
       risk: 'low',
       riskWhy: LOW,
     };

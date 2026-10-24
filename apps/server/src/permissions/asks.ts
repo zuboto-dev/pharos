@@ -13,7 +13,8 @@ import type {
 import { PharosError } from '../store/errors.js';
 import { explain } from './explain.js';
 import { example, ruleFor } from './rules.js';
-import type { PermissionService } from './service.js';
+import { checkScope, type PermissionService } from './service.js';
+import { scopesFor } from './scopes.js';
 import { readSession } from './transcripts.js';
 
 /**
@@ -135,6 +136,8 @@ export class PermissionAsks {
       allowable: true,
     };
     const where = this.service.whereIs(input.cwd);
+    const explained = explain(suggested);
+    const canAlwaysAllow = suggested.allowable && where.folderPath !== undefined;
     const at = this.now();
     const session = await this.session(input);
     // Nobody can answer in time in an unattended run: notify only, and the hook doesn't wait
@@ -160,10 +163,19 @@ export class PermissionAsks {
         home,
       ),
       rule: suggested.rule,
-      ...explain(suggested),
+      ...explained,
       allowable: suggested.allowable,
       ...(suggested.reason ? { reason: suggested.reason } : {}),
-      canAlwaysAllow: suggested.allowable && where.folderPath !== undefined,
+      canAlwaysAllow,
+      scopes: canAlwaysAllow
+        ? scopesFor({
+            suggested,
+            raws: [suggested.subject],
+            folder: { path: where.folderPath!, name: where.name },
+            home,
+            risk: explained.risk,
+          })
+        : [],
       waiters: new Set(),
     };
     this.asks.set(entry.id, entry);
@@ -237,7 +249,7 @@ export class PermissionAsks {
   }
 
   /** "Allow always": the change it would write, for the confirm step. */
-  preview(id: string, target: PermissionTarget): PermissionPreview {
+  preview(id: string, target: PermissionTarget, rule?: string): PermissionPreview {
     const entry = this.get(id);
     if (!entry.canAlwaysAllow || !entry.folderPath)
       throw new PharosError(
@@ -246,10 +258,12 @@ export class PermissionAsks {
           ? 'This agent isn’t working in a project folder, so there’s no folder to keep the rule in'
           : (entry.reason ?? 'This can only be denied'),
       );
+    const chosen = rule ?? entry.rule;
+    checkScope(entry.scopes, chosen, target);
     return this.service.previewAt({
       folderId: entry.folderId!,
       folder: entry.folderPath,
-      rule: entry.rule,
+      rule: chosen,
       action: 'allow',
       target,
       tool: entry.tool,
@@ -276,7 +290,7 @@ export class PermissionAsks {
       );
     if (answer.answer === 'dismiss') this.settle(id, 'dismissed');
     else if (answer.answer === 'always') {
-      const result = this.service.commit(this.preview(id, answer.target), answer.hash);
+      const result = this.service.commit(this.preview(id, answer.target, answer.rule), answer.hash);
       entry.record = result.record;
       this.settle(id, 'allowed_always');
     } else if (answer.answer === 'once') {

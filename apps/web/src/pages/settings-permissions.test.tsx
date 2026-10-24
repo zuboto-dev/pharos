@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type {
   PermissionAsk,
   PermissionPreview,
+  PermissionScope,
   PermissionSuggestion,
   PermissionsOverview,
   PermissionWriteRecord,
@@ -13,6 +14,17 @@ type Call = { url: string; method: string; body?: unknown; author?: string };
 let calls: Call[];
 let overview: PermissionsOverview;
 let asks: PermissionAsk[];
+
+const scope = (rule: string, extra: Partial<PermissionScope> = {}): PermissionScope => ({
+  id: 'folder',
+  kind: 'folder',
+  rule,
+  target: 'local',
+  label: 'As suggested',
+  where: 'Only in shop',
+  phrase: `run \`${rule}\``,
+  ...extra,
+});
 
 const suggestion = (
   s: Partial<PermissionSuggestion> & { rule: string; summary: string },
@@ -31,6 +43,7 @@ const suggestion = (
   risk: 'low',
   riskWhy: 'Only reads; it changes nothing.',
   origins: [{ label: '/nightshift', count: 4 }],
+  scopes: [scope(s.rule)],
   ...s,
 });
 
@@ -63,6 +76,7 @@ const ASK: PermissionAsk = {
   riskWhy: 'Runs the project’s own test scripts.',
   allowable: true,
   canAlwaysAllow: true,
+  scopes: [scope('Bash(npx pnpm@12.9.1 test:*)')],
 };
 
 function preview(body: { rule?: string; action?: string }): PermissionPreview {
@@ -92,12 +106,15 @@ beforeEach(() => {
     transcripts: 3,
     user: { path: '/home/me/.claude/settings.json', exists: true },
     recent: [],
+    hidden: 0,
     folders: [
       {
         id: 'f1',
         path: '/home/me/code/shop',
         displayPath: '~/code/shop',
         label: 'shop',
+        name: 'shop',
+        inPharos: true,
         projects: ['Shop site'],
         sessions: 2,
         total: 9,
@@ -113,6 +130,21 @@ beforeEach(() => {
             rule: 'Bash(pnpm build:*)',
             summary: 'Builds or starts the project',
             examples: ['pnpm build --prod', 'pnpm build', 'pnpm build --x'],
+            scopes: [
+              scope('Bash(pnpm build --prod:*)', {
+                id: 'narrow',
+                kind: 'narrow',
+                label: 'Only `pnpm build --prod …`',
+              }),
+              scope('Bash(pnpm build:*)'),
+              scope('Bash(pnpm build:*)', {
+                id: 'user',
+                kind: 'user',
+                target: 'user',
+                label: 'All my projects',
+                where: 'In all your projects',
+              }),
+            ],
           }),
           suggestion({
             rule: 'Bash(rm:*)',
@@ -123,6 +155,27 @@ beforeEach(() => {
             risk: 'high',
             reason: 'Deletes files, so it can only be denied',
           }),
+        ],
+      },
+      {
+        id: 'f2',
+        path: '/home/me/scratch',
+        displayPath: '~/scratch',
+        label: 'scratch',
+        name: 'scratch',
+        inPharos: false,
+        projects: [],
+        sessions: 1,
+        total: 2,
+        week: 2,
+        unfixable: 0,
+        files: {
+          local: { path: '/home/me/scratch/.claude/settings.local.json', exists: false },
+          shared: { path: '/home/me/scratch/.claude/settings.json', exists: false },
+        },
+        more: 0,
+        suggestions: [
+          suggestion({ rule: 'Bash(make:*)', summary: 'Builds the code', week: 2, total: 2 }),
         ],
       },
     ],
@@ -175,7 +228,7 @@ describe('Agent permissions in Settings', () => {
     };
     render(<AgentPermissions />);
     const card = await screen.findByRole('listitem', { name: 'shop' });
-    fireEvent.click(within(card).getByRole('button', { name: /Shop site/ }));
+    fireEvent.click(within(card).getByRole('button', { name: /^shop/ }));
     expect(within(card).getAllByText(/^Runs tool/)).toHaveLength(5);
     fireEvent.click(within(card).getByRole('button', { name: 'Show all 7' }));
     expect(within(card).getAllByText(/^Runs tool/)).toHaveLength(7);
@@ -189,7 +242,7 @@ describe('Agent permissions in Settings', () => {
   it('starts collapsed: a project, a count; then one line per command; then its detail', async () => {
     render(<AgentPermissions />);
     const folder = await screen.findByRole('listitem', { name: 'shop' });
-    const header = within(folder).getByRole('button', { name: /Shop site/ });
+    const header = within(folder).getByRole('button', { name: /^shop/ });
     expect(header.getAttribute('aria-expanded')).toBe('false');
     expect(within(folder).getByText('7 asks this week')).toBeTruthy();
     expect(within(folder).queryByText('Builds or starts the project')).toBeNull();
@@ -201,7 +254,7 @@ describe('Agent permissions in Settings', () => {
     expect(within(row).queryByRole('button', { name: 'Allow' })).toBeNull();
     fireEvent.click(within(row).getByRole('button', { name: /Builds or starts/ }));
     expect(within(row).getByText(/From \/nightshift \(4\)/)).toBeTruthy();
-    expect(within(row).getAllByText(/^pnpm build/)).toHaveLength(2);
+    expect(within(row).getAllByText(/^pnpm build/, { selector: 'li' })).toHaveLength(2);
     expect(within(row).getByText('Low risk')).toBeTruthy();
     expect(within(row).getByRole('button', { name: 'Allow' })).toBeTruthy();
     // A deny-only command has Deny and says why.
@@ -215,7 +268,7 @@ describe('Agent permissions in Settings', () => {
 
   it('shows the exact change, writes it as the owner, and undoes it', async () => {
     render(<AgentPermissions />);
-    fireEvent.click(await screen.findByRole('button', { name: /Shop site/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^shop/ }));
     const row = screen.getByRole('listitem', { name: 'Bash(pnpm build:*)' });
     fireEvent.click(within(row).getByRole('button', { name: /Builds or starts/ }));
     fireEvent.click(within(row).getByRole('button', { name: 'Allow' }));
@@ -230,6 +283,7 @@ describe('Agent permissions in Settings', () => {
       author: 'human:me',
       body: {
         folderId: 'f1',
+        base: 'Bash(pnpm build:*)',
         rule: 'Bash(pnpm build:*)',
         action: 'allow',
         target: 'local',
@@ -275,6 +329,7 @@ describe('Agent permissions in Settings', () => {
     await waitFor(() =>
       expect(calls.find((c) => c.url.endsWith('/answer'))?.body).toEqual({
         answer: 'always',
+        rule: 'Bash(npx pnpm@12.9.1 test:*)',
         target: 'local',
         hash: 'h1',
       }),
@@ -296,6 +351,56 @@ describe('Agent permissions in Settings', () => {
       expect(calls.find((c) => c.url === '/api/permissions/asks/a1/answer')?.body).toEqual({
         answer: 'dismiss',
       }),
+    );
+  });
+
+  it('chooses how far a rule reaches, says it plainly, and can save it for everyone', async () => {
+    render(<AgentPermissions />);
+    fireEvent.click(await screen.findByRole('button', { name: /^shop/ }));
+    const row = screen.getByRole('listitem', { name: 'Bash(pnpm build:*)' });
+    fireEvent.click(within(row).getByRole('button', { name: /Builds or starts/ }));
+    const what = within(row).getByLabelText('What this writes');
+    expect(what.textContent).toBe('Only in shop: lets agents run Bash(pnpm build:*)');
+    expect(within(row).getByText(/to .claude\/settings.local.json/)).toBeTruthy();
+    fireEvent.click(within(row).getByLabelText(/pnpm build --prod/));
+    expect(within(row).getByText(/Writes/).textContent).toContain('Bash(pnpm build --prod:*)');
+    fireEvent.click(within(row).getByLabelText('All my projects'));
+    expect(within(row).getByLabelText('What this writes').textContent).toMatch(
+      /^In all your projects/,
+    );
+    expect(within(row).getByText(/~\/.claude\/settings.json/)).toBeTruthy();
+    fireEvent.click(within(row).getByLabelText(/pnpm build --prod/));
+    fireEvent.click(within(row).getByRole('button', { name: 'Allow' }));
+    const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByText('+ Bash(pnpm build --prod:*)');
+    fireEvent.click(within(dialog).getByLabelText(/Save for everyone on this repo/));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === '/api/permissions/preview').at(-1)?.body).toMatchObject({
+        rule: 'Bash(pnpm build --prod:*)',
+        base: 'Bash(pnpm build:*)',
+        target: 'shared',
+      }),
+    );
+  });
+
+  it('folds folders that aren’t in Pharos into one group, with Add to Pharos and Hide', async () => {
+    render(<AgentPermissions />);
+    await screen.findByRole('listitem', { name: 'shop' });
+    expect(screen.queryByRole('listitem', { name: 'scratch' })).toBeNull();
+    const group = screen.getByLabelText('Not in Pharos');
+    fireEvent.click(within(group).getByRole('button', { name: /Not in Pharos \(1\)/ }));
+    const scratch = within(group).getByRole('listitem', { name: 'scratch' });
+    expect(within(scratch).getByText('~/scratch')).toBeTruthy();
+    fireEvent.click(within(scratch).getByRole('button', { name: /^scratch/ }));
+    fireEvent.click(within(scratch).getByRole('button', { name: 'Add to Pharos' }));
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.url === '/api/permissions/folders/f2/add' && c.author === 'human:me'),
+      ).toBe(true),
+    );
+    fireEvent.click(within(scratch).getByRole('button', { name: 'Hide' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === '/api/permissions/folders/f2/hide')).toBe(true),
     );
   });
 });

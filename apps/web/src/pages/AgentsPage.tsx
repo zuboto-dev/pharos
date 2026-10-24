@@ -37,10 +37,14 @@ import { LoadError } from './onboarding';
 // panel's state follows its output.
 
 /** One symbol and colour per state, the same in the glance and the rows. */
-export const STATE: Record<PanelState, { name: string; icon: LucideIcon; tone: string }> = {
-  working: { name: 'Working', icon: Loader2, tone: 'text-accent' },
-  waiting: { name: 'Waiting for you', icon: Hand, tone: 'text-warn' },
-  idle: { name: 'Idle', icon: Moon, tone: 'text-faint' },
+export const STATE: Record<
+  PanelState,
+  { name: string; short: string; icon: LucideIcon; tone: string }
+> = {
+  working: { name: 'Working', short: 'Working', icon: Loader2, tone: 'text-accent' },
+  // "Waiting" alone on a phone, where three counts share the width.
+  waiting: { name: 'Waiting for you', short: 'Waiting', icon: Hand, tone: 'text-warn' },
+  idle: { name: 'Idle', short: 'Idle', icon: Moon, tone: 'text-faint' },
 };
 
 const POLL_MS = 5000;
@@ -104,13 +108,16 @@ function Glance({
             data-count={s}
             onClick={() => onPick(on ? null : s)}
             className={clsx(
-              'flex flex-col items-start gap-1 rounded-block border bg-surface p-3 text-left transition-colors sm:p-4',
+              'flex min-w-0 flex-col items-start gap-1 rounded-block border bg-surface p-3 text-left transition-colors sm:p-4',
               on ? 'border-line-strong bg-subtle' : 'border-line hover:bg-sunken',
             )}
           >
-            <span className="flex items-center gap-1.5 text-xs text-muted">
-              <StateIcon state={s} still={!counts[s]} />
-              <span className="truncate">{STATE[s].name}</span>
+            <span className="flex max-w-full min-w-0 items-center gap-1.5 text-xs text-muted">
+              <span className="shrink-0">
+                <StateIcon state={s} still={!counts[s]} />
+              </span>
+              <span className="truncate sm:hidden">{STATE[s].short}</span>
+              <span className="hidden truncate sm:inline">{STATE[s].name}</span>
             </span>
             <span
               className={clsx(
@@ -135,7 +142,8 @@ function Section({
 }: {
   icon: LucideIcon;
   title: string;
-  count: number;
+  /** How many rows (left out for the one answering agent). */
+  count?: number;
   children: ReactNode;
 }) {
   return (
@@ -143,7 +151,7 @@ function Section({
       <h2 className="flex items-center gap-1.5 px-1 text-xs font-semibold tracking-wide text-faint uppercase">
         <Icon aria-hidden className="size-3.5" />
         {title}
-        <span className="font-normal tabular-nums">{count}</span>
+        {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
       </h2>
       <ul className="divide-y divide-line overflow-hidden rounded-block border border-line bg-surface">
         {children}
@@ -552,7 +560,7 @@ export function AgentsPage({ pollMs = POLL_MS }: { pollMs?: number }) {
             </Section>
           )}
           {shown.answering && (
-            <Section icon={MessageCircleQuestion} title="Answering questions" count={1}>
+            <Section icon={MessageCircleQuestion} title="Answering questions">
               <AnsweringRowView answering={shown.answering} now={now} />
             </Section>
           )}

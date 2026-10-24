@@ -188,7 +188,7 @@ export type TerminalTurn = {
   via: 'hook' | 'quiet';
   /** A panel showed it in a visible tab when the turn ended. */
   watched: boolean;
-  /** The owner typed in a panel of it in the last TYPING_MS. */
+  /** The owner typed in a panel of it in the last TYPING_MS, after sending the message. */
   typing: boolean;
 };
 
@@ -260,7 +260,11 @@ export class TerminalSessions {
       session,
       via,
       watched: session.watched,
-      typing: session.lastInputAt !== undefined && now - session.lastInputAt < TYPING_MS,
+      // Keys after the message that started the turn (Enter itself is the owner leaving it).
+      typing:
+        session.lastInputAt !== undefined &&
+        session.lastInputAt > (session.lastSubmitAt ?? -Infinity) &&
+        now - session.lastInputAt < TYPING_MS,
     };
     for (const fn of this.turnListeners) {
       try {

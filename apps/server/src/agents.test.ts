@@ -191,13 +191,18 @@ describe('the answered rule', () => {
     clock += 2000;
     terminal.hookTurn(session.launch.env.PHAROS_TERMINAL_TOKEN!);
     expect(got).toHaveLength(1);
+    // Sending a message is not typing: a quick answer in the hidden tab still notifies.
+    clock += 10_000;
+    terminal.sessions!.input(key, 'Reply with hello\r');
+    clock += 2000;
+    terminal.hookTurn(session.launch.env.PHAROS_TERMINAL_TOKEN!);
+    expect(got).toHaveLength(2);
     // Some seconds later, no panel at all: it notifies again (a new turn, a new notification).
     clock += 10_000;
     terminal.sessions!.detach(key, client);
     terminal.hookTurn(session.launch.env.PHAROS_TERMINAL_TOKEN!);
-    expect(got).toHaveLength(2);
-    // Turned off in Settings: kept out of the bell.
-    expect(got[1]!.kind).toBe('agent-answered');
+    expect(got).toHaveLength(3);
+    expect(got[2]!.kind).toBe('agent-answered');
   });
 
   it('agents without a hook (Codex): output quiet after the owner sent something ends the turn', () => {

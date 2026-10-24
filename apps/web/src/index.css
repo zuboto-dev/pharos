@@ -1053,7 +1053,7 @@
     position: fixed;
     right: 1.25rem;
     bottom: 1.25rem;
-    z-index: 40;
+    z-index: 45;
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -1073,7 +1073,7 @@
     position: fixed;
     right: 1.25rem;
     bottom: 1.25rem;
-    z-index: 40;
+    z-index: 45;
     display: flex;
     width: min(23rem, calc(100vw - 2rem));
     height: min(36rem, calc(100dvh - 2.5rem));

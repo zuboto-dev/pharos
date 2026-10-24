@@ -194,6 +194,46 @@ export function SheetShows({
   );
 }
 
+/**
+ * How much of the right edge the details panel and the agent panel cover now, so the Pictures
+ * button and window sit left of them instead of under them (owner, 10-23).
+ */
+export function usePanelsInset(): number {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        let left = window.innerWidth;
+        for (const el of document.querySelectorAll<HTMLElement>(
+          '[data-drawer], [data-agent-panel]',
+        )) {
+          const box = el.getBoundingClientRect();
+          // Only a side panel counts; a phone's full-screen sheet covers everything anyway.
+          if (box.width > 0 && box.width < window.innerWidth * 0.9) left = Math.min(left, box.left);
+        }
+        setInset(Math.max(0, Math.round(window.innerWidth - left)));
+      });
+    };
+    measure();
+    const watch = new MutationObserver(measure);
+    watch.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style'],
+    });
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      watch.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+  return inset;
+}
+
 /** Where the reader last left the Pictures window. */
 // v2: the window opens at the bottom right by default (owner's review, 10-23); a place saved by
 // the first version is dropped.
@@ -211,6 +251,7 @@ export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: Doc
   const [open, setOpen] = useState(false);
   // A floating window the reader drags by its title bar; the page under it stays usable, and the
   // window comes back where they left it (this browser only).
+  const inset = usePanelsInset();
   const [at, setAt] = useState<{ x: number; y: number } | null>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(PLACE_KEY) ?? 'null') as {
@@ -271,6 +312,7 @@ export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: Doc
         <button
           type="button"
           data-media-button=""
+          style={inset ? { right: inset + 20 } : undefined}
           onClick={() => setOpen(true)}
           className="doc-media-button"
         >
@@ -283,7 +325,19 @@ export function MediaPanel({ view, blocks }: { view: Entity<'view'>; blocks: Doc
           data-media-panel=""
           aria-label="Pictures and clips"
           className="doc-media-panel"
-          style={at ? { left: at.x, top: at.y, right: 'auto', bottom: 'auto' } : undefined}
+          style={
+            at
+              ? {
+                  // A place the reader chose, kept clear of a side panel that opened since.
+                  left: Math.max(0, Math.min(at.x, window.innerWidth - inset - 380)),
+                  top: at.y,
+                  right: 'auto',
+                  bottom: 'auto',
+                }
+              : inset
+                ? { right: inset + 20 }
+                : undefined
+          }
         >
           <header
             className="doc-media-panel-head"

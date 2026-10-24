@@ -1,7 +1,7 @@
 import type { Desk, DeskItem, RoutineDef, RoutinesConfig, RoutinesState } from '@pharos/schema';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   RoutinesLink,
   RoutinesPage,
@@ -238,6 +238,10 @@ const saveAll = async () => {
 
 describe('the Routines page', () => {
   it('draws tonight as evenly spaced routines in the order they run', async () => {
+    // The "now" dot shows only while tonight is under way: pin the clock inside tonight.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-23T23:30:00-05:00'));
+    onTestFinished(() => vi.useRealTimers());
     show();
     await screen.findByRole('button', { name: 'garden' });
     const nodes = [...document.querySelectorAll<HTMLElement>('[data-node]')];

@@ -12,6 +12,10 @@ import {
   valueText,
 } from './UpdatesPage';
 
+// The fixtures are "hours ago" and the page groups by calendar day: pin the clock to local
+// midday so "Today" and "Yesterday" hold whenever the tests run (they failed just after midnight).
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date(2026, 9, 23, 12, 0, 0));
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
 const bucket = (at: string, n = 0): UpdatesBucket => ({
   at,

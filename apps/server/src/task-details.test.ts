@@ -54,7 +54,7 @@ describe('task details on apply', () => {
       message: 'Owner adds a bare task',
       operations: [{ op: 'create', type: 'task', ref: 't', data: { projectId: p, title: 'Dig' } }],
     }).created.t!;
-    const move = (author: Author, data: object) =>
+    const move = (author: Author, data: Record<string, unknown>) =>
       store.apply(author, {
         message: 'Update',
         operations: [{ op: 'update', type: 'task', id, data }],

@@ -22,6 +22,9 @@ report instructions here while Pharos is available).
   project's "Updates" report document (newest first); never a new page per update.
 - Every change shows before and after: screenshots or a clip for a screen, the piece of UI drawn
   twice side by side for a component, a `diff` block for code, old and new values for data.
+- A repository file you mention (in a report, a task or decision description): a repo link,
+  `[FORMAL_MODEL.md](repo:docs/research/FORMAL_MODEL.md@review/formal-model)` (`@branch` when it
+  isn't on the checked-out branch), so the owner can open it in Pharos.
 - `view_preview`, fix the warnings, then answer in chat with one or two lines and the link.
 - Little to show is no reason to skip it: a short page with what there is and what is missing
   is the report. Only a one-line factual answer stays in chat.

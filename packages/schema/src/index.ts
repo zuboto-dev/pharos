@@ -36,3 +36,4 @@ export * from './notifications.js';
 export * from './search.js';
 export * from './routines.js';
 export * from './permissions.js';
+export * from './repo-files.js';

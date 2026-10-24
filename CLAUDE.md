@@ -283,6 +283,16 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   `FILE_TYPES` only. Agents see details only and may never add, remove or move a file
   (`Store.apply` refuses it). Tests use made-up folders and files only.
 
+## Repository file links
+
+- `repo:<path>[@<ref>][#L10-L40]` in any Markdown Pharos renders opens a file of the project's
+  repository (project.repositoryId → repository.path) in the file viewer; plain-text and
+  inline-code paths the repository has are linked too (`apps/web/src/files/repo-links.tsx`).
+  Contract and parsing: `packages/schema/src/repo-files.ts`. Server:
+  `apps/server/src/files/repo-files.ts` (`FILE_ROUTES.repoFile`/`repoPaths`, owner only like the
+  file routes; refs checked by name and `rev-parse --verify --end-of-options`, the working tree
+  read through `openInside`).
+
 ## Project files
 
 - What agents see of project files goes through `AgentFiles` (`apps/server/src/store/agent-files.ts`):

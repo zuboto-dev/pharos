@@ -28,6 +28,7 @@ import { search } from './search.js';
 import { Notifications } from './notifications.js';
 import { artifactFileRoutes, linkArtifacts, watchArtifactLinks } from './files/artifact-file.js';
 import { folderRequestRoutes } from './files/requests.js';
+import { repoFileRoutes } from './files/repo-files.js';
 import { fileRoutes } from './files/routes.js';
 import { FileService } from './files/service.js';
 import { z } from 'zod';
@@ -168,6 +169,8 @@ function agentRefusal(c: Context, store: Store): Response | undefined {
     // Folder requests are answered by the owner only; agents check theirs over MCP (R7.12).
     /^\/settings\/folder-requests(\/.*)?$/.test(path) ||
     /^\/projects\/[^/]+\/mentioned-files$/.test(path) ||
+    // The repository's files (repo: links) are the owner's; an agent reads its own checkout.
+    /^\/projects\/[^/]+\/repo-(file|paths)$/.test(path) ||
     /^\/settings\/folders\/[^/]+\/scan$/.test(path) ||
     /^\/projects\/[^/]+\/scanned-files$/.test(path) ||
     (/^\/projects\/[^/]+\/files$/.test(path) && c.req.method === 'POST')
@@ -847,6 +850,8 @@ export function createApp(
   api.route('/', artifactFileRoutes(store));
   watchArtifactLinks(store, feed);
   api.route('/', fileRoutes(files));
+  // Files of the project's repository, for repo: links (owner only, refused to agents above).
+  api.route('/', repoFileRoutes(store));
   // Folders the owner shares with Pharos (R7.3): app settings, never reachable over MCP.
   api.route('/settings/folders', folderRoutes(store, { ...info.folders, scanner: files.scanner }));
   // Agents' folder requests (R7.12): the owner approves or declines them on the Pharos page.

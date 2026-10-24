@@ -52,6 +52,10 @@ export type ViewerItem = {
   preview?: ReactNode;
   /** Under the preview: a picture's description and where it comes from (given `close`). */
   caption?: ReactNode | ((close: () => void) => ReactNode);
+  /** Under the title, e.g. a repository file's path and branch. */
+  meta?: ReactNode;
+  /** Beside the title, before Close: e.g. "Show in folder". */
+  headerActions?: ReactNode;
 };
 
 const FOCUSABLE =
@@ -232,6 +236,7 @@ export function FileViewer({
               </h2>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                 {item.file && <GlanceDate file={item.file.data} />}
+                {item.meta}
                 {many && (
                   <span aria-live="polite" className="tabular-nums">
                     {at + 1} of {items.length}
@@ -239,6 +244,7 @@ export function FileViewer({
                 )}
               </div>
             </div>
+            {item.headerActions}
             <button
               ref={closeButton}
               type="button"

@@ -28,6 +28,9 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
    - Every change shows before and after: screenshots or a clip for a screen, the piece of UI
      drawn twice side by side for a component, a `diff` block for code, old and new values for
      data. Take the before shot before you change anything.
+   - A repository file you mention (in a report, a task or decision description): a repo link,
+     `[FORMAL_MODEL.md](repo:docs/research/FORMAL_MODEL.md@review/formal-model)` (`@branch` when
+     it isn't on the checked-out branch), so the owner can open it in Pharos.
    - Updating an existing page beats making a new one (`view_list`, then `view_update`).
    - Anything written for the user (a plan, research, a review, notes, a summary) goes in a
      Pharos document, not a new Markdown file in the folder; files are only for what belongs

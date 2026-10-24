@@ -315,6 +315,10 @@ fails as a section of words only, a log of what the workers did, or a table of f
     doc.data). "Drawings" below has what the frame allows.
   - \`{kind: "embed", id, url: "https://…", caption?, height?}\`: another site shown in place,
     with a link to open it (many sites refuse to be framed).
+- A file of the project's repository named in Text (a doc, a script, a result) is a repo link
+  the owner can open: \`[FORMAL_MODEL.md](repo:docs/research/FORMAL_MODEL.md@review/formal-model)\`
+  (path from the repository folder; \`@branch\` when it isn't on the checked-out branch;
+  \`#L10-L40\` for lines). Never a bare path.
 - \`width\`: "text" (the reading column; default for Text, Markdown, Callout), "wide" (charts and
   tables; default for the rest) or "full".
 - \`data\`: named reads for drawings only: {"spend": {"type": "record", "filter": {"where": {…}}}}.

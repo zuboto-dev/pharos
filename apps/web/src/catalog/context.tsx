@@ -110,3 +110,8 @@ export function useViewData(): ViewData {
   if (!value) throw new Error('useViewData must be used inside ViewDataProvider');
   return value;
 }
+
+/** The view data, or null outside a ViewDataProvider (Markdown shown outside a project). */
+export function useOptionalViewData(): ViewData | null {
+  return useContext(ViewDataContext);
+}

@@ -241,7 +241,9 @@ describe('the Routines page', () => {
     // The "now" dot shows only while tonight is under way: pin the clock inside tonight.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-23T23:30:00-05:00'));
-    onTestFinished(() => vi.useRealTimers());
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
     show();
     await screen.findByRole('button', { name: 'garden' });
     const nodes = [...document.querySelectorAll<HTMLElement>('[data-node]')];

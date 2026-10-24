@@ -425,6 +425,33 @@ function FolderCard({
 }
 
 /** Folders agents asked in that aren't in Pharos: one collapsed group at the bottom. */
+/** Pharos folders agents haven't asked anything in: one quiet line, their names on opening. */
+function NoAsks({ folders }: { folders: PermissionFolder[] }) {
+  const [open, setOpen] = useState(false);
+  if (!folders.length) return null;
+  return (
+    <div aria-label="No asks" className="px-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-muted hover:text-ink"
+      >
+        <ChevronRight
+          className={clsx('size-3.5 shrink-0 text-faint transition-transform', open && 'rotate-90')}
+          aria-hidden
+        />
+        No asks ({folders.length})
+      </button>
+      {open && (
+        <p className="px-7 pb-1 text-xs text-muted">
+          {folders.map((f) => f.label).join(' · ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function NotInPharos({
   folders,
   windowDays,
@@ -1043,11 +1070,13 @@ export function AgentPermissions() {
         <>
           <ul className="space-y-2" aria-label="Folders">
             {folders
-              .filter((f) => f.inPharos)
+              .filter((f) => f.inPharos && f.total > 0)
               .map((f) => (
                 <FolderCard key={f.id} folder={f} windowDays={data.windowDays} onChoose={choose} />
               ))}
           </ul>
+          {/* Folders agents never asked in fold into one line (owner's review, 10-23). */}
+          <NoAsks folders={folders.filter((f) => f.inPharos && f.total === 0)} />
           <NotInPharos
             folders={folders.filter((f) => !f.inPharos)}
             windowDays={data.windowDays}

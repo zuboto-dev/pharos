@@ -76,6 +76,8 @@ Reports go here: an update on work you did, a review, research results or findin
 
 Every project keeps one report document named "Updates", newest first: after a version or batch of merged work, a night run, a search or research pass, or an evaluation, add a dated section at its top (what changed, before and after; the numbers; what needs the owner) with view_update. Create it once if missing; never a new page per update.
 
+Write for the owner in Pharos, not in local files: a plan, research, a review, notes, a handoff or a summary goes in a Pharos document (doc), never a new Markdown file in the project folder. Files are only for what belongs with the code (README, CLAUDE.md, code docs); when you mention one, link it.
+
 Getting oriented:
 - Start with project_brief: the project's brief (where it stands, the owner's rules, recent answers, hand-backs, what waits on them). When the owner gives a standing rule or feedback, add it to project.rules (apply) so every session gets it.
 - First, what the owner answered or handed back: project_snapshot's handedBack and desk_list({since}) answersSince. Act on those before new work; a review handed back to you is yours to pick up.

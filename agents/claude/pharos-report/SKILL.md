@@ -29,6 +29,9 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
      drawn twice side by side for a component, a `diff` block for code, old and new values for
      data. Take the before shot before you change anything.
    - Updating an existing page beats making a new one (`view_list`, then `view_update`).
+   - Anything written for the user (a plan, research, a review, notes, a summary) goes in a
+     Pharos document, not a new Markdown file in the folder; files are only for what belongs
+     with the code (README, CLAUDE.md, code docs).
    - After a version or batch of merged work, a night run, a search or research pass, or an
      evaluation: add a dated section at the top of the project's "Updates" report document
      (newest first: what changed with before and after, the numbers, what needs the owner).

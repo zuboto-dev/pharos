@@ -16,6 +16,8 @@ report instructions here while Pharos is available).
   with decisions and tasks). Prefer updating an existing page.
 - Always a document, never an HTML report page (`page`): Pharos refuses one. Another website goes
   in an `embed` block of the document; a `drawing` block only for one visual no component can draw.
+- Write plans, research, reviews and notes for the user as Pharos documents, not new Markdown
+  files in the folder; files only for what belongs with the code.
 - After merged work, a night run, research or an evaluation: add a dated section at the top of the
   project's "Updates" report document (newest first); never a new page per update.
 - Every change shows before and after: screenshots or a clip for a screen, the piece of UI drawn

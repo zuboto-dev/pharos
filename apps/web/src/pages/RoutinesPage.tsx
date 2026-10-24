@@ -7,6 +7,7 @@ import {
   daysText,
   type Day,
   ROUTINES,
+  currentRoutinesValue,
   describeRoutinesChange,
   routineCovers,
   routinesOf,
@@ -22,6 +23,8 @@ import {
   type RoutinesPharos,
   type RoutinesProject,
   type RoutineProposalView,
+  type RoutinesCurrent,
+  type RoutinesCurrentProject,
   type RoutinesProjectStatus,
   type RoutinesState,
 } from '@pharos/schema';
@@ -53,6 +56,7 @@ import {
   Sun,
   Sunset,
   Trash2,
+  Undo2,
   Wallet,
   X,
   type LucideIcon,
@@ -365,6 +369,107 @@ export function routineId(name: string, taken: string[]): string {
 
 type Edit = (change: (draft: Draft) => void) => void;
 
+// ── Unsaved edits survive ───────────────────────────────────────────────────────────────────
+
+/**
+ * The page's unsaved edits, kept in this browser until they are saved (owner's review: edits to
+ * a routine's instructions were lost when a save was refused or the page reloaded during a
+ * restart). A preference of this browser, not project data.
+ */
+export const DRAFT_KEY = 'pharos-routines-draft';
+
+function readDraft(): RoutinesChange[] | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(list) && list.length ? (list as RoutinesChange[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(changes: RoutinesChange[]) {
+  try {
+    if (changes.length) localStorage.setItem(DRAFT_KEY, JSON.stringify(changes));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Not kept in this browser: the page still works.
+  }
+}
+
+/** One edit made to the draft (what the save will send, made here first). */
+export function applyChange(d: Draft, ch: RoutinesChange): void {
+  switch (ch.field) {
+    case 'enrolled':
+    case 'budget_usd':
+    case 'hours': {
+      const p = d.projects.find((x) => x.name === ch.project);
+      if (p) Object.assign(p, { [ch.field]: ch.to });
+      break;
+    }
+    case 'schedule':
+      d.schedule[ch.routine] = ch.to;
+      break;
+    case 'timezone':
+      d.schedule.timezone = ch.to;
+      break;
+    case 'dispatch':
+      d.dispatch[ch.kind] = { ...d.dispatch[ch.kind], [ch.level]: ch.to };
+      break;
+    case 'routine': {
+      const at = d.routines.findIndex((r) => r.id === ch.id);
+      if (!ch.to) d.routines = d.routines.filter((r) => r.id !== ch.id);
+      else if (at < 0) d.routines.push(ch.to);
+      else d.routines[at] = ch.to;
+      break;
+    }
+    case 'project':
+      d.projects = d.projects.filter((x) => x.name !== ch.name);
+      if (ch.to) d.projects.push(ch.to as RoutinesProject);
+      break;
+  }
+}
+
+/** An edit whose field changed underneath it (routines.json edited elsewhere). */
+export type DraftConflict = { change: RoutinesChange; theirs: unknown };
+
+const same = (a: unknown, b: unknown) =>
+  (a ?? null) === (b ?? null) || canonical(a ?? null) === canonical(b ?? null);
+
+/**
+ * The owner's edits on top of a fresh routines.json: each one whose field still holds what the
+ * owner saw is made again; one already there is dropped; one whose field changed meanwhile is a
+ * conflict for the owner to settle (Keep mine / Use theirs).
+ */
+export function reapply(
+  fresh: Draft,
+  edits: RoutinesChange[],
+): { draft: Draft; conflicts: DraftConflict[]; kept: number } {
+  const draft = structuredClone(fresh);
+  const conflicts: DraftConflict[] = [];
+  let kept = 0;
+  for (const ch of edits) {
+    const theirs = currentRoutinesValue(fresh, ch);
+    if (same(theirs, ch.to)) continue;
+    if (same(theirs, ch.from)) {
+      applyChange(draft, ch);
+      kept++;
+    } else conflicts.push({ change: ch, theirs });
+  }
+  return { draft, conflicts, kept };
+}
+
+/** Their value of a conflicting field, in a few words. */
+function theirsText(c: DraftConflict): string {
+  const v = c.theirs as unknown;
+  if (v === null || v === undefined) return 'removed';
+  if (typeof v !== 'object') return String(v);
+  const r = v as Partial<RoutineDef> & { name?: string };
+  if (c.change.field === 'routine')
+    return `${r.time ?? ''}${r.days ? ` ${daysText(r.days)}` : ''} · “${(r.instructions ?? '').slice(0, 80)}${(r.instructions ?? '').length > 80 ? '…' : ''}”`;
+  return r.name ?? 'changed';
+}
+
 // ── Rows: routines.json merged with Pharos's folders ────────────────────────────────────────
 
 const samePath = (a: string, b: string) => a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
@@ -515,7 +620,10 @@ function RunDot({
   const time = runTime(run?.when, today);
   // Not from last night: shown faint, its date in the tooltip.
   const old = Boolean(run?.when && !run.when.startsWith(today));
-  const label = `${routine.name} · ${project}: ${RUN_WORD[look]}${time ? `, ${time}` : ''}`;
+  const label =
+    look === 'running'
+      ? `${routine.name} · ${project}: running ${minutesSince(run?.when)} min`
+      : `${routine.name} · ${project}: ${RUN_WORD[look]}${time ? `, ${time}` : ''}`;
   return (
     <Tooltip label={label} detail={run?.file ? 'Click for its log' : undefined} className="flex">
       <button
@@ -534,7 +642,10 @@ function RunDot({
         )}
       >
         {look === 'running' ? (
-          <Loader2 aria-hidden className="size-3 animate-spin text-sky-500" />
+          <Loader2
+            aria-hidden
+            className="size-3 text-sky-500 motion-safe:animate-spin motion-reduce:animate-pulse"
+          />
         ) : (
           <span
             aria-hidden
@@ -542,6 +653,83 @@ function RunDot({
           />
         )}
       </button>
+    </Tooltip>
+  );
+}
+
+/** A project's place in the routine running now: its dot, its state on hover. */
+const LIVE: Record<RoutinesCurrentProject['state'], { word: string; dot: string }> = {
+  done: { word: 'done', dot: 'bg-emerald-500' },
+  running: { word: 'running', dot: '' },
+  waiting: { word: 'waiting', dot: 'bg-amber-500 motion-safe:animate-pulse' },
+  queued: {
+    word: 'queued',
+    dot: 'border border-neutral-400 bg-transparent motion-safe:animate-pulse dark:border-neutral-500',
+  },
+  skipped: { word: 'skipped', dot: 'bg-amber-500' },
+  failed: { word: 'failed', dot: 'bg-rose-500' },
+};
+
+function LiveDot({
+  project,
+  routine,
+  live,
+  run,
+  onLog,
+}: {
+  project: string;
+  routine: RoutineDef;
+  live: RoutinesCurrentProject;
+  run: RoutineRun | null | undefined;
+  onLog: (file: string) => void;
+}) {
+  const look = LIVE[live.state];
+  const minutes = live.since ? ` ${minutesSince(live.since)} min` : '';
+  const label = `${routine.name} · ${project}: ${look.word}${live.state === 'running' || live.state === 'waiting' ? minutes : ''}${live.reason ? `: ${live.reason}` : ''}`;
+  const report = live.state === 'done' && live.report?.startsWith('/') ? live.report : undefined;
+  const dot =
+    live.state === 'running' ? (
+      <Loader2
+        aria-hidden
+        className="size-3 text-sky-500 motion-safe:animate-spin motion-reduce:animate-pulse"
+      />
+    ) : (
+      <span aria-hidden className={clsx('block size-2.5 rounded-full', look.dot)} />
+    );
+  const cls =
+    'tap-area flex size-5 items-center justify-center rounded-full hover:bg-subtle focus-visible:outline-2 focus-visible:outline-sky-400';
+  return (
+    <Tooltip
+      label={label}
+      detail={report ? 'Click for its report' : run?.file ? 'Click for its log' : undefined}
+      className="flex"
+    >
+      {report ? (
+        <Link
+          to={report}
+          aria-label={label}
+          data-run-dot={routine.id}
+          data-live={live.state}
+          className={cls}
+        >
+          {dot}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          aria-label={label}
+          data-run-dot={routine.id}
+          data-live={live.state}
+          disabled={!run?.file}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (run?.file) onLog(run.file);
+          }}
+          className={clsx(cls, 'disabled:cursor-default disabled:hover:bg-transparent')}
+        >
+          {dot}
+        </button>
+      )}
     </Tooltip>
   );
 }
@@ -692,6 +880,114 @@ function nightRunOf(project: string, desk: Desk | undefined): DeskRun | undefine
   return desk?.runs.find((r) => r.name === `Night run · ${project}`);
 }
 
+// ── Running now ─────────────────────────────────────────────────────────────────────────────
+
+/** A time as Routines writes it (the computer's local time, "2026-10-23T21:05"). */
+function localStamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Minutes since a Routines time, never negative. */
+export function minutesSince(when: string | null | undefined, now = new Date()): number {
+  const at = when ? new Date(when).getTime() : NaN;
+  return Number.isNaN(at) ? 0 : Math.max(0, Math.round((now.getTime() - at) / 60_000));
+}
+
+/**
+ * The run states the page shows: Routines' own, plus the routine runs Pharos's run log has open
+ * ("Evening wrap-up · tutti", reported by the run itself) that Routines doesn't show as running.
+ */
+export function withOpenRuns(
+  status: RoutinesProjectStatus[],
+  routines: RoutineDef[],
+  deskRuns: DeskRun[] | undefined,
+): Map<string, RoutinesProjectStatus> {
+  const out = new Map(status.map((s) => [s.name, s]));
+  for (const run of deskRuns ?? []) {
+    if (run.outcome !== 'running') continue;
+    for (const r of routines) {
+      const prefix = `${r.name} · `;
+      if (!run.name.startsWith(prefix)) continue;
+      const project = run.name.slice(prefix.length);
+      const was = out.get(project) ?? { name: project, exists: true };
+      if (was.runs?.[r.id]?.status === 'running') continue;
+      out.set(project, {
+        ...was,
+        runs: {
+          ...was.runs,
+          [r.id]: {
+            file: was.runs?.[r.id]?.file ?? null,
+            when: localStamp(new Date(run.startedAt)),
+            status: 'running',
+            tail: '',
+          },
+        },
+      });
+    }
+  }
+  return out;
+}
+
+export type RoutineProgress = {
+  running: boolean;
+  /** Projects of this run already finished, and all the projects it covers. */
+  done: number;
+  total: number;
+  /** When its first running project started (a Routines time). */
+  since: string | null;
+  /** Routines' own account of the run, project by project, when it gives one. */
+  current?: RoutinesCurrent;
+};
+
+/** "Evening wrap-up · 3 of 6 done · waiting on breathe". */
+export function currentLine(current: RoutinesCurrent): string {
+  const done = current.projects.filter((p) => p.state === 'done').length;
+  const waiting = current.projects.filter((p) => p.state === 'waiting').map((p) => p.name);
+  const running = current.projects.filter((p) => p.state === 'running').map((p) => p.name);
+  const now = waiting.length
+    ? ` · waiting on ${waiting.join(', ')}`
+    : running.length
+      ? ` · running ${running.join(', ')}`
+      : '';
+  return `${current.name} · ${done} of ${current.projects.length} done${now}`;
+}
+
+/**
+ * How far a running routine has got: of the projects it covers, how many finished in this run
+ * (a run's logs share its date) while the others wait or run.
+ */
+export function progressOf(
+  routine: RoutineDef,
+  projects: RoutinesProject[],
+  status: Map<string, RoutinesProjectStatus>,
+  current?: RoutinesCurrent | null,
+): RoutineProgress {
+  // Routines says where the run is (newer apps): that decides, queued projects included.
+  if (current && current.routine === routine.id)
+    return {
+      running: true,
+      done: current.projects.filter((p) => p.state === 'done').length,
+      total: current.projects.length,
+      since: current.started,
+      current,
+    };
+  const covered = projects.filter((p) => routineCovers(routine, p));
+  const runs = covered.map((p) => status.get(p.name)?.runs?.[routine.id]);
+  const running = runs.filter((r) => r?.status === 'running');
+  if (!running.length) return { running: false, done: 0, total: covered.length, since: null };
+  const since =
+    running
+      .map((r) => r!.when ?? '')
+      .filter(Boolean)
+      .sort()[0] ?? null;
+  const day = (running.find((r) => r!.file)?.file ?? since ?? '').slice(0, 10);
+  const done = runs.filter(
+    (r) => r && r.status !== 'running' && Boolean(day) && (r.file ?? r.when ?? '').startsWith(day),
+  ).length;
+  return { running: true, done, total: covered.length, since };
+}
+
 // ── Tonight: the band of routines ───────────────────────────────────────────────────────────
 
 const GRID =
@@ -717,6 +1013,7 @@ function lastResults(
 }
 
 function Tonight({
+  current,
   routines,
   timeZone,
   projects,
@@ -728,6 +1025,7 @@ function Tonight({
   onEdit,
   onAdd,
 }: {
+  current?: RoutinesCurrent | null;
   routines: RoutineDef[];
   timeZone: string | undefined;
   projects: RoutinesProject[];
@@ -750,6 +1048,8 @@ function Tonight({
   // daytime the ringed next routine and its countdown say it, and a dot left of the band looked
   // like a misplaced icon (owner's review, 10-23).
   const underway = now > first && now < last;
+  const progress = new Map(ordered.map((r) => [r.id, progressOf(r, projects, status, current)]));
+  const runningNow = ordered.filter((r) => progress.get(r.id)?.running);
   return (
     <div className={clsx(GRID, 'items-start px-3 pt-3 pb-2')} data-tonight="">
       <div className="space-y-0.5 pt-1">
@@ -769,6 +1069,26 @@ function Tonight({
             </>
           )}
         </p>
+        {runningNow.map((r) => {
+          const p = progress.get(r.id)!;
+          return (
+            <p
+              key={r.id}
+              data-running-line={r.id}
+              className="flex items-center gap-1 text-xs font-medium text-sky-700 dark:text-sky-300"
+            >
+              <Loader2
+                aria-hidden
+                className="size-3 shrink-0 motion-safe:animate-spin motion-reduce:animate-pulse"
+              />
+              <span>
+                {p.current
+                  ? currentLine(p.current)
+                  : `${r.name} is running · ${p.done} of ${p.total}`}
+              </span>
+            </p>
+          );
+        })}
       </div>
       <div className="relative h-[4.25rem]" role="list" aria-label="Tonight’s routines">
         {/* The band, and the part of it already behind us tonight. */}
@@ -805,6 +1125,7 @@ function Tonight({
           const results = lastResults(r, projects, status);
           // Its days skip tonight (a Fridays-only routine on a Tuesday): drawn faint.
           const skips = r.enabled && !runsTonight(r, timeZone);
+          const run = progress.get(r.id)!;
           return (
             <div
               key={r.id}
@@ -812,30 +1133,53 @@ function Tonight({
               className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
               style={{ left: `${line.xs[i]! * 100}%` }}
             >
-              <Tooltip
-                label={`${r.name} · ${r.time}${zone ? ` ${zone}` : ''}${r.enabled ? '' : ' · off'}${skips ? ` · not tonight (${daysShort(r.days)})` : r.days ? ` · ${daysText(r.days)}` : ''}`}
-                detail={`${skips ? `Not tonight (${daysShort(r.days)}). ` : ''}${r.instructions || 'No instructions yet.'}${results ? ` Last: ${results}.` : ''}${isNext && next ? ` Next, ${inTime(next.inMinutes)}.` : ''}`}
-                className="flex"
-              >
-                <button
-                  type="button"
-                  data-node={r.id}
-                  data-next={isNext || undefined}
-                  data-skips={skips || undefined}
-                  aria-label={`${r.name} at ${r.time}. Edit`}
-                  onClick={() => onEdit(r)}
-                  className={clsx(
-                    'relative z-20 flex size-7 items-center justify-center rounded-full border bg-surface transition-colors hover:bg-subtle focus-visible:outline-2 focus-visible:outline-sky-400',
-                    isNext
-                      ? 'border-sky-400 text-sky-700 ring-4 ring-sky-100 dark:border-sky-500 dark:text-sky-300 dark:ring-sky-950'
-                      : 'border-line-strong text-ink-soft',
-                    !r.enabled && 'border-dashed text-faint',
-                    skips && 'opacity-45',
-                  )}
+              <span className="relative flex">
+                {run.running && (
+                  // A ring going round the node while it runs; a pulse for reduced motion.
+                  <svg
+                    aria-hidden
+                    viewBox="0 0 36 36"
+                    data-running-ring=""
+                    className="pointer-events-none absolute -inset-1 z-30 size-9 text-sky-500 motion-safe:animate-spin motion-reduce:animate-pulse"
+                  >
+                    <circle
+                      cx="18"
+                      cy="18"
+                      r="16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeDasharray="28 100"
+                    />
+                  </svg>
+                )}
+                <Tooltip
+                  label={`${r.name} · ${r.time}${zone ? ` ${zone}` : ''}${r.enabled ? '' : ' · off'}${skips ? ` · not tonight (${daysShort(r.days)})` : r.days ? ` · ${daysText(r.days)}` : ''}`}
+                  detail={`${run.running ? `Running for ${minutesSince(run.since)} min: ${run.done} of ${run.total} projects done. ` : ''}${skips ? `Not tonight (${daysShort(r.days)}). ` : ''}${r.instructions || 'No instructions yet.'}${results ? ` Last: ${results}.` : ''}${isNext && next ? ` Next, ${inTime(next.inMinutes)}.` : ''}`}
+                  className="flex"
                 >
-                  <Icon aria-hidden className="size-3.5" />
-                </button>
-              </Tooltip>
+                  <button
+                    type="button"
+                    data-node={r.id}
+                    data-running={run.running || undefined}
+                    data-next={isNext || undefined}
+                    data-skips={skips || undefined}
+                    aria-label={`${r.name} at ${r.time}. Edit`}
+                    onClick={() => onEdit(r)}
+                    className={clsx(
+                      'relative z-20 flex size-7 items-center justify-center rounded-full border bg-surface transition-colors hover:bg-subtle focus-visible:outline-2 focus-visible:outline-sky-400',
+                      isNext
+                        ? 'border-sky-400 text-sky-700 ring-4 ring-sky-100 dark:border-sky-500 dark:text-sky-300 dark:ring-sky-950'
+                        : 'border-line-strong text-ink-soft',
+                      !r.enabled && 'border-dashed text-faint',
+                      skips && 'opacity-45',
+                    )}
+                  >
+                    <Icon aria-hidden className="size-3.5" />
+                  </button>
+                </Tooltip>
+              </span>
               <span
                 className={clsx(
                   'mt-1 hidden max-w-28 truncate text-xs sm:block',
@@ -852,7 +1196,17 @@ function Tonight({
                   isNext ? 'font-medium text-sky-700 dark:text-sky-300' : 'text-faint',
                 )}
               >
-                {isNext && next ? (
+                {run.running ? (
+                  <span className="font-medium text-sky-700 dark:text-sky-300">
+                    <span data-progress="" className="hidden sm:inline">
+                      Running · {run.done} of {run.total}
+                    </span>
+                    {/* A phone has room for the numbers only. */}
+                    <span aria-hidden className="sm:hidden">
+                      {run.done}/{run.total}
+                    </span>
+                  </span>
+                ) : isNext && next ? (
                   <>
                     {r.time} <span className="hidden sm:inline">· {inTime(next.inMinutes)}</span>
                   </>
@@ -1151,11 +1505,13 @@ function ProjectLine({
   needs,
   needIds,
   missing,
+  current,
   onToggle,
   onLog,
 }: {
   project: RoutinesProject;
   status: RoutinesProjectStatus | undefined;
+  current?: RoutinesCurrent | null;
   routines: RoutineDef[];
   xs: number[];
   today: string;
@@ -1210,19 +1566,37 @@ function ProjectLine({
         <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-line-soft" />
         {routines.map((r, i) =>
           // A routine that doesn't cover this project leaves its place empty.
-          routineCovers(r, project) || status?.runs?.[r.id] ? (
+          routineCovers(r, project) ||
+          status?.runs?.[r.id] ||
+          (current?.routine === r.id && current.projects.some((x) => x.name === project.name)) ? (
             <div
               key={r.id}
               className="absolute top-0 -translate-x-1/2"
               style={{ left: `${xs[i]! * 100}%` }}
             >
-              <RunDot
-                project={project.name}
-                routine={r}
-                run={status?.runs?.[r.id]}
-                today={today}
-                onLog={onLog}
-              />
+              {(() => {
+                const live =
+                  current?.routine === r.id
+                    ? current.projects.find((x) => x.name === project.name)
+                    : undefined;
+                return live ? (
+                  <LiveDot
+                    project={project.name}
+                    routine={r}
+                    live={live}
+                    run={status?.runs?.[r.id]}
+                    onLog={onLog}
+                  />
+                ) : (
+                  <RunDot
+                    project={project.name}
+                    routine={r}
+                    run={status?.runs?.[r.id]}
+                    today={today}
+                    onLog={onLog}
+                  />
+                );
+              })()}
             </div>
           ) : null,
         )}
@@ -1897,11 +2271,22 @@ export function RoutinesPage() {
     reload();
     reloadDesk();
   });
-  // Runs move on their own: look again every 30 seconds.
+  // Runs move on their own: look again every 10 seconds while one runs, else every 30.
+  const anyRunning = Boolean(
+    data?.current ||
+    data?.status.some((s) => Object.values(s.runs ?? {}).some((r) => r?.status === 'running')) ||
+    desk.data?.runs.some((r) => r.outcome === 'running'),
+  );
   useEffect(() => {
-    const timer = setInterval(reload, 30_000);
+    const timer = setInterval(
+      () => {
+        reload();
+        if (anyRunning) reloadDesk();
+      },
+      anyRunning ? 10_000 : 30_000,
+    );
     return () => clearInterval(timer);
-  }, [reload]);
+  }, [reload, reloadDesk, anyRunning]);
   useEffect(() => {
     const before = document.title;
     document.title = 'Routines · Pharos';
@@ -1921,14 +2306,42 @@ export function RoutinesPage() {
   );
   const loaded = data?.config;
   const [seen, setSeen] = useState<RoutinesConfig | undefined>(undefined);
+  // Edits to make again on the next load: this browser's unsaved ones at first, or the ones a
+  // stale save was refused with.
+  const [toReapply, setToReapply] = useState<{
+    edits: RoutinesChange[];
+    why: 'restored' | 'stale';
+  } | null>(() => {
+    const kept = readDraft();
+    return kept ? { edits: kept, why: 'restored' } : null;
+  });
+  const [conflicts, setConflicts] = useState<DraftConflict[]>([]);
+  const [ready, setReady] = useState(false);
+  const [restoredNote, setRestoredNote] = useState<string | null>(null);
   if (loaded && loaded !== seen) {
     setSeen(loaded);
-    if (!(changes.length && base)) {
+    if (toReapply || !(changes.length && base)) {
       const withRoutines = { ...loaded, routines: routinesOf(loaded) };
       setBase(withRoutines);
-      setDraft(structuredClone(withRoutines));
+      if (toReapply) {
+        const again = reapply(withRoutines, toReapply.edits);
+        setDraft(again.draft);
+        setConflicts(again.conflicts);
+        if (again.kept || again.conflicts.length)
+          setRestoredNote(
+            toReapply.why === 'restored'
+              ? 'Unsaved changes restored'
+              : 'routines.json changed outside this page; your edits are kept on top',
+          );
+        setToReapply(null);
+      } else setDraft(structuredClone(withRoutines));
+      setReady(true);
     }
   }
+  // Unsaved edits (and unsettled conflicts) stay in this browser until saved.
+  useEffect(() => {
+    if (ready) writeDraft([...changes, ...conflicts.map((c) => c.change)]);
+  }, [ready, changes, conflicts]);
   const edit: Edit = (change) =>
     setDraft((d) => {
       if (!d) return d;
@@ -2033,10 +2446,16 @@ export function RoutinesPage() {
     try {
       const res = await ownerPost<{ saved: string[] }>('/api/routines/save', { changes });
       setBase(draft);
+      setRestoredNote(null);
       setNotice({ tone: 'ok', text: `Saved: ${res.saved.join('; ')}` });
       reload();
     } catch (err) {
-      setNotice({ tone: 'error', text: (err as Error).message });
+      if (err instanceof ApiError && err.status === 409) {
+        // routines.json changed since the page loaded: keep the owner's edits, load the fresh
+        // file, and make them again on top (conflicts are shown to settle).
+        setToReapply({ edits: changes, why: 'stale' });
+        reload();
+      } else setNotice({ tone: 'error', text: (err as Error).message });
     } finally {
       setConfirmSave(false);
       setBusy(false);
@@ -2081,7 +2500,7 @@ export function RoutinesPage() {
   if (state.status === 'error' && !state.data)
     return <LoadError notFound={false} what="Routines" />;
 
-  const status = new Map((data?.status ?? []).map((s) => [s.name, s]));
+  const status = withOpenRuns(data?.status ?? [], draft?.routines ?? [], desk.data?.runs);
   const today = data?.now.slice(0, 10) ?? '';
   const rows = draft ? arrangeRows(draft.projects, data?.folders) : { active: [], parked: [] };
   const enrolled = rows.active;
@@ -2108,6 +2527,7 @@ export function RoutinesPage() {
           needs={needs}
           needIds={ids}
           missing={missing}
+          current={data?.current}
           onToggle={() => setOpen(open === p.name ? null : p.name)}
           onLog={(file) => void openLog(file)}
         />
@@ -2196,6 +2616,62 @@ export function RoutinesPage() {
         </p>
       )}
 
+      {restoredNote && (
+        <p role="status" data-restored="" className="flex items-center gap-2 text-xs text-muted">
+          <Undo2 aria-hidden className="size-3.5" />
+          {restoredNote}
+          <Tooltip label="Dismiss" className="flex">
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setRestoredNote(null)}
+              className={ICON_GHOST}
+            >
+              <X className="size-3" aria-hidden />
+            </button>
+          </Tooltip>
+        </p>
+      )}
+      {conflicts.length > 0 && (
+        <section
+          aria-label="Edits that conflict"
+          data-conflicts=""
+          className="space-y-2 rounded-block border border-amber-300 bg-amber-50/60 px-3 py-2.5 text-sm dark:border-amber-800 dark:bg-amber-950/40"
+        >
+          <p className="flex items-center gap-1.5 font-medium">
+            <AlertTriangle aria-hidden className="size-3.5 text-warn" />
+            Changed in routines.json while you edited
+          </p>
+          <ul className="space-y-1.5">
+            {conflicts.map((c, i) => (
+              <li key={i} data-conflict="" className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="min-w-0 flex-1">
+                  <span className="text-ink">Yours: {describeRoutinesChange(c.change)}</span>
+                  <span className="block text-xs text-muted">Theirs now: {theirsText(c)}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    edit((d) => applyChange(d, c.change));
+                    setConflicts((all) => all.filter((x) => x !== c));
+                  }}
+                  className={BUTTON.primary}
+                >
+                  Keep mine
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConflicts((all) => all.filter((x) => x !== c))}
+                  className={BUTTON.secondary}
+                >
+                  Use theirs
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {state.data && !state.data.available ? (
         <Unavailable reason={state.data.reason} url={state.data.url} onRetry={reload} />
       ) : !data || !draft ? (
@@ -2220,6 +2696,7 @@ export function RoutinesPage() {
             className="overflow-hidden rounded-block border border-line bg-surface"
           >
             <Tonight
+              current={data.current}
               routines={routines}
               timeZone={draft.schedule.timezone}
               projects={draft.projects}

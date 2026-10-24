@@ -1,5 +1,5 @@
 import type { Desk, DeskItem, RoutineDef, RoutinesConfig, RoutinesState } from '@pharos/schema';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -17,6 +17,10 @@ import {
   runTime,
   minutesUntil,
   runsTonight,
+  DRAFT_KEY,
+  progressOf,
+  withOpenRuns,
+  currentLine,
 } from './RoutinesPage';
 
 const ROUTINES = (): RoutineDef[] => [
@@ -163,6 +167,7 @@ let saveError: string | null = null;
 beforeEach(() => {
   calls = [];
   saveError = null;
+  localStorage.clear();
   state = STATE();
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
@@ -745,5 +750,265 @@ describe('routines agents propose', () => {
     expect((answers[0]!.init!.headers as Record<string, string>)['x-pharos-author']).toBe(
       'human:me',
     );
+  });
+});
+
+describe('a routine at work', () => {
+  const running = () => {
+    const st = STATE();
+    if (!st.available) throw new Error('unavailable');
+    st.config.projects[1]!.enrolled = true; // bike too: the night run covers 2 projects
+    const stamp = new Date(Date.now() - 12 * 60_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const when = `${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}T${pad(stamp.getHours())}:${pad(stamp.getMinutes())}`;
+    const day = when.slice(0, 10);
+    st.status[0]!.runs!.nightshift = {
+      file: `${day}-garden-nightshift.log`,
+      when,
+      status: 'running',
+      tail: '',
+    };
+    st.status[1]!.runs = {
+      nightshift: { file: `${day}-bike-nightshift.log`, when, status: 'ok', tail: '' },
+    };
+    return st;
+  };
+
+  it('counts projects done in this run, and adds runs Pharos has open', () => {
+    const st = running();
+    if (!st.available) return;
+    const status = withOpenRuns(st.status, st.config.routines, []);
+    const night = st.config.routines.find((r) => r.id === 'nightshift')!;
+    expect(progressOf(night, st.config.projects, status)).toMatchObject({
+      running: true,
+      done: 1,
+      total: 2,
+    });
+    const wrapup = st.config.routines.find((r) => r.id === 'wrapup')!;
+    expect(progressOf(wrapup, st.config.projects, status).running).toBe(false);
+    // The run log says the wrap-up runs for bike: shown running too.
+    const open = withOpenRuns(st.status, st.config.routines, [
+      {
+        id: 'run_9',
+        kind: 'routine',
+        name: 'Wrap-up · bike',
+        agent: 'Routines',
+        startedAt: new Date().toISOString(),
+        outcome: 'running',
+      },
+    ]);
+    expect(open.get('bike')!.runs!.wrapup!.status).toBe('running');
+    expect(progressOf(wrapup, st.config.projects, open)).toMatchObject({ running: true, total: 2 });
+  });
+
+  it('spins the node with its progress, says so in the headline, and on the dot', async () => {
+    state = running();
+    show();
+    const node = await screen.findByRole('button', { name: 'Night run at 01:00. Edit' });
+    expect(node.getAttribute('data-running')).toBe('true');
+    const item = node.closest('[role="listitem"]')!;
+    expect(item.querySelector('[data-running-ring]')).toBeTruthy();
+    expect(item.querySelector('[data-progress]')!.textContent).toBe('Running · 1 of 2');
+    expect(document.querySelector('[data-running-line="nightshift"]')!.textContent).toBe(
+      'Night run is running · 1 of 2',
+    );
+    expect(description(node)).toMatch(/^Running for 1[1-3] min: 1 of 2 projects done\./);
+    expect(
+      screen.getByRole('button', { name: /Night run · garden: running 1[1-3] min/ }),
+    ).toBeTruthy();
+  });
+
+  it('looks again every 10 seconds while something runs', async () => {
+    const timers = vi.spyOn(window, 'setInterval');
+    try {
+      state = running();
+      show();
+      await screen.findByRole('button', { name: 'Night run at 01:00. Edit' });
+      await waitFor(() => expect(timers.mock.calls.some(([, ms]) => ms === 10_000)).toBe(true));
+    } finally {
+      timers.mockRestore();
+    }
+  });
+
+  it('looks every 30 seconds when nothing runs', async () => {
+    const timers = vi.spyOn(window, 'setInterval');
+    try {
+      show();
+      await screen.findByRole('button', { name: 'garden' });
+      expect(timers.mock.calls.some(([, ms]) => ms === 30_000)).toBe(true);
+      expect(timers.mock.calls.some(([, ms]) => ms === 10_000)).toBe(false);
+    } finally {
+      timers.mockRestore();
+    }
+  });
+});
+
+describe('unsaved edits survive', () => {
+  it('keeps them in this browser and restores them on the next load', async () => {
+    const first = show();
+    const detail = await openGarden();
+    fireEvent.click(within(detail).getByRole('button', { name: /Night budget for garden/ }));
+    fireEvent.change(within(detail).getByLabelText('Night budget in dollars for garden'), {
+      target: { value: '12' },
+    });
+    expect(JSON.parse(localStorage.getItem(DRAFT_KEY)!)).toEqual([
+      { field: 'budget_usd', project: 'garden', from: 8, to: 12 },
+    ]);
+    first.unmount();
+    show();
+    expect(await screen.findByText('Unsaved changes restored')).toBeTruthy();
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    expect(await saveAll()).toEqual(['garden: night budget $8 → $10'.replace('10', '12')]);
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('when routines.json changed meanwhile, keeps the edits and asks only about real conflicts', async () => {
+    show();
+    // Two edits: the night run's time, and garden's budget.
+    fireEvent.click(await screen.findByRole('button', { name: 'Night run at 01:00. Edit' }));
+    const form = screen.getByRole('dialog');
+    fireEvent.change(within(form).getByLabelText('Time'), { target: { value: '02:00' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Done' }));
+    const detail = await openGarden();
+    fireEvent.click(within(detail).getByRole('button', { name: /Night budget for garden/ }));
+    fireEvent.change(within(detail).getByLabelText('Night budget in dollars for garden'), {
+      target: { value: '12' },
+    });
+
+    // Meanwhile someone edited the night run's instructions in routines.json.
+    if (state.available) {
+      const config = structuredClone(state.config);
+      config.routines[1]!.instructions = 'Changed outside the page.';
+      state = { ...state, config };
+    }
+    saveError = 'routines.json changed since the page loaded. Reload and try again.';
+    fireEvent.click(screen.getByRole('button', { name: 'Save…' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }));
+
+    const conflict = await screen.findByText(/^Yours: Night run: at 01:00 → 02:00/);
+    expect(document.querySelector('[data-conflicts]')!.textContent).toMatch(
+      /Theirs now: 01:00 · “Changed outside the page\.”/,
+    );
+    // The budget didn't conflict: still an unsaved change, on top of the fresh file.
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    expect(screen.getByText(/your edits are kept on top/)).toBeTruthy();
+
+    saveError = null;
+    const row = conflict.closest('[data-conflict]') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'Keep mine' }));
+    expect(document.querySelector('[data-conflicts]')).toBeNull();
+    calls = [];
+    expect((await saveAll()).length).toBe(2);
+    const changes = savedChanges() as { field: string; from: unknown; to: unknown }[];
+    const night = changes.find((c) => c.field === 'routine') as {
+      from: RoutineDef;
+      to: RoutineDef;
+    };
+    // Mine over theirs, checked against what's there now.
+    expect(night.from.instructions).toBe('Changed outside the page.');
+    expect(night.to.time).toBe('02:00');
+    expect(changes.find((c) => c.field === 'budget_usd')).toMatchObject({ from: 8, to: 12 });
+  });
+
+  it('Use theirs drops my edit to that field', async () => {
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify([{ field: 'budget_usd', project: 'garden', from: 6, to: 12 }]),
+    );
+    show();
+    const row = (await screen.findByText(/^Yours: garden: night budget \$6 → \$12/)).closest(
+      '[data-conflict]',
+    ) as HTMLElement;
+    expect(row.textContent).toMatch('Theirs now: 8');
+    fireEvent.click(within(row).getByRole('button', { name: 'Use theirs' }));
+    expect(document.querySelector('[data-conflicts]')).toBeNull();
+    expect(screen.queryByText(/unsaved change/)).toBeNull();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+});
+
+describe('the routine running now, from Routines', () => {
+  const minutesAgo = (n: number) => {
+    const d = new Date(Date.now() - n * 60_000);
+    const pad = (x: number) => String(x).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const withCurrent = (): RoutinesState => {
+    const st = STATE();
+    if (!st.available) return st;
+    st.config.projects[1]!.enrolled = true;
+    return {
+      ...st,
+      current: {
+        routine: 'wrapup',
+        name: 'Wrap-up',
+        started: minutesAgo(30),
+        projects: [
+          {
+            name: 'garden',
+            state: 'done',
+            since: minutesAgo(20),
+            report: '/projects/prj_g/views/view_w',
+          },
+          {
+            name: 'bike',
+            state: 'waiting',
+            since: minutesAgo(5),
+            reason: 'a Claude session is active in bike · try 2 of 3',
+          },
+        ],
+      },
+    };
+  };
+
+  it('says where the run is in one line', () => {
+    const st = withCurrent();
+    if (!st.available || !st.current) throw new Error('no current');
+    expect(currentLine(st.current)).toBe('Wrap-up · 1 of 2 done · waiting on bike');
+    expect(
+      currentLine({
+        ...st.current,
+        projects: [
+          { name: 'garden', state: 'running' },
+          { name: 'bike', state: 'queued' },
+        ],
+      }),
+    ).toBe('Wrap-up · 0 of 2 done · running garden');
+  });
+
+  it('spins the node, shows each project’s state on its dot, and links a finished report', async () => {
+    state = withCurrent();
+    show();
+    const node = await screen.findByRole('button', { name: 'Wrap-up at 00:00. Edit' });
+    expect(node.getAttribute('data-running')).toBe('true');
+    const item = node.closest('[role="listitem"]')!;
+    expect(item.querySelector('[data-running-ring]')).toBeTruthy();
+    expect(item.querySelector('[data-progress]')!.textContent).toBe('Running · 1 of 2');
+    expect(document.querySelector('[data-running-line="wrapup"]')!.textContent).toBe(
+      'Wrap-up · 1 of 2 done · waiting on bike',
+    );
+    // Garden is done: its dot opens its report.
+    const done = line('garden').querySelector('[data-run-dot="wrapup"]')!;
+    expect(done.getAttribute('data-live')).toBe('done');
+    expect(done.getAttribute('href')).toBe('/projects/prj_g/views/view_w');
+    // Bike waits: amber, pulsing, the reason on hover.
+    const waiting = line('bike').querySelector('[data-run-dot="wrapup"]')!;
+    expect(waiting.getAttribute('data-live')).toBe('waiting');
+    expect(waiting.getAttribute('aria-label')).toMatch(
+      /Wrap-up · bike: waiting [4-6] min: a Claude session is active in bike · try 2 of 3/,
+    );
+    expect(waiting.querySelector('.bg-amber-500')).toBeTruthy();
+  });
+
+  it('looks every 10 seconds while Routines says a routine runs', async () => {
+    const timers = vi.spyOn(window, 'setInterval');
+    try {
+      state = withCurrent();
+      show();
+      await screen.findByRole('button', { name: 'Wrap-up at 00:00. Edit' });
+      await waitFor(() => expect(timers.mock.calls.some(([, ms]) => ms === 10_000)).toBe(true));
+    } finally {
+      timers.mockRestore();
+    }
   });
 });

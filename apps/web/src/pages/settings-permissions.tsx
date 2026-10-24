@@ -444,9 +444,7 @@ function NoAsks({ folders }: { folders: PermissionFolder[] }) {
         No asks ({folders.length})
       </button>
       {open && (
-        <p className="px-7 pb-1 text-xs text-muted">
-          {folders.map((f) => f.label).join(' · ')}
-        </p>
+        <p className="px-7 pb-1 text-xs text-muted">{folders.map((f) => f.label).join(' · ')}</p>
       )}
     </div>
   );

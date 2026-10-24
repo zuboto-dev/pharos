@@ -388,6 +388,10 @@ export const FILE_ROUTES = {
   action: '/api/files/:fileId/actions/:action',
   /** GET → ArtifactFileMatch: where an artifact's local source is (R7.6). */
   artifactFile: '/api/artifacts/:artifactId/file',
+  /** GET ?path=&ref= → RepoFile: a file of the project's repository (repo-files.ts). */
+  repoFile: '/api/projects/:projectId/repo-file',
+  /** GET ?path=…&ref= → RepoPathsResult: which paths the repository has (repo-files.ts). */
+  repoPaths: '/api/projects/:projectId/repo-paths',
   /** GET → MentionedFile[]: the project's local sources not in Pharos yet (R7.12). */
   mentioned: '/api/projects/:projectId/mentioned-files',
   /** GET → FolderRequest[] (R7.12): agents' folder requests, newest first. */

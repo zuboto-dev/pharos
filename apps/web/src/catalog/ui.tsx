@@ -1,9 +1,10 @@
 import clsx from 'clsx';
 import { ExternalLink, FileText } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { glanceName } from '../files/files';
+import { remarkRepoPaths, repoAnchor, repoUrlTransform, useRepoProject } from '../files/repo-links';
 import { Bar } from './chart';
 import { humanize } from '../lib/format';
 import { CopyablePre, hastText } from './copy';
@@ -159,10 +160,23 @@ export function Markdown({
 }: { children: string; className?: string } & MarkdownExtras) {
   // In a report document (R15) a code block has a copy button.
   const inDocument = useInDocument();
-  const all = inDocument ? { pre: CodePre, ...components } : components;
+  // Repository file links (`repo:…`, and paths the repository has) open in the viewer.
+  const repoProject = useRepoProject();
+  const all = useMemo<Components>(
+    () => ({
+      ...(inDocument ? { pre: CodePre } : {}),
+      ...components,
+      a: repoAnchor(repoProject, components?.a),
+    }),
+    [inDocument, components, repoProject],
+  );
+  const plugins = useMemo(
+    () => [remarkGfm, ...(repoProject ? [remarkRepoPaths] : []), ...(remarkPlugins ?? [])],
+    [repoProject, remarkPlugins],
+  );
   return (
     <div className={clsx('md', className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, ...(remarkPlugins ?? [])]} components={all}>
+      <ReactMarkdown remarkPlugins={plugins} components={all} urlTransform={repoUrlTransform}>
         {children}
       </ReactMarkdown>
     </div>

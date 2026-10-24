@@ -20,6 +20,7 @@ import {
   DRAFT_KEY,
   progressOf,
   withOpenRuns,
+  currentLine,
 } from './RoutinesPage';
 
 const ROUTINES = (): RoutineDef[] => [
@@ -923,5 +924,91 @@ describe('unsaved edits survive', () => {
     expect(document.querySelector('[data-conflicts]')).toBeNull();
     expect(screen.queryByText(/unsaved change/)).toBeNull();
     expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+});
+
+describe('the routine running now, from Routines', () => {
+  const minutesAgo = (n: number) => {
+    const d = new Date(Date.now() - n * 60_000);
+    const pad = (x: number) => String(x).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const withCurrent = (): RoutinesState => {
+    const st = STATE();
+    if (!st.available) return st;
+    st.config.projects[1]!.enrolled = true;
+    return {
+      ...st,
+      current: {
+        routine: 'wrapup',
+        name: 'Wrap-up',
+        started: minutesAgo(30),
+        projects: [
+          {
+            name: 'garden',
+            state: 'done',
+            since: minutesAgo(20),
+            report: '/projects/prj_g/views/view_w',
+          },
+          {
+            name: 'bike',
+            state: 'waiting',
+            since: minutesAgo(5),
+            reason: 'a Claude session is active in bike · try 2 of 3',
+          },
+        ],
+      },
+    };
+  };
+
+  it('says where the run is in one line', () => {
+    const st = withCurrent();
+    if (!st.available || !st.current) throw new Error('no current');
+    expect(currentLine(st.current)).toBe('Wrap-up · 1 of 2 done · waiting on bike');
+    expect(
+      currentLine({
+        ...st.current,
+        projects: [
+          { name: 'garden', state: 'running' },
+          { name: 'bike', state: 'queued' },
+        ],
+      }),
+    ).toBe('Wrap-up · 0 of 2 done · running garden');
+  });
+
+  it('spins the node, shows each project’s state on its dot, and links a finished report', async () => {
+    state = withCurrent();
+    show();
+    const node = await screen.findByRole('button', { name: 'Wrap-up at 00:00. Edit' });
+    expect(node.getAttribute('data-running')).toBe('true');
+    const item = node.closest('[role="listitem"]')!;
+    expect(item.querySelector('[data-running-ring]')).toBeTruthy();
+    expect(item.querySelector('[data-progress]')!.textContent).toBe('Running · 1 of 2');
+    expect(document.querySelector('[data-running-line="wrapup"]')!.textContent).toBe(
+      'Wrap-up · 1 of 2 done · waiting on bike',
+    );
+    // Garden is done: its dot opens its report.
+    const done = line('garden').querySelector('[data-run-dot="wrapup"]')!;
+    expect(done.getAttribute('data-live')).toBe('done');
+    expect(done.getAttribute('href')).toBe('/projects/prj_g/views/view_w');
+    // Bike waits: amber, pulsing, the reason on hover.
+    const waiting = line('bike').querySelector('[data-run-dot="wrapup"]')!;
+    expect(waiting.getAttribute('data-live')).toBe('waiting');
+    expect(waiting.getAttribute('aria-label')).toMatch(
+      /Wrap-up · bike: waiting [4-6] min: a Claude session is active in bike · try 2 of 3/,
+    );
+    expect(waiting.querySelector('.bg-amber-500')).toBeTruthy();
+  });
+
+  it('looks every 10 seconds while Routines says a routine runs', async () => {
+    const timers = vi.spyOn(window, 'setInterval');
+    try {
+      state = withCurrent();
+      show();
+      await screen.findByRole('button', { name: 'Wrap-up at 00:00. Edit' });
+      await waitFor(() => expect(timers.mock.calls.some(([, ms]) => ms === 10_000)).toBe(true));
+    } finally {
+      timers.mockRestore();
+    }
   });
 });

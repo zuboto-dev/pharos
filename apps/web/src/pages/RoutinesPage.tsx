@@ -23,6 +23,8 @@ import {
   type RoutinesPharos,
   type RoutinesProject,
   type RoutineProposalView,
+  type RoutinesCurrent,
+  type RoutinesCurrentProject,
   type RoutinesProjectStatus,
   type RoutinesState,
 } from '@pharos/schema';
@@ -655,6 +657,83 @@ function RunDot({
   );
 }
 
+/** A project's place in the routine running now: its dot, its state on hover. */
+const LIVE: Record<RoutinesCurrentProject['state'], { word: string; dot: string }> = {
+  done: { word: 'done', dot: 'bg-emerald-500' },
+  running: { word: 'running', dot: '' },
+  waiting: { word: 'waiting', dot: 'bg-amber-500 motion-safe:animate-pulse' },
+  queued: {
+    word: 'queued',
+    dot: 'border border-neutral-400 bg-transparent motion-safe:animate-pulse dark:border-neutral-500',
+  },
+  skipped: { word: 'skipped', dot: 'bg-amber-500' },
+  failed: { word: 'failed', dot: 'bg-rose-500' },
+};
+
+function LiveDot({
+  project,
+  routine,
+  live,
+  run,
+  onLog,
+}: {
+  project: string;
+  routine: RoutineDef;
+  live: RoutinesCurrentProject;
+  run: RoutineRun | null | undefined;
+  onLog: (file: string) => void;
+}) {
+  const look = LIVE[live.state];
+  const minutes = live.since ? ` ${minutesSince(live.since)} min` : '';
+  const label = `${routine.name} · ${project}: ${look.word}${live.state === 'running' || live.state === 'waiting' ? minutes : ''}${live.reason ? `: ${live.reason}` : ''}`;
+  const report = live.state === 'done' && live.report?.startsWith('/') ? live.report : undefined;
+  const dot =
+    live.state === 'running' ? (
+      <Loader2
+        aria-hidden
+        className="size-3 text-sky-500 motion-safe:animate-spin motion-reduce:animate-pulse"
+      />
+    ) : (
+      <span aria-hidden className={clsx('block size-2.5 rounded-full', look.dot)} />
+    );
+  const cls =
+    'tap-area flex size-5 items-center justify-center rounded-full hover:bg-subtle focus-visible:outline-2 focus-visible:outline-sky-400';
+  return (
+    <Tooltip
+      label={label}
+      detail={report ? 'Click for its report' : run?.file ? 'Click for its log' : undefined}
+      className="flex"
+    >
+      {report ? (
+        <Link
+          to={report}
+          aria-label={label}
+          data-run-dot={routine.id}
+          data-live={live.state}
+          className={cls}
+        >
+          {dot}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          aria-label={label}
+          data-run-dot={routine.id}
+          data-live={live.state}
+          disabled={!run?.file}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (run?.file) onLog(run.file);
+          }}
+          className={clsx(cls, 'disabled:cursor-default disabled:hover:bg-transparent')}
+        >
+          {dot}
+        </button>
+      )}
+    </Tooltip>
+  );
+}
+
 // ── Small pieces ────────────────────────────────────────────────────────────────────────────
 
 /** A whole-number field that only changes the draft with a valid value. */
@@ -857,7 +936,22 @@ export type RoutineProgress = {
   total: number;
   /** When its first running project started (a Routines time). */
   since: string | null;
+  /** Routines' own account of the run, project by project, when it gives one. */
+  current?: RoutinesCurrent;
 };
+
+/** "Evening wrap-up · 3 of 6 done · waiting on breathe". */
+export function currentLine(current: RoutinesCurrent): string {
+  const done = current.projects.filter((p) => p.state === 'done').length;
+  const waiting = current.projects.filter((p) => p.state === 'waiting').map((p) => p.name);
+  const running = current.projects.filter((p) => p.state === 'running').map((p) => p.name);
+  const now = waiting.length
+    ? ` · waiting on ${waiting.join(', ')}`
+    : running.length
+      ? ` · running ${running.join(', ')}`
+      : '';
+  return `${current.name} · ${done} of ${current.projects.length} done${now}`;
+}
 
 /**
  * How far a running routine has got: of the projects it covers, how many finished in this run
@@ -867,7 +961,17 @@ export function progressOf(
   routine: RoutineDef,
   projects: RoutinesProject[],
   status: Map<string, RoutinesProjectStatus>,
+  current?: RoutinesCurrent | null,
 ): RoutineProgress {
+  // Routines says where the run is (newer apps): that decides, queued projects included.
+  if (current && current.routine === routine.id)
+    return {
+      running: true,
+      done: current.projects.filter((p) => p.state === 'done').length,
+      total: current.projects.length,
+      since: current.started,
+      current,
+    };
   const covered = projects.filter((p) => routineCovers(routine, p));
   const runs = covered.map((p) => status.get(p.name)?.runs?.[routine.id]);
   const running = runs.filter((r) => r?.status === 'running');
@@ -909,6 +1013,7 @@ function lastResults(
 }
 
 function Tonight({
+  current,
   routines,
   timeZone,
   projects,
@@ -920,6 +1025,7 @@ function Tonight({
   onEdit,
   onAdd,
 }: {
+  current?: RoutinesCurrent | null;
   routines: RoutineDef[];
   timeZone: string | undefined;
   projects: RoutinesProject[];
@@ -942,7 +1048,7 @@ function Tonight({
   // daytime the ringed next routine and its countdown say it, and a dot left of the band looked
   // like a misplaced icon (owner's review, 10-23).
   const underway = now > first && now < last;
-  const progress = new Map(ordered.map((r) => [r.id, progressOf(r, projects, status)]));
+  const progress = new Map(ordered.map((r) => [r.id, progressOf(r, projects, status, current)]));
   const runningNow = ordered.filter((r) => progress.get(r.id)?.running);
   return (
     <div className={clsx(GRID, 'items-start px-3 pt-3 pb-2')} data-tonight="">
@@ -976,7 +1082,9 @@ function Tonight({
                 className="size-3 shrink-0 motion-safe:animate-spin motion-reduce:animate-pulse"
               />
               <span>
-                {r.name} is running · {p.done} of {p.total}
+                {p.current
+                  ? currentLine(p.current)
+                  : `${r.name} is running · ${p.done} of ${p.total}`}
               </span>
             </p>
           );
@@ -1397,11 +1505,13 @@ function ProjectLine({
   needs,
   needIds,
   missing,
+  current,
   onToggle,
   onLog,
 }: {
   project: RoutinesProject;
   status: RoutinesProjectStatus | undefined;
+  current?: RoutinesCurrent | null;
   routines: RoutineDef[];
   xs: number[];
   today: string;
@@ -1456,19 +1566,37 @@ function ProjectLine({
         <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-line-soft" />
         {routines.map((r, i) =>
           // A routine that doesn't cover this project leaves its place empty.
-          routineCovers(r, project) || status?.runs?.[r.id] ? (
+          routineCovers(r, project) ||
+          status?.runs?.[r.id] ||
+          (current?.routine === r.id && current.projects.some((x) => x.name === project.name)) ? (
             <div
               key={r.id}
               className="absolute top-0 -translate-x-1/2"
               style={{ left: `${xs[i]! * 100}%` }}
             >
-              <RunDot
-                project={project.name}
-                routine={r}
-                run={status?.runs?.[r.id]}
-                today={today}
-                onLog={onLog}
-              />
+              {(() => {
+                const live =
+                  current?.routine === r.id
+                    ? current.projects.find((x) => x.name === project.name)
+                    : undefined;
+                return live ? (
+                  <LiveDot
+                    project={project.name}
+                    routine={r}
+                    live={live}
+                    run={status?.runs?.[r.id]}
+                    onLog={onLog}
+                  />
+                ) : (
+                  <RunDot
+                    project={project.name}
+                    routine={r}
+                    run={status?.runs?.[r.id]}
+                    today={today}
+                    onLog={onLog}
+                  />
+                );
+              })()}
             </div>
           ) : null,
         )}
@@ -2145,6 +2273,7 @@ export function RoutinesPage() {
   });
   // Runs move on their own: look again every 10 seconds while one runs, else every 30.
   const anyRunning = Boolean(
+    data?.current ||
     data?.status.some((s) => Object.values(s.runs ?? {}).some((r) => r?.status === 'running')) ||
     desk.data?.runs.some((r) => r.outcome === 'running'),
   );
@@ -2398,6 +2527,7 @@ export function RoutinesPage() {
           needs={needs}
           needIds={ids}
           missing={missing}
+          current={data?.current}
           onToggle={() => setOpen(open === p.name ? null : p.name)}
           onLog={(file) => void openLog(file)}
         />
@@ -2566,6 +2696,7 @@ export function RoutinesPage() {
             className="overflow-hidden rounded-block border border-line bg-surface"
           >
             <Tonight
+              current={data.current}
               routines={routines}
               timeZone={draft.schedule.timezone}
               projects={draft.projects}

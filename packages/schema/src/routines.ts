@@ -248,6 +248,26 @@ export const RoutinesProjectEntry = z
 
 export type RoutinesPage = { url: string; date?: string; posted?: string };
 
+/** Where one project is in the routine running now (Routines' `current`). */
+export type RoutinesCurrentProject = {
+  name: string;
+  state: 'queued' | 'waiting' | 'running' | 'done' | 'skipped' | 'failed';
+  /** Why it waits or was skipped ("a Claude session is active in breathe · try 2 of 3"). */
+  reason?: string;
+  /** Since when it is in this state (the Routines computer's local time). */
+  since?: string;
+  /** Its report, when done: a Pharos page. */
+  report?: string;
+};
+
+/** The routine running now, project by project (null when none runs). */
+export type RoutinesCurrent = {
+  routine: string;
+  name: string;
+  started: string;
+  projects: RoutinesCurrentProject[];
+};
+
 /** GET /api/routines/state. */
 export type RoutinesState =
   | {
@@ -261,6 +281,8 @@ export type RoutinesState =
       pharos: Record<string, RoutinesPharos>;
       /** Pharos's folders with a path, when this server has a store. */
       folders?: RoutinesFolder[];
+      /** The routine running now (newer Routines apps); null when idle. */
+      current?: RoutinesCurrent | null;
       /** Routines agents proposed that wait on the owner (routine_propose). */
       proposals?: RoutineProposalView[];
       report?: { text: string; date: string | null; when: string | null };

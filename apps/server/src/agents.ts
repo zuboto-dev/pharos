@@ -183,7 +183,9 @@ export function agentsOverview(sources: AgentsSources): AgentsOverview {
   const counts = { working: 0, waiting: 0, idle: 0 };
   for (const p of panels) counts[p.state] += 1;
   for (const c of connected) counts[c.live ? 'working' : 'idle'] += 1;
+  // The answering row is listed whenever answering is set up, idle unless a run is on.
   if (answering.state === 'running' || answering.state === 'stopping') counts.working += 1;
+  else if (answering.state !== 'unavailable') counts.idle += 1;
   counts.working += runs.length;
 
   return {

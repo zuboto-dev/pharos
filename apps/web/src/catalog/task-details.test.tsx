@@ -108,4 +108,11 @@ describe('task details in the drawer', () => {
     });
     expect(parseDeliverable(' | file')).toBeNull();
   });
+
+  it('reads back a result without a kind as it was written, edit after edit', () => {
+    // How the editor writes { label: 'Report', ref: 'docs/x.md' }: an empty kind between.
+    const line = 'Report |  | docs/x.md';
+    expect(parseDeliverable(line)).toEqual({ label: 'Report', ref: 'docs/x.md' });
+    expect(parseDeliverable('Report | | rec_123')).toEqual({ label: 'Report', ref: 'rec_123' });
+  });
 });

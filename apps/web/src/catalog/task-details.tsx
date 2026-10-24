@@ -143,6 +143,7 @@ export function parseDeliverable(line: string): Deliverable | null {
   const [label = '', ...rest] = line.split('|').map((p) => p.trim());
   if (!label) return null;
   const kind = DELIVERABLE_KINDS.find((k) => k === rest[0]?.toLowerCase());
-  const ref = (kind ? rest.slice(1) : rest).join(' | ').trim();
+  // An empty kind ("label |  | where", as a result without one is written) is skipped too.
+  const ref = (kind || rest[0] === '' ? rest.slice(1) : rest).join(' | ').trim();
   return { label, ...(kind ? { kind } : {}), ...(ref ? { ref } : {}) };
 }

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentsOverview, Author, PharosNotification } from '@pharos/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { AgentStatus } from './agent-runner.js';
 import { agentsOverview } from './agents.js';
 import { createApp } from './app.js';
 import { RunLog } from './desk.js';
@@ -305,6 +306,17 @@ describe('GET /api/agents', () => {
     expect(overview.runs.map((r) => r.name)).toEqual(['Morning brief']);
     // 1 panel + 2 live agents + 1 routine working; the one that only looked something up idle.
     expect(overview.counts).toEqual({ working: 4, waiting: 0, idle: 1 });
+    // Answering set up but not running: its row is listed under Idle, so it counts there.
+    const quiet = agentsOverview({
+      store,
+      presence,
+      runs,
+      lookups,
+      panels: () => terminal.panels(clock),
+      now: new Date(clock),
+      answering: () => ({ state: 'idle', queued: [] }) as unknown as AgentStatus,
+    });
+    expect(quiet.counts).toEqual({ working: 4, waiting: 0, idle: 2 });
 
     // The turn ends: waiting for you. Later, the old marks and revisions fall out of the window.
     terminal.hookTurn(a.launch.env.PHAROS_TERMINAL_TOKEN!);

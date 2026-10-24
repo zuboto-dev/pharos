@@ -2,6 +2,7 @@ import { projectBrief } from './brief.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  RoutineProposal,
   AGENT_FILE_CREATE_FIELDS,
   AskOwner,
   RunReport,
@@ -23,6 +24,7 @@ import {
 import { z } from 'zod';
 import { VERSION } from './version.js';
 import { RunLog, answersSince, askOwner, deskOf } from './desk.js';
+import { proposeRoutine } from './routine-proposals.js';
 import { LOOKUP_TOOLS, LookupLog } from './lookups.js';
 import { ActionService } from './actions/service.js';
 import { forAgent, requestFolder, savedRequests } from './files/requests.js';
@@ -94,6 +96,7 @@ Changing data:
 - The sidebar groups projects under repositories (shown as folders) and optional sections (type "section"); projects and repositories have an "order", and projects can be "pinned". Change these only when the user asks.
 
 - The owner's desk lists everything waiting on them across projects. When you need the owner (a choice of taste or direction, a secret, a payment, a push, personal data), ask with ask_owner in one call (options make it a one-tap decision) instead of writing the question into a page or a file; on your next turn read their answer with desk_list({since}). A routine or night run reports itself with run_report (start, then finish with an outcome).
+- When the owner asks for a routine (something run on a schedule: "every Friday at 5, review the week"), propose it with routine_propose; it goes on their desk and they add it with one tap. Never edit routines.json yourself.
 
 Generating views (what the user sees):
 - Read the resource pharos://guide/views (design guidelines) and pharos://examples/answers (worked examples) before your first view in a session.
@@ -307,6 +310,17 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       inputSchema: AskOwner.shape,
     },
     (input) => run(() => askOwner(store, author(), AskOwner.parse(input))),
+  );
+
+  server.registerTool(
+    'routine_propose',
+    {
+      title: 'Propose a routine',
+      description:
+        "Propose a routine to the owner (a job run unattended on a schedule, in each project's folder): its name, time (HH:MM), days (mon…sun; leave out for every day), what it does in the owner's words, which Routines projects (folder names, or \"enrolled\") and why. It puts one decision on the owner's desk (Add it / Not now); when they choose Add it, Pharos adds it to their routines. Agents never change routines.json themselves.",
+      inputSchema: RoutineProposal.shape,
+    },
+    (input) => run(() => proposeRoutine(store, author(), input)),
   );
 
   server.registerTool(

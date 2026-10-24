@@ -41,7 +41,14 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
     derived from `schedule` for an older app, then `editable: false`). State adds `pharos`: each
     Routines project's Pharos projects by repository folder, and report views named after a
     routine. The page's needs-you numbers are desk counts for those projects
-    (`/desk?project=a,b`), never NEXT.md's
+    (`/desk?project=a,b`), never NEXT.md's. A routine's optional `days` (mon…sun) decides which
+    nights it runs.
+  - `src/routine-proposals.ts` — agents propose routines, the owner approves: MCP
+    `routine_propose` puts one decision ("Add it" / "Not now") on the desk and keeps the proposal
+    in the app setting `routines.proposals` (by decision id, never a revision). An "Add it" from
+    anywhere (seen on the feed) is saved through the Routines client as the owner's action and
+    noted on the decision; if Routines is down the decision reopens and the Routines page's next
+    load retries
   - `src/feed.ts` — announces new revisions (including ones from other processes, by polling) to
     `GET /api/events` (SSE); the web app reloads affected data from it
   - `src/notifications.ts` — what Pharos tells the owner (desk items, failed runs, agent terminals

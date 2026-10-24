@@ -15,6 +15,8 @@ import {
   nextRun,
   routineId,
   runTime,
+  minutesUntil,
+  runsTonight,
 } from './RoutinesPage';
 
 const ROUTINES = (): RoutineDef[] => [
@@ -586,5 +588,103 @@ describe('rows follow Pharos’s folders', () => {
       to: { path: '/tmp/kiln', pm: { type: 'pharos', project: 'prj_k' } },
     });
     expect(removed).toMatchObject({ field: 'project', name: 'bike', to: null });
+  });
+});
+
+describe('days of the week', () => {
+  it('counts only the days a routine runs', () => {
+    // Tuesday 14:00 UTC: a Fridays-only 17:00 routine is 3 days and 3 hours away.
+    const tue = new Date('2026-10-20T14:00:00Z');
+    const weekly = { time: '17:00', days: ['fri' as const] };
+    expect(minutesUntil(weekly, 'UTC', tue)).toBe(3 * 1440 + 180);
+    expect(runsTonight(weekly, 'UTC', tue)).toBe(false);
+    expect(runsTonight(weekly, 'UTC', new Date('2026-10-23T14:00:00Z'))).toBe(true);
+    // 00:30 runs after midnight: on a Friday evening the next one is Saturday's.
+    const late = { time: '00:30', days: ['sat' as const] };
+    expect(runsTonight(late, 'UTC', new Date('2026-10-23T20:00:00Z'))).toBe(true);
+    expect(minutesUntil({ time: '17:00' }, 'UTC', tue)).toBe(180);
+    // The next run skips a routine whose day isn't tonight.
+    const list = [
+      { id: 'a', time: '15:00', enabled: true, days: ['fri' as const] },
+      { id: 'b', time: '18:00', enabled: true },
+    ];
+    expect(nextRun(list, 'UTC', tue)?.routine.id).toBe('b');
+    expect(inTime(3 * 1440 + 180)).toBe('in 3 d 3 h');
+  });
+
+  it('draws a routine that skips tonight faint, and says so on hover', async () => {
+    const off = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).find(
+      (d) => !runsTonight({ time: '18:00', days: [d] }, 'UTC'),
+    )!;
+    state = STATE();
+    if (state.available) state.config.routines[3]!.days = [off];
+    show();
+    const node = await screen.findByRole('button', { name: 'Evening read at 18:00. Edit' });
+    expect(node.getAttribute('data-skips')).toBe('true');
+    expect(node.getAttribute('data-next')).toBeNull();
+    expect(description(node)).toMatch(/^Not tonight \(\w{3} only\)\./);
+  });
+
+  it('picks days in the form, saved after confirming', async () => {
+    show();
+    fireEvent.click(await screen.findByRole('button', { name: 'Evening read at 18:00. Edit' }));
+    const form = screen.getByRole('dialog');
+    fireEvent.click(within(form).getByRole('button', { name: 'Pick days' }));
+    const done = within(form).getByRole('button', { name: 'Done' }) as HTMLButtonElement;
+    expect(done.disabled).toBe(true);
+    fireEvent.click(within(form).getByRole('button', { name: 'fri' }));
+    fireEvent.click(done);
+    expect(await saveAll()).toEqual(['Evening read: every day → Fridays']);
+    const [change] = savedChanges() as { to: RoutineDef }[];
+    expect(change!.to.days).toEqual(['fri']);
+
+    // Weekdays on a new one; Every day leaves days out.
+    fireEvent.click(screen.getByRole('button', { name: 'Add a routine' }));
+    const add = screen.getByRole('dialog');
+    fireEvent.change(within(add).getByPlaceholderText('Weekly review'), {
+      target: { value: 'Standup notes' },
+    });
+    fireEvent.change(within(add).getByPlaceholderText(/In your words/), {
+      target: { value: 'Summarize yesterday.' },
+    });
+    fireEvent.click(within(add).getByRole('button', { name: 'Weekdays' }));
+    fireEvent.click(within(add).getByRole('button', { name: 'Add' }));
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+  });
+});
+
+describe('routines agents propose', () => {
+  const proposal = {
+    decisionId: 'dec_1',
+    href: '/projects/prj_g?decision=dec_1',
+    proposedBy: 'Claude Code',
+    proposal: {
+      name: 'Weekly review',
+      time: '17:00',
+      days: ['fri' as const],
+      instructions: 'Read the week.',
+      projects: ['garden'],
+      reason: 'You asked for it.',
+    },
+  };
+
+  it('lists them at the top with Add and Not now, answered as the owner', async () => {
+    state = { ...STATE(), proposals: [proposal] } as RoutinesState;
+    show();
+    const row = await screen.findByText('Proposed by Claude Code:');
+    const card = row.closest('[data-proposal]') as HTMLElement;
+    expect(card.textContent).toMatch('Weekly review · Fri only 17:00');
+    fireEvent.click(within(card).getByRole('button', { name: 'Add' }));
+    await new Promise((r) => setTimeout(r, 0));
+    fireEvent.click(within(card).getByRole('button', { name: 'Not now' }));
+    await new Promise((r) => setTimeout(r, 0));
+    const answers = calls.filter((c) => c.url === '/api/desk/answer');
+    expect(answers.map((c) => JSON.parse(String(c.init!.body)))).toEqual([
+      { id: 'dec_1', chosenOptionId: 'add' },
+      { id: 'dec_1', chosenOptionId: 'not-now' },
+    ]);
+    expect((answers[0]!.init!.headers as Record<string, string>)['x-pharos-author']).toBe(
+      'human:me',
+    );
   });
 });

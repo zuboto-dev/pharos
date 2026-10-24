@@ -39,7 +39,8 @@ import { landedSince, markDeskSeen } from './landed.js';
 import { folderBriefs, projectBrief } from './brief.js';
 import { DiskFolders } from './disk-folders.js';
 import { updatesOf } from './updates.js';
-import { routinesRoutes, type RoutinesOptions } from './routines.js';
+import { createRoutinesClient, routinesRoutes, type RoutinesOptions } from './routines.js';
+import { proposalSettler, watchProposals } from './routine-proposals.js';
 import { Presence, watchAgentRevisions } from './presence.js';
 import { PackApplyInput, applyPack, listPacks } from './packs/service.js';
 import { agentViewOpsIssue } from './views/block-ask.js';
@@ -387,7 +388,11 @@ export function createApp(
   });
 
   // The Routines page: the owner's daily routines, proxied to the Routines app (owner only).
-  api.route('/routines', routinesRoutes(info.routines, store));
+  const routinesClient = createRoutinesClient(info.routines);
+  const proposals = proposalSettler(store, routinesClient);
+  // An owner's "Add it" on a proposed routine (any process, any page) adds it through Routines.
+  watchProposals(feed, proposals);
+  api.route('/routines', routinesRoutes(routinesClient, store, proposals));
 
   // Which agent works where right now (also sent on the feed as `presence`).
   api.get('/presence', (c) => c.json(presence.state()));

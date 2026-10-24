@@ -1,6 +1,11 @@
 import {
+  DAYS,
   DIFFICULTIES,
   ROUTINE_MODELS,
+  WEEKDAYS,
+  daysShort,
+  daysText,
+  type Day,
   ROUTINES,
   describeRoutinesChange,
   routineCovers,
@@ -16,17 +21,20 @@ import {
   type RoutinesFolder,
   type RoutinesPharos,
   type RoutinesProject,
+  type RoutineProposalView,
   type RoutinesProjectStatus,
   type RoutinesState,
 } from '@pharos/schema';
 import clsx from 'clsx';
 import {
   AlertTriangle,
+  Bot,
   Brush,
   CalendarClock,
   Globe,
   Check,
   ChevronRight,
+  Clock,
   Flag,
   FolderGit2,
   GitBranch,
@@ -147,25 +155,72 @@ export function inOrder<T extends Pick<RoutineDef, 'time'>>(routines: T[]): T[] 
 }
 
 /** The next enabled routine to fire, and in how many minutes. */
-export function nextRun<T extends Pick<RoutineDef, 'time' | 'enabled'>>(
+/** Today's day of the week in `timeZone`, 0 = Monday. */
+export function weekdayIn(timeZone: string | undefined, now = new Date()): number {
+  let name: string;
+  try {
+    name = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
+  } catch {
+    name = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(now);
+  }
+  return Math.max(0, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(name));
+}
+
+/**
+ * Minutes until a routine next fires, counting only the days it runs (missing days: every day);
+ * null when it never does. A run at this very minute is firing now; the next one counts.
+ */
+export function minutesUntil(
+  routine: Pick<RoutineDef, 'time' | 'days'>,
+  timeZone: string | undefined,
+  now = new Date(),
+): number | null {
+  if (!/^\d\d:\d\d$/.test(routine.time)) return null;
+  const current = minutesIn(timeZone, now);
+  const today = weekdayIn(timeZone, now);
+  const first = (toMinutes(routine.time) - current + 1440) % 1440 || 1440;
+  for (let extra = 0; extra < 8; extra++) {
+    const inMinutes = first + extra * 1440;
+    // The day the run happens on: today, or a later day once it passes midnight.
+    const day = (today + Math.floor((current + inMinutes) / 1440)) % 7;
+    if (!routine.days || routine.days.includes(DAYS[day]!)) return inMinutes;
+  }
+  return null;
+}
+
+/** Whether a routine runs at its next time (tonight), or skips it for its days. */
+export function runsTonight(
+  routine: Pick<RoutineDef, 'time' | 'days'>,
+  timeZone: string | undefined,
+  now = new Date(),
+): boolean {
+  const left = minutesUntil(routine, timeZone, now);
+  return left !== null && left <= 1440;
+}
+
+/** The next enabled routine to fire (on a day it runs), and in how many minutes. */
+export function nextRun<T extends Pick<RoutineDef, 'time' | 'enabled' | 'days'>>(
   routines: T[],
   timeZone: string | undefined,
   now = new Date(),
 ): { routine: T; inMinutes: number } | null {
-  const current = minutesIn(timeZone, now);
   const due = routines
-    .filter((r) => r.enabled && /^\d\d:\d\d$/.test(r.time))
-    // A run at this very minute is firing now; the next one is tomorrow's.
-    .map((routine) => ({
-      routine,
-      inMinutes: (toMinutes(routine.time) - current + 1440) % 1440 || 1440,
-    }));
+    .filter((r) => r.enabled)
+    .flatMap((routine) => {
+      const inMinutes = minutesUntil(routine, timeZone, now);
+      return inMinutes === null ? [] : [{ routine, inMinutes }];
+    });
   return due.sort((a, b) => a.inMinutes - b.inMinutes)[0] ?? null;
 }
 
 /** "in 45 min", "in 10 h 26 min". */
 export function inTime(minutes: number): string {
   if (minutes < 60) return `in ${minutes} min`;
+  if (minutes >= 1440) {
+    const d = Math.floor(minutes / 1440);
+    const h = Math.floor((minutes % 1440) / 60);
+    return h ? `in ${d} d ${h} h` : `in ${d} d`;
+  }
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return m ? `in ${h} h ${m} min` : `in ${h} h`;
@@ -748,6 +803,8 @@ function Tonight({
           const Icon = routineIcon(r);
           const isNext = next?.routine.id === r.id;
           const results = lastResults(r, projects, status);
+          // Its days skip tonight (a Fridays-only routine on a Tuesday): drawn faint.
+          const skips = r.enabled && !runsTonight(r, timeZone);
           return (
             <div
               key={r.id}
@@ -756,14 +813,15 @@ function Tonight({
               style={{ left: `${line.xs[i]! * 100}%` }}
             >
               <Tooltip
-                label={`${r.name} · ${r.time}${zone ? ` ${zone}` : ''}${r.enabled ? '' : ' · off'}`}
-                detail={`${r.instructions || 'No instructions yet.'}${results ? ` Last: ${results}.` : ''}${isNext && next ? ` Next, ${inTime(next.inMinutes)}.` : ''}`}
+                label={`${r.name} · ${r.time}${zone ? ` ${zone}` : ''}${r.enabled ? '' : ' · off'}${skips ? ` · not tonight (${daysShort(r.days)})` : r.days ? ` · ${daysText(r.days)}` : ''}`}
+                detail={`${skips ? `Not tonight (${daysShort(r.days)}). ` : ''}${r.instructions || 'No instructions yet.'}${results ? ` Last: ${results}.` : ''}${isNext && next ? ` Next, ${inTime(next.inMinutes)}.` : ''}`}
                 className="flex"
               >
                 <button
                   type="button"
                   data-node={r.id}
                   data-next={isNext || undefined}
+                  data-skips={skips || undefined}
                   aria-label={`${r.name} at ${r.time}. Edit`}
                   onClick={() => onEdit(r)}
                   className={clsx(
@@ -772,6 +830,7 @@ function Tonight({
                       ? 'border-sky-400 text-sky-700 ring-4 ring-sky-100 dark:border-sky-500 dark:text-sky-300 dark:ring-sky-950'
                       : 'border-line-strong text-ink-soft',
                     !r.enabled && 'border-dashed text-faint',
+                    skips && 'opacity-45',
                   )}
                 >
                   <Icon aria-hidden className="size-3.5" />
@@ -782,6 +841,7 @@ function Tonight({
                   'mt-1 hidden max-w-28 truncate text-xs sm:block',
                   isNext ? 'font-medium text-ink' : 'text-muted',
                   !r.enabled && 'line-through',
+                  skips && 'opacity-60',
                 )}
               >
                 {r.name}
@@ -846,6 +906,21 @@ function RoutineForm({
     routine && routine.projects !== 'enrolled' ? routine.projects : [],
   );
   const [removing, setRemoving] = useState(false);
+  const initialDays = routine?.days;
+  const [dayMode, setDayMode] = useState<'every' | 'weekdays' | 'pick'>(
+    !initialDays || initialDays.length >= 7
+      ? 'every'
+      : daysText(initialDays) === 'weekdays'
+        ? 'weekdays'
+        : 'pick',
+  );
+  const [picked, setPicked] = useState<Day[]>(initialDays ?? []);
+  const days: Day[] | undefined =
+    dayMode === 'every'
+      ? undefined
+      : dayMode === 'weekdays'
+        ? WEEKDAYS
+        : DAYS.filter((d) => picked.includes(d));
   const ids = useId();
   // An older Routines app keeps only the built-ins' times.
   const timeOnly = !editable;
@@ -858,7 +933,9 @@ function RoutineForm({
         ? 'Say what it should do'
         : scope === 'chosen' && !chosen.length
           ? 'Pick at least one project'
-          : null;
+          : days && !days.length
+            ? 'Pick at least one day'
+            : null;
   const field =
     'w-full rounded-control border border-line-strong bg-surface px-2.5 py-1.5 text-sm disabled:opacity-60';
   const done = () => {
@@ -871,6 +948,7 @@ function RoutineForm({
       ...(routine?.skill ? { skill: routine.skill } : {}),
       instructions: instructions.trim(),
       projects: scope === 'enrolled' ? 'enrolled' : chosen,
+      ...(days && days.length < 7 ? { days } : {}),
     });
   };
   if (removing && routine)
@@ -935,6 +1013,49 @@ function RoutineForm({
           className={clsx(field, 'resize-y')}
         />
       </label>
+      <fieldset className="space-y-1.5" disabled={timeOnly} data-days="">
+        <legend className="text-xs text-muted">Days</legend>
+        <div className="flex flex-wrap gap-1.5">
+          {(['every', 'weekdays', 'pick'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={dayMode === m}
+              onClick={() => setDayMode(m)}
+              className={clsx(
+                'rounded-full px-2.5 py-1 text-xs ring-1 ring-inset disabled:opacity-60',
+                dayMode === m ? 'bg-inverse text-on-inverse ring-inverse' : 'text-muted ring-line',
+              )}
+            >
+              {m === 'every' ? 'Every day' : m === 'weekdays' ? 'Weekdays' : 'Pick days'}
+            </button>
+          ))}
+        </div>
+        {dayMode === 'pick' && (
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Days it runs">
+            {DAYS.map((d) => {
+              const on = picked.includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={d}
+                  onClick={() => setPicked(on ? picked.filter((x) => x !== d) : [...picked, d])}
+                  className={clsx(
+                    'w-10 rounded-full py-0.5 text-xs capitalize ring-1 ring-inset',
+                    on
+                      ? 'bg-sky-50 text-sky-800 ring-sky-300 dark:bg-sky-950 dark:text-sky-200 dark:ring-sky-800'
+                      : 'text-muted ring-line',
+                  )}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </fieldset>
       <fieldset className="space-y-1.5" disabled={timeOnly}>
         <legend className="text-xs text-muted">Projects</legend>
         <div className="flex flex-wrap gap-1.5">
@@ -1680,6 +1801,83 @@ function Unavailable({
   );
 }
 
+/** Routines agents proposed (routine_propose), waiting on the owner: Add / Not now in place. */
+function Proposals({
+  proposals,
+  onAnswer,
+}: {
+  proposals: RoutineProposalView[];
+  onAnswer: (decisionId: string, option: 'add' | 'not-now') => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const answer = async (id: string, option: 'add' | 'not-now') => {
+    setBusy(id);
+    await onAnswer(id, option);
+    setBusy(null);
+  };
+  return (
+    <section aria-label="Proposed routines" className="space-y-1.5" data-proposals="">
+      {proposals.map((p) => {
+        const r = p.proposal;
+        const Icon = routineIcon({});
+        const scope =
+          !r.projects || r.projects === 'enrolled' ? 'enrolled projects' : r.projects.join(', ');
+        return (
+          <div
+            key={p.decisionId}
+            data-proposal={p.decisionId}
+            className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-block border border-sky-200 bg-sky-50/60 px-3 py-2 text-sm dark:border-sky-900 dark:bg-sky-950/40"
+          >
+            <Bot aria-hidden className="size-4 shrink-0 text-sky-700 dark:text-sky-300" />
+            <span className="text-muted">Proposed by {p.proposedBy}:</span>
+            <Tooltip
+              label={`${r.name} · ${daysShort(r.days)} ${r.time} · for ${scope}`}
+              detail={`${r.instructions} Why: ${r.reason}`}
+              className="flex min-w-0"
+            >
+              <Link
+                to={p.href}
+                className="inline-flex min-w-0 items-center gap-1 font-medium text-ink hover:underline"
+              >
+                <Icon aria-hidden className="size-3.5 shrink-0 text-faint" />
+                <span className="truncate">
+                  {r.name} · {r.days ? `${daysShort(r.days)} ` : ''}
+                  {r.time}
+                </span>
+              </Link>
+            </Tooltip>
+            {p.waiting && (
+              <Tooltip label="Approved; waiting for Routines" detail={p.waiting} className="flex">
+                <span tabIndex={0} className="text-warn">
+                  <Clock aria-label="Approved; waiting for Routines" className="size-3.5" />
+                </span>
+              </Tooltip>
+            )}
+            <span className="ml-auto flex gap-1.5">
+              <button
+                type="button"
+                disabled={busy === p.decisionId}
+                onClick={() => void answer(p.decisionId, 'add')}
+                className={BUTTON.primary}
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                disabled={busy === p.decisionId}
+                onClick={() => void answer(p.decisionId, 'not-now')}
+                className={BUTTON.secondary}
+              >
+                Not now
+              </button>
+            </span>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 type Pending = { routine: RoutineDef; project: RoutinesProject };
 /** The routine form: a new routine (null) or one to change. */
 type Editing = { routine: RoutineDef | null };
@@ -1923,6 +2121,19 @@ export function RoutinesPage() {
         <div className="h-64 animate-pulse rounded-block bg-sunken" />
       ) : (
         <>
+          {data.proposals && data.proposals.length > 0 && (
+            <Proposals
+              proposals={data.proposals}
+              onAnswer={async (decisionId, chosenOptionId) => {
+                try {
+                  await ownerPost('/api/desk/answer', { id: decisionId, chosenOptionId });
+                  setTimeout(reload, 600);
+                } catch (err) {
+                  setNotice({ tone: 'error', text: (err as Error).message });
+                }
+              }}
+            />
+          )}
           <section
             aria-label="Projects"
             className="overflow-hidden rounded-block border border-line bg-surface"

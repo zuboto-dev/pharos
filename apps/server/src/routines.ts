@@ -10,6 +10,7 @@ import {
   type RoutinesConfig,
   type RoutinesFolder,
   type RoutinesPharos,
+  type RoutineProposalView,
   type RoutinesState,
 } from '@pharos/schema';
 import { Hono, type Context } from 'hono';
@@ -36,7 +37,118 @@ export type RoutinesOptions = {
   timeoutMs?: number;
 };
 
-class Unreachable extends Error {}
+/** Routines didn't answer (not running, timed out, or sent something unreadable). */
+export class Unreachable extends Error {}
+
+/** Routines (or Pharos's checks before it) refused a save. */
+export class SaveRefused extends Error {
+  constructor(
+    readonly status: 400 | 409 | 502,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export type RoutinesClient = ReturnType<typeof createRoutinesClient>;
+
+/** Talks to the Routines app: reads routines.json and saves checked edits into it. */
+export function createRoutinesClient(options: RoutinesOptions = {}) {
+  const base = (options.url || DEFAULT_ROUTINES_URL).replace(/\/+$/, '');
+  const doFetch = options.fetch ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 4000;
+
+  /** One call to Routines; network failures and timeouts become `Unreachable` with a reason. */
+  async function call(path: string, init?: RequestInit): Promise<Response> {
+    try {
+      return await doFetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (err) {
+      const name = (err as Error)?.name;
+      const reason =
+        name === 'TimeoutError' || name === 'AbortError'
+          ? `Routines at ${base} didn't answer within ${Math.round(timeoutMs / 1000)} s.`
+          : `Routines isn't running at ${base}.`;
+      throw new Unreachable(reason);
+    }
+  }
+
+  async function config(): Promise<RoutinesConfig> {
+    const res = await call('/api/state');
+    if (!res.ok) throw new Unreachable(`Routines at ${base} answered HTTP ${res.status}.`);
+    const body = (await res.json().catch(() => null)) as { config?: RoutinesConfig } | null;
+    if (!body?.config || !Array.isArray(body.config.projects))
+      throw new Unreachable(`Routines at ${base} sent no routines.json.`);
+    return body.config;
+  }
+
+  /**
+   * Saves edits into routines.json: each edit names the value it changes, and the save is refused
+   * when routines.json no longer holds it (changed on disk or in another tab). Returns what was
+   * saved, in words; throws `SaveRefused` or `Unreachable`.
+   */
+  async function save(changes: RoutinesChange[]): Promise<string[]> {
+    const conf = await config();
+    const stale = changes.filter((ch) => !sameValue(currentRoutinesValue(conf, ch), ch.from));
+    const missing = changes.filter(
+      (ch) => 'project' in ch && !conf.projects.some((p) => p.name === ch.project),
+    );
+    const routineChanges = changes.filter((ch) => ch.field === 'routine');
+    if (routineChanges.length && !Array.isArray(conf.routines))
+      throw new SaveRefused(
+        400,
+        'invalid',
+        'This Routines app keeps only the three built-in routines: update it to add or change routines.',
+      );
+    const badName = changes.find((ch) => ch.field === 'project' && ch.to && ch.to.name !== ch.name);
+    if (badName && badName.field === 'project')
+      throw new SaveRefused(400, 'invalid', `A project's name can't change (${badName.name})`);
+    const badId = routineChanges.find((ch) => ch.to && ch.to.id !== ch.id);
+    if (badId) throw new SaveRefused(400, 'invalid', `A routine's id can't change (${badId.id})`);
+    if (missing.length)
+      throw new SaveRefused(
+        400,
+        'invalid',
+        `No project named ${missing.map((m) => 'project' in m && m.project).join(', ')}`,
+      );
+    if (stale.length)
+      throw new SaveRefused(
+        409,
+        'conflict',
+        `routines.json changed since the page loaded (${stale.map(describeRoutinesChange).join('; ')}). Reload and try again.`,
+      );
+    const next = applyChanges(conf, changes);
+    // A removed project also leaves the routines that named it (the engine refuses unknown names).
+    const routinesChanged =
+      routineChanges.length > 0 ||
+      (Array.isArray(conf.routines) && canonical(conf.routines) !== canonical(next.routines));
+    const res = await call('/api/state', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        projects: next.projects,
+        schedule: next.schedule,
+        dispatch: next.dispatch,
+        ...(routinesChanged ? { routines: next.routines } : {}),
+      }),
+    });
+    if (!res.ok) {
+      const answer = (await res.json().catch(() => ({}))) as {
+        error?: unknown;
+        problems?: unknown;
+      };
+      const problems = Array.isArray(answer.problems) ? `: ${answer.problems.join('; ')}` : '';
+      throw new SaveRefused(
+        res.status === 400 ? 400 : 502,
+        'upstream',
+        `Routines didn't save (${typeof answer.error === 'string' ? answer.error : `HTTP ${res.status}`}${problems})`,
+      );
+    }
+    return changes.map(describeRoutinesChange);
+  }
+
+  return { base, call, config, save };
+}
 
 /** A request that declares an agent (any author that isn't `human:…`): never served here. */
 function declaresAgent(c: Context): boolean {
@@ -120,34 +232,13 @@ export function pharosOf(store: Store, config: RoutinesConfig): Record<string, R
   return out;
 }
 
-export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
-  const base = (options.url || DEFAULT_ROUTINES_URL).replace(/\/+$/, '');
-  const doFetch = options.fetch ?? fetch;
-  const timeoutMs = options.timeoutMs ?? 4000;
+export function routinesRoutes(
+  client: RoutinesClient,
+  store?: Store,
+  proposals?: { settle: (retry?: boolean) => Promise<void>; pending: () => RoutineProposalView[] },
+) {
+  const { base, call, config } = client;
   const app = new Hono();
-
-  /** One call to Routines; network failures and timeouts become `Unreachable` with a reason. */
-  async function call(path: string, init?: RequestInit): Promise<Response> {
-    try {
-      return await doFetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-    } catch (err) {
-      const name = (err as Error)?.name;
-      const reason =
-        name === 'TimeoutError' || name === 'AbortError'
-          ? `Routines at ${base} didn't answer within ${Math.round(timeoutMs / 1000)} s.`
-          : `Routines isn't running at ${base}.`;
-      throw new Unreachable(reason);
-    }
-  }
-
-  async function config(): Promise<RoutinesConfig> {
-    const res = await call('/api/state');
-    if (!res.ok) throw new Unreachable(`Routines at ${base} answered HTTP ${res.status}.`);
-    const body = (await res.json().catch(() => null)) as { config?: RoutinesConfig } | null;
-    if (!body?.config || !Array.isArray(body.config.projects))
-      throw new Unreachable(`Routines at ${base} sent no routines.json.`);
-    return body.config;
-  }
 
   const unreachable = (c: Context, err: unknown) => {
     if (err instanceof Unreachable)
@@ -169,6 +260,8 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
   });
 
   app.get('/state', async (c) => {
+    // A routine the owner approved while Routines was down is added now, if it answers.
+    await proposals?.settle(true).catch((err: unknown) => console.error('[pharos] routines:', err));
     try {
       const res = await call('/api/state');
       if (!res.ok) throw new Unreachable(`Routines at ${base} answered HTTP ${res.status}.`);
@@ -184,6 +277,7 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
         editable,
         pharos: store && Array.isArray(conf.projects) ? pharosOf(store, conf) : {},
         ...(store ? { folders: foldersOf(store) } : {}),
+        ...(proposals ? { proposals: proposals.pending() } : {}),
         url: base,
       } as RoutinesState);
     } catch (err) {
@@ -228,58 +322,9 @@ export function routinesRoutes(options: RoutinesOptions = {}, store?: Store) {
   app.post('/save', async (c) => {
     const { changes } = RoutinesSave.parse(await c.req.json().catch(() => ({})));
     try {
-      const conf = await config();
-      const stale = changes.filter((ch) => !sameValue(currentRoutinesValue(conf, ch), ch.from));
-      const missing = changes.filter(
-        (ch) => 'project' in ch && !conf.projects.some((p) => p.name === ch.project),
-      );
-      const routineChanges = changes.filter((ch) => ch.field === 'routine');
-      if (routineChanges.length && !Array.isArray(conf.routines))
-        return fail(
-          c,
-          400,
-          'invalid',
-          'This Routines app keeps only the three built-in routines: update it to add or change routines.',
-        );
-      const badName = changes.find(
-        (ch) => ch.field === 'project' && ch.to && ch.to.name !== ch.name,
-      );
-      if (badName && badName.field === 'project')
-        return fail(c, 400, 'invalid', `A project's name can't change (${badName.name})`);
-      const badId = routineChanges.find((ch) => ch.to && ch.to.id !== ch.id);
-      if (badId) return fail(c, 400, 'invalid', `A routine's id can't change (${badId.id})`);
-      if (missing.length)
-        return fail(
-          c,
-          400,
-          'invalid',
-          `No project named ${missing.map((m) => 'project' in m && m.project).join(', ')}`,
-        );
-      if (stale.length)
-        return fail(
-          c,
-          409,
-          'conflict',
-          `routines.json changed since the page loaded (${stale.map(describeRoutinesChange).join('; ')}). Reload and try again.`,
-        );
-      const next = applyChanges(conf, changes);
-      // A removed project also leaves the routines that named it (the engine refuses unknown names).
-      const routinesChanged =
-        routineChanges.length > 0 ||
-        (Array.isArray(conf.routines) && canonical(conf.routines) !== canonical(next.routines));
-      const res = await call('/api/state', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          projects: next.projects,
-          schedule: next.schedule,
-          dispatch: next.dispatch,
-          ...(routinesChanged ? { routines: next.routines } : {}),
-        }),
-      });
-      if (!res.ok) return fail(c, 502, 'upstream', `Routines didn't save (HTTP ${res.status})`);
-      return c.json({ ok: true, saved: changes.map(describeRoutinesChange) });
+      return c.json({ ok: true, saved: await client.save(changes) });
     } catch (err) {
+      if (err instanceof SaveRefused) return fail(c, err.status, err.code, err.message);
       return unreachable(c, err);
     }
   });

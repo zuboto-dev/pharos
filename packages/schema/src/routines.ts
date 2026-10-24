@@ -34,6 +34,42 @@ const Time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'a time as HH:MM');
  * do in the owner's words, and which projects it covers. The three built-ins also name the skill
  * they run (wrapup, nightshift, daybreak); a custom one has only its instructions.
  */
+/** Days of the week a routine can run on (the day the run happens, in the schedule's timezone). */
+export const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+export type Day = (typeof DAYS)[number];
+const DAY_NAMES: Record<Day, string> = {
+  mon: 'Monday',
+  tue: 'Tuesday',
+  wed: 'Wednesday',
+  thu: 'Thursday',
+  fri: 'Friday',
+  sat: 'Saturday',
+  sun: 'Sunday',
+};
+export const WEEKDAYS: Day[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
+
+/** Days as people say them: "every day", "weekdays", "Fridays", "Mon, Wed, Fri". */
+export function daysText(days: readonly Day[] | undefined): string {
+  if (!days || new Set(days).size >= 7) return 'every day';
+  const sorted = DAYS.filter((d) => days.includes(d));
+  if (sorted.join() === WEEKDAYS.join()) return 'weekdays';
+  if (sorted.join() === 'sat,sun') return 'weekends';
+  if (sorted.length === 1) return `${DAY_NAMES[sorted[0]!]}s`;
+  return sorted.map((d) => DAY_NAMES[d].slice(0, 3)).join(', ');
+}
+
+/** Short days for a chip or a tooltip: "Fri only", "weekdays", "Mon, Wed". */
+export function daysShort(days: readonly Day[] | undefined): string {
+  const text = daysText(days);
+  return days && days.length === 1 ? `${DAY_NAMES[days[0]!].slice(0, 3)} only` : text;
+}
+
+const Days = z
+  .array(z.enum(DAYS))
+  .min(1, 'pick at least one day')
+  .max(7)
+  .refine((d) => new Set(d).size === d.length, 'each day once');
+
 export const RoutineDef = z.object({
   id: z.string().regex(ROUTINE_ID, 'an id of a-z, 0-9 and -'),
   name: z.string().trim().min(1).max(60),
@@ -42,8 +78,46 @@ export const RoutineDef = z.object({
   skill: z.string().max(40).optional(),
   instructions: z.string().max(2000),
   projects: z.union([z.literal('enrolled'), z.array(z.string().min(1).max(120)).max(100)]),
+  /** The days it runs; missing means every day. */
+  days: Days.optional(),
 });
 export type RoutineDef = z.infer<typeof RoutineDef>;
+
+/**
+ * What an agent proposes (MCP routine_propose): a routine the owner adds with one tap on the
+ * desk. Agents never change routines.json themselves.
+ */
+export const RoutineProposal = z.strictObject({
+  name: z.string().trim().min(1).max(60).describe('Its name, e.g. "Weekly review"'),
+  time: Time.describe('When it runs each day it runs, HH:MM (24 h) in the schedule’s timezone'),
+  days: Days.optional().describe('The days it runs (mon…sun); leave out for every day'),
+  instructions: z
+    .string()
+    .trim()
+    .min(1)
+    .max(2000)
+    .describe('What it should do, in the owner’s words: what to look at and what to leave them'),
+  projects: z
+    .union([z.literal('enrolled'), z.array(z.string().min(1).max(120)).min(1).max(100)])
+    .optional()
+    .describe('Routines project names (folder names, e.g. "tutti"), or "enrolled" (default)'),
+  reason: z.string().trim().min(1).max(600).describe('Why: one or two lines the owner reads'),
+  projectId: z
+    .string()
+    .optional()
+    .describe('The Pharos project whose desk it goes on (default: the first named project’s)'),
+});
+export type RoutineProposal = z.infer<typeof RoutineProposal>;
+
+/** A proposal waiting on the owner, as the Routines page lists it. */
+export type RoutineProposalView = {
+  decisionId: string;
+  href: string;
+  proposedBy: string;
+  proposal: RoutineProposal;
+  /** Approved, but Routines didn't answer: Pharos tries again. */
+  waiting?: string;
+};
 
 /** The routines a routines.json defines; the three built-ins from `schedule` when it has none. */
 export function routinesOf(config: Pick<RoutinesConfig, 'schedule' | 'routines'>): RoutineDef[] {
@@ -187,6 +261,8 @@ export type RoutinesState =
       pharos: Record<string, RoutinesPharos>;
       /** Pharos's folders with a path, when this server has a store. */
       folders?: RoutinesFolder[];
+      /** Routines agents proposed that wait on the owner (routine_propose). */
+      proposals?: RoutineProposalView[];
       report?: { text: string; date: string | null; when: string | null };
       pages?: Partial<Record<'morning' | 'evening', RoutinesPage>>;
       /** The Routines computer's local time, `YYYY-MM-DDTHH:MM`. */
@@ -290,7 +366,8 @@ const who = (r: RoutineDef) =>
   r.projects === 'enrolled' ? 'enrolled projects' : r.projects.join(', ') || 'no projects';
 
 function describeRoutineChange(from: RoutineDef | null, to: RoutineDef | null): string {
-  if (!from && to) return `New routine “${to.name}” at ${to.time} for ${who(to)}`;
+  if (!from && to)
+    return `New routine “${to.name}” at ${to.time}${to.days ? `, ${daysText(to.days)}` : ''} for ${who(to)}`;
   if (from && !to) return `Remove the routine “${from.name}”`;
   if (!from || !to) return 'No change';
   const parts: string[] = [];
@@ -299,6 +376,8 @@ function describeRoutineChange(from: RoutineDef | null, to: RoutineDef | null): 
   if (from.enabled !== to.enabled) parts.push(to.enabled ? 'on' : 'off');
   if (from.instructions !== to.instructions) parts.push('new instructions');
   if (JSON.stringify(from.projects) !== JSON.stringify(to.projects)) parts.push(`for ${who(to)}`);
+  if (daysText(from.days) !== daysText(to.days))
+    parts.push(`${daysText(from.days)} → ${daysText(to.days)}`);
   return `${from.name}: ${parts.join(', ') || 'no change'}`;
 }
 

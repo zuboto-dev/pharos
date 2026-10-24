@@ -58,6 +58,7 @@ describe('MCP', () => {
       'report_asset_list',
       'report_asset_put',
       'report_guide',
+      'routine_propose',
       'run_report',
       'view_answer',
       'view_create',

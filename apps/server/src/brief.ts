@@ -103,7 +103,7 @@ export function projectBrief(
   };
   add(
     'In progress',
-    active.slice(0, 8).map((t) => `${t.data.title}${who(t)} (${t.id})`),
+    active.slice(0, 8).map((t) => `${t.data.title}${who(t)} (${t.id})${taskDetailLines(t.data)}`),
   );
   const working = [
     ...new Set(
@@ -119,6 +119,16 @@ export function projectBrief(
     'Updates, reviews, research results and reports go in Pharos as pages that show before they tell (report_guide); answer in chat with a line or two and the link. When the owner gives a standing rule or feedback for this project, add it to project.rules.',
   );
   return lines.join('\n');
+}
+
+/** An in-progress task's steps, checks and deliverables, indented under its line in the brief. */
+function taskDetailLines(data: Entity<'task'>['data']): string {
+  const out: string[] = [];
+  data.actions?.forEach((a, i) => out.push(`${i + 1}. ${a}`));
+  for (const c of data.acceptance ?? []) out.push(`Done when: ${c}`);
+  for (const d of data.deliverables ?? [])
+    out.push(`Produces: ${d.label}${d.kind ? ` (${d.kind})` : ''}${d.ref ? ` → ${d.ref}` : ''}`);
+  return out.map((l) => `\n  ${l}`).join('');
 }
 
 /** The briefs of the projects whose repository is this folder (a session's start hook). */

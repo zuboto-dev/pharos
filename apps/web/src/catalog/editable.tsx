@@ -247,19 +247,41 @@ export function EditableDate({ entity, field }: { entity: Entity; field: string 
 }
 
 /** A list of short lines (e.g. success criteria), edited as one line per item. */
-export function EditableList({ entity, field }: { entity: Entity; field: string }) {
+/**
+ * A list field edited as one item per line. `display` draws the saved items (a bulleted list by
+ * default); `toLine` and `fromLine` turn non-text items into a line and back (a line `fromLine`
+ * returns null for is dropped).
+ */
+export function EditableList<T = string>({
+  entity,
+  field,
+  display,
+  toLine = String,
+  fromLine = (line) => line as T,
+  addLabel = 'Add',
+  placeholder = 'One per line',
+}: {
+  entity: Entity;
+  field: string;
+  display?: (items: T[]) => ReactNode;
+  toLine?: (item: T) => string;
+  fromLine?: (line: string) => T | null;
+  addLabel?: string;
+  placeholder?: string;
+}) {
   const save = useSaveField(entity);
-  const items = ((entity.data as Record<string, unknown>)[field] as string[] | undefined) ?? [];
+  const items = ((entity.data as Record<string, unknown>)[field] as T[] | undefined) ?? [];
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
     if (draft === null) return;
-    save(
-      field,
-      draft
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean),
-    );
+    const next = draft
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map(fromLine)
+      .filter((v): v is T => v !== null);
+    // An emptied list that was never set stays unset.
+    if (next.length || items.length) save(field, next);
     setDraft(null);
   };
   if (draft !== null) {
@@ -278,7 +300,7 @@ export function EditableList({ entity, field }: { entity: Entity; field: string 
               setDraft(null);
             }
           }}
-          placeholder="One per line"
+          placeholder={placeholder}
           className={INPUT}
         />
         <div className="flex gap-2">
@@ -292,18 +314,24 @@ export function EditableList({ entity, field }: { entity: Entity; field: string 
       </div>
     );
   }
-  if (!items.length) return <AddButton label="Add" onClick={() => setDraft('')} />;
+  if (!items.length) return <AddButton label={addLabel} onClick={() => setDraft('')} />;
   return (
     <div className="group/edit flex items-start gap-1">
-      <ul className="list-disc space-y-0.5 pl-4">
-        {items.map((v, i) => (
-          <li key={i}>{v}</li>
-        ))}
-      </ul>
+      <div className="min-w-0">
+        {display ? (
+          display(items)
+        ) : (
+          <ul className="list-disc space-y-0.5 pl-4">
+            {items.map((v, i) => (
+              <li key={i}>{toLine(v)}</li>
+            ))}
+          </ul>
+        )}
+      </div>
       <button
         type="button"
         aria-label={`Edit ${words(field)}`}
-        onClick={() => setDraft(items.join('\n'))}
+        onClick={() => setDraft(items.map(toLine).join('\n'))}
         className={EDIT_HINT}
       >
         <Pencil className="size-3.5" />

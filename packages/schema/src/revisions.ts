@@ -16,7 +16,9 @@ const Ref = z
   .regex(/^[A-Za-z0-9_-]+$/)
   .describe(
     'Name for this new entity; later operations in the same call can use "$<ref>" as its id',
-  );
+  )
+  // Shared once in the apply schema's definitions instead of on every type's create.
+  .meta({ id: 'Ref' });
 
 /**
  * Types an author may only update (and create as CreateOnly allows), leaving out some fields:

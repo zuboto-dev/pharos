@@ -80,7 +80,8 @@ describe('MCP', () => {
     // update's fields are described once, in the create of the same type.
     // Raised from 50 000 on 2026-10-23 for decision.dependsOn, task.goalIds and project.rules
     // (connections and the owner's standing rules), and to 52 000 on 2026-10-24 for
-    // decision.items (the items a choice applies to, about 0.7k).
+    // decision.items (the items a choice applies to, about 0.7k). Task actions, acceptance and
+    // deliverables (about 1.1k) fit after a create's ref was shared once in definitions (-1.5k).
     expect(apply.length).toBeLessThan(52_000);
     expect(apply).toContain('"#/definitions/ProjectOptions"');
     expect(client.getInstructions()).toContain('apply');

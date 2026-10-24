@@ -4,6 +4,7 @@ export * from './decisions.js';
 export * from './relations.js';
 export * from './connections.js';
 export * from './task-answers.js';
+export * from './task-details.js';
 export * from './files.js';
 export * from './records.js';
 export * from './actions.js';

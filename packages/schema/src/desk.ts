@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DECISION, DecisionItemsInput, DecisionOption, type DecisionItem } from './decisions.js';
+import { TASK_DETAIL_FIELDS } from './task-details.js';
 
 /**
  * The desk (R16, docs/reframe/r16-desk.md): everything waiting on the owner in every project, in
@@ -155,5 +156,10 @@ export const AskOwner = z.strictObject({
   ),
   dependsOn: z.array(z.string()).optional().describe('Decisions this builds on'),
   viewId: z.string().optional().describe('A page that explains it (the desk links there)'),
+  // A task for the owner (no options): the steps and what makes it done are required in spirit
+  // (a warning without them), what it leaves is optional.
+  actions: TASK_DETAIL_FIELDS.actions.describe('A task: the steps for them, in order (required)'),
+  acceptance: TASK_DETAIL_FIELDS.acceptance.describe('A task: "done when" checks (required)'),
+  deliverables: TASK_DETAIL_FIELDS.deliverables,
 });
 export type AskOwner = z.infer<typeof AskOwner>;

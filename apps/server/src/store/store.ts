@@ -9,6 +9,7 @@ import {
   decisionIssues,
   decisionWarnings,
   localFileWarning,
+  taskDetailWarnings,
   type ApplyInput,
   type Author,
   type Change,
@@ -1434,6 +1435,18 @@ class Transaction {
         const data = (entity as Entity<'task'>).data;
         const local = data.desk ? localFileWarning(data.description) : undefined;
         if (local) out.push(`task ${id} ("${data.title}") ${local}`);
+        // An agent's task says what to do, when it's done and what it leaves (never refused:
+        // older tasks and the owner's own stay valid). An undo restores what was there.
+        if (this.revision.author.kind === 'agent' && this.revision.revertOf === null) {
+          const before = this.changes.find((c) => c.id === id)?.before as typeof data | null;
+          const project = this.store.get(data.projectId) as Entity<'project'> | null;
+          const meaning = (status: string | undefined) => meaningOf(project, 'task.status', status);
+          out.push(
+            ...taskDetailWarnings(before ?? null, data, meaning).map(
+              (w) => `task ${id} ("${data.title}") ${w}`,
+            ),
+          );
+        }
         continue;
       }
       if (entity?.type !== 'claim') continue;

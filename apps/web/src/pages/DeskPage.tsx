@@ -21,6 +21,12 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type MouseEvent } from 'react';
 import { Link, NavLink, useSearchParams } from 'react-router';
+import {
+  ItemChecklist,
+  selectionLine,
+  tickedIds,
+  useTicked,
+} from '../catalog/components/decision-items';
 import { OtherAnswerButton } from '../catalog/components/task-answer';
 import { Menu, MenuItem, MenuSeparator } from '../catalog/menu';
 import { Popover, usePopover } from '../catalog/popover';
@@ -194,8 +200,22 @@ function DeclineForm({
  * The answer at the end of a row: a decision's options (on a phone only the suggested one), a
  * task's Mark done and other answers, a sheet's way in.
  */
-function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) => void }) {
+function Answer({
+  item,
+  onDone,
+  selected,
+}: {
+  item: DeskItem;
+  onDone: (message: string) => void;
+  /** The items kept ticked, sent with the option they apply to. */
+  selected?: string[];
+}) {
   const { busy, error, send } = useDeskSend(onDone);
+  /** The selection goes with its option; none ticked can't choose it. */
+  const withItems = (optionId: string) =>
+    item.items && optionId === item.items.appliesTo && selected ? { selected } : {};
+  const blocked = (optionId: string) =>
+    Boolean(item.items && optionId === item.items.appliesTo && selected && !selected.length);
   const wide = useWide();
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const [decline, setDecline] = useState<DOMRect | null>(null);
@@ -222,7 +242,9 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
       .filter((o) => wide || o.id === item.recommendedOptionId);
     const more = options.filter((o) => !inline.includes(o));
     const choose = (o: (typeof options)[number], anchor: DOMRect) =>
-      o.asks ? setNote({ option: o, anchor }) : void send({ id: item.id, chosenOptionId: o.id });
+      o.asks
+        ? setNote({ option: o, anchor })
+        : void send({ id: item.id, chosenOptionId: o.id, ...withItems(o.id) });
     return (
       <div className="flex shrink-0 items-center gap-1.5">
         {failed}
@@ -232,8 +254,8 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
             <button
               key={o.id}
               type="button"
-              disabled={busy}
-              title={o.label}
+              disabled={busy || blocked(o.id)}
+              title={blocked(o.id) ? 'Tick at least one item' : o.label}
               onClick={(e: MouseEvent<HTMLButtonElement>) =>
                 choose(o, e.currentTarget.getBoundingClientRect())
               }
@@ -272,6 +294,7 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
               <MenuItem
                 plain
                 key={o.id}
+                disabled={blocked(o.id)}
                 onClick={() => {
                   const anchor = menu;
                   setMenu(null);
@@ -325,9 +348,12 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
               busy={busy}
               onCancel={() => setNote(null)}
               onSave={(text) =>
-                void send({ id: item.id, chosenOptionId: note.option.id, note: text }).then(
-                  (ok) => ok && setNote(null),
-                )
+                void send({
+                  id: item.id,
+                  chosenOptionId: note.option.id,
+                  note: text,
+                  ...withItems(note.option.id),
+                }).then((ok) => ok && setNote(null))
               }
             />
           </Popover>
@@ -385,58 +411,101 @@ function Answer({ item, onDone }: { item: DeskItem; onDone: (message: string) =>
  */
 function Row({ item, onDone }: { item: DeskItem; onDone: (message: string) => void }) {
   const Icon = KIND_ICON[item.kind];
+  const items = item.items;
+  const [open, setOpen] = useState(false);
+  const [ticked, setTicked] = useTicked(items?.list);
+  const target = items && item.options?.find((o) => o.id === items.appliesTo);
+  const panelId = `desk-items-${item.id}`;
   return (
-    <li
-      data-desk-item={item.kind}
-      className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 sm:gap-3"
-    >
-      <Tooltip label={KIND_NAME[item.kind]} className="flex shrink-0">
-        <span tabIndex={0} className="rounded-control text-faint">
-          <Icon aria-label={KIND_NAME[item.kind]} className="size-3.5" />
-        </span>
-      </Tooltip>
-      <Tooltip label={item.title} detail={item.ask} className="flex min-w-24 flex-1 sm:min-w-56">
-        <Link
-          to={item.href}
-          className="min-w-0 truncate text-sm font-medium text-ink hover:underline"
-        >
-          {item.title}
-        </Link>
-      </Tooltip>
-      {item.note && (
-        // It builds on something unanswered, was assumed, or may be outdated (relationNotes).
-        <Tooltip label={item.note} className="flex shrink-0">
-          <span tabIndex={0} data-desk-note="" className="text-warn">
-            <Link2 aria-label={item.note} className="size-3.5" />
+    <li data-desk-item={item.kind}>
+      <div className="flex min-h-11 items-center gap-2.5 px-3 py-1.5 sm:gap-3">
+        <Tooltip label={KIND_NAME[item.kind]} className="flex shrink-0">
+          <span tabIndex={0} className="rounded-control text-faint">
+            <Icon aria-label={KIND_NAME[item.kind]} className="size-3.5" />
           </span>
         </Tooltip>
-      )}
-      {item.gate && (
-        <Tooltip label="Only you can do this" className="flex shrink-0">
-          <span tabIndex={0} className="text-warn">
-            <Lock aria-label="only you" className="size-3" />
-          </span>
+        <Tooltip label={item.title} detail={item.ask} className="flex min-w-24 flex-1 sm:min-w-56">
+          <Link
+            to={item.href}
+            className="min-w-0 truncate text-sm font-medium text-ink hover:underline"
+          >
+            {item.title}
+          </Link>
         </Tooltip>
-      )}
-      {item.project && (
-        <span className="hidden max-w-36 shrink-0 truncate text-xs text-muted sm:block">
-          {item.project}
-        </span>
-      )}
-      <span className="hidden w-12 shrink-0 text-right text-xs text-muted tabular-nums sm:block">
-        {item.minutes !== undefined && (
-          <span title="About how long it takes">
-            ~{formatMinutes(item.minutes).replace(' min', 'm')}
+        {item.note && (
+          // It builds on something unanswered, was assumed, or may be outdated (relationNotes).
+          <Tooltip label={item.note} className="flex shrink-0">
+            <span tabIndex={0} data-desk-note="" className="text-warn">
+              <Link2 aria-label={item.note} className="size-3.5" />
+            </span>
+          </Tooltip>
+        )}
+        {item.gate && (
+          <Tooltip label="Only you can do this" className="flex shrink-0">
+            <span tabIndex={0} className="text-warn">
+              <Lock aria-label="only you" className="size-3" />
+            </span>
+          </Tooltip>
+        )}
+        {item.project && (
+          <span className="hidden max-w-36 shrink-0 truncate text-xs text-muted sm:block">
+            {item.project}
           </span>
         )}
-      </span>
-      {item.overdue && (
-        <span className="shrink-0 text-xs font-medium text-warn tabular-nums">
-          <span className="sr-only">waiting </span>
-          {waited(item.since)}
+        <span className="hidden w-12 shrink-0 text-right text-xs text-muted tabular-nums sm:block">
+          {item.minutes !== undefined && (
+            <span title="About how long it takes">
+              ~{formatMinutes(item.minutes).replace(' min', 'm')}
+            </span>
+          )}
         </span>
+        {item.overdue && (
+          <span className="shrink-0 text-xs font-medium text-warn tabular-nums">
+            <span className="sr-only">waiting </span>
+            {waited(item.since)}
+          </span>
+        )}
+        {items && (
+          // Which items the choice applies to: the count on the row, the checklist under it.
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={panelId}
+            aria-label={`Items: ${selectionLine(items.list, ticked)}`}
+            title="Choose which items"
+            onClick={() => setOpen((o) => !o)}
+            className={clsx(
+              ROW_BUTTON,
+              PLAIN,
+              'tabular-nums',
+              ticked.size < items.list.length && 'border-sky-300 dark:border-sky-800',
+            )}
+          >
+            <ListChecks aria-hidden className="size-3.5" />
+            {ticked.size}/{items.list.length}
+            <ChevronDown
+              aria-hidden
+              className={clsx('hidden size-3 transition-transform sm:block', open && 'rotate-180')}
+            />
+          </button>
+        )}
+        <Answer
+          item={item}
+          onDone={onDone}
+          {...(items ? { selected: tickedIds(items.list, ticked) } : {})}
+        />
+      </div>
+      {items && open && (
+        <div id={panelId} className="px-3 pb-2.5 sm:pl-9">
+          <ItemChecklist
+            compact
+            list={items.list}
+            ticked={ticked}
+            onChange={setTicked}
+            {...(target ? { optionLabel: target.label } : {})}
+          />
+        </div>
       )}
-      <Answer item={item} onDone={onDone} />
     </li>
   );
 }

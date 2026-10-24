@@ -656,3 +656,76 @@ describe('a decision in the details panel', () => {
     expect(screen.queryByRole('button', { name: 'Choose Checklist' })).toBeNull();
   });
 });
+
+describe('DecisionBlock with items to pick', () => {
+  const list = [
+    { id: 'web/dist', label: 'web/dist', detail: '200 MB · untouched 9 days' },
+    { id: 'cache', label: '.cache', detail: '80 MB' },
+    { id: 'tmp/shots', label: 'tmp/shots', detail: '32 MB' },
+  ];
+  const trash = proposal({
+    title: 'Clean up 3 items in tutti?',
+    options: [
+      { id: 'move', label: 'Move to Trash' },
+      { id: 'keep', label: 'Keep them' },
+    ],
+    recommendedOptionId: 'move',
+    items: { list },
+  });
+  const boxes = () =>
+    within(screen.getByRole('group', { name: 'Items for “Move to Trash”' })).getAllByRole(
+      'checkbox',
+    ) as HTMLInputElement[];
+
+  it('ticks every item at first; select none blocks the choice, select all brings them back', () => {
+    setup(trash);
+    expect(boxes().map((b) => b.checked)).toEqual([true, true, true]);
+    expect(screen.getByText('3 of 3 selected · 312 MB')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Select none' }));
+    expect(boxes().every((b) => !b.checked)).toBe(true);
+    expect(screen.getByText('0 of 3 selected')).toBeTruthy();
+    const move = screen.getByRole('button', { name: /^Choose Move to Trash/ }) as HTMLButtonElement;
+    expect(move.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(boxes().every((b) => b.checked)).toBe(true);
+    expect(move.disabled).toBe(false);
+  });
+
+  it('saves the ticked ids with the choice, in one revision that says how many', () => {
+    const { apply } = setup(trash);
+    fireEvent.click(boxes()[1]!);
+    expect(screen.getByText('2 of 3 selected · 232 MB')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Move to Trash for 2 of 3' }));
+    const [message, operations] = apply.mock.calls[0]!;
+    expect(message).toBe('Choose “Move to Trash”: 2 of 3 · Clean up 3 items in tutti?');
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      op: 'update',
+      id: 'dec_empty',
+      data: { chosenOptionId: 'move', items: { list, selected: ['web/dist', 'tmp/shots'] } },
+    });
+  });
+
+  it('another option saves no selection', () => {
+    const { apply } = setup(trash);
+    fireEvent.click(boxes()[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Keep them' }));
+    const [message, operations] = apply.mock.calls[0]!;
+    expect(message).toBe('Choose “Keep them”: Clean up 3 items in tutti?');
+    expect(operations[0]).toMatchObject({ data: { items: { list } } });
+    expect(JSON.stringify(operations[0])).not.toContain('selected');
+  });
+
+  it('once chosen, says how many items it went with and which were left out', () => {
+    setup(
+      proposal({
+        ...trash.data,
+        chosenOptionId: 'move',
+        status: 'accepted',
+        items: { list, selected: ['web/dist'] },
+      }),
+    );
+    expect(screen.queryByRole('group', { name: /Items for/ })).toBeNull();
+    expect(screen.getByText('For 1 of 3 items (2 left out)')).toBeTruthy();
+  });
+});

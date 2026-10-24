@@ -492,6 +492,11 @@ When the reader has to choose, store the choice on a decision and show it in a D
   \`asks\`: the question they answer when they choose it ("Which steps failed, and what did you
   see?"). Choosing it then opens a box for the note, and the note is required. The reader can add
   a note to any choice; never write "say it in your answer" in an option's summary.
+- When the choice applies to a set of things (the folders a cleanup would move), give the
+  decision \`items\`: \`{list: [{id, label, detail}], appliesTo}\` (ids stable, e.g. a relative
+  path; detail one line like "312 MB · untouched 9 days"; appliesTo the option, default the
+  recommended one). The reader unticks what to keep; choosing that option saves the ticked ids
+  in \`items.selected\`. Act on exactly those; agents can't set \`selected\`.
 - Only the reader chooses, writes a note or another answer, or decides later; Pharos refuses
   \`chosenOptionId\`, \`note\`, \`answer\` and \`deferredUntil\` from agents, and an "accepted"
   status on a decision with options. Read the answer back from the decision (project_snapshot

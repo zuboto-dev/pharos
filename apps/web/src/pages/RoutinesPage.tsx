@@ -21,6 +21,7 @@ import {
   type RoutinesConfig,
   type RoutinesFolder,
   type RoutinesPharos,
+  type RoutinesMachine,
   type RoutinesProject,
   type RoutineProposalView,
   type RoutinesCurrent,
@@ -57,6 +58,7 @@ import {
   Sunset,
   Trash2,
   Undo2,
+  Server,
   Wallet,
   X,
   type LucideIcon,
@@ -324,6 +326,13 @@ export function diffConfig(base: Draft, draft: Draft, editable = true): Routines
       });
     if (p.hours !== was.hours)
       changes.push({ field: 'hours', project: p.name, from: was.hours, to: p.hours });
+    if ((p.machine ?? null) !== (was.machine ?? null))
+      changes.push({
+        field: 'machine',
+        project: p.name,
+        from: was.machine ?? null,
+        to: p.machine ?? null,
+      });
   }
   if (editable) {
     for (const r of draft.routines) {
@@ -1740,8 +1749,11 @@ function ProjectDetail({
   onLog,
   onRemove,
   onEnrolled,
+  machines = [],
 }: {
   project: RoutinesProject;
+  /** The owner's other machines (routines.json `machines`): where this project's routines run. */
+  machines?: RoutinesMachine[];
   status: RoutinesProjectStatus | undefined;
   routines: RoutineDef[];
   pharos: RoutinesPharos | undefined;
@@ -1918,6 +1930,24 @@ function ProjectDetail({
             <span className="text-muted">Nothing</span>
           )}
         </Fact>
+        {machines.length > 0 && (
+          <Fact icon={Server} label="Runs on">
+            <select
+              aria-label={`Where ${project.name}'s routines run`}
+              data-machine=""
+              value={project.machine ?? ''}
+              onChange={(e) => set({ machine: e.target.value || undefined })}
+              className="rounded-control border border-line bg-surface px-1.5 py-0.5 text-sm"
+            >
+              <option value="">This Mac</option>
+              {machines.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </Fact>
+        )}
         <Fact icon={Wallet} label="Night budget: $ cap and hours handed over">
           {budget ? (
             <span className="flex items-center gap-1.5">
@@ -2546,6 +2576,7 @@ export function RoutinesPage() {
             onLog={(file) => void openLog(file)}
             onRemove={missing ? () => setRemoving(p) : undefined}
             onEnrolled={(enrolled) => setEnrolled(p, enrolled)}
+            machines={draft?.machines ?? []}
           />
         )}
       </li>

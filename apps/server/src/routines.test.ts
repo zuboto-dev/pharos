@@ -337,6 +337,26 @@ describe('applyChanges', () => {
   });
 });
 
+describe('where a project runs', () => {
+  it('sets a project to one of the machines and back, and refuses an unknown one', () => {
+    const conf = {
+      ...CONFIG(),
+      machines: [{ id: 'axion-01', name: 'axion-01', host: 'axion-01' }],
+    };
+    const there = applyChanges(conf, [
+      { field: 'machine', project: 'bike', from: null, to: 'axion-01' },
+    ]);
+    expect(there.projects[1]!.machine).toBe('axion-01');
+    const back = applyChanges(there, [
+      { field: 'machine', project: 'bike', from: 'axion-01', to: null },
+    ]);
+    expect('machine' in back.projects[1]!).toBe(false);
+    expect(() =>
+      applyChanges(conf, [{ field: 'machine', project: 'bike', from: null, to: 'nowhere' }]),
+    ).toThrow(/No machine "nowhere"/);
+  });
+});
+
 describe('routines the owner defines', () => {
   const weekly = {
     id: 'weekly',

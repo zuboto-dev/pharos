@@ -391,6 +391,15 @@ export function applyChanges(conf: RoutinesConfig, changes: RoutinesChange[]): R
         if (project) Object.assign(project, { [ch.field]: ch.to });
         break;
       }
+      case 'machine': {
+        const project = next.projects.find((p) => p.name === ch.project);
+        if (!project) break;
+        if (ch.to && !(next.machines ?? []).some((m) => m.id === ch.to))
+          throw new SaveRefused(400, 'invalid', `No machine "${ch.to}" in routines.json`);
+        if (ch.to) project.machine = ch.to;
+        else delete project.machine;
+        break;
+      }
       case 'schedule':
         next.schedule[ch.routine] = ch.to;
         break;

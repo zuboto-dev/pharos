@@ -571,6 +571,18 @@ describe('routine helpers', () => {
       { field: 'dispatch', kind: 'develop', level: 'hard', from: 'opus', to: 'sonnet' },
     ]);
   });
+
+  it('saves where a project runs as one change, and back to this Mac as null', () => {
+    const base = CONFIG();
+    const draft = CONFIG();
+    draft.projects[1]!.machine = 'axion-01';
+    expect(diffConfig(base, draft)).toEqual([
+      { field: 'machine', project: 'bike', from: null, to: 'axion-01' },
+    ]);
+    expect(diffConfig(draft, base)).toEqual([
+      { field: 'machine', project: 'bike', from: 'axion-01', to: null },
+    ]);
+  });
 });
 
 describe('rows follow Pharos’s folders', () => {

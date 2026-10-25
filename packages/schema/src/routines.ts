@@ -176,7 +176,12 @@ export type RoutinesProject = {
   note?: string;
   pm?: { type: string; url?: string; project?: string } | null;
   cleanup?: number;
+  /** The id of one of `machines` its routines run on; absent: the Routines computer itself. */
+  machine?: string;
 };
+
+/** Another computer of the owner's that routines can run on (over SSH), e.g. axion-01. */
+export type RoutinesMachine = { id: string; name: string; host: string; home?: string };
 
 export type RoutinesConfig = {
   schedule: Partial<Record<Routine, string>> & { timezone?: string };
@@ -184,6 +189,8 @@ export type RoutinesConfig = {
   dispatch: Record<string, Partial<Record<Difficulty, string>>>;
   cleanup?: { level?: number; scratch_days?: number };
   projects: RoutinesProject[];
+  /** The owner's other machines a project can run on (Routines `machines`). */
+  machines?: RoutinesMachine[];
   /** The owner's routines (newer Routines apps); see `routinesOf` for older ones. */
   routines?: RoutineDef[];
   [key: string]: unknown;
@@ -314,6 +321,16 @@ export const RoutinesChange = z.discriminatedUnion('field', [
     from: z.number(),
     to: z.number().min(0).max(24),
   }),
+  // Where a project's routines run: a machine id from `machines`, or null for this computer.
+  z.object({
+    field: z.literal('machine'),
+    project: Name,
+    from: z.string().nullable(),
+    to: z
+      .string()
+      .regex(/^[\w.-]{1,64}$/)
+      .nullable(),
+  }),
   z.object({
     field: z.literal('schedule'),
     routine: z.enum(ROUTINES),
@@ -367,6 +384,8 @@ export function describeRoutinesChange(change: RoutinesChange): string {
       return `${change.project}: night budget ${money(change.from)} → ${money(change.to)}`;
     case 'hours':
       return `${change.project}: night hours ${change.from} h → ${change.to} h`;
+    case 'machine':
+      return `${change.project}: runs on ${change.to ?? 'this computer'} (was ${change.from ?? 'this computer'})`;
     case 'schedule':
       return `${ROUTINE_NAMES[change.routine]} at ${change.from ?? 'no time'} → ${change.to}`;
     case 'timezone':
@@ -410,6 +429,8 @@ export function currentRoutinesValue(config: RoutinesConfig, change: RoutinesCha
     case 'budget_usd':
     case 'hours':
       return config.projects.find((p) => p.name === change.project)?.[change.field];
+    case 'machine':
+      return config.projects.find((p) => p.name === change.project)?.machine ?? null;
     case 'schedule':
       return config.schedule?.[change.routine];
     case 'timezone':

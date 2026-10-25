@@ -593,20 +593,23 @@ export function ViewTabs({
                 close();
                 navigate(`/projects/${projectId}/views/${view.id}`);
               }}
+              end={
+                <>
+                  <AsksBadge n={asks.get(view.id) ?? 0} />
+                  {working.has(view.id) ? (
+                    <PresenceDot className="size-1.5" />
+                  ) : (
+                    changed.has(view.id) && <ChangedDot />
+                  )}
+                </>
+              }
             >
               {view.data.name}
-              <AsksBadge n={asks.get(view.id) ?? 0} className="ml-1.5 align-middle" />
               {working.has(view.id) && (
-                <>
-                  <PresenceDot className="ml-1.5 size-1.5 align-middle" />
-                  <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
-                </>
+                <span className="sr-only"> ({workingLine(working.get(view.id)!, 'it')})</span>
               )}
               {!working.has(view.id) && changed.has(view.id) && (
-                <>
-                  <ChangedDot className="ml-1.5 align-middle" />
-                  <span className="sr-only"> ({CHANGED_TEXT})</span>
-                </>
+                <span className="sr-only"> ({CHANGED_TEXT})</span>
               )}
             </MenuItem>
           ))}

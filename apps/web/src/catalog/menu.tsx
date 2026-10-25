@@ -99,9 +99,12 @@ export function MenuItem({
   disabled,
   current,
   plain,
+  end,
 }: {
   icon?: LucideIcon;
   children: ReactNode;
+  /** Marks after the label (counts, dots) that stay in sight when a long label truncates. */
+  end?: ReactNode;
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
@@ -129,6 +132,7 @@ export function MenuItem({
         <span className="size-3.5 shrink-0" />
       )}
       <span className="min-w-0 truncate">{children}</span>
+      {end && <span className="flex shrink-0 items-center gap-1.5">{end}</span>}
     </button>
   );
 }

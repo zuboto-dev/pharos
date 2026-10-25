@@ -161,5 +161,6 @@ export const AskOwner = z.strictObject({
   actions: TASK_DETAIL_FIELDS.actions.describe('A task: the steps for them, in order (required)'),
   acceptance: TASK_DETAIL_FIELDS.acceptance.describe('A task: "done when" checks (required)'),
   deliverables: TASK_DETAIL_FIELDS.deliverables,
+  allowCommands: TASK_DETAIL_FIELDS.allowCommands,
 });
 export type AskOwner = z.infer<typeof AskOwner>;

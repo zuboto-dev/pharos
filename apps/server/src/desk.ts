@@ -531,6 +531,7 @@ export function askOwner(
           ...(input.actions?.length ? { actions: input.actions } : {}),
           ...(input.acceptance?.length ? { acceptance: input.acceptance } : {}),
           ...(input.deliverables?.length ? { deliverables: input.deliverables } : {}),
+          ...(input.allowCommands?.length ? { allowCommands: input.allowCommands } : {}),
         },
       },
     ],

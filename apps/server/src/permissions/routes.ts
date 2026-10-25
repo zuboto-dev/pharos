@@ -1,5 +1,6 @@
 import {
   PermissionAskAnswer,
+  PermissionCommandsInput,
   PermissionAskInput,
   PermissionChangeInput,
   PermissionTarget,
@@ -65,6 +66,13 @@ export function permissionRoutes(service: PermissionService, asks?: PermissionAs
   );
   api.post('/write', async (c) =>
     c.json(await service.write(PermissionWriteInput.parse(await c.req.json()))),
+  );
+  // A task's "Allow these commands" button (its allowCommands), in the project's own folder.
+  api.post('/commands/preview', async (c) =>
+    c.json(service.commandsPreview(PermissionCommandsInput.parse(await c.req.json()))),
+  );
+  api.post('/commands/write', async (c) =>
+    c.json(service.commandsWrite(PermissionCommandsInput.parse(await c.req.json()))),
   );
   api.post('/undo', async (c) =>
     c.json(service.undo(PermissionUndoInput.parse(await c.req.json()).id)),

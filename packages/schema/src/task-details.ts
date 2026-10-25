@@ -44,6 +44,13 @@ export const TASK_DETAIL_FIELDS = {
     .describe(
       'The acceptance statements checked off, word for word; when every one is, Pharos marks the task done',
     ),
+  allowCommands: z
+    .array(z.string().trim().min(1).max(TASK_DETAILS.stepChars))
+    .max(TASK_DETAILS.items)
+    .optional()
+    .describe(
+      "Commands the owner should allow for agents in this project's folder, exactly as agents run them; Pharos shows one button that writes the matching rules, so the steps need not ask them to open Settings",
+    ),
   deliverables: z
     .array(Deliverable)
     .max(TASK_DETAILS.items)

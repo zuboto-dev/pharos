@@ -428,7 +428,7 @@ function EntityHistory({ id }: { id: string }) {
 function Raised({ entity }: { entity: Entity }) {
   const revision = useResource<RevisionSummary>(`/api/revisions/${entity.createdRev}`);
   const rev = revision.data;
-  const Icon = rev ? AUTHOR_ICONS[rev.author.kind] : null;
+  const Icon = rev?.author ? AUTHOR_ICONS[rev.author.kind] : null;
   const edited = entity.updatedRev !== entity.createdRev;
   return (
     <div className="-mt-3 space-y-0.5 text-xs text-muted" data-testid="raised">

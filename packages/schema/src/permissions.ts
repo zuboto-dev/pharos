@@ -206,6 +206,41 @@ export type PermissionWriteInput = z.infer<typeof PermissionWriteInput>;
 
 export const PermissionUndoInput = z.strictObject({ id: z.string().min(1).max(64) });
 
+/**
+ * A task's commands to allow (its `allowCommands`), for the task's own button: each command
+ * becomes the rule Pharos would suggest for it, written only to the project folder's own
+ * settings.local.json, only when the owner presses the button.
+ */
+export const PermissionCommandsInput = z.strictObject({
+  projectId: z.string().min(1).max(64),
+  commands: z.array(z.string().trim().min(1).max(300)).min(1).max(20),
+});
+export type PermissionCommandsInput = z.infer<typeof PermissionCommandsInput>;
+
+export type PermissionCommandRow = {
+  command: string;
+  /** The rule Pharos writes for it (as the Permissions page would suggest). */
+  rule: string;
+  summary: string;
+  risk: PermissionRisk;
+  riskWhy: string;
+  /** False: no rule can allow it safely (it runs any code, or its shape can't be matched). */
+  allowable: boolean;
+  reason?: string;
+  /** Already allowed in that file. */
+  unchanged: boolean;
+};
+
+export type PermissionCommandsPreview = {
+  folder: string;
+  path: string;
+  rows: PermissionCommandRow[];
+};
+
+export type PermissionCommandsResult = PermissionCommandsPreview & {
+  records: PermissionWriteRecord[];
+};
+
 export type PermissionWriteResult = { preview: PermissionPreview; record: PermissionWriteRecord };
 
 // ---- Live asks (the PermissionRequest hook) ----

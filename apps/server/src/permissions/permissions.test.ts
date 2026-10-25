@@ -17,6 +17,8 @@ import type {
   PermissionPreview,
   PermissionWriteRecord,
   PermissionWriteResult,
+  PermissionCommandsPreview,
+  PermissionCommandsResult,
   PermissionsOverview,
 } from '@pharos/schema';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -644,5 +646,73 @@ describe('edge cases', () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+});
+
+describe("a task's Allow button", () => {
+  function project(path = repo): string {
+    const { created } = store.apply({ kind: 'human', name: 'me' }, {
+      message: 'test',
+      operations: [
+        { op: 'create', type: 'repository', ref: 'r', data: { name: 'Shop', path } },
+        {
+          op: 'create',
+          type: 'project',
+          ref: 'p',
+          data: { name: 'Shop site', repositoryId: '$r' },
+        },
+      ],
+    } as never);
+    return created.p!;
+  }
+
+  it('shows each command as the rule Pharos suggests, with its risk, and what it cannot allow', async () => {
+    const projectId = project();
+    const res = await request('POST', '/commands/preview', {
+      projectId,
+      commands: ['npx pnpm@12.9.1 test', 'git log -3', 'bash -c "anything"'],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PermissionCommandsPreview;
+    expect(body.path).toBe(join(repo, '.claude/settings.local.json'));
+    expect(body.rows.map((r) => [r.rule, r.allowable])).toEqual([
+      [bashRule('npx pnpm@12.9.1 test').rule, true],
+      [bashRule('git log -3').rule, true],
+      [bashRule('bash -c "anything"').rule, false],
+    ]);
+    expect(body.rows[0]!.risk).toMatch(/low|medium|high/);
+  });
+
+  it('writes only the allowable rules, to that folder only, and Undo takes them back', async () => {
+    const projectId = project();
+    const res = await request('POST', '/commands/write', {
+      projectId,
+      commands: ['npx pnpm@12.9.1 test', 'bash -c "anything"'],
+    });
+    const body = (await res.json()) as PermissionCommandsResult;
+    expect(body.records.map((r) => r.rule)).toEqual([bashRule('npx pnpm@12.9.1 test').rule]);
+    const file = JSON.parse(readFileSync(join(repo, '.claude/settings.local.json'), 'utf8'));
+    expect(file.permissions.allow).toEqual([bashRule('npx pnpm@12.9.1 test').rule]);
+    expect(existsSync(join(claudeHome, 'settings.json'))).toBe(false); // never the user's file
+    // Pressing again writes nothing more.
+    const again = (await (
+      await request('POST', '/commands/write', { projectId, commands: ['npx pnpm@12.9.1 test'] })
+    ).json()) as PermissionCommandsResult;
+    expect(again.records).toEqual([]);
+    expect(again.rows[0]!.unchanged).toBe(true);
+    expect((await request('POST', '/undo', { id: body.records[0]!.id })).status).toBe(200);
+  });
+
+  it('is the owner’s alone, and refuses a project with no folder here', async () => {
+    const projectId = project(join(base, 'nowhere'));
+    const agent = await request(
+      'POST',
+      '/commands/write',
+      { projectId, commands: ['git log'] },
+      { 'x-pharos-author': 'agent:Claude Code' },
+    );
+    expect(agent.status).toBe(403);
+    const none = await request('POST', '/commands/preview', { projectId, commands: ['git log'] });
+    expect(none.status).toBe(400);
   });
 });

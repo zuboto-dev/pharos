@@ -3,6 +3,9 @@ import {
   type Deliverable,
   type DeliverableKind,
   type Entity,
+  type PermissionCommandsPreview,
+  type PermissionCommandsResult,
+  type PermissionWriteRecord,
   type RevisionSummary,
 } from '@pharos/schema';
 import {
@@ -16,12 +19,13 @@ import {
   SquareCheck,
   type LucideIcon,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import { useResource } from '../lib/api';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ApiError, ownerSend, useResource } from '../lib/api';
 import { dateTime } from '../lib/format';
 import { useViewData } from './context';
 import { EditableList, INPUT } from './editable';
 import { AUTHOR_ICONS } from './history';
+import { RISK } from './risk';
 import { BUTTON, Markdown } from './ui';
 
 /**
@@ -54,6 +58,11 @@ export function TaskDetails({ task }: { task: Entity<'task'> }) {
           )}
         />
       </Part>
+      {task.data.allowCommands?.length ? (
+        <Part title="Allow for agents">
+          <AllowCommands task={task} commands={task.data.allowCommands} />
+        </Part>
+      ) : null}
       <Part title="Done when">
         <EditableList
           entity={task}
@@ -69,6 +78,134 @@ export function TaskDetails({ task }: { task: Entity<'task'> }) {
     </div>
   );
 }
+
+/**
+ * The commands a task asks the owner to allow, with one button: Pharos turns each into the rule
+ * Settings → Agent permissions would suggest, shows its risk, and on the press writes the
+ * allowable ones to the project folder's own settings.local.json (owner-only routes). A comment
+ * on the task records what was written; Undo takes it back.
+ */
+function AllowCommands({ task, commands }: { task: Entity<'task'>; commands: string[] }) {
+  const { actions } = useViewData();
+  const body = { projectId: task.data.projectId, commands };
+  const key = JSON.stringify(body);
+  const [preview, setPreview] = useState<PermissionCommandsPreview | null>(null);
+  const [records, setRecords] = useState<PermissionWriteRecord[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    ownerSend<PermissionCommandsPreview>('/api/permissions/commands/preview', JSON.parse(key))
+      .then((p) => live && setPreview(p))
+      .catch((err: unknown) => live && setError(errorText(err)));
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  if (error) return <p className="text-sm text-danger">{error}</p>;
+  if (!preview) return <p className="text-sm text-muted">Checking these commands…</p>;
+  const toWrite = preview.rows.filter((r) => r.allowable && !r.unchanged);
+  const allow = async () => {
+    setBusy(true);
+    try {
+      const result = await ownerSend<PermissionCommandsResult>(
+        '/api/permissions/commands/write',
+        body,
+      );
+      setPreview(result);
+      setRecords(result.records);
+      if (result.records.length)
+        await actions.apply(
+          `Allowed ${result.records.length} command rules for “${task.data.title}”`,
+          [
+            {
+              op: 'create',
+              type: 'comment',
+              data: {
+                projectId: task.data.projectId,
+                taskId: task.id,
+                body:
+                  `Allowed in \`${result.path}\`:\n\n` +
+                  result.records.map((r) => `- \`${r.rule}\``).join('\n'),
+              },
+            },
+          ],
+        );
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const undo = async () => {
+    setBusy(true);
+    try {
+      for (const r of records ?? []) await ownerSend('/api/permissions/undo', { id: r.id });
+      setRecords(null);
+      setPreview(
+        await ownerSend<PermissionCommandsPreview>('/api/permissions/commands/preview', body),
+      );
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2" data-allow-commands="">
+      <ul className="space-y-1.5 text-sm">
+        {preview.rows.map((r) => (
+          <li key={r.rule} className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <code className="rounded bg-sunken px-1 py-0.5 text-xs break-all">{r.rule}</code>
+              {r.unchanged ? (
+                <span className="text-xs text-emerald-700 dark:text-emerald-300">Allowed</span>
+              ) : r.allowable ? (
+                <span className={`rounded-full px-1.5 text-[11px] ${RISK[r.risk].className}`}>
+                  {RISK[r.risk].label}
+                </span>
+              ) : (
+                <span className="text-xs text-danger">Can’t be allowed</span>
+              )}
+            </div>
+            <p className="text-xs text-muted">
+              {r.allowable ? r.summary : (r.reason ?? r.riskWhy)}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {records?.length ? (
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <SquareCheck aria-hidden className="size-3.5 text-emerald-600" />
+          Allowed {records.length} in this project’s folder only.
+          <button
+            type="button"
+            disabled={busy}
+            onClick={undo}
+            className="text-accent-strong hover:underline"
+          >
+            Undo
+          </button>
+        </p>
+      ) : toWrite.length ? (
+        <div className="space-y-1">
+          <button type="button" disabled={busy} onClick={allow} className={BUTTON.primary}>
+            Allow {toWrite.length} {toWrite.length === 1 ? 'command' : 'commands'}
+          </button>
+          <p className="text-xs text-faint">
+            Written to <code>{preview.path.replace(/^\/Users\/[^/]+/, '~')}</code>, this folder
+            only.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted">Nothing left to allow here.</p>
+      )}
+    </div>
+  );
+}
+
+const errorText = (err: unknown) =>
+  err instanceof ApiError ? err.message : 'Couldn’t reach the server';
 
 /** The "done when" checks as boxes to tick; all ticked makes the task done (Store.checksDone). */
 function Checklist({ task, items }: { task: Entity<'task'>; items: string[] }) {

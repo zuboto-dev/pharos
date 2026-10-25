@@ -9,6 +9,10 @@ import {
   PERMISSION_WINDOW_DAYS,
   type PermissionAction,
   type PermissionChangeInput,
+  type PermissionCommandRow,
+  type PermissionCommandsInput,
+  type PermissionCommandsPreview,
+  type PermissionCommandsResult,
   type PermissionFile,
   type PermissionFolder,
   type PermissionPreview,
@@ -25,7 +29,7 @@ import {
 } from '@pharos/schema';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
-import { covers, example, type Suggested } from './rules.js';
+import { bashRule, covers, example, type Suggested } from './rules.js';
 import {
   hashText,
   planChange,
@@ -632,6 +636,64 @@ export class PermissionService {
     if (input.target === 'user')
       out.push('~/.claude/settings.json applies in every folder you run Claude Code in.');
     return out;
+  }
+
+  /** The project's folder: its repository's path, as an absolute path that exists. */
+  private projectFolder(projectId: string): string {
+    const project = this.store.get(projectId);
+    if (!project || project.type !== 'project')
+      throw new PharosError('not_found', 'No such project');
+    const repoId = (project.data as { repositoryId?: string }).repositoryId;
+    const repo = repoId ? this.store.get(repoId) : null;
+    const raw = (repo?.data as { path?: string } | undefined)?.path?.trim();
+    const path = raw ? this.absolute(raw) : '';
+    if (!path.startsWith('/') || !isDir(path))
+      throw new PharosError('invalid', 'This project has no folder on this computer');
+    return path;
+  }
+
+  /** What a task's button would write: each command's suggested rule in the folder's own file. */
+  commandsPreview(input: PermissionCommandsInput): PermissionCommandsPreview {
+    const folder = this.projectFolder(input.projectId);
+    const path = join(folder, PERMISSION_TARGETS.local.file);
+    const seen = new Set<string>();
+    const rows: PermissionCommandRow[] = [];
+    for (const command of input.commands) {
+      const s = bashRule(command);
+      if (seen.has(s.rule)) continue;
+      seen.add(s.rule);
+      const read = readSettings(path);
+      const unchanged = s.allowable && planChange(read, s.rule, 'allow').unchanged;
+      rows.push({
+        command,
+        rule: s.rule,
+        ...explain(s),
+        allowable: s.allowable,
+        ...(s.reason ? { reason: s.reason } : {}),
+        unchanged,
+      });
+    }
+    return { folder, path, rows };
+  }
+
+  /** Presses the task's button: writes every allowable rule not there yet, each with its record. */
+  commandsWrite(input: PermissionCommandsInput): PermissionCommandsResult {
+    const preview = this.commandsPreview(input);
+    const records: PermissionWriteRecord[] = [];
+    for (const row of preview.rows) {
+      if (!row.allowable || row.unchanged) continue;
+      const change = this.previewAt({
+        folderId: folderId(preview.folder),
+        rule: row.rule,
+        action: 'allow',
+        target: 'local',
+        folder: preview.folder,
+        tool: 'Bash',
+        allowable: true,
+      });
+      records.push(this.commit(change, change.hash).record);
+    }
+    return { ...preview, records };
   }
 
   async write(input: PermissionWriteInput): Promise<PermissionWriteResult> {

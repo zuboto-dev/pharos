@@ -147,6 +147,70 @@ describe('task details in the drawer', () => {
     ]);
   });
 
+  it('offers one button for the commands a task asks you to allow, with their risk', async () => {
+    const calls: [string, unknown][] = [];
+    const rows = [
+      {
+        command: 'npx pnpm@12.9.1 test',
+        rule: 'Bash(npx pnpm@12.9.1 test:*)',
+        summary: 'Runs the tests',
+        risk: 'low',
+        riskWhy: 'Reads and runs tests',
+        allowable: true,
+        unchanged: false,
+      },
+      {
+        command: 'bash -c x',
+        rule: 'Bash(bash:*)',
+        summary: 'Runs any shell code',
+        risk: 'high',
+        riskWhy: 'Anything',
+        allowable: false,
+        reason: 'It runs any code',
+        unchanged: false,
+      },
+    ];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      calls.push([url, init?.body ? JSON.parse(String(init.body)) : undefined]);
+      const preview = { folder: '/x/shop', path: '/x/shop/.claude/settings.local.json', rows };
+      if (url.endsWith('/commands/write'))
+        return Response.json({
+          ...preview,
+          records: [
+            {
+              id: 'w1',
+              rule: rows[0]!.rule,
+              at: '',
+              folderId: 'f',
+              path: preview.path,
+              action: 'allow',
+            },
+          ],
+        });
+      if (url.endsWith('/commands/preview')) return Response.json(preview);
+      return Response.json([]);
+    });
+    const dialog = openDrawer({
+      ...plain,
+      data: { ...plain.data, allowCommands: ['npx pnpm@12.9.1 test', 'bash -c x'] },
+    });
+    expect(await within(dialog).findByText('Bash(npx pnpm@12.9.1 test:*)')).toBeTruthy();
+    expect(within(dialog).getByText('Low risk')).toBeTruthy();
+    expect(within(dialog).getByText('Can’t be allowed')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Allow 1 command' }));
+    expect(await within(dialog).findByText(/Allowed 1 in this project’s folder only/)).toBeTruthy();
+    expect(calls.find(([u]) => u.endsWith('/commands/write'))![1]).toEqual({
+      projectId: plain.data.projectId,
+      commands: ['npx pnpm@12.9.1 test', 'bash -c x'],
+    });
+    const op = apply.mock.calls.at(-1)![1][0] as unknown as {
+      type: string;
+      data: { body: string };
+    };
+    expect(op.type).toBe('comment');
+    expect(op.data.body).toContain('Bash(npx pnpm@12.9.1 test:*)');
+  });
+
   it('reads a line without a kind as label and where', () => {
     expect(parseDeliverable('Report | out/report.pdf')).toEqual({
       label: 'Report',

@@ -5,7 +5,6 @@ import {
   type PermissionFolder,
   type PermissionLists,
   type PermissionPreview,
-  type PermissionRisk,
   type PermissionScope,
   type PermissionStatus,
   type PermissionSuggestion,
@@ -19,7 +18,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { SkeletonRows } from '../catalog/skeleton';
 import { Tooltip } from '../catalog/tooltip';
 import { BUTTON } from '../catalog/ui';
-import { ApiError } from '../lib/api';
+import { ApiError, ownerSend as send } from '../lib/api';
+import { RISK } from '../catalog/risk';
 import { useNotificationEvents } from '../lib/events';
 import { plural, timeAgo } from '../lib/format';
 import { Section } from './settings-ui';
@@ -36,27 +36,6 @@ import { Section } from './settings-ui';
  * Only this page writes a rule: every request says it's the owner (`X-Pharos-Author: human:me`);
  * agents are refused. Every write shows the exact change first, keeps a backup, and can be undone.
  */
-
-const OWNER_HEADERS = { 'x-pharos-author': 'human:me' };
-
-async function send<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: {
-      ...OWNER_HEADERS,
-      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok)
-    throw new ApiError(
-      res.status,
-      data?.error?.message ?? `HTTP ${res.status}`,
-      data?.error?.issues,
-    );
-  return data as T;
-}
 
 const errorText = (err: unknown) =>
   err instanceof ApiError ? err.message : 'Couldn’t reach the server';
@@ -75,21 +54,6 @@ const STATUS: Record<PermissionStatus, { label: string; className: string }> = {
     className: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
   },
   not_set: { label: 'Not set', className: 'bg-subtle text-muted' },
-};
-
-const RISK: Record<PermissionRisk, { label: string; className: string }> = {
-  low: {
-    label: 'Low risk',
-    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
-  },
-  medium: {
-    label: 'Medium risk',
-    className: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
-  },
-  high: {
-    label: 'High risk',
-    className: 'bg-rose-50 text-rose-800 dark:bg-rose-950/50 dark:text-rose-200',
-  },
 };
 
 const SOURCE_LABEL = {

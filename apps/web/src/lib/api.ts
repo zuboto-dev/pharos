@@ -122,3 +122,25 @@ export function useResource<T>(path: string | null): Resource<T> {
   if (current.data !== undefined) return { status: 'ok', data: current.data, ...common };
   return { status: 'loading', ...common };
 }
+
+/** Requests only the owner may make from the Pharos page (permissions): GET, or POST with a body. */
+const OWNER_HEADERS = { 'x-pharos-author': 'human:me' };
+
+export async function ownerSend<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      ...OWNER_HEADERS,
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok)
+    throw new ApiError(
+      res.status,
+      data?.error?.message ?? `HTTP ${res.status}`,
+      data?.error?.issues,
+    );
+  return data as T;
+}

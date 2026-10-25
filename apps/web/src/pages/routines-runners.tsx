@@ -43,7 +43,10 @@ export const RUNNER_WORDS: Record<RunnerState, { label: string; tone: string }> 
   'not-built': { label: 'Not built yet', tone: 'bg-subtle text-muted' },
 };
 
+/** Looked at again often while one of these: a check or setup running, or one about to start. */
 const BUSY: RunnerState[] = ['checking', 'setting-up', 'unchecked'];
+/** The buttons wait only while a check or setup actually runs. */
+const WORKING: RunnerState[] = ['checking', 'setting-up'];
 
 /** The runners view, looked at again every 3 s while a check or a setup runs, else every 30 s. */
 export function useRunners() {
@@ -142,13 +145,16 @@ export function RunnersCard({ view }: { view: ReturnType<typeof useRunners> }) {
                   <button
                     type="button"
                     aria-label={`Check ${r.name} again`}
-                    disabled={BUSY.includes(r.status.state)}
+                    disabled={WORKING.includes(r.status.state)}
                     onClick={() => void act('check', { id: r.id })}
                     className={ICON_GHOST}
                   >
                     <RefreshCw
                       aria-hidden
-                      className={clsx('size-3.5', BUSY.includes(r.status.state) && 'animate-spin')}
+                      className={clsx(
+                        'size-3.5',
+                        WORKING.includes(r.status.state) && 'animate-spin',
+                      )}
                     />
                   </button>
                 </Tooltip>

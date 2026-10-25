@@ -447,7 +447,10 @@ function Raised({ entity }: { entity: Entity }) {
           </span>
         )}
       </p>
-      {rev?.message && <p className="line-clamp-2">“{rev.message}”</p>}
+      {/* The reason, unless it only repeats the title ("Ask the owner: <title>"). */}
+      {rev?.message && !rev.message.includes(labelOf(entity)) && (
+        <p className="line-clamp-2">“{rev.message}”</p>
+      )}
     </div>
   );
 }

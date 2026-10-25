@@ -154,4 +154,16 @@ describe('when an item was raised', () => {
     expect(raised.textContent).toContain('“Plan the view work”');
     expect(urls).toContain('/api/revisions/1');
   });
+
+  it('leaves out a reason that only repeats the title', async () => {
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.startsWith('/api/revisions/1')
+        ? Response.json(rev(1, { message: 'Ask the owner: View spec format + queries' }))
+        : Response.json([]),
+    );
+    renderDrawer({ entity: 'task_a9f652e80406' });
+    const raised = await screen.findByTestId('raised');
+    await waitFor(() => expect(raised.textContent).toMatch(/by\s+Claude Code/));
+    expect(raised.textContent).not.toContain('Ask the owner');
+  });
 });

@@ -456,6 +456,34 @@ function Raised({ entity }: { entity: Entity }) {
 }
 
 /**
+ * The review pages whose sheets ask this decision, each a link that lands on its sheet, so the
+ * details and the page where it is answered lead to each other.
+ */
+function AskedOn({ decision }: { decision: Entity<'decision'> }) {
+  const { views, project } = useViewData();
+  const places = views.flatMap((v) =>
+    (v.data.doc?.blocks ?? [])
+      .filter((b) => b.kind === 'sheet' && (b.decisions ?? []).includes(decision.id))
+      .map((b) => ({ view: v, sheet: b as { id: string; title: string } })),
+  );
+  if (!places.length) return null;
+  return (
+    <p className="-mt-3 flex flex-wrap items-center gap-x-1.5 text-xs text-muted" data-asked-on="">
+      <span>Asked on</span>
+      {places.map(({ view, sheet }) => (
+        <a
+          key={`${view.id}#${sheet.id}`}
+          href={`/projects/${project.id}/views/${view.id}#sheet-${sheet.id}`}
+          className="text-accent-strong hover:underline"
+        >
+          {view.data.name} › {sheet.title}
+        </a>
+      ))}
+    </p>
+  );
+}
+
+/**
  * What a page says about a decision, drawn by the page that holds the panel (the project page
  * passes the document's renderer; the catalog doesn't import pages).
  */
@@ -475,6 +503,7 @@ function EntityDetails({ entity }: { entity: Entity }) {
         }
       />
       {entity.type !== 'project' && <Raised entity={entity} />}
+      {entity.type === 'decision' && <AskedOn decision={entity as Entity<'decision'>} />}
       {/* Where its document is and why it can't open yet, with Approve when asked (R7.12). */}
       {entity.type === 'artifact' && (
         <ArtifactSourcePanel artifact={entity as Entity<'artifact'>} />

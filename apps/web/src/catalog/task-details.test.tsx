@@ -45,34 +45,74 @@ function openDrawer(task: Entity<'task'>) {
 }
 
 describe('task details in the drawer', () => {
-  it('shows what to do numbered, done when as checks, and what it produces by kind', () => {
-    const dialog = openDrawer(detailed);
+  it('shows steps, done-when checks to tick, and results as short links and comments', () => {
+    const open = vi.fn();
+    const withComment = {
+      ...base,
+      tasks: base.tasks.map((t) => (t.id === detailed.id ? detailed : t)),
+      comments: [
+        {
+          id: 'cmt_1',
+          type: 'comment' as const,
+          data: {
+            projectId: detailed.data.projectId,
+            taskId: detailed.id,
+            body: 'Both pass:\n\n```\nnode run.mjs\n```',
+          },
+          createdAt: '2026-10-24T06:19:56.018Z',
+          updatedAt: '2026-10-24T06:19:56.018Z',
+          createdRev: 5,
+          updatedRev: 5,
+        },
+      ],
+    };
+    render(
+      <ViewDataProvider data={withComment} version={1} actions={{ apply, open }}>
+        <DetailDrawer target={{ entity: detailed.id }} onClose={() => {}} />
+      </ViewDataProvider>,
+    );
+    const dialog = screen.getByRole('dialog');
     const details = dialog.querySelector('[data-task-details]') as HTMLElement;
     expect(
       within(details)
         .getAllByRole('heading')
         .map((h) => h.textContent),
-    ).toEqual(['What to do', 'Done when', 'Produces']);
+    ).toEqual(['What to do', 'Done when', 'Results and notes']);
     const steps = details.querySelector('ol')!;
     expect([...steps.querySelectorAll('li')].map((l) => l.textContent)).toEqual([
       'Draft the schema',
       'Wire the drawer',
     ]);
-    expect(within(details).getByText('The drawer shows three sections')).toBeTruthy();
-    // A URL opens in a new tab, a path or commit is code, an id is a link to the record.
-    const link = within(details).getByRole('link', { name: 'https://example.com/spec' });
+    // Ticking the only check sends it; the server marks the task done.
+    const check = within(details).getByRole('checkbox', {
+      name: 'The drawer shows three sections',
+    });
+    expect(check.getAttribute('aria-checked')).toBe('false');
+    expect(within(details).getByText(/0 of 1 checked/)).toBeTruthy();
+    fireEvent.click(check);
+    expect(apply.mock.calls.at(-1)![1]).toEqual([
+      {
+        op: 'update',
+        type: 'task',
+        id: detailed.id,
+        data: { acceptanceMet: ['The drawer shows three sections'] },
+      },
+    ]);
+    // Result links are one-line chips: a URL opens in a new tab, a record opens in the panel.
+    const link = within(details).getByRole('link', { name: /Spec/ });
     expect(link.getAttribute('target')).toBe('_blank');
-    expect(within(details).getByText('docs/notes.md').tagName).toBe('CODE');
-    expect(within(details).getByText('abc1234').tagName).toBe('CODE');
-    expect(
-      within(details).getByRole('link', { name: (n) => n.includes(other.data.title) }),
-    ).toBeTruthy();
+    fireEvent.click(within(details).getByRole('button', { name: /Related task/ }));
+    expect(open).toHaveBeenCalledWith({ entity: other.id });
     expect(details.querySelector('[data-kind="commit"] svg')).toBeTruthy();
+    // A comment shows its Markdown, and its code block has a copy button.
+    const comment = details.querySelector('[data-comment="cmt_1"]') as HTMLElement;
+    expect(comment.textContent).toContain('Both pass');
+    expect(within(comment).getByRole('button', { name: 'Copy code' })).toBeTruthy();
     // Not repeated in the fields below.
     expect(within(dialog).queryByText('Acceptance')).toBeNull();
   });
 
-  it('lets the owner add steps, and edit results one per line', () => {
+  it('lets the owner add steps, edit steps with code blocks, and comment', () => {
     let dialog = openDrawer(plain);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add steps' }));
     fireEvent.change(within(dialog).getByLabelText('Actions'), {
@@ -83,20 +123,26 @@ describe('task details in the drawer', () => {
       { op: 'update', type: 'task', id: plain.id, data: { actions: ['First', 'Second'] } },
     ]);
     cleanup();
-    dialog = openDrawer(detailed);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit deliverables' }));
-    const box = within(dialog).getByLabelText('Deliverables') as HTMLTextAreaElement;
-    expect(box.value.split('\n')[0]).toBe('Schema change | commit | abc1234');
-    fireEvent.change(box, { target: { value: 'Guide | page | v1\nLoose note' } });
+    const coded = {
+      ...plain,
+      data: { ...plain.data, actions: ['Run:\n\n```\npnpm test\n```', 'Read the summary'] },
+    };
+    dialog = openDrawer(coded);
+    expect(within(dialog).getByRole('button', { name: 'Copy code' })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit actions' }));
+    const box = within(dialog).getByLabelText('Actions') as HTMLTextAreaElement;
+    expect(box.value).toBe('Run:\n\n```\npnpm test\n```\n---\nRead the summary');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(apply).toHaveBeenCalledTimes(1); // unchanged: nothing saved
+    fireEvent.change(within(dialog).getByLabelText('Add a comment'), {
+      target: { value: 'Done: 12 tests pass' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Comment' }));
     expect(apply.mock.calls.at(-1)![1]).toEqual([
       {
-        op: 'update',
-        type: 'task',
-        id: plain.id,
-        data: {
-          deliverables: [{ label: 'Guide', kind: 'page', ref: 'v1' }, { label: 'Loose note' }],
-        },
+        op: 'create',
+        type: 'comment',
+        data: { projectId: plain.data.projectId, taskId: plain.id, body: 'Done: 12 tests pass' },
       },
     ]);
   });

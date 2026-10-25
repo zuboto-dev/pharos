@@ -41,6 +41,7 @@ export const ENTITY_TYPES = [
   'term',
   'file',
   'record',
+  'comment',
 ];
 
 export const AGENTS = ['claude', 'codex', 'opencode'];

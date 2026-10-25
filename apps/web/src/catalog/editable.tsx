@@ -35,7 +35,7 @@ function useSaveField(entity: Entity) {
   };
 }
 
-const INPUT =
+export const INPUT =
   'w-full rounded-control border border-sky-300 bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-sky-200 dark:border-sky-800 dark:focus:ring-sky-900';
 const EDIT_HINT =
   'tap-area relative inline-flex shrink-0 items-center rounded p-0.5 text-faint opacity-0 group-hover/edit:opacity-100 hover:text-ink-soft focus:opacity-100 pointer-coarse:opacity-100';
@@ -260,6 +260,7 @@ export function EditableList<T = string>({
   fromLine = (line) => line as T,
   addLabel = 'Add',
   placeholder = 'One per line',
+  multiline = false,
 }: {
   entity: Entity;
   field: string;
@@ -268,14 +269,21 @@ export function EditableList<T = string>({
   fromLine?: (line: string) => T | null;
   addLabel?: string;
   placeholder?: string;
+  /**
+   * Items may span lines (a step with a code block): while any does, the editor separates items
+   * with a line of `---` instead of one per line.
+   */
+  multiline?: boolean;
 }) {
   const save = useSaveField(entity);
   const items = ((entity.data as Record<string, unknown>)[field] as T[] | undefined) ?? [];
   const [draft, setDraft] = useState<string | null>(null);
+  const lines = items.map(toLine);
+  const spread = multiline && lines.some((l) => l.includes('\n'));
   const commit = () => {
     if (draft === null) return;
-    const next = draft
-      .split('\n')
+    const parts = multiline && /^---$/m.test(draft) ? draft.split(/^---$/m) : draft.split('\n');
+    const next = parts
       .map((l) => l.trim())
       .filter(Boolean)
       .map(fromLine)
@@ -314,6 +322,7 @@ export function EditableList<T = string>({
       </div>
     );
   }
+  const open = () => setDraft(lines.join(spread ? '\n---\n' : '\n'));
   if (!items.length) return <AddButton label={addLabel} onClick={() => setDraft('')} />;
   return (
     <div className="group/edit flex items-start gap-1">
@@ -331,7 +340,7 @@ export function EditableList<T = string>({
       <button
         type="button"
         aria-label={`Edit ${words(field)}`}
-        onClick={() => setDraft(items.map(toLine).join('\n'))}
+        onClick={open}
         className={EDIT_HINT}
       >
         <Pencil className="size-3.5" />

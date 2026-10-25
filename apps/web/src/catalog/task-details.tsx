@@ -3,6 +3,7 @@ import {
   type Deliverable,
   type DeliverableKind,
   type Entity,
+  type RevisionSummary,
 } from '@pharos/schema';
 import {
   Database,
@@ -12,17 +13,23 @@ import {
   Package,
   PanelsTopLeft,
   Square,
+  SquareCheck,
   type LucideIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useResource } from '../lib/api';
+import { dateTime } from '../lib/format';
 import { useViewData } from './context';
-import { EditableList } from './editable';
-import { EntityRef } from './interactive';
+import { EditableList, INPUT } from './editable';
+import { AUTHOR_ICONS } from './history';
+import { BUTTON, Markdown } from './ui';
 
 /**
- * A task's details in the drawer: what to do (numbered), when it's done (a checklist look; the
- * checks are statements, not state) and what it produces (by kind). The owner edits each list in
- * place, one item per line.
+ * A task's details in the drawer, below its description (context only): what to do (numbered
+ * steps in Markdown; code blocks have a copy button), when it's done (a checklist: ticking every
+ * check marks the task done, which the server decides) and the results and notes on it
+ * (comments, newest last, with the short result links older tasks kept). The owner edits the
+ * steps and checks in place.
  */
 export function TaskDetails({ task }: { task: Entity<'task'> }) {
   return (
@@ -31,12 +38,17 @@ export function TaskDetails({ task }: { task: Entity<'task'> }) {
         <EditableList
           entity={task}
           field="actions"
+          multiline
           addLabel="Add steps"
-          placeholder="One step per line, in order"
+          placeholder="One step per line, in order (a step with a code block: separate steps with a line of ---)"
           display={(items) => (
-            <ol className="list-decimal space-y-1 pl-5 text-sm marker:text-faint">
+            <ol className="list-decimal space-y-1.5 pl-5 text-sm marker:text-faint">
               {items.map((a, i) => (
-                <li key={i}>{a}</li>
+                <li key={i} className="pl-0.5">
+                  <Markdown copyCode className="task-step">
+                    {a}
+                  </Markdown>
+                </li>
               ))}
             </ol>
           )}
@@ -48,36 +60,133 @@ export function TaskDetails({ task }: { task: Entity<'task'> }) {
           field="acceptance"
           addLabel="Add checks"
           placeholder="One “done when” statement per line"
-          display={(items) => (
-            <ul className="space-y-1 text-sm">
-              {items.map((c, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <Square aria-hidden className="mt-0.5 size-3.5 shrink-0 text-faint" />
-                  <span>{c}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          display={(items) => <Checklist task={task} items={items} />}
         />
       </Part>
-      <Part title="Produces">
-        <EditableList<Deliverable>
-          entity={task}
-          field="deliverables"
-          addLabel="Add results"
-          placeholder={`One per line: label | kind | where\nkinds: ${DELIVERABLE_KINDS.join(', ')}`}
-          toLine={deliverableLine}
-          fromLine={parseDeliverable}
-          display={(items) => (
-            <ul className="space-y-1.5 text-sm">
-              {items.map((d, i) => (
-                <DeliverableItem key={i} item={d} />
-              ))}
-            </ul>
-          )}
-        />
+      <Part title="Results and notes">
+        <Comments task={task} />
       </Part>
     </div>
+  );
+}
+
+/** The "done when" checks as boxes to tick; all ticked makes the task done (Store.checksDone). */
+function Checklist({ task, items }: { task: Entity<'task'>; items: string[] }) {
+  const { actions } = useViewData();
+  const met = new Set((task.data.acceptanceMet ?? []).filter((m) => items.includes(m)));
+  const toggle = (item: string) => {
+    const next = items.filter((i) => (i === item ? !met.has(i) : met.has(i)));
+    void actions.apply(
+      `${met.has(item) ? 'Untick' : 'Tick'} “${item}” on “${task.data.title}”`,
+      [{ op: 'update', type: 'task', id: task.id, data: { acceptanceMet: next } }],
+      { undoable: true },
+    );
+  };
+  return (
+    <div className="space-y-1.5">
+      <ul className="space-y-1 text-sm">
+        {items.map((c, i) => {
+          const done = met.has(c);
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={done}
+                onClick={() => toggle(c)}
+                className="flex w-full items-start gap-2 rounded-control text-left hover:bg-subtle"
+              >
+                {done ? (
+                  <SquareCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                ) : (
+                  <Square aria-hidden className="mt-0.5 size-4 shrink-0 text-faint" />
+                )}
+                <span className={done ? 'text-muted line-through' : undefined}>{c}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-xs text-faint">
+        {met.size} of {items.length} checked
+        {met.size < items.length ? ' · ticking every one marks the task done' : ''}
+      </p>
+    </div>
+  );
+}
+
+/** Results, evidence and notes on a task, by whoever wrote them; anyone can add one. */
+function Comments({ task }: { task: Entity<'task'> }) {
+  const { comments = [], actions } = useViewData();
+  const mine = comments
+    .filter((c) => c.data.taskId === task.id)
+    .sort((a, b) => a.createdRev - b.createdRev);
+  const links = task.data.deliverables ?? [];
+  const [draft, setDraft] = useState('');
+  const send = () => {
+    const body = draft.trim();
+    if (!body) return;
+    void actions
+      .apply(`Comment on “${task.data.title}”`, [
+        {
+          op: 'create',
+          type: 'comment',
+          data: { projectId: task.data.projectId, taskId: task.id, body },
+        },
+      ])
+      .then((r) => r.ok && setDraft(''));
+  };
+  return (
+    <div className="space-y-3">
+      {links.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Result links">
+          {links.map((d, i) => (
+            <DeliverableChip key={i} item={d} />
+          ))}
+        </ul>
+      )}
+      {mine.map((c) => (
+        <CommentItem key={c.id} comment={c} />
+      ))}
+      <div className="space-y-1.5">
+        <textarea
+          aria-label="Add a comment"
+          rows={draft.includes('\n') ? 4 : 2}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send();
+          }}
+          placeholder="Add a result, evidence or a note (Markdown)"
+          className={INPUT}
+        />
+        {draft.trim() && (
+          <button type="button" onClick={send} className={BUTTON.primary}>
+            Comment
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CommentItem({ comment }: { comment: Entity<'comment'> }) {
+  const revision = useResource<RevisionSummary>(`/api/revisions/${comment.createdRev}`);
+  const author = revision.data?.author;
+  const Icon = author ? AUTHOR_ICONS[author.kind] : null;
+  return (
+    <article className="rounded-tile border border-line px-3 py-2" data-comment={comment.id}>
+      <header className="mb-1 flex items-center gap-1.5 text-xs text-muted">
+        {Icon && <Icon aria-hidden className="size-3.5" />}
+        <span className="font-medium text-ink-soft">{author?.name ?? '…'}</span>
+        <span title={new Date(comment.createdAt).toLocaleString()}>
+          · {dateTime(comment.createdAt)}
+        </span>
+      </header>
+      <Markdown copyCode className="text-sm">
+        {comment.data.body}
+      </Markdown>
+    </article>
   );
 }
 
@@ -99,43 +208,48 @@ const KIND_ICONS: Record<DeliverableKind, LucideIcon> = {
   other: Package,
 };
 
-function DeliverableItem({ item }: { item: Deliverable }) {
+/** A short result link on one line: its kind, its label (in full on hover), where it is. */
+function DeliverableChip({ item }: { item: Deliverable }) {
+  const { entityById, actions } = useViewData();
   const Icon = KIND_ICONS[item.kind ?? 'other'];
+  const ref = item.ref;
+  const body = (
+    <>
+      <Icon aria-label={item.kind ?? 'other'} className="size-3.5 shrink-0 text-muted" />
+      <span className="truncate">{item.label}</span>
+    </>
+  );
+  const chip =
+    'inline-flex max-w-full items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-xs';
+  const title = ref ? `${item.label}\n${ref}` : item.label;
   return (
-    <li className="flex items-start gap-2" data-kind={item.kind ?? 'other'}>
-      <Icon aria-label={item.kind ?? 'other'} className="mt-0.5 size-3.5 shrink-0 text-muted" />
-      <span className="min-w-0 space-y-0.5">
-        <span className="block">{item.label}</span>
-        {item.ref && <DeliverableRef value={item.ref} />}
-      </span>
+    <li className="max-w-full" data-kind={item.kind ?? 'other'}>
+      {ref && entityById.has(ref) ? (
+        <button
+          type="button"
+          title={title}
+          onClick={() => actions.open({ entity: ref })}
+          className={`${chip} hover:bg-subtle`}
+        >
+          {body}
+        </button>
+      ) : ref && /^https?:\/\//i.test(ref) ? (
+        <a
+          href={ref}
+          target="_blank"
+          rel="noreferrer noopener"
+          title={title}
+          className={`${chip} hover:bg-subtle`}
+        >
+          {body}
+        </a>
+      ) : (
+        <span title={title} className={chip}>
+          {body}
+        </span>
+      )}
     </li>
   );
-}
-
-/** Where a result is: a Pharos record opens, a URL opens in a new tab, anything else is code. */
-function DeliverableRef({ value }: { value: string }) {
-  const { entityById } = useViewData();
-  if (entityById.has(value)) return <EntityRef id={value} />;
-  if (/^https?:\/\//i.test(value))
-    return (
-      <a
-        href={value}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="block truncate text-xs text-accent-strong hover:underline"
-      >
-        {value}
-      </a>
-    );
-  return (
-    <code className="block rounded bg-sunken px-1 py-0.5 text-xs break-all text-ink-soft">
-      {value}
-    </code>
-  );
-}
-
-function deliverableLine(d: Deliverable): string {
-  return [d.label, d.kind ?? '', d.ref ?? ''].join(' | ').replace(/( \| )+$/, '');
 }
 
 /** "label | kind | where"; a kind that isn't one is read as the where. */

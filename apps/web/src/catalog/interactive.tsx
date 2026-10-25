@@ -43,6 +43,7 @@ export const TYPE_LABELS: Record<EntityType, string> = {
   term: 'Term',
   file: 'File',
   record: 'Record',
+  comment: 'Comment',
 };
 
 export function labelOf(entity: Entity): string {

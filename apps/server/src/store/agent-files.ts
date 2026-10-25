@@ -387,6 +387,7 @@ export class AgentFiles {
       terms: this.entities(dataset.terms),
       files: this.entities(dataset.files),
       records: this.entities(dataset.records ?? []),
+      ...(dataset.comments ? { comments: dataset.comments } : {}),
     };
   }
 

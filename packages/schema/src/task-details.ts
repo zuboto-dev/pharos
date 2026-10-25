@@ -9,7 +9,8 @@ import { z } from 'zod';
 export const TASK_DETAILS = {
   /** Most steps, checks or deliverables on one task. */
   items: 20,
-  stepChars: 300,
+  /** A step may hold a command in a code block, so it has room for one. */
+  stepChars: 1000,
   labelChars: 200,
   refChars: 500,
 } as const;
@@ -36,11 +37,18 @@ export const TASK_DETAIL_FIELDS = {
     .max(TASK_DETAILS.items)
     .optional()
     .describe('Checkable "done when" statements'),
+  acceptanceMet: z
+    .array(Line)
+    .max(TASK_DETAILS.items)
+    .optional()
+    .describe(
+      'The acceptance statements checked off, word for word; when every one is, Pharos marks the task done',
+    ),
   deliverables: z
     .array(Deliverable)
     .max(TASK_DETAILS.items)
     .optional()
-    .describe('What it produces'),
+    .describe('Short links to what it produces; write results and evidence as comments instead'),
 };
 
 type TaskLike = {

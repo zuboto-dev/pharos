@@ -142,6 +142,18 @@ export const TaskData = z.strictObject({
   fileIds: FileIds,
 });
 
+/** A note on a task: results, evidence, a question (author and time come from its revision). */
+export const CommentData = z.strictObject({
+  projectId: Id,
+  taskId: Id.describe('The task it is on'),
+  body: z
+    .string()
+    .trim()
+    .min(1)
+    .max(20_000)
+    .describe('Markdown: results, evidence, links; code in fenced blocks'),
+});
+
 export const ArtifactData = z.strictObject({
   projectId: Id,
   title: Text,
@@ -403,6 +415,7 @@ export const ENTITY_TYPES = [
   'term',
   'file',
   'record',
+  'comment',
 ] as const;
 export const EntityType = z.enum(ENTITY_TYPES);
 export type EntityType = z.infer<typeof EntityType>;
@@ -574,6 +587,13 @@ export const ENTITIES = {
     defaults: { fields: {} },
     refs: { projectId: projectRef, fileIds: { type: 'file', many: true, onDelete: 'unset' } },
     label: 'title',
+  },
+  comment: {
+    prefix: 'cmt',
+    data: CommentData,
+    defaults: {},
+    refs: { projectId: projectRef, taskId: { type: 'task', onDelete: 'cascade' } },
+    label: 'body',
   },
 } satisfies Record<EntityType, EntityDef>;
 

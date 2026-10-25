@@ -82,7 +82,8 @@ describe('MCP', () => {
     // (connections and the owner's standing rules), and to 52 000 on 2026-10-24 for
     // decision.items (the items a choice applies to, about 0.7k). Task actions, acceptance and
     // deliverables (about 1.1k) fit after a create's ref was shared once in definitions (-1.5k).
-    expect(apply.length).toBeLessThan(52_000);
+    // To 54 000 on 2026-10-24 for comments on tasks and task.acceptanceMet (about 1.1k).
+    expect(apply.length).toBeLessThan(54_000);
     expect(apply).toContain('"#/definitions/ProjectOptions"');
     expect(client.getInstructions()).toContain('apply');
   });

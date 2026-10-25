@@ -167,3 +167,44 @@ describe('when an item was raised', () => {
     expect(raised.textContent).not.toContain('Ask the owner');
   });
 });
+
+describe('a decision asked on a review page', () => {
+  it('links its details to the sheet that asks it', async () => {
+    vi.stubGlobal('fetch', async () => Response.json([]));
+    const decision = data.decisions[0]!;
+    const view = {
+      ...data.views[0]!,
+      id: 'view_review',
+      data: {
+        ...data.views[0]!.data,
+        name: 'Review · Batch',
+        spec: undefined,
+        template: undefined,
+        doc: {
+          blocks: [
+            {
+              kind: 'sheet',
+              id: 'pick',
+              title: 'Pick the layout',
+              decisions: [decision.id],
+              blocks: [{ kind: 'block', id: 'b', node: { component: 'Text', content: 'Why' } }],
+            },
+          ],
+        },
+      },
+    } as unknown as ProjectDataset['views'][number];
+    render(
+      <ViewDataProvider
+        data={{ ...data, views: [...data.views, view] }}
+        version={1}
+        actions={{ apply: vi.fn(), open: vi.fn() }}
+      >
+        <DetailDrawer target={{ entity: decision.id }} onClose={() => {}} />
+      </ViewDataProvider>,
+    );
+    const link = await screen.findByRole('link', { name: 'Review · Batch › Pick the layout' });
+    expect(link.getAttribute('href')).toBe(
+      `/projects/${data.project.id}/views/view_review#sheet-pick`,
+    );
+  });
+});

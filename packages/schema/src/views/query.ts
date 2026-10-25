@@ -99,4 +99,6 @@ export type ProjectDataset = {
   files: Entity<'file'>[];
   /** Records of the project's own kinds (R8); older datasets come without them. */
   records?: Entity<'record'>[];
+  /** Comments on tasks: results, evidence, notes; older datasets come without them. */
+  comments?: Entity<'comment'>[];
 };

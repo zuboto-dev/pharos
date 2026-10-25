@@ -90,6 +90,7 @@ export function ViewDataProvider({
       ...data.terms,
       ...(data.files ?? []),
       ...(data.records ?? []),
+      ...(data.comments ?? []),
       ...data.views,
     ];
     return {

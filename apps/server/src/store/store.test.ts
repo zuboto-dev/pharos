@@ -859,3 +859,74 @@ describe('claims and terms', () => {
     });
   });
 });
+
+describe('task checks and comments', () => {
+  const task = (id: string) => store.get(id)!.data as Record<string, unknown>;
+
+  it('marks a task done when every "done when" check is ticked, and back when one is unticked', () => {
+    const ids = seedProject();
+    apply('Checks', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptance: ['Tests pass', 'Screenshot on the page'], status: 'in_progress' },
+    });
+    apply('One', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptanceMet: ['Tests pass'] },
+    });
+    expect(task(ids.t1).status).toBe('in_progress');
+    apply('Both', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptanceMet: ['Tests pass', 'Screenshot on the page'] },
+    });
+    expect(task(ids.t1).status).toBe('done');
+    apply('Untick', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptanceMet: ['Tests pass'] },
+    });
+    expect(task(ids.t1).status).toBe('in_progress');
+  });
+
+  it('drops ticks for reworded checks and lets an explicit status win', () => {
+    const ids = seedProject();
+    apply('Checks', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptance: ['A', 'B'], acceptanceMet: ['A'] },
+    });
+    apply('Reword', { op: 'update', type: 'task', id: ids.t1, data: { acceptance: ['A2', 'B'] } });
+    expect(task(ids.t1).acceptanceMet).toBeUndefined();
+    apply('Tick all, but needs review', {
+      op: 'update',
+      type: 'task',
+      id: ids.t1,
+      data: { acceptanceMet: ['A2', 'B'], status: 'review' },
+    });
+    expect(task(ids.t1).status).toBe('review');
+  });
+
+  it('keeps comments on a task and removes them with it', () => {
+    const ids = seedProject();
+    const { created } = apply('Result', {
+      op: 'create',
+      type: 'comment',
+      ref: 'c',
+      data: {
+        projectId: ids.p,
+        taskId: ids.t1,
+        body: 'Both evals pass.\n\n```\nnode run.mjs\n```',
+      },
+    });
+    expect(store.dataset(ids.p).comments?.map((c) => c.id)).toEqual([created.c]);
+    apply('Remove', { op: 'delete', type: 'task', id: ids.t1 });
+    expect(store.get(created.c!)).toBeNull();
+  });
+});

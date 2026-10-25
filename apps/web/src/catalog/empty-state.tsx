@@ -104,6 +104,7 @@ const PLURAL: Record<EntityType, string> = {
   term: 'terms',
   file: 'files',
   record: 'records',
+  comment: 'comments',
 };
 
 export const FILES_HINT =

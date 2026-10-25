@@ -448,6 +448,7 @@ export class Store {
       terms: this.list('term', { projectId }),
       files: this.list('file', { projectId }),
       records: this.list('record', { projectId }),
+      comments: this.list('comment', { projectId }),
     };
   }
 
@@ -1084,13 +1085,40 @@ class Transaction {
   }
 
   private update(entity: Entity, raw: Data): void {
-    const data = this.parse(entity.type, raw);
+    const data = this.parse(
+      entity.type,
+      entity.type === 'task' ? this.checksDone(entity, raw) : raw,
+    );
     if (isDeepStrictEqual(data, entity.data)) return;
     this.db
       .prepare('UPDATE entities SET data = ?, updated_at = ?, updated_rev = ? WHERE id = ?')
       .run(JSON.stringify(data), this.revision.createdAt, this.revision.id, entity.id);
     const projectId = this.projectIdOf(entity.type, entity.id, data);
     this.record('update', entity.type, entity.id, projectId, entity.data, data);
+  }
+
+  /**
+   * A task's "done when" checks decide its status when they change: every one ticked makes it
+   * done; unticking one of a done task puts it back in progress. Ticks that no longer match a
+   * statement (it was reworded or removed) are dropped. A change that sets the status itself wins.
+   */
+  private checksDone(entity: Entity, raw: Data): Data {
+    const before = entity.data as Data;
+    const acceptance = (raw.acceptance as string[] | undefined) ?? [];
+    const met = ((raw.acceptanceMet as string[] | undefined) ?? []).filter((m) =>
+      acceptance.includes(m),
+    );
+    const next: Data = { ...raw };
+    if (met.length) next.acceptanceMet = met;
+    else delete next.acceptanceMet;
+    const changed = !isDeepStrictEqual(met, (before.acceptanceMet as string[] | undefined) ?? []);
+    if (!changed || raw.status !== before.status || !acceptance.length) return next;
+    const project = this.store.get(raw.projectId as string) as Entity<'project'> | null;
+    const meaning = meaningOf(project, 'task.status', raw.status as string);
+    const all = acceptance.every((a) => met.includes(a));
+    if (all && meaning !== 'done') next.status = valueFor(project, 'task.status', 'done');
+    if (!all && meaning === 'done') next.status = valueFor(project, 'task.status', 'in_progress');
+    return next;
   }
 
   /** Deletes entities, everything that cascades from them, and clears references to them. */

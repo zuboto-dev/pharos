@@ -157,9 +157,15 @@ export function Markdown({
   className,
   remarkPlugins,
   components,
-}: { children: string; className?: string } & MarkdownExtras) {
+  copyCode = false,
+}: {
+  children: string;
+  className?: string;
+  /** Code blocks get a copy button outside documents too (a task's steps). */
+  copyCode?: boolean;
+} & MarkdownExtras) {
   // In a report document (R15) a code block has a copy button.
-  const inDocument = useInDocument();
+  const inDocument = useInDocument() || copyCode;
   // Repository file links (`repo:…`, and paths the repository has) open in the viewer.
   const repoProject = useRepoProject();
   const all = useMemo<Components>(

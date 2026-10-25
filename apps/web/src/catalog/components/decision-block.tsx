@@ -410,7 +410,15 @@ export function Decision({
             {answered ? 'Decided' : 'Decision for you'}
           </p>
           <h3 id={titleId} className="text-lg font-semibold text-balance">
-            {question}
+            {/* The same decision's details (its history, links, reasons) open in the panel. */}
+            <button
+              type="button"
+              title="Open its details"
+              onClick={() => actions.open({ entity: decision.id })}
+              className="text-left decoration-line-strong underline-offset-4 hover:underline"
+            >
+              {question}
+            </button>
           </h3>
         </div>
         {state.kind === 'deferred' && (

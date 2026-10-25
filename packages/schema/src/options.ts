@@ -4,7 +4,8 @@ import { z } from 'zod';
  * Built-in meanings of option fields. Custom options each map to one of these, so progress,
  * highlights, and agents keep working however a project names its statuses.
  */
-export const TaskStatus = z.enum(['todo', 'in_progress', 'blocked', 'done', 'cancelled']);
+// review: the work is finished but not verified yet; an agent or the owner checks it before done.
+export const TaskStatus = z.enum(['todo', 'in_progress', 'review', 'blocked', 'done', 'cancelled']);
 export const TaskPriority = z.enum(['low', 'medium', 'high', 'urgent']);
 export const StageStatus = z.enum(['planned', 'active', 'done', 'skipped']);
 export const GoalStatus = z.enum(['open', 'achieved', 'dropped']);
@@ -106,6 +107,7 @@ export type OptionColor = (typeof OPTION_COLORS)[number];
 const MEANING_COLORS: Record<string, OptionColor> = {
   todo: 'neutral',
   in_progress: 'blue',
+  review: 'violet',
   blocked: 'red',
   done: 'green',
   cancelled: 'muted',
@@ -196,6 +198,7 @@ function humanize(value: string): string {
 
 /** Default labels where the plain meaning name would be unclear. */
 const DEFAULT_LABELS: Partial<Record<OptionKey, Record<string, string>>> = {
+  'task.status': { review: 'Needs review' },
   'scope_item.kind': { in: 'In scope', out: 'Out of scope' },
   'claim.certainty': {
     reading: 'Our reading',
@@ -220,11 +223,29 @@ export function defaultOptions(key: OptionKey): Option[] {
 
 type HasOptions = { data: { options?: ProjectOptions } } | null | undefined;
 
+/**
+ * Meanings added after projects could keep their own lists: a custom list without one gets the
+ * default option for it, after the option it follows, so every project can use it.
+ */
+const ADDED_MEANINGS: Partial<Record<OptionKey, { meaning: string; after: string }[]>> = {
+  'task.status': [{ meaning: 'review', after: 'in_progress' }],
+};
+
 /** The options a project uses for a field, in display order. */
 export function optionsFor(project: HasOptions, key: OptionKey): Option[] {
   const custom = project?.data.options?.[key];
   if (!custom) return defaultOptions(key);
-  return custom.map((o) => ({ ...o, color: o.color ?? MEANING_COLORS[o.meaning] ?? 'neutral' }));
+  const list = custom.map((o) => ({
+    ...o,
+    color: o.color ?? MEANING_COLORS[o.meaning] ?? 'neutral',
+  }));
+  for (const { meaning, after } of ADDED_MEANINGS[key] ?? []) {
+    if (list.some((o) => o.meaning === meaning || o.value === meaning)) continue;
+    const added = defaultOptions(key).find((o) => o.meaning === meaning)!;
+    const at = list.map((o) => o.meaning).lastIndexOf(after);
+    list.splice(at < 0 ? list.length : at + 1, 0, added);
+  }
+  return list;
 }
 
 export function findOption(

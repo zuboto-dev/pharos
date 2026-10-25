@@ -25,8 +25,13 @@ Pharos is installed here, so reports live in Pharos, where the user reads them, 
    - A review, or anything the user must choose or do: a review desk (sheets with decisions
      that have options and a recommendation, and tasks for them), so they answer in place and
      it reaches their desk.
-   - Every task you add carries `actions` (the steps), `acceptance` ("done when" checks) and
-     `deliverables` (`{label, kind, ref}`), so a person could check the work without asking.
+   - Every task you add has a description with context only, `actions` (steps anyone can
+     follow; commands in fenced code blocks), `acceptance` ("done when" checks to tick) and
+     results as comments on the task, so a person could check the work without asking.
+   - Write in plain, literal words: no metaphors or idioms ("merged into main", not "landed";
+     "the tests pass", not "green"), no internal labels or code names unless the same sentence
+     explains them, and say who does what by which date. A reader who has to ask what you meant
+     costs a whole round of conversation.
    - Every change shows before and after: screenshots or a clip for a screen, the piece of UI
      drawn twice side by side for a component, a `diff` block for code, old and new values for
      data. Take the before shot before you change anything.

@@ -78,6 +78,12 @@ Every project keeps one report document named "Updates", newest first: after a v
 
 Write for the owner in Pharos, not in local files: a plan, research, a review, notes, a handoff or a summary goes in a Pharos document (doc), never a new Markdown file in the project folder. Files are only for what belongs with the code (README, CLAUDE.md, code docs); when you mention one, link it.
 
+Writing for the owner (everything people read in Pharos: titles, descriptions, comments, reports, decisions, run reports, chat):
+- Say what is literally true, in plain words. No metaphors, idioms or figures of speech: write "merged into main", "released", "the tests pass", "running", "stopped", "waiting for your answer", not "landed", "shipped", "green", "in flight", "parked", "on ice", "blocked on a gate".
+- Name things by what they are: the command, the file, the page, the number, the person. No internal labels or code names (task codes, milestone codes, "ship check", "nightshift", "daybreak", "gate", "auto/review/ask") unless the same sentence says what they mean.
+- Say who does what, by when, and what happens if nobody does. A deadline is a date, not "today" or "tonight".
+- If a word could be read two ways, use the longer exact phrase. A reader who has to ask what you meant costs a whole round of conversation.
+
 Getting oriented:
 - Start with project_brief: the project's brief (where it stands, the owner's rules, recent answers, hand-backs, what waits on them). When the owner gives a standing rule or feedback, add it to project.rules (apply) so every session gets it.
 - First, what the owner answered or handed back: project_snapshot's handedBack and desk_list({since}) answersSince. Act on those before new work; a review handed back to you is yours to pick up.

@@ -47,7 +47,7 @@ import { Badge, Empty, toneOf } from './ui';
 
 const HIDDEN = new Set(['projectId', 'order', 'spec', 'template']);
 /** A task's steps, checks and results, drawn above the fields by TaskDetails. */
-const TASK_DETAIL_FIELDS = new Set(['actions', 'acceptance', 'deliverables']);
+const TASK_DETAIL_FIELDS = new Set(['actions', 'acceptance', 'acceptanceMet', 'deliverables']);
 /** Long text, edited as markdown above the fields. */
 const MARKDOWN = new Set(['description', 'body', 'rationale']);
 /** One-line text people can edit in place (shown even when empty, to add it). */

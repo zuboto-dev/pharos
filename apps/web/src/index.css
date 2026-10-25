@@ -1399,6 +1399,17 @@
     color: var(--ph-ink);
     white-space: pre;
   }
+  /* In a task's steps and comments the column is narrow: long commands wrap under the button. */
+  .task-step .doc-code > pre,
+  [data-comment] .doc-code > pre {
+    padding-right: 5.75rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .task-step .doc-code > pre code,
+  [data-comment] .doc-code > pre code {
+    white-space: inherit;
+  }
   .doc-copy {
     position: absolute;
     top: 0.45rem;

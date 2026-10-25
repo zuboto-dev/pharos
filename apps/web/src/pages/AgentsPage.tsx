@@ -577,7 +577,23 @@ export function AgentsPage({ pollMs = POLL_MS }: { pollMs?: number }) {
 }
 
 /** The sidebar's link, next to Updates. */
+/** How many agents are working now, for the sidebar: the page's look, polled less often. */
+function useWorkingAgents(pollMs = 15_000): number {
+  const overview = useResource<AgentsOverview>('/api/agents');
+  const { reload } = overview;
+  const presence = usePresence();
+  const answering = useAgentStatus();
+  useEffect(() => reload(), [presence, answering.state, reload]);
+  useEffect(() => {
+    const timer = setInterval(reload, pollMs);
+    return () => clearInterval(timer);
+  }, [reload, pollMs]);
+  return overview.data?.counts?.working ?? 0;
+}
+
+/** Agents in the sidebar: its icon turns while any agent is working (owner, 2026-10-24). */
 export function AgentsLink() {
+  const working = useWorkingAgents();
   return (
     <NavLink
       to="/agents"
@@ -588,7 +604,71 @@ export function AgentsLink() {
         )
       }
     >
-      <Radar aria-hidden className="size-3.5" /> Agents
+      <Radar
+        aria-hidden
+        data-working={working > 0 || undefined}
+        className={clsx('size-3.5', working > 0 && 'animate-working text-presence')}
+      />{' '}
+      Agents
+      {working > 0 && <WorkingMark label={`${working} working`} />}
     </NavLink>
+  );
+}
+
+/** Agents on the folded sidebar's rail: the same turn while agents work. */
+export function AgentsRailLink() {
+  const working = useWorkingAgents();
+  return (
+    <RailLink
+      to="/agents"
+      label={working > 0 ? `Agents · ${working} working` : 'Agents'}
+      working={working > 0}
+      icon={Radar}
+    />
+  );
+}
+
+/** An icon link on the folded sidebar's rail; its icon turns while its page has work running. */
+export function RailLink({
+  to,
+  label,
+  working,
+  icon: Icon,
+}: {
+  to: string;
+  label: string;
+  working: boolean;
+  icon: typeof Radar;
+}) {
+  return (
+    <Tooltip label={label}>
+      <Link
+        to={to}
+        aria-label={label}
+        className="relative flex size-8 items-center justify-center rounded-control text-muted hover:bg-sunken hover:text-ink"
+      >
+        <Icon
+          aria-hidden
+          data-working={working || undefined}
+          className={clsx('size-4', working && 'animate-working text-presence')}
+        />
+        {working && (
+          <span
+            aria-hidden
+            className="absolute top-1 right-1 size-1.5 animate-presence rounded-full bg-presence"
+          />
+        )}
+      </Link>
+    </Tooltip>
+  );
+}
+
+/** The dot after a sidebar link's name while its page has something working, with what. */
+export function WorkingMark({ label }: { label: string }) {
+  return (
+    <span className="ml-auto inline-flex items-center" title={label}>
+      <span aria-hidden className="size-1.5 animate-presence rounded-full bg-presence" />
+      <span className="sr-only"> ({label})</span>
+    </span>
   );
 }

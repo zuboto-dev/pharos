@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router';
+import { RailLink, WorkingMark } from './AgentsPage';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '../catalog/menu';
 import { Select } from '../catalog/select';
 import { ICON_GHOST, InfoTip, Tooltip } from '../catalog/tooltip';
@@ -2912,7 +2913,34 @@ export function RoutinesPage() {
 }
 
 /** The sidebar link, under Updates. */
+/** The routine running now, for the sidebar: its name, or null (polled like the page). */
+function useRunningRoutine(): string | null {
+  const state = useResource<RoutinesState>('/api/routines/state');
+  const { reload } = state;
+  const current = state.data?.available ? state.data.current : null;
+  useEffect(() => {
+    const timer = setInterval(reload, current ? 10_000 : 30_000);
+    return () => clearInterval(timer);
+  }, [reload, current]);
+  return current ? current.name || current.routine : null;
+}
+
+/** Routines on the folded sidebar's rail: the same turn while a routine runs. */
+export function RoutinesRailLink() {
+  const running = useRunningRoutine();
+  return (
+    <RailLink
+      to="/routines"
+      label={running ? `Routines · ${running} running` : 'Routines'}
+      working={Boolean(running)}
+      icon={Repeat}
+    />
+  );
+}
+
+/** Routines in the sidebar: its icon turns while a routine runs (owner, 2026-10-24). */
 export function RoutinesLink() {
+  const running = useRunningRoutine();
   return (
     <NavLink
       to="/routines"
@@ -2923,7 +2951,13 @@ export function RoutinesLink() {
         )
       }
     >
-      <Repeat aria-hidden className="size-3.5" /> Routines
+      <Repeat
+        aria-hidden
+        data-working={running ? true : undefined}
+        className={clsx('size-3.5', running && 'animate-working text-presence')}
+      />{' '}
+      Routines
+      {running && <WorkingMark label={`${running} running`} />}
     </NavLink>
   );
 }

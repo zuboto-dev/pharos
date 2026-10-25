@@ -32,6 +32,7 @@ describe('motion tokens', () => {
       if (name === 'block-changed') continue; // a colour fade, not a movement
       if (name === 'presence') continue; // a slow looping pulse (v0.2 B5), not a transition
       if (name === 'shimmer') continue; // a loading skeleton's slow sweep (v0.2 B8), still when reduced
+      if (name === 'working') continue; // a sidebar icon's slow turn while work runs, still when reduced
       expect(value, name).toMatch(/var\(--motion-(quick|base|slow)\) var\(--ease-calm(-out)?\)/);
     }
   });
@@ -48,12 +49,13 @@ describe('motion tokens', () => {
       expect(block).toContain(distance);
     expect(block).toContain('--motion-scale: 1');
     expect(block).toContain('--motion-presence-scale: 1');
+    expect(block).toContain('--motion-turn: 0deg');
     // Keyframes move only by those distances, so reduced motion leaves just the fade.
     const keyframes = [...css.matchAll(/@keyframes motion-[a-z-]+ \{[^@]*/g)].map((m) => m[0]);
     for (const k of keyframes) {
       for (const t of k.matchAll(/transform:\s*([^;]+);/g))
         expect(t[1]).toMatch(
-          /^(translate[XY]\((calc\()?var\(--motion-[a-z]+\)|translateY\(calc|scale\((1|var\(--motion-presence-scale\))\)$)/,
+          /^(translate[XY]\((calc\()?var\(--motion-[a-z]+\)|translateY\(calc|scale\((1|var\(--motion-presence-scale\))\)|rotate\(var\(--motion-turn\)\)$)/,
         );
     }
   });

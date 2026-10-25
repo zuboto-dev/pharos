@@ -13,6 +13,8 @@ import { NotificationsProvider } from '../notifications/model';
 import { NotificationBell, NotificationModal, ToastStack } from '../notifications/ui';
 import { SearchButton, SearchProvider } from '../search/SearchPalette';
 import { PharosLogo } from './Logo';
+import { AgentsRailLink } from './AgentsPage';
+import { RoutinesRailLink } from './RoutinesPage';
 import { Sidebar } from './Sidebar';
 import { SIDEBAR_ID, SidebarToggle, usePeek, useSidebarPinned } from './sidebar-toggle';
 import { UpdateNotice } from './UpdateNotice';
@@ -141,6 +143,8 @@ export function AppShell() {
                   <SearchButton />
                   <NotificationBell />
                   <RunningAgentsButton />
+                  <AgentsRailLink />
+                  <RoutinesRailLink />
                 </div>
               </div>
             )}

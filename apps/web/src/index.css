@@ -20,6 +20,8 @@
   --motion-scale: 0.98;
   /* The presence dot (v0.2 B5) breathes: it shrinks a little as it fades. */
   --motion-presence-scale: 0.7;
+  /* A working icon's turn (Agents, Routines in the sidebar); still when reduced. */
+  --motion-turn: 360deg;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -30,6 +32,7 @@
     --motion-side: 0px;
     --motion-scale: 1;
     --motion-presence-scale: 1;
+    --motion-turn: 0deg;
   }
 }
 
@@ -190,6 +193,14 @@
   --animate-block-changed: motion-block-changed 1600ms ease-out;
   --animate-presence: motion-presence 1800ms ease-in-out infinite;
   --animate-shimmer: motion-shimmer 1800ms ease-in-out infinite;
+  /* A sidebar icon turns slowly while its page has something working (Agents, Routines). */
+  --animate-working: motion-working 2400ms linear infinite;
+
+  @keyframes motion-working {
+    to {
+      transform: rotate(var(--motion-turn));
+    }
+  }
 
   @keyframes motion-fade-in {
     from {

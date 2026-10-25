@@ -100,6 +100,32 @@ async function fakeRoutines(opts: { hang?: boolean; runStatus?: number; routines
         res.writeHead(200, { 'content-type': 'text/plain' });
         return res.end('# NEXT · garden\n- [ ] A1 auto water');
       }
+      if (req.method === 'GET' && url.pathname === '/api/runners')
+        return json(200, {
+          local: {
+            id: 'local',
+            name: 'This Mac',
+            kind: 'local',
+            status: { state: 'ready', detail: 'runs here' },
+          },
+          runners: [
+            {
+              id: 'box',
+              name: 'box',
+              kind: 'ssh',
+              host: 'box',
+              status: { state: 'ready', detail: 'ready' },
+              projects: ['garden'],
+            },
+          ],
+          candidates: [{ host: 'vm2', name: 'vm2', source: 'tailscale' }],
+          kinds: ['ssh', 'container', 'cloud'],
+          built: ['ssh'],
+        });
+      if (req.method === 'POST' && url.pathname.startsWith('/api/runners/')) {
+        if (url.pathname.endsWith('/setup')) return json(409, { error: 'box is busy' });
+        return json(200, { ok: true, ...(url.pathname.endsWith('/add') ? { id: 'vm2' } : {}) });
+      }
       if (url.pathname === '/api/log') {
         res.writeHead(200, { 'content-type': 'text/plain' });
         return res.end(`log ${url.searchParams.get('file')}`);
@@ -337,23 +363,54 @@ describe('applyChanges', () => {
   });
 });
 
+describe('runners through Pharos', () => {
+  it('lists them, passes the owner’s actions through, and refuses agents and bad input', async () => {
+    const fake = await fakeRoutines();
+    const app = appFor(fake.url);
+    const view = (await (await app.request('/api/routines/runners')).json()) as {
+      runners: { id: string }[];
+      candidates: { host: string }[];
+    };
+    expect(view.runners.map((r) => r.id)).toEqual(['box']);
+    expect(view.candidates.map((c) => c.host)).toEqual(['vm2']);
+    const add = await app.request('/api/routines/runners/add', post({ host: 'vm2' }));
+    expect(await add.json()).toEqual({ ok: true, id: 'vm2' });
+    expect(fake.seen.at(-1)).toMatchObject({ url: '/api/runners/add', body: '{"host":"vm2"}' });
+    expect((await app.request('/api/routines/runners/setup', post({ id: 'box' }))).status).toBe(
+      409,
+    );
+    expect((await app.request('/api/routines/runners/zap', post({ id: 'box' }))).status).toBe(400);
+    expect(
+      (await app.request('/api/routines/runners/add', post({ host: 'a; rm -rf ~' }))).status,
+    ).toBe(400);
+    const agent = await app.request(
+      '/api/routines/runners/check',
+      post(
+        { id: 'box' },
+        { 'x-pharos-author': 'agent:Claude Code', 'content-type': 'application/json' },
+      ),
+    );
+    expect(agent.status).toBe(403);
+  });
+});
+
 describe('where a project runs', () => {
   it('sets a project to one of the machines and back, and refuses an unknown one', () => {
     const conf = {
       ...CONFIG(),
-      machines: [{ id: 'axion-01', name: 'axion-01', host: 'axion-01' }],
+      runners: [{ id: 'axion-01', name: 'axion-01', kind: 'ssh' as const, host: 'axion-01' }],
     };
     const there = applyChanges(conf, [
-      { field: 'machine', project: 'bike', from: null, to: 'axion-01' },
+      { field: 'runner', project: 'bike', from: null, to: 'axion-01' },
     ]);
-    expect(there.projects[1]!.machine).toBe('axion-01');
+    expect(there.projects[1]!.runner).toBe('axion-01');
     const back = applyChanges(there, [
-      { field: 'machine', project: 'bike', from: 'axion-01', to: null },
+      { field: 'runner', project: 'bike', from: 'axion-01', to: null },
     ]);
-    expect('machine' in back.projects[1]!).toBe(false);
+    expect('runner' in back.projects[1]!).toBe(false);
     expect(() =>
-      applyChanges(conf, [{ field: 'machine', project: 'bike', from: null, to: 'nowhere' }]),
-    ).toThrow(/No machine "nowhere"/);
+      applyChanges(conf, [{ field: 'runner', project: 'bike', from: null, to: 'nowhere' }]),
+    ).toThrow(/No runner "nowhere"/);
   });
 });
 

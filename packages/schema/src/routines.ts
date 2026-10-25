@@ -176,12 +176,27 @@ export type RoutinesProject = {
   note?: string;
   pm?: { type: string; url?: string; project?: string } | null;
   cleanup?: number;
-  /** The id of one of `machines` its routines run on; absent: the Routines computer itself. */
-  machine?: string;
+  /** The id of one of `runners` its routines run on; absent: the Routines computer itself. */
+  runner?: string;
 };
 
-/** Another computer of the owner's that routines can run on (over SSH), e.g. axion-01. */
-export type RoutinesMachine = { id: string; name: string; host: string; home?: string };
+/** The kinds of place a routine can run besides the Routines computer (Routines `runners`). */
+export const RUNNER_KINDS = ['ssh', 'container', 'cloud'] as const;
+export type RunnerKind = (typeof RUNNER_KINDS)[number];
+
+/**
+ * Where and how routines can run unattended besides the Routines computer: a machine of the
+ * owner's over SSH, a throwaway container or VM, or a cloud agent service. Only an `isolated`
+ * runner that is thrown away after each run may skip permissions.
+ */
+export type RoutinesRunner = {
+  id: string;
+  name: string;
+  kind: RunnerKind;
+  host?: string;
+  home?: string;
+  isolated?: boolean;
+};
 
 export type RoutinesConfig = {
   schedule: Partial<Record<Routine, string>> & { timezone?: string };
@@ -189,8 +204,8 @@ export type RoutinesConfig = {
   dispatch: Record<string, Partial<Record<Difficulty, string>>>;
   cleanup?: { level?: number; scratch_days?: number };
   projects: RoutinesProject[];
-  /** The owner's other machines a project can run on (Routines `machines`). */
-  machines?: RoutinesMachine[];
+  /** Where else a project's routines can run (Routines `runners`). */
+  runners?: RoutinesRunner[];
   /** The owner's routines (newer Routines apps); see `routinesOf` for older ones. */
   routines?: RoutineDef[];
   [key: string]: unknown;
@@ -321,9 +336,9 @@ export const RoutinesChange = z.discriminatedUnion('field', [
     from: z.number(),
     to: z.number().min(0).max(24),
   }),
-  // Where a project's routines run: a machine id from `machines`, or null for this computer.
+  // Where a project's routines run: a runner id from `runners`, or null for this computer.
   z.object({
-    field: z.literal('machine'),
+    field: z.literal('runner'),
     project: Name,
     from: z.string().nullable(),
     to: z
@@ -370,6 +385,53 @@ export type RoutinesChange = z.infer<typeof RoutinesChange>;
 /** POST /api/routines/save. */
 export const RoutinesSave = z.object({ changes: z.array(RoutinesChange).min(1).max(200) });
 
+export type RunnerState =
+  | 'ready'
+  | 'needs-sign-in'
+  | 'not-set-up'
+  | 'unreachable'
+  | 'unchecked'
+  | 'checking'
+  | 'setting-up'
+  | 'not-built';
+
+/** A runner's last check (Routines bin/runners.py). */
+export type RunnerStatus = {
+  state: RunnerState;
+  detail: string;
+  checked?: string;
+  os?: string | null;
+  arch?: string | null;
+  node?: string | null;
+  pnpm?: string | null;
+  claude?: string | null;
+  memory_gb?: string | null;
+  disk_free_gb?: string | null;
+};
+
+/** GET /api/routines/runners: this computer, the owner's runners and machines to add. */
+export type RunnersView = {
+  local: { id: 'local'; name: string; kind: 'local'; status: RunnerStatus };
+  runners: (RoutinesRunner & { status: RunnerStatus; projects: string[] })[];
+  candidates: { host: string; name: string; source: 'tailscale' | 'ssh config'; os?: string }[];
+  kinds: RunnerKind[];
+  built: RunnerKind[];
+};
+
+/** POST /api/routines/runners/:action. */
+export const RunnerAction = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('add'),
+    host: z.string().regex(/^[\w.@-]{1,120}$/),
+    name: z.string().min(1).max(64).optional(),
+  }),
+  z.object({
+    action: z.enum(['check', 'setup', 'remove']),
+    id: z.string().regex(/^[\w.-]{1,64}$/),
+  }),
+]);
+export type RunnerAction = z.infer<typeof RunnerAction>;
+
 /** POST /api/routines/run: one routine for one project, now. */
 export const RoutinesRun = z.object({ routine: z.string().regex(ROUTINE_ID), project: Name });
 
@@ -384,7 +446,7 @@ export function describeRoutinesChange(change: RoutinesChange): string {
       return `${change.project}: night budget ${money(change.from)} → ${money(change.to)}`;
     case 'hours':
       return `${change.project}: night hours ${change.from} h → ${change.to} h`;
-    case 'machine':
+    case 'runner':
       return `${change.project}: runs on ${change.to ?? 'this computer'} (was ${change.from ?? 'this computer'})`;
     case 'schedule':
       return `${ROUTINE_NAMES[change.routine]} at ${change.from ?? 'no time'} → ${change.to}`;
@@ -429,8 +491,8 @@ export function currentRoutinesValue(config: RoutinesConfig, change: RoutinesCha
     case 'budget_usd':
     case 'hours':
       return config.projects.find((p) => p.name === change.project)?.[change.field];
-    case 'machine':
-      return config.projects.find((p) => p.name === change.project)?.machine ?? null;
+    case 'runner':
+      return config.projects.find((p) => p.name === change.project)?.runner ?? null;
     case 'schedule':
       return config.schedule?.[change.routine];
     case 'timezone':

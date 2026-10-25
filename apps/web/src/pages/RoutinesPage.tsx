@@ -21,7 +21,7 @@ import {
   type RoutinesConfig,
   type RoutinesFolder,
   type RoutinesPharos,
-  type RoutinesMachine,
+  type RunnersView,
   type RoutinesProject,
   type RoutineProposalView,
   type RoutinesCurrent,
@@ -76,6 +76,7 @@ import { plural } from '../lib/format';
 import { isOpen as needsOwner } from './DeskPage';
 import { LoadError } from './onboarding';
 import { Switch } from './settings-ui';
+import { RUNNER_WORDS, RunnersCard, useRunners } from './routines-runners';
 
 // The Routines page: the owner's routines (the evening wrap-up, the night run, the morning report
 // and any the owner adds) at a glance. The engine is the Routines app; Pharos reads it through
@@ -326,12 +327,12 @@ export function diffConfig(base: Draft, draft: Draft, editable = true): Routines
       });
     if (p.hours !== was.hours)
       changes.push({ field: 'hours', project: p.name, from: was.hours, to: p.hours });
-    if ((p.machine ?? null) !== (was.machine ?? null))
+    if ((p.runner ?? null) !== (was.runner ?? null))
       changes.push({
-        field: 'machine',
+        field: 'runner',
         project: p.name,
-        from: was.machine ?? null,
-        to: p.machine ?? null,
+        from: was.runner ?? null,
+        to: p.runner ?? null,
       });
   }
   if (editable) {
@@ -1749,11 +1750,11 @@ function ProjectDetail({
   onLog,
   onRemove,
   onEnrolled,
-  machines = [],
+  runners = [],
 }: {
   project: RoutinesProject;
-  /** The owner's other machines (routines.json `machines`): where this project's routines run. */
-  machines?: RoutinesMachine[];
+  /** Where else its routines can run, with each runner's last check (Where routines run). */
+  runners?: RunnersView['runners'];
   status: RoutinesProjectStatus | undefined;
   routines: RoutineDef[];
   pharos: RoutinesPharos | undefined;
@@ -1930,19 +1931,26 @@ function ProjectDetail({
             <span className="text-muted">Nothing</span>
           )}
         </Fact>
-        {machines.length > 0 && (
+        {runners.length > 0 && (
           <Fact icon={Server} label="Runs on">
             <select
               aria-label={`Where ${project.name}'s routines run`}
-              data-machine=""
-              value={project.machine ?? ''}
-              onChange={(e) => set({ machine: e.target.value || undefined })}
+              data-runner-select=""
+              value={project.runner ?? ''}
+              onChange={(e) => set({ runner: e.target.value || undefined })}
               className="rounded-control border border-line bg-surface px-1.5 py-0.5 text-sm"
             >
               <option value="">This Mac</option>
-              {machines.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
+              {runners.map((r) => (
+                <option
+                  key={r.id}
+                  value={r.id}
+                  disabled={r.status.state !== 'ready' && r.id !== project.runner}
+                >
+                  {r.name}
+                  {r.status.state === 'ready'
+                    ? ''
+                    : ` (${RUNNER_WORDS[r.status.state]?.label ?? r.status.state})`}
                 </option>
               ))}
             </select>
@@ -2293,6 +2301,7 @@ type Editing = { routine: RoutineDef | null };
 export function RoutinesPage() {
   const state = useResource<RoutinesState>('/api/routines/state');
   const desk = useResource<Desk>('/api/desk');
+  const runnersView = useRunners();
   const { reload } = state;
   const reloadDesk = desk.reload;
   const data = state.data?.available ? state.data : null;
@@ -2576,7 +2585,7 @@ export function RoutinesPage() {
             onLog={(file) => void openLog(file)}
             onRemove={missing ? () => setRemoving(p) : undefined}
             onEnrolled={(enrolled) => setEnrolled(p, enrolled)}
-            machines={draft?.machines ?? []}
+            runners={runnersView.data?.runners ?? []}
           />
         )}
       </li>
@@ -2775,6 +2784,7 @@ export function RoutinesPage() {
             </p>
           )}
 
+          <RunnersCard view={runnersView} />
           <HowItRuns draft={draft} config={data.config} edit={edit} />
         </>
       )}

@@ -2,6 +2,8 @@ import {
   ROUTINE_FILES,
   ROUTINE_LOG,
   RoutinesRun,
+  RunnerAction,
+  type RunnersView,
   RoutinesSave,
   currentRoutinesValue,
   describeRoutinesChange,
@@ -317,6 +319,46 @@ export function routinesRoutes(
     }
   });
 
+  // Runners (where routines run besides this computer): listed, checked, set up and removed by the
+  // Routines app; Pharos passes the owner's requests through.
+  app.get('/runners', async (c) => {
+    try {
+      const res = await call('/api/runners');
+      if (!res.ok) return fail(c, 502, 'upstream', `Routines answered HTTP ${res.status}`);
+      return c.json((await res.json()) as RunnersView);
+    } catch (err) {
+      return unreachable(c, err);
+    }
+  });
+
+  app.post('/runners/:action', async (c) => {
+    const parsed = RunnerAction.safeParse({
+      ...((await c.req.json().catch(() => ({}))) as object),
+      action: c.req.param('action'),
+    });
+    if (!parsed.success)
+      return fail(c, 400, 'invalid', 'Unknown runner action or a bad id or host');
+    const { action, ...body } = parsed.data;
+    try {
+      const res = await call(`/api/runners/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const answer = (await res.json().catch(() => ({}))) as { error?: unknown };
+      if (!res.ok)
+        return fail(
+          c,
+          res.status === 409 ? 409 : res.status === 404 ? 404 : res.status === 400 ? 400 : 502,
+          res.status === 409 ? 'conflict' : 'upstream',
+          typeof answer.error === 'string' ? answer.error : `HTTP ${res.status}`,
+        );
+      return c.json(answer);
+    } catch (err) {
+      return unreachable(c, err);
+    }
+  });
+
   // Saves the page's edits into routines.json: each edit names the value it changes, and the
   // save is refused when routines.json no longer holds it (changed on disk or in another tab).
   app.post('/save', async (c) => {
@@ -391,13 +433,13 @@ export function applyChanges(conf: RoutinesConfig, changes: RoutinesChange[]): R
         if (project) Object.assign(project, { [ch.field]: ch.to });
         break;
       }
-      case 'machine': {
+      case 'runner': {
         const project = next.projects.find((p) => p.name === ch.project);
         if (!project) break;
-        if (ch.to && !(next.machines ?? []).some((m) => m.id === ch.to))
-          throw new SaveRefused(400, 'invalid', `No machine "${ch.to}" in routines.json`);
-        if (ch.to) project.machine = ch.to;
-        else delete project.machine;
+        if (ch.to && !(next.runners ?? []).some((r) => r.id === ch.to))
+          throw new SaveRefused(400, 'invalid', `No runner "${ch.to}" in routines.json`);
+        if (ch.to) project.runner = ch.to;
+        else delete project.runner;
         break;
       }
       case 'schedule':

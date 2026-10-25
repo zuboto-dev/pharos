@@ -137,3 +137,21 @@ describe('reverting', () => {
     expect(table).toContain('Assignee— → Alex');
   });
 });
+
+describe('when an item was raised', () => {
+  it('shows when, by whom and why on top of its details', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      if (url.startsWith('/api/revisions/1'))
+        return Response.json(rev(1, { message: 'Plan the view work' }));
+      return Response.json([]);
+    });
+    renderDrawer({ entity: 'task_a9f652e80406' });
+    const raised = await screen.findByTestId('raised');
+    expect(raised.textContent).toMatch(/^Raised (Oct 5, 2026|Oct 5), /);
+    await waitFor(() => expect(raised.textContent).toMatch(/by\s+Claude Code/));
+    expect(raised.textContent).toContain('“Plan the view work”');
+    expect(urls).toContain('/api/revisions/1');
+  });
+});

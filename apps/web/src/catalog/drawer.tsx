@@ -26,7 +26,7 @@ import { Loading, SkeletonShape, SkeletonRows } from './skeleton';
 import { Decision } from './components/decision-block';
 import { RecordDetails } from './components/records';
 import { useResource } from '../lib/api';
-import { humanize, plural, timeAgo } from '../lib/format';
+import { dateTime, humanize, plural, timeAgo } from '../lib/format';
 import { useViewData, type OpenTarget } from './context';
 import { Clickable, EntityRef, TYPE_LABELS, TaskCheck, labelOf } from './interactive';
 import { EditOptionsButton, OptionBadge, useOptions } from './options';
@@ -422,6 +422,37 @@ function EntityHistory({ id }: { id: string }) {
 }
 
 /**
+ * When, by whom and why an item was raised, on top of its details: the time comes with the item,
+ * the author and the reason (the message of the change that made it) load after.
+ */
+function Raised({ entity }: { entity: Entity }) {
+  const revision = useResource<RevisionSummary>(`/api/revisions/${entity.createdRev}`);
+  const rev = revision.data;
+  const Icon = rev ? AUTHOR_ICONS[rev.author.kind] : null;
+  const edited = entity.updatedRev !== entity.createdRev;
+  return (
+    <div className="-mt-3 space-y-0.5 text-xs text-muted" data-testid="raised">
+      <p className="flex flex-wrap items-center gap-x-1.5">
+        <span title={new Date(entity.createdAt).toLocaleString()}>
+          Raised {dateTime(entity.createdAt)} · {timeAgo(entity.createdAt)}
+        </span>
+        {rev && Icon && (
+          <span className="inline-flex items-center gap-1">
+            by <Icon className="size-3.5" aria-hidden /> {rev.author.name}
+          </span>
+        )}
+        {edited && (
+          <span title={new Date(entity.updatedAt).toLocaleString()}>
+            · changed {timeAgo(entity.updatedAt)}
+          </span>
+        )}
+      </p>
+      {rev?.message && <p className="line-clamp-2">“{rev.message}”</p>}
+    </div>
+  );
+}
+
+/**
  * What a page says about a decision, drawn by the page that holds the panel (the project page
  * passes the document's renderer; the catalog doesn't import pages).
  */
@@ -440,6 +471,7 @@ function EntityDetails({ entity }: { entity: Entity }) {
           ) : undefined
         }
       />
+      {entity.type !== 'project' && <Raised entity={entity} />}
       {/* Where its document is and why it can't open yet, with Approve when asked (R7.12). */}
       {entity.type === 'artifact' && (
         <ArtifactSourcePanel artifact={entity as Entity<'artifact'>} />

@@ -32,6 +32,23 @@ export function formatDate(date: string, short = false, now = new Date()): strin
   return format.format(new Date(y!, m! - 1, d!));
 }
 
+const clock = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+
+/**
+ * A moment as a reader says it, in their time zone: "today 1:19 AM", "yesterday 9:02 PM",
+ * "Oct 20, 1:19 AM" (the year only when it isn't this year).
+ */
+export function dateTime(iso: string, now = new Date()): string {
+  const at = new Date(iso);
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(now) - day(at)) / 86400000);
+  const time = clock.format(at);
+  if (days === 0) return `today ${time}`;
+  if (days === 1) return `yesterday ${time}`;
+  const date = (at.getFullYear() === now.getFullYear() ? shortDate : dateFormat).format(at);
+  return `${date}, ${time}`;
+}
+
 export function humanize(value: string): string {
   const text = value.replaceAll('_', ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);

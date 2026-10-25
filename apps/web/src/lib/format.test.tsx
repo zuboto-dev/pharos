@@ -5,7 +5,7 @@ import dataset from '../catalog/__fixtures__/dataset.json';
 import { ViewDataProvider, useViewData } from '../catalog/context';
 import { RecordValue } from '../catalog/components/records';
 import { fileTitle } from '../files/files';
-import { formatDate } from './format';
+import { dateTime, formatDate } from './format';
 
 afterEach(cleanup);
 
@@ -49,5 +49,15 @@ describe('dates and links in tables (v0.2 B10)', () => {
     expect(link.getAttribute('href')).toBe('https://apps.ankiweb.net');
     expect(link.getAttribute('title')).toBe('https://apps.ankiweb.net');
     expect(link.textContent).not.toContain('https://');
+  });
+});
+
+describe('dateTime', () => {
+  const now = new Date(2026, 9, 24, 17, 45);
+  it('says today and yesterday, and the date otherwise', () => {
+    expect(dateTime(new Date(2026, 9, 24, 1, 19).toISOString(), now)).toMatch(/^today 1:19/);
+    expect(dateTime(new Date(2026, 9, 23, 21, 2).toISOString(), now)).toMatch(/^yesterday 9:02/);
+    expect(dateTime(new Date(2026, 9, 20, 1, 19).toISOString(), now)).toMatch(/^Oct 20, 1:19/);
+    expect(dateTime(new Date(2025, 2, 1, 8, 0).toISOString(), now)).toMatch(/^Mar 1, 2025, 8:00/);
   });
 });

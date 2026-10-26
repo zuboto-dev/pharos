@@ -109,7 +109,7 @@ pnpm is pinned in `packageManager`. If `pnpm` isn't installed, replace `pnpm` in
     `install`) runs `update` when `.git/refs/heads/main` or `packed-refs` changes and every 5
     minutes: it builds the new main in the other slot (`pnpm install --frozen-lockfile`,
     `pnpm build`), backs up the database to `~/.pharos/backups` (last 5), switches, restarts,
-    and switches back if the server isn't healthy within 20 s. A failed build or start leaves
+    and switches back if the server isn't healthy within 60 s. A failed build or start leaves
     the old version running and that commit is skipped until main moves again; updates wait
     while the answering agent is queued or running. Log: `~/.pharos/update.log`. Merging to main
     deploys; no re-install needed.

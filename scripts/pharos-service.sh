@@ -16,7 +16,7 @@
 # local `main` in ~/.pharos/slots/{a,b}, with ~/.pharos/app pointing at the one deployed (its
 # commit is in ~/.pharos/deployed). An update builds main in the other slot, backs up the
 # database (~/.pharos/backups, the last 5), switches over, restarts, and switches back if the
-# server isn't healthy within 20 s. A failed build never touches the running server. Updates
+# server isn't healthy within 60 s. A failed build never touches the running server. Updates
 # wait while the answering agent is working. Log: ~/.pharos/update.log.
 #
 # PORT, PHAROS_DB, PHAROS_AGENT_COMMAND, PHAROS_AGENT_LOG, and PHAROS_WEB_URL set while installing
@@ -212,6 +212,10 @@ bootstrap() { # [label plist]
 # with that burst is still healthy (a 1 s limit once rolled back a good update).
 healthy() { curl -sf -m 3 "$HEALTH" >/dev/null 2>&1; }
 
+# How long a new server has to start and answer: other agents' work can load this Mac heavily
+# (load 24 once made a good update take 14 s just to listen, and roll back).
+START_SECONDS=${PHAROS_START_SECONDS:-60}
+
 wait_healthy() { # [seconds]
   local _
   for _ in $(seq 1 $(( ${1:-10} * 4 ))); do
@@ -230,7 +234,8 @@ wait_started() { # seconds
   wait_healthy "$1" || return 1
   pid=$(service_pid)
   sleep 3
-  [ -n "$pid" ] && [ "$pid" = "$(service_pid)" ] && healthy
+  # Still the same process, answering (a busy machine may need a few tries).
+  [ -n "$pid" ] && [ "$pid" = "$(service_pid)" ] && wait_healthy 10
 }
 
 log() { mkdir -p "$PHAROS_HOME"; printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$UPDATE_LOG"; }
@@ -422,13 +427,13 @@ do_update() {
   fi
   use_slot "$slot"
   launchctl kickstart -k "$DOMAIN/$LABEL"
-  if wait_started 20; then
+  if wait_started "$START_SECONDS"; then
     rm -f "$FAILED"
     log "update: now running $(short "$sha") (pid $(service_pid)); healthy at $HEALTH"
     return 0
   fi
   echo "$sha" > "$FAILED"
-  log "update: $(short "$sha") did not start healthy within 20 s; rolling back to $(short "$old"). Server log:"
+  log "update: $(short "$sha") did not start healthy within $START_SECONDS s; rolling back to $(short "$old"). Server log:"
   tail -n 15 "$LOG" >> "$UPDATE_LOG" 2>/dev/null || true
   if [ -n "$old_slot" ] && slot_built "$old_slot"; then
     use_slot "$old_slot"
@@ -436,7 +441,7 @@ do_update() {
     if build_slot "$old_slot" "$old"; then use_slot "$old_slot"; else log "update: could not rebuild $(short "$old")"; fi
   fi
   launchctl kickstart -k "$DOMAIN/$LABEL"
-  if wait_started 20; then
+  if wait_started "$START_SECONDS"; then
     log "update: rolled back; running $(short "$old") again (pid $(service_pid)), healthy"
   else
     log "update: rolled back to $(short "$old") but it is not healthy either; see $LOG"

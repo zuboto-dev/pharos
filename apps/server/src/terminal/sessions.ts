@@ -59,6 +59,15 @@ const PRIVATE_MODE = /\x1b\[\?([\d;]+)([hl])/g;
 /** The alternate screen modes, replayed before the others (switching screens resets some). */
 const SCREEN_MODES = new Set([47, 1047, 1049]);
 
+/** Bracketed paste: the panel wraps pasted text in these when the agent asked for it. */
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+/**
+ * A paste whose end marker doesn't come within this long after its last input is over (a panel
+ * that went away mid-paste), so Enter can start a turn again. One paste arrives within ms.
+ */
+const PASTE_MS = 2000;
+
 export class TerminalSession {
   readonly clients = new Set<TerminalClient>();
   /** Recent output (up to twice SCROLLBACK, trimmed in one go), replayed to a panel that (re)attaches. */
@@ -86,6 +95,10 @@ export class TerminalSession {
   turnEndedAt: number | undefined;
   /** Panels attached in a tab the owner can't see (a hidden browser tab). */
   readonly hidden = new Set<TerminalClient>();
+  /** Inside a bracketed paste, which may span several inputs. */
+  private pasting = false;
+  /** The end of the last input when it may be the start of a paste marker split across two. */
+  private inputTail = '';
 
   constructor(
     readonly key: string,
@@ -118,6 +131,43 @@ export class TerminalSession {
       state: 'idle',
       since: Math.max(this.lastOutputAt ?? this.startedAt, this.turnEndedAt ?? this.startedAt),
     };
+  }
+
+  /**
+   * Whether the owner's input `data` holds an Enter: a carriage return typed, not one inside a
+   * bracketed paste (the terminal sends a pasted newline as a carriage return there). Follows a
+   * paste across inputs, its markers too. `at` and `lastInputAt` (the input before) tell a paste
+   * whose end never came.
+   */
+  submits(data: string, at: number): boolean {
+    if (this.pasting && at - (this.lastInputAt ?? at) > PASTE_MS) this.pasting = false;
+    const text = this.inputTail + data;
+    let submit = false;
+    let pos = 0;
+    while (pos < text.length) {
+      if (this.pasting) {
+        const end = text.indexOf(PASTE_END, pos);
+        if (end < 0) break;
+        this.pasting = false;
+        pos = end + PASTE_END.length;
+      } else {
+        const start = text.indexOf(PASTE_START, pos);
+        if (text.slice(pos, start < 0 ? undefined : start).includes('\r')) submit = true;
+        if (start < 0) break;
+        this.pasting = true;
+        pos = start + PASTE_START.length;
+      }
+    }
+    // A marker cut short at the end (it holds no carriage return, so it is never counted twice).
+    this.inputTail = '';
+    for (let n = Math.min(PASTE_START.length - 1, text.length); n > 0; n--) {
+      const suffix = text.slice(-n);
+      if (PASTE_START.startsWith(suffix) || PASTE_END.startsWith(suffix)) {
+        this.inputTail = suffix;
+        break;
+      }
+    }
+    return submit;
   }
 
   /** Keeps output for replay and notes the modes it sets. */
@@ -351,9 +401,9 @@ export class TerminalSessions {
     const session = this.get(key);
     if (!session) return;
     const now = this.now();
+    // Enter sends a carriage return; a pasted newline (inside a bracketed paste) does not submit.
+    if (session.submits(data, now)) session.lastSubmitAt = now;
     session.lastInputAt = now;
-    // Enter sends a carriage return (a pasted newline does not submit).
-    if (data.includes('\r')) session.lastSubmitAt = now;
     session.pty.write(data);
   }
 

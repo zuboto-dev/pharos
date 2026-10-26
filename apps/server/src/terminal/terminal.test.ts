@@ -394,6 +394,67 @@ describe('terminal sessions', () => {
     expect(second.killed).toEqual([]);
   });
 
+  it('a pasted newline is not Enter: only an Enter outside a bracketed paste starts a turn', () => {
+    let now = 1000;
+    const sessions = new TerminalSessions(fakeSpawn, { now: () => now, killGroup: () => {} });
+    const session = sessions.attach('p1', launch, client(), size);
+    const pty = spawned[0]!;
+    // The agent answered: waiting for the owner.
+    sessions.input('p1', 'hello\r');
+    pty.emit('Hi.');
+    now += 1000;
+    sessions.turnEnded(session, 'hook');
+    expect(session.state(now).state).toBe('waiting');
+    const asked = session.lastSubmitAt;
+
+    // A multi-line paste in one input: the agent gets it as is, nothing is sent yet.
+    now += 1000;
+    const paste = '\x1b[200~line one\rline two\r\x1b[201~';
+    sessions.input('p1', paste);
+    pty.emit('[Pasted text +2 lines]');
+    expect(pty.written.at(-1)).toBe(paste);
+    expect(session.lastInputAt).toBe(now);
+    expect(session.lastSubmitAt).toBe(asked);
+    expect(session.state(now).state).toBe('waiting');
+
+    // A paste split across inputs, its markers too.
+    now += 100;
+    for (const chunk of ['\x1b[20', '0~first\r', 'second\r', 'third\r\x1b', '[201~'])
+      sessions.input('p1', chunk);
+    expect(session.lastSubmitAt).toBe(asked);
+    expect(session.state(now).state).toBe('waiting');
+
+    // Enter typed after the paste sends it: a turn starts.
+    now += 1000;
+    sessions.input('p1', '\r');
+    expect(session.lastSubmitAt).toBe(now);
+    // So does an Enter right after a paste in the same input.
+    now += 1000;
+    sessions.input('p1', '\x1b[200~a\rb\x1b[201~\r');
+    expect(session.lastSubmitAt).toBe(now);
+    // A paste whose end never came (the panel went away) doesn't swallow Enter for good.
+    now += 1000;
+    sessions.input('p1', '\x1b[200~cut off\r');
+    expect(session.lastSubmitAt).toBe(now - 1000);
+    now += 5000;
+    sessions.input('p1', '\r');
+    expect(session.lastSubmitAt).toBe(now);
+  });
+
+  it('a pasted newline does not end a Codex turn by going quiet', () => {
+    let now = 1000;
+    const sessions = new TerminalSessions(fakeSpawn, { now: () => now, killGroup: () => {} });
+    const session = sessions.attach('p1', () => ({ ...launch(), preset: 'codex' }), client(), size);
+    spawned[0]!.emit('Codex ready');
+    now += 1000;
+    sessions.input('p1', '\x1b[200~fix this\rand this\x1b[201~');
+    now += 500;
+    spawned[0]!.emit('fix this and this');
+    now += 20_000;
+    expect(sessions.checkQuiet()).toEqual([]);
+    expect(session.turnEndedAt).toBeUndefined();
+  });
+
   it('survives a panel whose connection throws', () => {
     const sessions = new TerminalSessions(fakeSpawn, { killGroup: () => {} });
     sessions.attach('p1', launch, { send: () => {}, close: () => {} }, size);

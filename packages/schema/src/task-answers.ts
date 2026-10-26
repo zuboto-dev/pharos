@@ -18,9 +18,10 @@ export const OWNER_TASK_FIELDS = ['reply', 'deferredUntil'] as const;
 
 /**
  * Where a task stands as an answer: done, won't do (cancelled), replied, later (deferred to a day
- * after today), or open. A deferral whose day has come is open again.
+ * after today), in review (the "review" meaning: nothing is left for the owner, an agent checks
+ * it), or open. A deferral whose day has come is open again.
  */
-export type TaskAnswerState = 'done' | 'wontDo' | 'replied' | 'later' | 'open';
+export type TaskAnswerState = 'done' | 'wontDo' | 'replied' | 'later' | 'review' | 'open';
 
 export function taskAnswerState(
   data: { reply?: string; deferredUntil?: string },
@@ -31,6 +32,7 @@ export function taskAnswerState(
 ): TaskAnswerState {
   if (meaning === 'done') return 'done';
   if (meaning === 'cancelled') return 'wontDo';
+  if (meaning === 'review') return 'review';
   if (data.reply) return 'replied';
   if (data.deferredUntil && data.deferredUntil > today) return 'later';
   return 'open';

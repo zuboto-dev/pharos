@@ -6,7 +6,15 @@ import {
   type TaskAnswerState,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { Ban, CalendarClock, Clock, Ellipsis, MessageSquare, Undo2 } from 'lucide-react';
+import {
+  Ban,
+  CalendarClock,
+  Clock,
+  Ellipsis,
+  MessageSquare,
+  SearchCheck,
+  Undo2,
+} from 'lucide-react';
 import {
   useEffect,
   useId,
@@ -254,7 +262,9 @@ export function TaskAnswered({
       ? [Ban, 'Won’t do', 'Won’t do']
       : state === 'later'
         ? [CalendarClock, `Later · ${formatDate(until ?? '', true)}`, `Later, on ${until}`]
-        : [MessageSquare, reply ?? '', `Your reply: ${reply ?? ''}`];
+        : state === 'review'
+          ? [SearchCheck, 'Needs review', 'Nothing left for you: an agent checks it']
+          : [MessageSquare, reply ?? '', `Your reply: ${reply ?? ''}`];
   return (
     <span data-task-answer={state} className="flex min-w-0 shrink items-center gap-1">
       <span

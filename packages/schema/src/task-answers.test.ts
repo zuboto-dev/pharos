@@ -82,3 +82,10 @@ describe("a task's owner answers", () => {
     expect(nextMonday('2026-10-25')).toBe('2026-10-26'); // a Sunday
   });
 });
+
+describe('a task in review', () => {
+  it('is answered: nothing is left for the owner, an agent checks it', () => {
+    expect(taskAnswerState({}, 'review', '2026-10-26')).toBe('review');
+    expect(taskAnswerState({ reply: 'x' }, 'review', '2026-10-26')).toBe('review');
+  });
+});

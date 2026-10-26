@@ -5,6 +5,7 @@ import {
   ENTITIES,
   ENTITY_TYPES,
   OWNER_DECISION_FIELDS,
+  isProjectManagementView,
   OWNER_TASK_FIELDS,
   decisionIssues,
   decisionWarnings,
@@ -116,7 +117,9 @@ function optionKeysOf(type: EntityType): OptionKey[] {
 const SYSTEM: Author = { kind: 'system', name: 'pharos' };
 
 /** Views every new project starts with. */
-const DEFAULT_VIEWS = [{ name: 'Overview', template: 'overview', pinned: true }];
+// Not pinned: once the project has a main page, the Overview waits under More unless the owner
+// pins it.
+const DEFAULT_VIEWS = [{ name: 'Overview', template: 'overview', pinned: false }];
 
 /** For each entity type, the fields on other types that reference it. */
 const INCOMING_REFS = new Map<EntityType, { type: EntityType; field: string; spec: RefSpec }[]>();
@@ -663,6 +666,7 @@ export class Store {
           agentDecisionIssue(this, tx.changes) ??
           agentTaskAnswerIssue(tx.changes) ??
           agentOutcomeIssue(tx.changes) ??
+          agentMainPageIssue(tx.changes) ??
           agentBlockScopeIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
@@ -709,6 +713,28 @@ function agentFileIssue(op: Operation): string | undefined {
 function agentArtifactFileIssue(op: Operation): string | undefined {
   if (op.type !== 'artifact' || op.op === 'delete' || !('fileId' in op.data)) return undefined;
   return "agents can't set fileId; put the local path in uri and Pharos links it to the project file";
+}
+
+/**
+ * The main page is revised, not put away: agents can't archive or delete it, or make it an
+ * ordinary page; the owner can (in Pharos, or by making another page the main page).
+ */
+function agentMainPageIssue(changes: Change[]): string | undefined {
+  for (const change of changes) {
+    // Project-management views stay out of the tabs unless the owner pins them.
+    if (
+      change.type === 'view' &&
+      change.after?.pinned === true &&
+      change.before?.pinned !== true &&
+      isProjectManagementView({ data: change.after as Entity<'view'>['data'] })
+    )
+      return `${describe('view', change.id, change.after)}: only the owner pins a project-management view (tasks, stages, goals); leave pinned out, and put what a reader must see on the main page`;
+    if (change.type !== 'view' || change.before?.kind !== 'main') continue;
+    const after = change.after;
+    if (!after || after.archived === true || after.kind !== 'main')
+      return `${describe('view', change.id, change.before)}: the main page is revised, not archived, deleted or replaced; change it with view_update (doc) and say why in the message`;
+  }
+  return undefined;
 }
 
 /**
@@ -1306,6 +1332,7 @@ class Transaction {
       if (entity.type === 'view') {
         issues.push(...this.viewQueryIssues(entity as Entity<'view'>, prefix));
         issues.push(...this.reportPageIssues(entity as Entity<'view'>, prefix));
+        issues.push(...this.mainPageIssues(entity as Entity<'view'>, prefix));
       }
       if (entity.type === 'request')
         issues.push(...this.blockRequestIssues(entity as Entity<'request'>, prefix));
@@ -1532,6 +1559,27 @@ class Transaction {
     return [
       `${prefix}: a view has one of spec (a board of blocks), page (a report page) or doc (a report document), not ${kinds.map(([key]) => key).join(' and ')}; clear the others to keep one`,
     ];
+  }
+
+  /**
+   * The main page says what the project is for: it is a document (or a report page), and a
+   * project has one. Another page becomes the main page only when the old one stops being it.
+   */
+  private mainPageIssues(view: Entity<'view'>, prefix: string): string[] {
+    if (view.data.kind !== 'main') return [];
+    const issues: string[] = [];
+    if (!view.data.doc && !view.data.page)
+      issues.push(
+        `${prefix}: the main page is a document the reader reads (doc), not a board; give doc`,
+      );
+    const other = this.store
+      .list('view', { projectId: view.data.projectId })
+      .find((v) => v.id !== view.id && v.data.kind === 'main');
+    if (other)
+      issues.push(
+        `${prefix}: the project already has a main page, “${other.data.name}” (${other.id}); revise it with view_update instead of making another`,
+      );
+    return issues;
   }
 
   /** "Ask about this block" (R10) needs a block: report pages (R13) and documents (R14) have none. */

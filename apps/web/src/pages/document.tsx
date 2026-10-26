@@ -1,12 +1,15 @@
 import {
   docLeaves,
+  type BlockChange,
+  type DiffPart,
+  type DocComparison,
   type DocBlock,
   type DocLeafBlock,
   type Entity,
   type Widget,
 } from '@pharos/schema';
 import clsx from 'clsx';
-import { ArrowUpRight, CircleCheck, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, CircleCheck, ExternalLink, Minus, PenLine, Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import {
   useEffect,
@@ -203,6 +206,143 @@ export function DocumentView({ view }: { view: Entity<'view'> }) {
             <MediaPanel view={view} blocks={doc.blocks} />
           </BoardActionsProvider>
         </BoardFilesProvider>
+      </FileViewerProvider>
+    </VariantProvider>
+  );
+}
+
+const CHANGE_LOOK: Record<
+  Exclude<BlockChange, 'same'>,
+  { label: string; icon: typeof Plus; box: string; tag: string }
+> = {
+  added: {
+    label: 'Added',
+    icon: Plus,
+    box: 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30',
+    tag: 'text-emerald-700 dark:text-emerald-300',
+  },
+  changed: {
+    label: 'Changed',
+    icon: PenLine,
+    box: 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20',
+    tag: 'text-amber-700 dark:text-amber-300',
+  },
+  removed: {
+    label: 'Removed',
+    icon: Minus,
+    box: 'border-rose-500 bg-rose-50/50 opacity-75 dark:bg-rose-950/20',
+    tag: 'text-rose-700 dark:text-rose-300',
+  },
+};
+
+const ADDED_HREF = '#pharos-added';
+/** Markdown symbols a marker around a changed word could break. */
+const MARKUP = /[*_`#[\]<>|~]/;
+
+/** Wraps each run of words in a part (spaces and line breaks stay outside the marker). */
+function marked(text: string, wrap: (words: string) => string) {
+  return text.replace(/[^\s]+(?:[ \t]+[^\s]+)*/g, (words) => wrap(words));
+}
+
+/**
+ * A changed text block's words, drawn as the text reads (headings, bold, lists), the words
+ * taken out struck through and the words put in marked. When a change touches markdown symbols,
+ * the words are shown as plain text instead, so a marker never breaks the formatting.
+ */
+function WordChanges({ words }: { words: DiffPart[] }) {
+  const plain = words.some((w) => w.op !== 'same' && MARKUP.test(w.text));
+  if (plain)
+    return (
+      <p className="text-[0.95rem] leading-relaxed whitespace-pre-wrap">
+        {words.map((w, i) =>
+          w.op === 'removed' ? (
+            <del key={i} className={DEL}>
+              {w.text}
+            </del>
+          ) : w.op === 'added' ? (
+            <ins key={i} className={INS}>
+              {w.text}
+            </ins>
+          ) : (
+            <span key={i}>{w.text}</span>
+          ),
+        )}
+      </p>
+    );
+  const source = words
+    .map((w) =>
+      w.op === 'removed'
+        ? marked(w.text, (x) => `~~${x}~~`)
+        : w.op === 'added'
+          ? marked(w.text, (x) => `[${x}](${ADDED_HREF})`)
+          : w.text,
+    )
+    .join('');
+  return (
+    <Markdown
+      components={{
+        del: ({ children }) => <del className={DEL}>{children}</del>,
+        a: ({ href, children }) =>
+          href === ADDED_HREF ? (
+            <ins className={INS}>{children}</ins>
+          ) : (
+            <a href={href}>{children}</a>
+          ),
+      }}
+    >
+      {source}
+    </Markdown>
+  );
+}
+
+const DEL = 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200';
+const INS =
+  'bg-emerald-100 text-emerald-900 no-underline dark:bg-emerald-950/60 dark:text-emerald-100';
+
+/**
+ * One version of a document compared with the one before (the page's version history): every
+ * block as that version left it, those added, changed or removed marked on the left edge with a
+ * word and a symbol (never colour alone); a changed text shows its words taken out and put in.
+ * A drawing that changed is named, not drawn: its frame only serves the page as it is now.
+ */
+export function DocumentCompare({
+  view,
+  comparison,
+}: {
+  view: Entity<'view'>;
+  comparison: DocComparison;
+}) {
+  return (
+    <VariantProvider variant="document">
+      <FileViewerProvider>
+        <article aria-label={`${view.data.name}, compared`} className="doc doc-flow pt-2 pb-16">
+          {comparison.blocks.map(({ block, change, words }) => {
+            const drawn =
+              block.kind === 'drawing' && change !== 'same' ? (
+                <p className="text-sm text-muted">
+                  A drawing{change === 'removed' ? ' was here' : ''}.
+                </p>
+              ) : words ? (
+                <WordChanges words={words} />
+              ) : (
+                <DocTopBlock view={view} block={block} />
+              );
+            if (change === 'same') return <div key={block.id}>{drawn}</div>;
+            const look = CHANGE_LOOK[change];
+            return (
+              <div
+                key={`${change}:${block.id}`}
+                data-change={change}
+                className={clsx('rounded-r-tile border-l-4 py-2 pr-3 pl-4', look.box)}
+              >
+                <p className={clsx('mb-1 flex items-center gap-1 text-xs font-medium', look.tag)}>
+                  <look.icon className="size-3.5" aria-hidden /> {look.label}
+                </p>
+                {drawn}
+              </div>
+            );
+          })}
+        </article>
       </FileViewerProvider>
     </VariantProvider>
   );

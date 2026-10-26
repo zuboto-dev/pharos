@@ -65,6 +65,7 @@ import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './term
 import { lastAssistantText, SessionNoteInput, SessionNotes } from './session-notes.js';
 import { StandingApprovals } from './approvals.js';
 import { pulseOf } from './pulse.js';
+import { viewAt, viewVersions } from './views/versions.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
 import { TURN_TOKEN_HEADER } from './terminal/command.js';
@@ -929,6 +930,12 @@ export function createApp(
     });
     return c.json(files ? files.revisions(history) : history);
   });
+
+  // A view's versions: the revisions that changed it, and the view as one of them left it.
+  api.get('/views/:id/versions', (c) => c.json(viewVersions(store, c.req.param('id'))));
+  api.get('/views/:id/versions/:rev', (c) =>
+    c.json(viewAt(store, c.req.param('id'), IntParam.parse(c.req.param('rev')))),
+  );
 
   api.get('/revisions/:id', (c) => {
     const id = IntParam.parse(c.req.param('id'));

@@ -7,6 +7,7 @@ import {
   toBoard,
   type ActionResult,
   type ActionSubmission,
+  isProjectManagementView,
   type Board,
   type ComponentName,
   type Entity,
@@ -54,6 +55,7 @@ import { ProjectPulseStrip } from './pulse';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
 import { DecisionPageContext, DocumentView, isDocument } from './document';
+import { VersionsLink, ViewVersions } from './versions';
 import { ArchivedNotice } from './hand-back';
 import { notifyProjectsChanged } from './projects';
 import { archiveChange, isArchived } from './sidebar-model';
@@ -205,6 +207,15 @@ function ProjectName({ name }: { name: string }) {
   );
 }
 
+/**
+ * The page a project opens on: its main page, else the first pinned page or one that isn't for
+ * managing the project; the Overview only when there is nothing else.
+ */
+function firstView(views: Entity<'view'>[]) {
+  const open = sortViews(views.filter((v) => !v.data.archived && !isExpired(v)));
+  return open.find((v) => v.data.pinned || !isProjectManagementView(v)) ?? open[0];
+}
+
 export function ProjectPage({ page }: { page?: 'files' } = {}) {
   const filesPage = page === 'files';
   const { projectId, viewId } = useParams();
@@ -227,10 +238,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   // agent's page is stale. Opening the view marks it seen.
   const shownViewId = filesPage
     ? undefined
-    : (viewId ??
-      (dataset.data
-        ? sortViews(dataset.data.views.filter((v) => !v.data.archived && !isExpired(v)))[0]?.id
-        : undefined));
+    : (viewId ?? (dataset.data ? firstView(dataset.data.views)?.id : undefined));
   const freshness = usePageFreshness(projectId, shownViewId);
   // When the owner last changed something from this page: the reload that follows isn't a live
   // update, so the blocks it changes aren't marked (v0.2 B4).
@@ -396,6 +404,8 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   const dock = useAgentDock(projectId, !!terminal?.running);
   // Arriving from the list of running agents (the rail): open its panel, once.
   const openTerminal = params.get('terminal') === '1' && !!terminal?.available;
+  // The open page's version history (?versions=latest or a revision), in place of the page.
+  const versionsOf = params.get('versions');
   const { setOpen: setDockOpen } = dock;
   useEffect(() => {
     if (!openTerminal) return;
@@ -653,7 +663,12 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
             {/* Files that expired or expire within 60 days (R7.15). */}
             {!editing && <ExpiryNotice />}
             {filesPage && <FilesPage onAdded={reload} />}
-            {active && !report && !editing && <ViewUpdated view={active} />}
+            {active && !report && !editing && (
+              <div className="flex flex-wrap items-center gap-x-3 text-xs">
+                <ViewUpdated view={active} />
+                <VersionsLink view={active} />
+              </div>
+            )}
             {active && !editing && <WhatChanged freshness={freshness} />}
             {editing && (
               // The how-to waits behind the (i): the grips, gears and crosses say it on the blocks.
@@ -684,7 +699,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
               isEmptyProject(dataset.data) && (
                 <GetStarted projectId={projectId!} name={dataset.data.project.data.name} />
               )}
-            {!filesPage && !report && board.widgets.length === 0 && !editing && (
+            {!filesPage && !report && !versionsOf && board.widgets.length === 0 && !editing && (
               <div className="rounded-block border border-dashed border-line-strong">
                 <EmptyState
                   icon={LayoutGrid}
@@ -717,12 +732,13 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                 </EmptyState>
               </div>
             )}
-            {report && (
+            {active && versionsOf && <ViewVersions view={active} selected={versionsOf} />}
+            {report && !versionsOf && (
               <div key={report.id} className="animate-fade-in">
                 {docView ? <DocumentView view={docView} /> : <ReportFrame view={report} />}
               </div>
             )}
-            {!filesPage && !report && (
+            {!filesPage && !report && !versionsOf && (
               // A tab switch fades the new view in (opacity only, so nothing shifts).
               <div key={active?.id} className="animate-fade-in">
                 <ViewRenderer

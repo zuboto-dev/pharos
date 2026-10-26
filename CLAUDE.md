@@ -287,6 +287,22 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   per project, computed from records, the change log, the desk and the run log, never written by
   an agent; the home page lists them (`PortfolioPulse`), the project page shows its own line.
 
+## Main page, project-management views and versions
+
+- A view with `kind: "main"` is the project's main page (`packages/schema/src/views/versions.ts`):
+  one per project, a document, the first tab, and the page a project opens on. The store refuses a
+  second one or a board as main; agents can't archive, delete or demote it (they revise it with
+  view_update). view_create's `main: true` makes it; project_brief points agents at it, or asks
+  them to write it. The owner moves it with "Make this the main page" (one revision).
+- `isProjectManagementView`: the built-in Overview, or a board mostly of task, stage and goal
+  blocks (`PM_COMPONENTS`). Those wait under More ("Project management") once the project has
+  another page, unless pinned; only the owner pins one (the store refuses an agent's pin), and a
+  new project's Overview starts unpinned.
+- A view's versions are its revisions (`apps/server/src/views/versions.ts`, `GET
+/api/views/:id/versions[/:rev]`); the web app shows them in place of the page (`?versions=`),
+  the picked version compared with the one before (`compareDocs`: blocks added, changed with
+  word changes, removed), and restores one as a new, undoable change.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

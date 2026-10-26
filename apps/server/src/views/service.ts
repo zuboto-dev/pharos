@@ -64,7 +64,9 @@ function summary(view: Entity<'view'>) {
     revision: view.updatedRev,
     ...(kind === 'answer'
       ? { kind, question, expiresAt, ...(isExpired(view) ? { expired: true } : {}) }
-      : {}),
+      : kind === 'main'
+        ? { kind, main: "The project's main page: read it first; revise it when the project moves" }
+        : {}),
     ...(description ? { description } : {}),
     pinned,
     ...(archived ? { archived } : {}),
@@ -259,6 +261,12 @@ export const ViewCreateInput = z.object({
   name: z.string().min(1).describe('Tab name, short (e.g. "This week", "Release")'),
   description: z.string().optional().describe('What question this view answers'),
   pinned: z.boolean().optional(),
+  main: z
+    .boolean()
+    .optional()
+    .describe(
+      "The project's main page (one per project, give doc): what it is for, the problem in the owner's words, how it works, the anchor points it passed and where it is heading. The first tab; revise it with view_update, never archive it",
+    ),
   widgets: z
     .array(z.unknown())
     .optional()
@@ -301,6 +309,7 @@ export function createView(store: Store, author: Author, input: z.infer<typeof V
             name: input.name,
             ...(input.description ? { description: input.description } : {}),
             ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
+            ...(input.main ? { kind: 'main' as const, pinned: true, order: -1 } : {}),
             ...layout,
           },
         },

@@ -235,9 +235,11 @@ export const ViewData = z.strictObject({
       'Set with archived when the owner finished a review document (every sheet answered) and handed it back to the agent; read the answers with view_get',
     ),
   kind: z
-    .enum(['saved', 'answer'])
+    .enum(['saved', 'answer', 'main'])
     .optional()
-    .describe('An answer view answers one question and expires unless kept (default: saved)'),
+    .describe(
+      "main: the project's main page, one per project, a document revised as the project moves (never archived); answer: answers one question and expires unless kept; default saved",
+    ),
   question: z.string().optional().describe('For answer views: the question it answers'),
   expiresAt: z.iso
     .datetime()

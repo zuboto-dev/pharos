@@ -1,5 +1,6 @@
 import type { Entity, ProjectDataset, RevisionSummary, ViewFreshness } from '@pharos/schema';
 import clsx from 'clsx';
+import { VersionsLink } from './versions';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useViewData } from '../catalog/context';
@@ -159,6 +160,7 @@ export function ReportBar({
           Updated {timeAgo(view.updatedAt)}
           {rev && ` by ${authorName(rev.author, false)}`}
         </button>
+        <VersionsLink view={view} />
         {stale && (
           <span
             data-evidence="stale"

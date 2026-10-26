@@ -6,7 +6,7 @@
   "fixture": {
     "path": "eval/fixtures/catalog-delivery.json",
     "variant": "base",
-    "checksum": "354fa50c127cb9a8ed7901d29abdc0c28c5007e338615b3391f520535eff61a0",
+    "checksum": "bb75bc5625def10994613aa0c6bb3e597715b5900d641609965567e3cb8e7f91",
     "projectRef": "cd_project",
     "semanticDate": "2026-10-07",
     "timezone": "UTC"

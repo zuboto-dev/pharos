@@ -72,7 +72,7 @@ describe('apply', () => {
     const ids = seedProject();
     const views = store.list('view', { projectId: ids.p });
     expect(views.map((v) => v.data)).toEqual([
-      { projectId: ids.p, name: 'Overview', template: 'overview', pinned: true, order: 0 },
+      { projectId: ids.p, name: 'Overview', template: 'overview', pinned: false, order: 0 },
     ]);
     expect(views[0]!.createdRev).toBe(1);
   });

@@ -1,4 +1,9 @@
-import type { Entity, RevisionSummary } from '@pharos/schema';
+import {
+  isMainPage,
+  isProjectManagementView,
+  type Entity,
+  type RevisionSummary,
+} from '@pharos/schema';
 import clsx from 'clsx';
 import {
   Archive,
@@ -10,6 +15,7 @@ import {
   Newspaper,
   Pencil,
   LayoutGrid,
+  House,
   Pin,
   PinOff,
   Plus,
@@ -32,7 +38,7 @@ import { canArchive, restoreView } from './hand-back';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
 import { AsksBadge, useOpenAsks } from './open-asks';
 
-/** Pinned views first, then by order. */
+/** The main page first, then pinned views, then by order; answers last. */
 const isAnswer = (v: Entity<'view'>) => v.data.kind === 'answer';
 
 /** Answer views past their expiry; they're hidden unless kept. */
@@ -84,6 +90,7 @@ export function ViewUpdated({ view }: { view: Entity<'view'> }) {
 export function sortViews(views: Entity<'view'>[]): Entity<'view'>[] {
   return [...views].sort(
     (a, b) =>
+      Number(isMainPage(b)) - Number(isMainPage(a)) ||
       Number(isAnswer(a)) - Number(isAnswer(b)) ||
       (isAnswer(a)
         ? b.createdRev - a.createdRev
@@ -146,6 +153,13 @@ function TabLabel({ view }: { view: Entity<'view'> }) {
   // A symbol leads every tab: a pin when pinned, then what it is (an answer, a report; a board
   // has the grid only when nothing else leads). On hover the first one becomes the pin toggle
   // (the button over it), so pinning needs no menu and the tabs never shift.
+  if (isMainPage(view))
+    return (
+      <>
+        <House className="size-3.5 shrink-0" aria-label="Main page" />
+        <span className="truncate">{view.data.name}</span>
+      </>
+    );
   const kind = isAnswer(view) ? (
     <MessageCircleQuestion className="size-3.5 shrink-0 text-sky-500" aria-label="Answer" />
   ) : view.data.page || view.data.doc ? (
@@ -159,6 +173,28 @@ function TabLabel({ view }: { view: Entity<'view'> }) {
       <span className="truncate">{view.data.name}</span>
     </>
   );
+}
+
+/**
+ * Makes a document the project's main page, in one revision: the old main page (if any) becomes
+ * an ordinary pinned page, so nothing is lost and the project keeps one main page.
+ */
+export function makeMainPage(view: Entity<'view'>, views: Entity<'view'>[]) {
+  const old = views.find((v) => v.id !== view.id && isMainPage(v));
+  return {
+    message: `Make “${view.data.name}” the main page${old ? ` (was “${old.data.name}”)` : ''}`,
+    operations: [
+      ...(old
+        ? [{ op: 'update' as const, type: 'view' as const, id: old.id, data: { kind: null } }]
+        : []),
+      {
+        op: 'update' as const,
+        type: 'view' as const,
+        id: view.id,
+        data: { kind: 'main', pinned: true, archived: null, order: -1 },
+      },
+    ],
+  };
 }
 
 /**
@@ -190,9 +226,16 @@ export function ViewTabs({
   const [menu, setMenu] = useState<{ kind: 'view' | 'more'; anchor: DOMRect } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const visible = sortViews(
-    views.filter((v) => !v.data.archived && (!isExpired(v) || v.id === active?.id)),
-  );
+  const open = views.filter((v) => !v.data.archived && (!isExpired(v) || v.id === active?.id));
+  // Project-management views (the Overview, task and stage boards) wait under More once the
+  // project has another page to show, unless pinned; the open one stays in sight.
+  const other = open.some((v) => !isProjectManagementView(v) && !isAnswer(v));
+  const tucked = other
+    ? sortViews(
+        open.filter((v) => isProjectManagementView(v) && !v.data.pinned && v.id !== active?.id),
+      )
+    : [];
+  const visible = sortViews(open.filter((v) => !tucked.includes(v)));
   // Archived views plus answers that were dismissed or have expired.
   const archived = views.filter((v) => v.data.archived || isExpired(v));
   const close = () => {
@@ -383,7 +426,7 @@ export function ViewTabs({
                 </Link>
               </Tooltip>
             )}
-            {!renaming && !isAnswer(view) && (
+            {!renaming && !isAnswer(view) && !isMainPage(view) && (
               // Pin or unpin from the tab on hover, as well as from its ⋯ menu; a touch screen keeps
               // it in the menu. It sits in the tab's corner, so the tabs never shift.
               <Tooltip
@@ -466,20 +509,34 @@ export function ViewTabs({
                 <MenuItem icon={Pencil} onClick={() => (close(), setRenaming(true))}>
                   Rename
                 </MenuItem>
-                <MenuItem
-                  icon={view.data.pinned ? PinOff : Pin}
-                  onClick={() => {
-                    close();
-                    void update(
-                      view,
-                      { pinned: !view.data.pinned },
-                      `${view.data.pinned ? 'Unpin' : 'Pin'} view “${view.data.name}”`,
-                    );
-                  }}
-                >
-                  {view.data.pinned ? 'Unpin' : 'Pin'}
-                </MenuItem>
-                {visible.length > 1 && (
+                {!isMainPage(view) && (
+                  <MenuItem
+                    icon={view.data.pinned ? PinOff : Pin}
+                    onClick={() => {
+                      close();
+                      void update(
+                        view,
+                        { pinned: !view.data.pinned },
+                        `${view.data.pinned ? 'Unpin' : 'Pin'} view “${view.data.name}”`,
+                      );
+                    }}
+                  >
+                    {view.data.pinned ? 'Unpin' : 'Pin'}
+                  </MenuItem>
+                )}
+                {!isMainPage(view) && (view.data.doc || view.data.page) && (
+                  <MenuItem
+                    icon={House}
+                    onClick={() => {
+                      close();
+                      const { message, operations } = makeMainPage(view, views);
+                      void actions.apply(message, operations, { undoable: true });
+                    }}
+                  >
+                    Make this the main page
+                  </MenuItem>
+                )}
+                {visible.length > 1 && !isMainPage(view) && (
                   <>
                     {/* Pinned and template (Overview) views stay in the tabs. */}
                     {canArchive(view) && (
@@ -522,16 +579,16 @@ export function ViewTabs({
           </div>
         );
       })}
-      {(overflow.length > 0 || archived.length > 0) && (
-        <Tooltip label={overflow.length ? 'More views' : 'Archived views'}>
+      {(overflow.length > 0 || tucked.length > 0 || archived.length > 0) && (
+        <Tooltip label={overflow.length || tucked.length ? 'More views' : 'Archived views'}>
           <button
             type="button"
             data-tabstop
             aria-haspopup="menu"
             aria-expanded={menu?.kind === 'more'}
             aria-label={
-              overflow.length
-                ? `More views (${overflow.length}${archived.length ? `, ${archived.length} archived` : ''})`
+              overflow.length || tucked.length
+                ? `More views (${overflow.length + tucked.length}${archived.length ? `, ${archived.length} archived` : ''})`
                 : `Archived (${archived.length})`
             }
             onClick={(e) =>
@@ -552,10 +609,10 @@ export function ViewTabs({
               )
             )}
             <AsksBadge n={overflow.reduce((n, v) => n + (asks.get(v.id) ?? 0), 0)} />
-            {overflow.length ? (
+            {overflow.length || tucked.length ? (
               <>
                 <span className="rounded-full bg-subtle px-1.5 text-ink-soft">
-                  {overflow.length}
+                  {overflow.length + tucked.length}
                 </span>
                 <ChevronDown className="size-3.5" aria-hidden />
               </>
@@ -613,7 +670,26 @@ export function ViewTabs({
               )}
             </MenuItem>
           ))}
-          {overflow.length > 0 && archived.length > 0 && <MenuSeparator />}
+          {tucked.length > 0 && (
+            <>
+              {overflow.length > 0 && <MenuSeparator />}
+              <MenuLabel>Project management</MenuLabel>
+              {tucked.map((view) => (
+                <MenuItem
+                  key={view.id}
+                  icon={LayoutGrid}
+                  onClick={() => {
+                    close();
+                    navigate(`/projects/${projectId}/views/${view.id}`);
+                  }}
+                  end={<AsksBadge n={asks.get(view.id) ?? 0} />}
+                >
+                  {view.data.name}
+                </MenuItem>
+              ))}
+            </>
+          )}
+          {(overflow.length > 0 || tucked.length > 0) && archived.length > 0 && <MenuSeparator />}
           {archived.length > 0 && <MenuLabel>Archived</MenuLabel>}
           {archived.map((view) => (
             <MenuItem

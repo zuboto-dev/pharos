@@ -13,7 +13,10 @@ import { deskSummary, useSheetTasks, type Sheet } from './document-rich';
 
 /** Pinned and template (Overview) views are never archived. */
 export const canArchive = (view: Entity<'view'>): boolean =>
-  !view.data.pinned && !view.data.template && view.data.kind !== 'answer';
+  !view.data.pinned &&
+  !view.data.template &&
+  view.data.kind !== 'answer' &&
+  view.data.kind !== 'main';
 
 /** What the hand-back revision says: plainly what happened, for the agent's changes_since. */
 export function handBackMessage(name: string, answered: number, agent: string | undefined) {

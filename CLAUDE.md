@@ -33,9 +33,11 @@ discover, record decisions, and move `currentStageId` when a milestone finishes.
     `src/lookups.ts` logs agents' MCP read calls (`LOOKUP_TOOLS`) in the `lookups` table (30 days,
     5000 rows; never revisions) for "looked up"
   - `src/agent-runner.ts` — runs an agent (Claude Code by default) for new questions
-  - `src/routines.ts` — the Routines page's proxy (`/api/routines/*`) to the owner's Routines app
-    (`PHAROS_ROUTINES_URL`, default http://127.0.0.1:4777): state, save (field edits checked
-    against routines.json), run, file, log. Owner only; writes and runs need `human:…`. Tests use
+  - `src/routines.ts` — the Routines page's API (`/api/routines/*`) over the owner's Routines app:
+    by default its folder's `bin/api.py` answers each request (`PHAROS_ROUTINES_DIR`, default
+    ~/chaeeon/apps/routines; one process per request, no server to keep running); with
+    `PHAROS_ROUTINES_URL` the old server.py on 4777 instead. State, save (field edits checked
+    against routines.json), run, file, log, runners. Owner only; writes and runs need `human:…`. Tests use
     an in-process fake; never POST to the real one (it rewrites routines.json and starts paid runs).
     Routines are the owner's list (`routines`, `RoutineDef` in `packages/schema/src/routines.ts`;
     derived from `schedule` for an older app, then `editable: false`). State adds `pharos`: each

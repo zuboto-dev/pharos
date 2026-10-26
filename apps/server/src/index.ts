@@ -141,6 +141,19 @@ for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
 const permissions = new PermissionService(store, {
   ...(process.env.PHAROS_CLAUDE_HOME ? { claudeHome: process.env.PHAROS_CLAUDE_HOME } : {}),
 });
+/**
+ * How Pharos reaches Routines: PHAROS_ROUTINES_URL keeps the old server (server.py on 4777);
+ * otherwise the Routines folder (PHAROS_ROUTINES_DIR, default ~/chaeeon/apps/routines) answers
+ * each request with bin/api.py when it has one, with the Python its launchd jobs use. Neither:
+ * the server at its default address, as before.
+ */
+function routinesOptions() {
+  if (process.env.PHAROS_ROUTINES_URL) return { url: process.env.PHAROS_ROUTINES_URL };
+  const dir = process.env.PHAROS_ROUTINES_DIR ?? join(homedir(), 'chaeeon', 'apps', 'routines');
+  if (!existsSync(join(dir, 'bin', 'api.py'))) return {};
+  return { dir, python: existsSync('/usr/bin/python3') ? '/usr/bin/python3' : 'python3' };
+}
+
 // Standing approvals: rules that wait, and decisions other processes (stdio MCP) asked, are
 // answered within a minute. sweep never throws.
 const approvals = new StandingApprovals(store);
@@ -159,7 +172,7 @@ const app = createApp(store, feed, agent, {
   webUrl: process.env.PHAROS_WEB_URL,
   terminal,
   notifications,
-  routines: { url: process.env.PHAROS_ROUTINES_URL },
+  routines: routinesOptions(),
   permissions,
 });
 

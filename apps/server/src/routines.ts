@@ -15,6 +15,8 @@ import {
   type RoutineProposalView,
   type RoutinesState,
 } from '@pharos/schema';
+import { execFile } from 'node:child_process';
+import { join } from 'node:path';
 import { Hono, type Context } from 'hono';
 import type { Store } from './store/store.js';
 import { folderProjects } from './terminal/command.js';
@@ -29,10 +31,55 @@ export const DEFAULT_ROUTINES_URL = 'http://127.0.0.1:4777';
 /** How to start the Routines server, for the page when it isn't reachable. */
 export const ROUTINES_START_HINT =
   'Start it with `python3 server.py` in the Routines folder (its launchd job `page` keeps it up; see its README).';
+/** What to check when the Routines folder's bin/api.py doesn't answer. */
+export const ROUTINES_COMMAND_HINT =
+  'Check that the Routines folder is there (PHAROS_ROUTINES_DIR) and `python3 bin/api.py GET /api/state` answers in it.';
+
+/**
+ * One request to Routines answered by `bin/api.py` in its folder: the same API as server.py, one
+ * process per request, nothing left running. Its envelope ({status, type, body}) becomes a Response.
+ */
+async function callCommand(
+  dir: string,
+  python: string,
+  path: string,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): Promise<Response> {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const input = typeof init?.body === 'string' ? init.body : '';
+  const out = await new Promise<string>((resolve, reject) => {
+    const child = execFile(
+      python,
+      ['-I', join(dir, 'bin', 'api.py'), method, path],
+      { cwd: dir, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 },
+      (err, stdout) => (err ? reject(err) : resolve(stdout)),
+    );
+    child.stdin?.on('error', () => {});
+    child.stdin?.end(input);
+  });
+  const envelope = JSON.parse(out) as { status: number; type: string; body: unknown };
+  const text =
+    typeof envelope.body === 'string' && !envelope.type.startsWith('application/json')
+      ? envelope.body
+      : JSON.stringify(envelope.body);
+  return new Response(text, {
+    status: envelope.status,
+    headers: { 'content-type': `${envelope.type}; charset=utf-8` },
+  });
+}
 
 export type RoutinesOptions = {
   /** The Routines server (`PHAROS_ROUTINES_URL`); default http://127.0.0.1:4777. */
   url?: string;
+  /**
+   * The Routines folder whose `bin/api.py` answers each request (no server to keep running).
+   * Used instead of `url` when given; index.ts passes it when the folder has bin/api.py and no
+   * PHAROS_ROUTINES_URL is set.
+   */
+  dir?: string;
+  /** The Python that runs bin/api.py (default python3). */
+  python?: string;
   /** Tests pass a stub. */
   fetch?: typeof fetch;
   /** Per request; Routines answers locally, so a slow answer means it's stuck. */
@@ -57,12 +104,31 @@ export type RoutinesClient = ReturnType<typeof createRoutinesClient>;
 
 /** Talks to the Routines app: reads routines.json and saves checked edits into it. */
 export function createRoutinesClient(options: RoutinesOptions = {}) {
-  const base = (options.url || DEFAULT_ROUTINES_URL).replace(/\/+$/, '');
+  const dir = options.dir;
+  const base = dir
+    ? `bin/api.py in ${dir}`
+    : (options.url || DEFAULT_ROUTINES_URL).replace(/\/+$/, '');
+  const hint = dir ? ROUTINES_COMMAND_HINT : ROUTINES_START_HINT;
   const doFetch = options.fetch ?? fetch;
-  const timeoutMs = options.timeoutMs ?? 4000;
+  // A command starts Python each time and reads git in every project: a little more time.
+  const timeoutMs = options.timeoutMs ?? (dir ? 15000 : 4000);
 
   /** One call to Routines; network failures and timeouts become `Unreachable` with a reason. */
   async function call(path: string, init?: RequestInit): Promise<Response> {
+    if (dir) {
+      try {
+        return await callCommand(dir, options.python ?? 'python3', path, init, timeoutMs);
+      } catch (err) {
+        const killed = (err as { killed?: boolean })?.killed;
+        throw new Unreachable(
+          killed
+            ? `Routines (${base}) didn't answer within ${Math.round(timeoutMs / 1000)} s.`
+            : `Routines (${base}) didn't answer: ${String((err as Error)?.message ?? err)
+                .split('\n')[0]
+                ?.slice(0, 200)}.`,
+        );
+      }
+    }
     try {
       return await doFetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch (err) {
@@ -149,7 +215,7 @@ export function createRoutinesClient(options: RoutinesOptions = {}) {
     return changes.map(describeRoutinesChange);
   }
 
-  return { base, call, config, save };
+  return { base, hint, call, config, save };
 }
 
 /** A request that declares an agent (any author that isn't `human:…`): never served here. */
@@ -239,12 +305,11 @@ export function routinesRoutes(
   store?: Store,
   proposals?: { settle: (retry?: boolean) => Promise<void>; pending: () => RoutineProposalView[] },
 ) {
-  const { base, call, config } = client;
+  const { base, hint, call, config } = client;
   const app = new Hono();
 
   const unreachable = (c: Context, err: unknown) => {
-    if (err instanceof Unreachable)
-      return fail(c, 503, 'unavailable', `${err.message} ${ROUTINES_START_HINT}`);
+    if (err instanceof Unreachable) return fail(c, 503, 'unavailable', `${err.message} ${hint}`);
     throw err;
   };
 
@@ -286,7 +351,7 @@ export function routinesRoutes(
       if (!(err instanceof Unreachable)) throw err;
       return c.json({
         available: false,
-        reason: `${err.message} ${ROUTINES_START_HINT}`,
+        reason: `${err.message} ${hint}`,
         url: base,
       } satisfies RoutinesState);
     }

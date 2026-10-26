@@ -1,5 +1,6 @@
 import { decisionState, meaningOf, type Entity } from '@pharos/schema';
 import { deskOf, RunLog, waitingHandBacks } from './desk.js';
+import { hostname } from 'node:os';
 import type { Presence } from './presence.js';
 import type { SessionNotes } from './session-notes.js';
 import type { Store } from './store/store.js';
@@ -119,7 +120,9 @@ export function projectBrief(
   add(
     'Recent sessions (their last message)',
     recent.map((n) => {
-      const where = [n.kind, n.host].filter(Boolean).join(' on ');
+      // The computer Pharos runs on reads "this Mac"; runners by their own names.
+      const host = n.host && n.host !== hostname() ? n.host : 'this Mac';
+      const where = [n.kind, host].join(' on ');
       const when = n.lastAt.slice(0, 16).replace('T', ' ');
       return `${when} UTC · ${n.agent ?? 'agent'} (${where}): ${n.message.replace(/\s+/g, ' ').slice(0, 400)}`;
     }),

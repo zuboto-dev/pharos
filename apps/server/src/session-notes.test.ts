@@ -82,7 +82,7 @@ describe('session notes', () => {
     expect(brief).toContain(
       'Claude Code (routine: Night run on axion-01): All 2,029 tests pass on main.',
     );
-    expect(brief).toContain('agent (terminal): Desk is down to 28.');
+    expect(brief).toContain('agent (terminal on this Mac): Desk is down to 28.');
   });
 
   it('reads the last thing the assistant said from a transcript', () => {

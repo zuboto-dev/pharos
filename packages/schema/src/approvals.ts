@@ -4,7 +4,7 @@ import { optionOutcome, type DecisionOption } from './decisions.js';
 /**
  * Standing approvals: the owner's rules for decisions that only need a yes. A rule names words
  * in a decision's question ("merge"), and Pharos answers a matching decision with the option the
- * agent recommended, as the owner, logged so it can be undone. Rules are an app setting the owner
+ * agent recommended, as the owner, logged (the revisions it makes) so it can be undone. Rules are an app setting the owner
  * changes in Settings (never revisions, never over MCP); every answer they give is a revision.
  *
  * A rule never answers a gate, a decision with items to pick (a cleanup), an option that asks for
@@ -13,7 +13,6 @@ import { optionOutcome, type DecisionOption } from './decisions.js';
  */
 
 export const APPROVAL_RULES_SETTING = 'approvals.rules';
-export const APPROVAL_LOG_SETTING = 'approvals.log';
 
 export const APPROVAL = {
   maxRules: 30,
@@ -21,7 +20,7 @@ export const APPROVAL = {
   maxWords: 8,
   wordChars: 40,
   maxWaitHours: 72,
-  /** Answers kept in the log. */
+  /** Answers listed at most (they are read from the change history). */
   logSize: 300,
 } as const;
 
@@ -76,20 +75,18 @@ export type ApprovalRuleInput = z.infer<typeof ApprovalRuleInput>;
 
 export const ApprovalRules = z.array(ApprovalRule).max(APPROVAL.maxRules);
 
-/** One answer a rule gave. */
-export const ApprovalAnswer = z.strictObject({
-  decisionId: z.string(),
-  projectId: z.string(),
-  title: z.string(),
-  option: z.string(),
-  ruleId: z.string(),
-  rule: z.string(),
-  revision: z.number().int(),
-  at: z.string(),
-  /** Set when the owner undid it: the rule never answers that decision again. */
-  undoneAt: z.string().optional(),
-});
-export type ApprovalAnswer = z.infer<typeof ApprovalAnswer>;
+/** One answer a rule gave: a revision by `rule: <name>` (Pharos reads them from the history). */
+export type ApprovalAnswer = {
+  decisionId: string;
+  projectId: string;
+  title: string;
+  option: string;
+  rule: string;
+  revision: number;
+  at: string;
+  /** When the owner undid it: the rule never answers that decision again. */
+  undoneAt?: string;
+};
 
 /** The parts of a decision a rule looks at. */
 export type RuleCandidate = {

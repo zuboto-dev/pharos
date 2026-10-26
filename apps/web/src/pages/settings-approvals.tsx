@@ -101,7 +101,16 @@ export function StandingApprovals() {
                     rule={rule}
                     projects={names}
                     waiting={s.matches[rule.id] ?? []}
-                    onToggle={(enabled) => void save({ ...rule, enabled })}
+                    onToggle={(enabled) =>
+                      void save({
+                        id: rule.id,
+                        name: rule.name,
+                        words: rule.words,
+                        waitHours: rule.waitHours,
+                        enabled,
+                        ...(rule.projectIds ? { projectIds: rule.projectIds } : {}),
+                      })
+                    }
                     onRemove={() => void send('/api/approvals/rules/remove', { id: rule.id })}
                   />
                 ))}

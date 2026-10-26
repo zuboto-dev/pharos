@@ -511,6 +511,11 @@ export class Store {
        * `evidenceRevision`. Only the view service passes it, for agents' views.
        */
       evidence?: boolean;
+      /**
+       * Runs inside the write transaction before any operation (no other process can write
+       * meanwhile); it throws to refuse the write. Standing approvals recheck their decision here.
+       */
+      check?: () => void;
     } = {},
   ): ApplyResult {
     let input = raw;
@@ -550,6 +555,7 @@ export class Store {
       input = prepareAgentOperations(this, input);
     }
     const result = this.transaction(author, input.message, null, (tx) => {
+      options.check?.();
       const created: Record<string, string> = {};
       const refs = new Map<string, string>();
       // Everything before this revision (inside the transaction, nothing else can write).

@@ -1,9 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   APPROVAL,
-  APPROVAL_LOG_SETTING,
   APPROVAL_RULES_SETTING,
-  ApprovalAnswer,
   ApprovalRuleInput,
   ApprovalRules,
   SUGGEST_WAIT_HOURS,
@@ -14,6 +12,7 @@ import {
   localToday,
   matchingRule,
   meaningOf,
+  type ApprovalAnswer,
   type ApprovalRule,
   type ApprovalsState,
   type Author,
@@ -22,6 +21,10 @@ import {
 } from '@pharos/schema';
 import { deskAnswer } from './desk.js';
 import { PharosError } from './store/errors.js';
+
+/** The author name prefix of an answer a rule gave. */
+const RULE_AUTHOR = 'rule: ';
+const STALE = 'The decision changed before the rule could answer it';
 import type { Store } from './store/store.js';
 
 /**
@@ -44,12 +47,58 @@ export class StandingApprovals {
     return parsed.success ? parsed.data : [];
   }
 
-  log(): ApprovalAnswer[] {
-    const raw = this.store.setting<unknown[]>(APPROVAL_LOG_SETTING) ?? [];
-    return raw.flatMap((r) => {
-      const parsed = ApprovalAnswer.safeParse(r);
-      return parsed.success ? [parsed.data] : [];
+  /**
+   * What rules answered, newest first (since an ISO time), read from the change history: each
+   * answer is a revision by `rule: <name>`, undone when a revert of it exists. Nothing to lose
+   * or overwrite between processes, and nothing evicted.
+   */
+  answers(since?: string): ApprovalAnswer[] {
+    const rows = this.store.database
+      .prepare(
+        `SELECT r.id AS revision, r.author_name AS author, r.created_at AS at,
+                c.entity_id AS decisionId, c.project_id AS projectId, c.after AS after,
+                (SELECT MIN(u.created_at) FROM revisions u WHERE u.revert_of = r.id) AS undoneAt
+           FROM revisions r JOIN changes c ON c.revision_id = r.id
+          WHERE r.author_kind = 'human' AND r.author_name LIKE '${RULE_AUTHOR}%'
+            AND r.revert_of IS NULL AND c.entity_type = 'decision' AND c.after IS NOT NULL
+            AND (? IS NULL OR r.created_at >= ?)
+          ORDER BY r.id DESC LIMIT ${APPROVAL.logSize}`,
+      )
+      .all(since ?? null, since ?? null) as {
+      revision: number;
+      author: string;
+      at: string;
+      decisionId: string;
+      projectId: string;
+      after: string;
+      undoneAt: string | null;
+    }[];
+    return rows.map((row) => {
+      const after = JSON.parse(row.after) as Entity<'decision'>['data'];
+      const option = after.options?.find((o) => o.id === after.chosenOptionId);
+      return {
+        decisionId: row.decisionId,
+        projectId: row.projectId,
+        title: after.title,
+        option: option?.label ?? '',
+        rule: row.author.slice(RULE_AUTHOR.length),
+        revision: row.revision,
+        at: row.at,
+        ...(row.undoneAt ? { undoneAt: row.undoneAt } : {}),
+      };
     });
+  }
+
+  /** Every decision a rule ever answered: a rule answers a decision once, never again after an undo. */
+  private answeredByRules(): Set<string> {
+    const rows = this.store.database
+      .prepare(
+        `SELECT DISTINCT c.entity_id AS id FROM revisions r JOIN changes c ON c.revision_id = r.id
+          WHERE r.author_kind = 'human' AND r.author_name LIKE '${RULE_AUTHOR}%'
+            AND c.entity_type = 'decision'`,
+      )
+      .all() as { id: string }[];
+    return new Set(rows.map((r) => r.id));
   }
 
   /** Adds a rule, or changes the one with its id. */
@@ -89,7 +138,7 @@ export class StandingApprovals {
 
   /** Open decisions with a recommendation in active projects, as rules see them. */
   private candidates(): RuleCandidate[] {
-    const answered = new Set(this.log().map((a) => a.decisionId));
+    const answered = this.answeredByRules();
     const projects = new Map(
       this.store
         .list('project')
@@ -121,7 +170,8 @@ export class StandingApprovals {
         const rule = matchingRule(rules, d, now);
         if (!rule) continue;
         try {
-          made.push(this.answer(rule, d, now));
+          const answer = this.answer(rule, d, now);
+          if (answer) made.push(answer);
         } catch (error) {
           console.error(
             `[pharos] Standing approval “${rule.name}” could not answer ${d.id}:`,
@@ -137,26 +187,48 @@ export class StandingApprovals {
     return made;
   }
 
-  private answer(rule: ApprovalRule, d: RuleCandidate, now: Date): ApprovalAnswer {
-    const author: Author = { kind: 'human', name: `rule: ${rule.name}` };
-    const result = deskAnswer(
-      this.store,
-      author,
-      { id: d.id, chosenOptionId: d.recommendedOptionId!, via: `Standing approval “${rule.name}”` },
-      now,
-    );
-    const entry: ApprovalAnswer = {
+  private answer(rule: ApprovalRule, d: RuleCandidate, now: Date): ApprovalAnswer | undefined {
+    const author: Author = { kind: 'human', name: `${RULE_AUTHOR}${rule.name}` };
+    // Checked again inside the write: another process may have made it a gate, changed the
+    // recommendation, answered it, or turned the rule off since the sweep read it.
+    const check = () => {
+      const fresh = this.store.get(d.id) as Entity<'decision'> | null;
+      const rules = this.rules().filter((r) => r.enabled);
+      const again = fresh && matchingRule(rules, candidateOf(fresh), now);
+      if (
+        !again ||
+        again.id !== rule.id ||
+        fresh.data.recommendedOptionId !== d.recommendedOptionId ||
+        this.answeredByRules().has(d.id)
+      )
+        throw new PharosError('conflict', STALE);
+    };
+    let result;
+    try {
+      result = deskAnswer(
+        this.store,
+        author,
+        {
+          id: d.id,
+          chosenOptionId: d.recommendedOptionId!,
+          via: `Standing approval “${rule.name}”`,
+        },
+        now,
+        check,
+      );
+    } catch (error) {
+      if (error instanceof PharosError && error.message === STALE) return undefined;
+      throw error;
+    }
+    return {
       decisionId: d.id,
       projectId: d.projectId,
       title: d.title,
       option: d.options!.find((o) => o.id === d.recommendedOptionId)!.label,
-      ruleId: rule.id,
       rule: rule.name,
       revision: result.revision?.id ?? this.store.latestRevisionId(),
       at: now.toISOString(),
     };
-    this.store.setSetting(APPROVAL_LOG_SETTING, [entry, ...this.log()].slice(0, APPROVAL.logSize));
-    return entry;
   }
 
   /** An ask's result, with the rule's answer when one answered it at once (ask_owner). */
@@ -178,32 +250,26 @@ export class StandingApprovals {
 
   /** The answer a rule gave this decision, if one did (and the owner didn't undo it). */
   answerOf(decisionId: string): ApprovalAnswer | undefined {
-    return this.log().find((a) => a.decisionId === decisionId && !a.undoneAt);
+    return this.answers().find((a) => a.decisionId === decisionId && !a.undoneAt);
   }
 
   /** Undoes a rule's answer: the decision is open again and on the desk, for the owner only. */
   undo(decisionId: string, author: Author): ApprovalAnswer {
-    const log = this.log();
-    const entry = log.find((a) => a.decisionId === decisionId && !a.undoneAt);
+    const entry = this.answerOf(decisionId);
     if (!entry) throw new PharosError('not_found', `No rule answered ${decisionId}`);
-    this.store.revert(
+    const result = this.store.revert(
       entry.revision,
       author,
       `Undo standing approval “${entry.rule}”: ${entry.title}`,
     );
-    const undone = { ...entry, undoneAt: this.now().toISOString() };
-    this.store.setSetting(
-      APPROVAL_LOG_SETTING,
-      log.map((a) => (a === entry ? undone : a)),
-    );
-    return undone;
+    return { ...entry, undoneAt: result.revision?.createdAt ?? this.now().toISOString() };
   }
 
   state(): ApprovalsState {
     const now = this.now();
     const rules = this.rules();
     const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
-    const answers = this.log().filter((a) => a.at >= weekAgo);
+    const answers = this.answers(weekAgo);
     const candidates = this.candidates().filter((d) => !approvalBlock(d));
     const matches: ApprovalsState['matches'] = {};
     for (const rule of rules)
@@ -220,7 +286,7 @@ export class StandingApprovals {
    */
   private history(rules: ApprovalRule[], now: Date) {
     const today = localToday(now);
-    const byRules = new Set(this.log().map((a) => a.decisionId));
+    const byRules = this.answeredByRules();
     const answered = this.store
       .list('decision')
       .filter(
@@ -257,7 +323,7 @@ export class StandingApprovals {
       week: {
         answered: week.length,
         followed: week.filter(followed).length,
-        byRules: this.log().filter((a) => a.at >= weekAgo && !a.undoneAt).length,
+        byRules: this.answers(weekAgo).filter((a) => !a.undoneAt).length,
       },
     };
   }

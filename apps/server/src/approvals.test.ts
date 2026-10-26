@@ -150,6 +150,42 @@ describe('standing approvals', () => {
     expect(app).toBeTruthy();
   });
 
+  it('rechecks inside the write: a decision made a gate since the sweep read it stays open', () => {
+    const { store, approvals, ask, decision } = setup();
+    const id = ask('Merge it?').id;
+    const saved = approvals.saveRule({ ...rule, enabled: false });
+    const stale = { ...decision(id).data, id, createdAt: decision(id).createdAt };
+    store.apply(agent, {
+      message: 'now a gate',
+      operations: [{ op: 'update', type: 'decision', id, data: { gate: true } }],
+    });
+    store.setSetting('approvals.rules', [{ ...saved, enabled: true }]);
+    const answer = (
+      approvals as unknown as {
+        answer: (r: typeof saved, d: typeof stale, now: Date) => unknown;
+      }
+    ).answer({ ...saved, enabled: true }, stale, new Date());
+    expect(answer).toBeUndefined();
+    expect(decision(id).data.chosenOptionId).toBeUndefined();
+  });
+
+  it('an answer a rule gives while an undo runs is kept in the list', () => {
+    const { store, approvals, ask, decision } = setup();
+    const merge = approvals.saveRule(rule);
+    const link = approvals.saveRule({ ...rule, name: 'Links', words: ['link'], enabled: false });
+    const first = ask('Merge it?').id;
+    const second = ask('Link the project?').id;
+    expect(decision(second).data.chosenOptionId).toBeUndefined();
+    // Turned on without a sweep: the undo's commit is what answers the second one.
+    store.setSetting('approvals.rules', [merge, { ...link, enabled: true }]);
+    approvals.undo(first, me);
+    expect(decision(second).data.chosenOptionId).toBe('yes');
+    const answers = approvals.answers();
+    expect(answers.find((a) => a.decisionId === second)).toMatchObject({ rule: 'Links' });
+    expect(answers.find((a) => a.decisionId === first)?.undoneAt).toBeTruthy();
+    expect(store.setting('approvals.log')).toBeUndefined();
+  });
+
   it('only the owner changes rules or undoes an answer over REST', async () => {
     const { store, approvals } = setup();
     const app = createApp(store, undefined, undefined, { approvals });

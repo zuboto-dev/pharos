@@ -639,6 +639,8 @@ export function deskAnswer(
     via?: string;
   },
   now: Date = new Date(),
+  /** Rechecks inside the write transaction (Store.apply's `check`); throws to refuse. */
+  check?: () => void,
 ) {
   const found = store.get(input.id);
   if (!found || (found.type !== 'decision' && found.type !== 'task'))
@@ -704,42 +706,46 @@ export function deskAnswer(
         picks && selected ? selectionCount(items, selected) : undefined,
       )
     : declineMessage(decision.data.title, note);
-  return store.apply(author, {
-    message: input.via ? `${input.via}: ${message}` : message,
-    operations: [
-      ...(owner
-        ? []
-        : [
-            {
-              op: 'create' as const,
-              type: 'assignee' as const,
-              ref: 'me',
-              data: { name: 'me', kind: 'human' as const },
-            },
-          ]),
-      {
-        op: 'update',
-        type: 'decision',
-        id: decision.id,
-        // Status, who and when follow from the choice (decline → rejected, later → back in a week).
-        data: option
-          ? choiceUpdate(option, {
-              ...(note ? { note } : {}),
-              today,
-              decidedById: owner ?? '$me',
-              status,
-              items,
-              itemsOptionId: target,
-              selected,
-            })
-          : declineUpdate({
-              ...(note ? { reason: note } : {}),
-              today,
-              decidedById: owner ?? '$me',
-              status,
-              items,
-            }),
-      },
-    ],
-  });
+  return store.apply(
+    author,
+    {
+      message: input.via ? `${input.via}: ${message}` : message,
+      operations: [
+        ...(owner
+          ? []
+          : [
+              {
+                op: 'create' as const,
+                type: 'assignee' as const,
+                ref: 'me',
+                data: { name: 'me', kind: 'human' as const },
+              },
+            ]),
+        {
+          op: 'update',
+          type: 'decision',
+          id: decision.id,
+          // Status, who and when follow from the choice (decline → rejected, later → back in a week).
+          data: option
+            ? choiceUpdate(option, {
+                ...(note ? { note } : {}),
+                today,
+                decidedById: owner ?? '$me',
+                status,
+                items,
+                itemsOptionId: target,
+                selected,
+              })
+            : declineUpdate({
+                ...(note ? { reason: note } : {}),
+                today,
+                decidedById: owner ?? '$me',
+                status,
+                items,
+              }),
+        },
+      ],
+    },
+    check ? { check } : {},
+  );
 }

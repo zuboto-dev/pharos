@@ -62,7 +62,7 @@ export function pulseOf(
     ...(options.projectId ? { projectId: options.projectId } : {}),
   });
   const running = runs.latest().filter((r) => r.outcome === 'running');
-  const ruled = approvals.log().filter((a) => a.at >= weekAgo && !a.undoneAt);
+  const ruled = approvals.answers(weekAgo).filter((a) => !a.undoneAt);
 
   const out = projects.map((project): ProjectPulse => {
     const data = store.dataset(project.id);

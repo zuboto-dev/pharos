@@ -1,7 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ApprovalsState, ProjectPulse, Pulse } from '@pharos/schema';
+import {
+  ApprovalRuleInput,
+  type ApprovalsState,
+  type ProjectPulse,
+  type Pulse,
+} from '@pharos/schema';
 import { PortfolioPulse, ProjectPulseStrip } from './pulse';
 import { StandingApprovals } from './settings-approvals';
 
@@ -47,7 +52,6 @@ beforeEach(() => {
         projectId: 'p1',
         title: 'Merge the fix?',
         option: 'Merge it',
-        ruleId: 'rule-1',
         rule: 'Yes to “merge”',
         revision: 9,
         at: new Date().toISOString(),
@@ -111,6 +115,28 @@ describe('pulse', () => {
 });
 
 describe('standing approvals', () => {
+  it('turns a rule off with only the fields the server accepts', async () => {
+    approvals.rules = [
+      {
+        id: 'rule-1',
+        name: 'Yes to “link”',
+        words: ['link'],
+        waitHours: 0,
+        enabled: true,
+        createdAt: '2026-10-26T00:00:00.000Z',
+      },
+    ];
+    render(
+      <MemoryRouter>
+        <StandingApprovals />
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('switch', { name: 'Rule “Yes to “link”” on' }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/approvals/rules')).toBe(true));
+    const body = calls.find((c) => c.url === '/api/approvals/rules')!.body;
+    expect(ApprovalRuleInput.parse(body)).toMatchObject({ id: 'rule-1', enabled: false });
+  });
+
   it('adds a suggested rule, and undoes a rule’s answer, as the owner', async () => {
     render(
       <MemoryRouter>

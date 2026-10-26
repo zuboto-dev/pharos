@@ -1,5 +1,6 @@
 import { decisionState, meaningOf, type Entity } from '@pharos/schema';
 import { deskOf, RunLog, waitingHandBacks } from './desk.js';
+import { pageUpkeep } from './page-upkeep.js';
 import { hostname } from 'node:os';
 import type { Presence } from './presence.js';
 import type { SessionNotes } from './session-notes.js';
@@ -40,16 +41,18 @@ export function projectBrief(
       .join(' · ') || 'No summary yet.',
   );
   add('The owner’s rules for this project', project.data.rules ?? []);
-  // The main page says what the project is for and where it is heading: read it first, and
-  // revise it when the project passes an anchor point. Without one, writing it is the first job.
+  // The main page says what the project is for: read it first. Then the pages that are behind
+  // how Pharos pages work now, and what changed (page-upkeep.ts): agents fix them as they work.
   const main = store
     .list('view', { projectId })
     .find((v) => v.data.kind === 'main' && !v.data.archived);
-  add('The main page', [
-    main
-      ? `“${main.data.name}” (${main.id}, updated ${main.updatedAt.slice(0, 10)}): read it with view_get first; revise it with view_update when the project passes an anchor point`
-      : 'None yet: write it (view_create with main: true and doc) before other pages, so a reader sees what the project is for, the problem it started from, the anchor points and where it is heading',
-  ]);
+  if (main)
+    add('The main page', [
+      `“${main.data.name}” (${main.id}, updated ${main.updatedAt.slice(0, 10)}): read it with view_get first`,
+    ]);
+  const upkeep = pageUpkeep(store, projectId, now);
+  add('Pages to bring up to date (do these as part of your work here)', upkeep.todo);
+  if (upkeep.todo.length) add('What changed in how Pharos pages work', upkeep.updates);
 
   const tasks = store.list('task', { projectId });
   const done = (t: Entity<'task'>) => meaningOf(project, 'task.status', t.data.status) === 'done';

@@ -245,6 +245,17 @@ describe('pulse', () => {
     expect(pulse.tasks).toMatchObject({ blocked: 1, doneWeek: 1, addedWeek: 2, open: 0 });
     expect(pulse.doneByDay.at(-1)).toBe(1);
     expect(pulse.waiting.count).toBe(1);
+    // A run that finished partly is a notice, not something waiting on the owner.
+    const runs = new RunLog(store);
+    runs.report(agent, {
+      projectId: p,
+      kind: 'night',
+      name: 'Night run',
+      outcome: 'partial',
+    } as never);
+    expect(
+      pulseOf(store, runs, approvals).projects.find((x) => x.projectId === p)!.waiting.count,
+    ).toBe(1);
     expect(pulse.last?.message).toBe('Ask the owner: Which seeds?');
   });
 });

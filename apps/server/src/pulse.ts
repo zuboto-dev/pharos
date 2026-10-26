@@ -104,7 +104,9 @@ export function pulseOf(
         }
       : undefined;
 
-    const waiting = desk.items.filter((i) => i.projectId === project.id);
+    // What the owner has to do: decisions, review sheets, tasks for them. Notices of runs that
+    // finished partly or failed are not asks (the owner saw "2 items wait on you" and found none).
+    const waiting = desk.items.filter((i) => i.projectId === project.id && i.kind !== 'run');
     const goalMeaning = (g: Entity<'goal'>) => meaningOf(project, 'goal.status', g.data.status);
     const last = store.history({ projectId: project.id, limit: 1 })[0];
     return {

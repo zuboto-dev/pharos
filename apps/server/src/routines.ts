@@ -80,6 +80,12 @@ export type RoutinesOptions = {
   dir?: string;
   /** The Python that runs bin/api.py (default python3). */
   python?: string;
+  /**
+   * How long a read of the state or the runners is reused (default 5 s with `dir`, none with a
+   * server): every open Routines tab polls, and each command starts Python and reads git in every
+   * project, which once kept the server busy on a loaded Mac.
+   */
+  cacheMs?: number;
   /** Tests pass a stub. */
   fetch?: typeof fetch;
   /** Per request; Routines answers locally, so a slow answer means it's stuck. */
@@ -113,8 +119,38 @@ export function createRoutinesClient(options: RoutinesOptions = {}) {
   // A command starts Python each time and reads git in every project: a little more time.
   const timeoutMs = options.timeoutMs ?? (dir ? 15000 : 4000);
 
-  /** One call to Routines; network failures and timeouts become `Unreachable` with a reason. */
+  const cacheMs = options.cacheMs ?? (dir ? 5000 : 0);
+  type Kept = { status: number; type: string; text: string };
+  const kept = new Map<string, { at: number; answer: Promise<Kept> }>();
+  const CACHED = new Set(['/api/state', '/api/runners']);
+
+  /**
+   * One call to Routines. Reads of the state and the runners are shared for `cacheMs` (calls at the
+   * same moment wait for one answer); any write clears them.
+   */
   async function call(path: string, init?: RequestInit): Promise<Response> {
+    const method = (init?.method ?? 'GET').toUpperCase();
+    if (method !== 'GET') kept.clear();
+    if (method !== 'GET' || !cacheMs || !CACHED.has(path)) return send(path, init);
+    const now = Date.now();
+    let entry = kept.get(path);
+    if (!entry || now - entry.at > cacheMs) {
+      const answer = send(path, init).then(async (res) => ({
+        status: res.status,
+        type: res.headers.get('content-type') ?? 'application/json',
+        text: await res.text(),
+      }));
+      entry = { at: now, answer };
+      kept.set(path, entry);
+      // A failed read is not kept.
+      answer.catch(() => kept.get(path) === entry && kept.delete(path));
+    }
+    const { status, type, text } = await entry.answer;
+    return new Response(text, { status, headers: { 'content-type': type } });
+  }
+
+  /** One request to Routines; network failures and timeouts become `Unreachable` with a reason. */
+  async function send(path: string, init?: RequestInit): Promise<Response> {
     if (dir) {
       try {
         return await callCommand(dir, options.python ?? 'python3', path, init, timeoutMs);

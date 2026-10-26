@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -59,5 +59,22 @@ describe('Routines answered by bin/api.py (no server)', () => {
     const state = (await (await app.request('/state')).json()) as Record<string, unknown>;
     expect(state.available).toBe(false);
     expect(String(state.reason)).toMatch(/PHAROS_ROUTINES_DIR/);
+  });
+});
+
+describe('reads shared between tabs', () => {
+  it('runs the command once for reads close together, and again after a write', async () => {
+    const app = routinesRoutes(createRoutinesClient({ dir, cacheMs: 60_000 }));
+    await Promise.all([app.request('/state'), app.request('/state'), app.request('/state')]);
+    await app.request('/state');
+    const calls = () => readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n');
+    expect(calls().filter((l) => l.includes('"GET", "/api/state"'))).toHaveLength(1);
+    await app.request('/run', {
+      method: 'POST',
+      headers: owner,
+      body: JSON.stringify({ routine: 'wrapup', project: 'garden' }),
+    });
+    await app.request('/state');
+    expect(calls().filter((l) => l.includes('"GET", "/api/state"')).length).toBeGreaterThan(1);
   });
 });

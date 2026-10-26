@@ -126,7 +126,7 @@ describe('what changed since you looked (R11.5)', () => {
     expect(screen.getByRole('status').textContent).toContain(
       'Since you last looked: Opus 5.5 changed “Oil change” and this page.',
     );
-    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Project history/ }));
     expect(open).toHaveBeenCalledWith({ history: true });
     fireEvent.click(screen.getByRole('button', { name: 'Hide what changed' }));
     expect(screen.queryByRole('status')).toBeNull();

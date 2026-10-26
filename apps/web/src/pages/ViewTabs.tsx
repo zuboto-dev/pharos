@@ -16,6 +16,7 @@ import {
   Pencil,
   LayoutGrid,
   House,
+  Layers,
   Pin,
   PinOff,
   Plus,
@@ -37,6 +38,7 @@ import { dismissAnswer, keepAnswer } from './answers';
 import { canArchive, restoreView } from './hand-back';
 import { CHANGED_TEXT, ChangedDot } from './freshness';
 import { AsksBadge, useOpenAsks } from './open-asks';
+import { useVersionCount } from './versions';
 
 /** The main page first, then pinned views, then by order; answers last. */
 const isAnswer = (v: Entity<'view'>) => v.data.kind === 'answer';
@@ -63,17 +65,21 @@ export function ViewUpdated({ view }: { view: Entity<'view'> }) {
     `/api/history?entityId=${view.id}&limit=1&v=${version}`,
   );
   const rev = latest.data?.[0];
+  const versions = useVersionCount(view);
+  const navigate = useNavigate();
   const Icon = rev ? AUTHOR_ICONS[rev.author.kind] : null;
   // The line says when and who; what changed waits in its tooltip (and its description).
   return (
     <Tooltip
-      label="Details and history"
+      label={versions > 1 ? 'Versions of this page' : 'Details'}
       detail={rev ? `#${rev.id} · ${rev.message}` : undefined}
       className="max-w-full"
     >
       <button
         type="button"
-        onClick={() => actions.open({ entity: view.id })}
+        onClick={() =>
+          versions > 1 ? navigate('?versions=latest') : actions.open({ entity: view.id })
+        }
         className="inline-flex max-w-full items-center gap-1.5 text-xs text-muted hover:text-ink"
       >
         {Icon && <Icon className="size-3.5 shrink-0" aria-hidden />}
@@ -491,6 +497,15 @@ export function ViewTabs({
                   Rename
                 </MenuItem>
                 <MenuItem
+                  icon={Layers}
+                  onClick={() => {
+                    close();
+                    navigate(`/projects/${projectId}/views/${view.id}?versions=latest`);
+                  }}
+                >
+                  Versions
+                </MenuItem>
+                <MenuItem
                   icon={X}
                   danger
                   onClick={() => {
@@ -508,6 +523,15 @@ export function ViewTabs({
               <Menu anchor={menu.anchor} onClose={close} label={`Options for ${view.data.name}`}>
                 <MenuItem icon={Pencil} onClick={() => (close(), setRenaming(true))}>
                   Rename
+                </MenuItem>
+                <MenuItem
+                  icon={Layers}
+                  onClick={() => {
+                    close();
+                    navigate(`/projects/${projectId}/views/${view.id}?versions=latest`);
+                  }}
+                >
+                  Versions
                 </MenuItem>
                 {!isMainPage(view) && (
                   <MenuItem

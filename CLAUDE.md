@@ -299,7 +299,7 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   another page, unless pinned; only the owner pins one (the store refuses an agent's pin), and a
   new project's Overview starts unpinned.
 - A view's versions are its revisions (`apps/server/src/views/versions.ts`, `GET
-/api/views/:id/versions[/:rev]`); the web app shows them in place of the page (`?versions=`),
+/api/views/:id/versions[/:rev]`); the web app shows them in place of the page (`?versions=`; the page line's "Versions · N", the updated line and the tab menu open it; the toolbar clock is "Project history"),
   the picked version compared with the one before (`compareDocs`: blocks added, changed with
   word changes, removed). Restoring one is `POST /api/views/:id/versions/:rev/restore` (owner only):
   a new, undoable change that also brings back the evidence the text was written from

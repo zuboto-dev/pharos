@@ -1,13 +1,13 @@
 import { compareDocs, comparisonLine, type Entity, type ViewVersion } from '@pharos/schema';
 import clsx from 'clsx';
-import { ArrowLeft, History, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Layers, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { Skeleton } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
 import { ApiError, ownerSend, useResource } from '../lib/api';
-import { dateTime, plural } from '../lib/format';
+import { dateTime } from '../lib/format';
 import { DocumentCompare } from './document';
 
 /**
@@ -19,18 +19,27 @@ import { DocumentCompare } from './document';
 type ViewData = Entity<'view'>['data'];
 type At = { version: ViewVersion; before: ViewData | null; after: ViewData | null };
 
-/** "History · 4 versions" beside the page's updated line; opens the history in place. */
-export function VersionsLink({ view }: { view: Entity<'view'> }) {
+/** How many versions a page has (its revisions). */
+export function useVersionCount(view: Entity<'view'>): number {
   const { version } = useViewData();
   const versions = useResource<ViewVersion[]>(`/api/views/${view.id}/versions?v=${version}`);
-  const n = Array.isArray(versions.data) ? versions.data.length : 0;
+  return Array.isArray(versions.data) ? versions.data.length : 0;
+}
+
+/**
+ * "Versions · 4" beside the page's updated line: this page's own versions, shown in place. Named
+ * apart from the project history (the clock in the toolbar), which lists every change in the
+ * project.
+ */
+export function VersionsLink({ view }: { view: Entity<'view'> }) {
+  const n = useVersionCount(view);
   if (n < 2) return null;
   return (
     <Link
       to="?versions=latest"
-      className="inline-flex items-center gap-1 font-medium text-muted hover:text-ink"
+      className="inline-flex items-center gap-1 rounded-full border border-line-strong px-2 py-0.5 font-medium text-ink-soft hover:border-sky-400 hover:text-ink"
     >
-      <History className="size-3.5" aria-hidden /> History · {plural(n, 'version')}
+      <Layers className="size-3.5" aria-hidden /> Versions · {n}
     </Link>
   );
 }
@@ -68,7 +77,10 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
   };
 
   return (
-    <section aria-label="Version history" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
+    <section
+      aria-label="Versions of this page"
+      className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem]"
+    >
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Link to="?" className={BUTTON.secondary}>
@@ -115,7 +127,7 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
         )}
       </div>
       <nav aria-label="Versions" className="space-y-1 lg:sticky lg:top-4 lg:self-start">
-        <h2 className="mb-2 text-sm font-medium text-muted">Versions</h2>
+        <h2 className="mb-2 text-sm font-medium text-muted">Versions of this page</h2>
         {!list.data && <Skeleton lines={5} label="Loading versions" />}
         <ol className="max-h-[70vh] space-y-1 overflow-y-auto pr-1">
           {versions.map((v) => (

@@ -1,6 +1,7 @@
 import type { Entity, ProjectDataset, RevisionSummary, ViewFreshness } from '@pharos/schema';
 import clsx from 'clsx';
-import { VersionsLink } from './versions';
+import { useNavigate } from 'react-router';
+import { VersionsLink, useVersionCount } from './versions';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useViewData } from '../catalog/context';
@@ -144,6 +145,8 @@ export function ReportBar({
     `/api/history?entityId=${view.id}&limit=1&v=${version}`,
   );
   const rev = latest.data?.[0];
+  const versions = useVersionCount(view);
+  const navigate = useNavigate();
   const evidence = freshness?.evidence;
   const stale = evidence && !('unknown' in evidence) ? evidence.stale : undefined;
   const summary = view.data.page?.summary;
@@ -151,10 +154,13 @@ export function ReportBar({
     <div data-report-bar="" className={clsx('space-y-2', className)}>
       {summary && <p className="max-w-3xl text-sm text-ink-soft">{summary}</p>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted">
+        {/* The updated line leads to this page's versions (the details drawer once it has one). */}
         <button
           type="button"
-          onClick={() => actions.open({ entity: view.id })}
-          title={rev ? `#${rev.id} · ${rev.message}` : 'Show this page’s history'}
+          onClick={() =>
+            versions > 1 ? navigate('?versions=latest') : actions.open({ entity: view.id })
+          }
+          title={rev ? `#${rev.id} · ${rev.message}` : 'Show this page’s versions'}
           className="min-w-0 text-left hover:text-ink"
         >
           Updated {timeAgo(view.updatedAt)}

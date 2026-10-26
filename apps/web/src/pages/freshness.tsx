@@ -174,10 +174,10 @@ export function WhatChanged({ freshness }: { freshness: ViewFreshness | null }) 
         {changesSentence(changed)}.{' '}
         <span className="text-xs text-muted">Latest {timeAgo(latest.at)}.</span>
       </p>
-      <Tooltip label="History">
+      <Tooltip label="Project history">
         <button
           type="button"
-          aria-label="History"
+          aria-label="Project history"
           onClick={() => actions.open({ history: true })}
           className="-my-0.5 shrink-0 rounded-control p-0.5 text-accent hover:bg-sky-100 dark:hover:bg-sky-900"
         >

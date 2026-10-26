@@ -634,12 +634,12 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
                         open={dock.open}
                         onToggle={() => dock.setOpen((o) => !o)}
                       />
-                      <Tooltip label="History">
+                      <Tooltip label="Project history">
                         <button
                           type="button"
                           onClick={() => open({ history: true })}
                           className={ICON_BUTTON.secondary}
-                          aria-label="History"
+                          aria-label="Project history"
                         >
                           <History className="size-4" aria-hidden />
                         </button>

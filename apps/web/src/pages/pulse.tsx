@@ -12,12 +12,21 @@ import { formatDate, plural, timeAgo } from '../lib/format';
  */
 
 /** Tasks finished per day as small bars, one per day, today last; a title per bar on hover. */
-export function DoneBars({ days, today }: { days: number[]; today: string }) {
+export function DoneBars({
+  days,
+  today,
+  small = false,
+}: {
+  days: number[];
+  today: string;
+  /** The project page's one-line pulse: half as tall. */
+  small?: boolean;
+}) {
   const max = Math.max(1, ...days);
   const total = days.reduce((a, b) => a + b, 0);
-  const W = 6;
+  const W = small ? 4 : 6;
   const GAP = 2;
-  const H = 24;
+  const H = small ? 12 : 24;
   return (
     <svg
       role="img"
@@ -238,20 +247,25 @@ export function ProjectPulseStrip({ projectId }: { projectId: string }) {
   const p = projects.find((x) => x.projectId === projectId);
   if (!p || !pulse.data) return null;
   const ship = p.stage && shipText(p.stage);
+  // One short line under the project name: where it stands, this week, what waits on you.
+  const items = [
+    p.tasks.doneWeek > 0 && { key: 'done', text: `${p.tasks.doneWeek} done this week` },
+    p.tasks.review > 0 && { key: 'review', text: `${p.tasks.review} to review` },
+    p.tasks.blocked > 0 && { key: 'blocked', text: `${p.tasks.blocked} blocked`, bad: true },
+  ].filter((i): i is { key: string; text: string; bad?: boolean } => !!i);
   return (
     <div
       aria-label="How this project is going"
-      className="!mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-block border border-line bg-surface px-4 py-2.5"
+      className="!mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted"
     >
       {p.stage && (
-        <span className="text-xs text-muted">
-          Stage {p.stage.index} of {p.stage.of}:{' '}
-          <span className="font-medium text-ink-soft">{p.stage.name}</span>
+        <span className="truncate">
+          {p.stage.name}
           {ship && (
             <span
               className={clsx(
-                ship.late && 'text-rose-600 dark:text-rose-400',
-                ship.soon && 'text-amber-700 dark:text-amber-400',
+                ship.late && 'font-medium text-rose-600 dark:text-rose-400',
+                ship.soon && 'font-medium text-amber-700 dark:text-amber-400',
               )}
             >
               {' '}
@@ -260,16 +274,13 @@ export function ProjectPulseStrip({ projectId }: { projectId: string }) {
           )}
         </span>
       )}
-      <Counts p={p} />
-      <Waiting p={p} />
-      {p.last && (
-        <span className="text-xs text-faint">
-          Last change {timeAgo(p.last.at)} by {p.last.who}
+      {items.map((i) => (
+        <span key={i.key} className={clsx(i.bad && 'text-rose-600 dark:text-rose-400')}>
+          {i.text}
         </span>
-      )}
-      <span className="ml-auto">
-        <DoneBars days={p.doneByDay} today={pulse.data.today} />
-      </span>
+      ))}
+      {p.waiting.count > 0 && <Waiting p={p} />}
+      <DoneBars days={p.doneByDay} today={pulse.data.today} small />
     </div>
   );
 }

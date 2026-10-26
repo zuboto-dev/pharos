@@ -50,6 +50,7 @@ import { dismissAnswer, keepAnswer } from './answers';
 import { GetStarted, LoadError, ProjectSkeleton, isEmptyProject } from './onboarding';
 import { EvidenceNote, WhatChanged, usePageFreshness } from './freshness';
 import { AskDialog, RequestsButton } from './requests';
+import { ProjectPulseStrip } from './pulse';
 import { ViewTabs, ViewUpdated, isExpired, sortViews } from './ViewTabs';
 import { ReportBar, ReportFrame, isReport } from './report';
 import { DecisionPageContext, DocumentView, isDocument } from './document';
@@ -533,6 +534,7 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
         >
           <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-8">
             {dataset.data && <ProjectName name={dataset.data.project.data.name} />}
+            {projectId && <ProjectPulseStrip projectId={projectId} />}
             {archivedProject && (
               <p className="-mb-2 flex items-center gap-1.5 text-sm text-muted">
                 <Archive className="size-3.5" aria-hidden />

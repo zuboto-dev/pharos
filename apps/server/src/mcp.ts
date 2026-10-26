@@ -25,6 +25,7 @@ import {
 import { z } from 'zod';
 import { VERSION } from './version.js';
 import { RunLog, answersSince, askOwner, deskOf } from './desk.js';
+import { StandingApprovals } from './approvals.js';
 import { proposeRoutine } from './routine-proposals.js';
 import { LOOKUP_TOOLS, LookupLog } from './lookups.js';
 import { ActionService } from './actions/service.js';
@@ -312,15 +313,16 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
 
   // R16: the owner's desk. One call puts something on it; the next turn reads the answer.
   const runs = new RunLog(store);
+  const approvals = new StandingApprovals(store);
   server.registerTool(
     'ask_owner',
     {
       title: 'Ask the owner',
       description:
-        "Put something on the owner's desk (the one list of everything waiting on them, across projects) in one call. With 2–5 options it is a decision they answer in one tap (mark your pick with recommendedOptionId); without, a task for them, with actions (the steps for them) and acceptance (what makes it done). Ask only what needs them: a choice of taste or direction, a secret, a payment, a push, personal data. Give minutes (about how long) and gate for things only they can do. Read the answer on your next turn with desk_list({since}).",
+        "Put something on the owner's desk (the one list of everything waiting on them, across projects) in one call. With 2–5 options it is a decision they answer in one tap (mark your pick with recommendedOptionId); without, a task for them, with actions (the steps for them) and acceptance (what makes it done). Ask only what needs them: a choice of taste or direction, a secret, a payment, a push, personal data. Give minutes (about how long) and gate for things only they can do. Read the answer on your next turn with desk_list({since}); when the owner's standing approval answers it at once, the result has `answered` and you go ahead.",
       inputSchema: AskOwner.shape,
     },
-    (input) => run(() => askOwner(store, author(), AskOwner.parse(input))),
+    (input) => run(() => approvals.withAnswer(askOwner(store, author(), AskOwner.parse(input)))),
   );
 
   server.registerTool(

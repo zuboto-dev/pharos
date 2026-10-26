@@ -17,6 +17,7 @@ import { defaultDatabasePath, openDatabase } from './store/database.js';
 import { Store } from './store/store.js';
 import { seenMarks } from './views/freshness.js';
 import { scheduleAssetPurge } from './views/report.js';
+import { StandingApprovals } from './approvals.js';
 import { webBuildId } from './version.js';
 import { loadPty } from './terminal/pty.js';
 import { TerminalService } from './terminal/service.js';
@@ -140,7 +141,12 @@ for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
 const permissions = new PermissionService(store, {
   ...(process.env.PHAROS_CLAUDE_HOME ? { claudeHome: process.env.PHAROS_CLAUDE_HOME } : {}),
 });
+// Standing approvals: rules that wait, and decisions other processes (stdio MCP) asked, are
+// answered within a minute. sweep never throws.
+const approvals = new StandingApprovals(store);
+setInterval(() => approvals.sweep(), 60_000).unref();
 const app = createApp(store, feed, agent, {
+  approvals,
   dataPath: dbPath,
   port,
   files,

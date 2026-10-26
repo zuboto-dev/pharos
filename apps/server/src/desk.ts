@@ -437,7 +437,7 @@ export function waitingHandBacks(store: Store): DeskHandBack[] {
 }
 
 /** The person the owner's tasks go to: the person with the most tasks, made when there is none. */
-function ownerAssignee(store: Store): string | null {
+export function ownerAssignee(store: Store): string | null {
   const people = store.list('assignee').filter((a) => a.data.kind === 'human');
   if (!people.length) return null;
   const counts = new Map<string, number>();
@@ -635,6 +635,8 @@ export function deskAnswer(
     decline?: boolean;
     /** The items the owner kept ticked, when the option chosen is the one they apply to. */
     selected?: string[];
+    /** What answered for the owner, put before the message ("Standing approval “Merge”"). */
+    via?: string;
   },
   now: Date = new Date(),
 ) {
@@ -693,16 +695,17 @@ export function deskAnswer(
         `selected: pick at least one item for “${option.label}”, or choose another answer`,
       );
   }
+  const message = option
+    ? choiceMessage(
+        option,
+        decision.data.title,
+        note,
+        today,
+        picks && selected ? selectionCount(items, selected) : undefined,
+      )
+    : declineMessage(decision.data.title, note);
   return store.apply(author, {
-    message: option
-      ? choiceMessage(
-          option,
-          decision.data.title,
-          note,
-          today,
-          picks && selected ? selectionCount(items, selected) : undefined,
-        )
-      : declineMessage(decision.data.title, note),
+    message: input.via ? `${input.via}: ${message}` : message,
     operations: [
       ...(owner
         ? []

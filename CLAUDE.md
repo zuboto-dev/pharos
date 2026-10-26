@@ -272,6 +272,20 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   `taskAnswerChange` is the one update and message (`Won't do “…”`, `Later (day): “…”`, `Reply on
 “…”: …`) the document's TaskChecklist and the desk share. These answers don't make a document stale.
 
+## Standing approvals and the pulse
+
+- Standing approvals (`packages/schema/src/approvals.ts`, `apps/server/src/approvals.ts`): the
+  owner's rules (words in a decision's question, projects, a wait) answer matching decisions with
+  the agent's recommendation, as `human` author `rule: <name>`, one revision each, logged in the
+  `approvals.log` app setting with undo (`POST /api/approvals/undo`; an undone decision is never
+  answered by a rule again). Rules are the `approvals.rules` app setting, changed only by the owner
+  (Settings; never over MCP). `approvalBlock` keeps gates, item picks, notes, non-yes picks and
+  NEVER_WORDS (delete, send, publish, pay, production…) with the owner. `sweep` runs after every
+  commit and on index.ts's 60 s timer; ask_owner returns `answered` when a rule answered at once.
+- The pulse (`packages/schema/src/pulse.ts`, `apps/server/src/pulse.ts`, `GET /api/pulse`):
+  per project, computed from records, the change log, the desk and the run log, never written by
+  an agent; the home page lists them (`PortfolioPulse`), the project page shows its own line.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

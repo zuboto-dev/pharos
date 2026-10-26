@@ -63,6 +63,8 @@ import type { PermissionAsk } from '@pharos/schema';
 import { PermissionService } from './permissions/service.js';
 import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
 import { lastAssistantText, SessionNoteInput, SessionNotes } from './session-notes.js';
+import { StandingApprovals } from './approvals.js';
+import { pulseOf } from './pulse.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
 import { TURN_TOKEN_HEADER } from './terminal/command.js';
@@ -221,6 +223,8 @@ export type ServerInfo = {
   routines?: RoutinesOptions;
   /** Claude Code permissions (Settings): tests pass one with a temp home; never the real one. */
   permissions?: PermissionService;
+  /** Standing approvals (index.ts runs its timer); made here when absent. */
+  approvals?: StandingApprovals;
   /** Live permission asks (the hook); tests make one with a short wait. */
   permissionAsks?: (
     service: PermissionService,
@@ -244,6 +248,9 @@ export function createApp(
   watchAgentRevisions(store, feed, presence);
   const notifications = info.notifications ?? new Notifications(store, new RunLog(store));
   const notes = new SessionNotes(store);
+  // Standing approvals answer matching decisions after every commit (and on index.ts's timer).
+  const approvals = info.approvals ?? new StandingApprovals(store);
+  store.onCommit(() => approvals.sweep());
 
   // Text goes compressed when the browser accepts it (project data, the app's scripts and styles:
   // about a fifth of the size over the network, to a phone). Never the live feed, the terminal
@@ -737,6 +744,30 @@ export function createApp(
   // routine without MCP may report its run here. Only a person marks a run seen.
   const runs = new RunLog(store);
   api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
+  // Every active project's pulse: worked out from records and history, never written by an agent.
+  api.get('/pulse', (c) =>
+    c.json(pulseOf(store, runs, approvals, { projectId: c.req.query('projectId') })),
+  );
+  // Standing approvals: the owner's rules (an app setting, never over MCP) and what they answered.
+  const ownerRules = 'Only the owner sets standing approvals';
+  api.get('/approvals', (c) => c.json(approvals.state()));
+  api.post('/approvals/rules', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerRules);
+    return c.json({ rule: approvals.saveRule(await c.req.json().catch(() => ({}))) });
+  });
+  api.post('/approvals/rules/remove', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, ownerRules);
+    const body = z.object({ id: z.string().min(1) }).parse(await c.req.json().catch(() => ({})));
+    approvals.removeRule(body.id);
+    return c.json({ ok: true });
+  });
+  api.post('/approvals/undo', async (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Only the owner undoes a standing approval');
+    const body = z
+      .object({ decisionId: z.string().min(1) })
+      .parse(await c.req.json().catch(() => ({})));
+    return c.json({ answer: approvals.undo(body.decisionId, authorOf(c)) });
+  });
   // A project's brief (or every project's in a folder: a session's start hook), as text.
   api.get('/projects/:id/brief', (c) => {
     if (store.get(c.req.param('id'))?.type !== 'project')
@@ -755,7 +786,7 @@ export function createApp(
     const ref = typeof raw.projectId === 'string' ? raw.projectId : '';
     const byName = store.list('project').find((p) => p.data.name === ref);
     const input = AskOwner.parse({ ...raw, projectId: byName?.id ?? ref });
-    return c.json(askOwner(store, authorOf(c), input));
+    return c.json(approvals.withAnswer(askOwner(store, authorOf(c), input)));
   });
   // The owner picks or makes a project folder on this computer (the sidebar's New folder). Only a
   // request that declares the owner gets an answer: folder names on disk are not for agents.

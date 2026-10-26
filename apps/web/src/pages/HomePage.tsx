@@ -5,6 +5,7 @@ import { BUTTON, StatusBadge } from '../catalog/ui';
 import { ConnectAgent, useMcpUrl } from './ConnectAgent';
 import { plural } from '../lib/format';
 import { NewProjectDialog } from './NewProjectDialog';
+import { PortfolioPulse } from './pulse';
 import { HomeSkeleton, LoadError } from './onboarding';
 import { useWorkspace } from './projects';
 import type { Item } from './sidebar-model';
@@ -97,6 +98,7 @@ export function HomePage() {
         {newButton}
       </div>
       {dialog}
+      <PortfolioPulse />
       {groups.map((group) => (
         <section key={group.key} className="space-y-3">
           <h2 className="flex items-center gap-1.5 text-sm font-medium text-muted">

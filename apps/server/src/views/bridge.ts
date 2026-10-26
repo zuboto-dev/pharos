@@ -17,6 +17,8 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
   var timeout = window.setTimeout;
   var clearTimer = window.clearTimeout;
   var URLClass = window.URL;
+  var Observer = window.ResizeObserver;
+  var computed = window.getComputedStyle;
   var preventDefault = window.Event && window.Event.prototype.preventDefault;
   function cancel(event) {
     if (preventDefault) apply(preventDefault, event, []);
@@ -69,7 +71,9 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
           ? { pharos: 1, token: token, kind: kind, fileId: a }
           : kind === 'link'
             ? { pharos: 1, token: token, kind: kind, url: a }
-            : { pharos: 1, token: token, kind: kind };
+            : kind === 'size'
+              ? { pharos: 1, token: token, kind: kind, height: a }
+              : { pharos: 1, token: token, kind: kind };
     try {
       parentWindow.postMessage(message, '*');
     } catch (e) {}
@@ -228,6 +232,48 @@ export const BRIDGE_SCRIPT = String.raw`(function () {
     window.addEventListener('pagehide', leaving);
   }
   send('ready');
+  // A drawing (it lists its reads) fits its document without scrolling: content wider than the
+  // frame is scaled down to its width, and the frame is told the height it needs ("size").
+  if (framed && listed) {
+    var scheduled = false;
+    var fit = function () {
+      scheduled = false;
+      try {
+        var html = document.documentElement;
+        var body = document.body;
+        if (!body) return;
+        body.style.transform = '';
+        html.style.overflow = 'hidden';
+        var width = html.clientWidth;
+        var wide = Math.max(body.scrollWidth, html.scrollWidth);
+        var zoom = width > 0 && wide > width + 1 ? width / wide : 1;
+        if (zoom < 1) {
+          body.style.transformOrigin = '0 0';
+          body.style.transform = 'scale(' + zoom + ')';
+        }
+        var style = apply(computed, window, [body]);
+        var height =
+          body.scrollHeight + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
+        send('size', Math.ceil(height * zoom));
+      } catch (e) {}
+    };
+    var later = function () {
+      if (scheduled) return;
+      scheduled = true;
+      timeout(fit, 30);
+    };
+    try {
+      window.addEventListener('load', later);
+      window.addEventListener('resize', later);
+      document.addEventListener('DOMContentLoaded', function () {
+        later();
+        try {
+          if (Observer) new Observer(later).observe(document.body);
+        } catch (e) {}
+      });
+      later();
+    } catch (e) {}
+  }
 })();`;
 
 export type PageTheme = 'light' | 'dark';

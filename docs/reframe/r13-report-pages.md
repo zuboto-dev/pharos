@@ -160,6 +160,7 @@ kept from the page's scripts; R13.6):
 | `{ pharos: 1, token, kind: 'openFile', fileId }` | `pharos.openFile(fileId)`: the parent opens the file viewer (A6) only for a file agents can see.                                                                      |
 | `{ pharos: 1, token, kind: 'link', url }`        | A click on a web link or `pharos.openLink(url)`: the parent opens it or asks the reader (see "Serving and the frame").                                                |
 | `{ pharos: 1, token, kind: 'leaving' }`          | The document is unloading (`beforeunload`, `pagehide`): the parent stops the frame.                                                                                   |
+| `{ pharos: 1, token, kind: 'size', height }`     | A drawing (R14) only: the height its document needs, after scaling wider content down to the frame's width; the parent sizes the frame to it (24–4000 px).            |
 
 Parent → frame:
 

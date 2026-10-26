@@ -46,6 +46,7 @@ type FromFrame = { pharos: 1; token: string } & (
   | { kind: 'data'; id: string | number; name: string }
   | { kind: 'openFile'; fileId: string }
   | { kind: 'link'; url: string }
+  | { kind: 'size'; height: number }
   | { kind: 'leaving' }
 );
 
@@ -66,8 +67,13 @@ function readMessage(data: unknown): FromFrame | null {
     return { pharos: 1, token, kind: 'openFile', fileId: m.fileId };
   if (m.kind === 'link' && typeof m.url === 'string')
     return { pharos: 1, token, kind: 'link', url: m.url };
+  if (m.kind === 'size' && typeof m.height === 'number' && Number.isFinite(m.height))
+    return { pharos: 1, token, kind: 'size', height: m.height };
   return null;
 }
+
+/** The tallest a drawing may make its frame by reporting its size. */
+export const FRAME_MAX_HEIGHT = 4000;
 
 /** Links a page may ask Pharos to open: http(s) only, at most this long. */
 export const LINK_MAX_CHARS = 2000;
@@ -189,6 +195,8 @@ export type BridgeFrame = {
   /** A link the page asked to open that the reader must confirm (one at a time). */
   confirm: string | null;
   setConfirm: (url: string | null) => void;
+  /** The height a drawing reported it needs, for this load (null until it does). */
+  height: number | null;
 };
 
 /**
@@ -218,6 +226,8 @@ export function useBridgeFrame({
   const shown = status.src === src ? status.value : 'loading';
   const life = useRef<FrameLife>({ src, loads: 0, token: null, dead: false });
   const [confirm, setConfirm] = useState<string | null>(null);
+  // The height a drawing reported for itself (size), for this load.
+  const [fitted, setFitted] = useState<{ src: string; height: number } | null>(null);
   // When links opened at once lately, for the rate limit.
   const opened = useRef<number[]>([]);
   // The latest of what message handlers need, without re-subscribing on every reload.
@@ -313,6 +323,12 @@ export function useBridgeFrame({
           })
           .catch(() => {});
       } else if (message.kind === 'link') openLink(message.url);
+      else if (message.kind === 'size')
+        // A drawing's own height, so it shows whole without scrolling (bounded).
+        setFitted({
+          src,
+          height: Math.min(FRAME_MAX_HEIGHT, Math.max(24, Math.ceil(message.height))),
+        });
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -356,7 +372,14 @@ export function useBridgeFrame({
       );
   };
 
-  return { frame, shown, onLoad, confirm, setConfirm };
+  return {
+    frame,
+    shown,
+    onLoad,
+    confirm,
+    setConfirm,
+    height: fitted?.src === src ? fitted.height : null,
+  };
 }
 
 const NOTICE_BOX =

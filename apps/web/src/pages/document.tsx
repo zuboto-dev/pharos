@@ -703,13 +703,15 @@ export function DrawingFrame({ view, block }: { view: Entity<'view'>; block: Dra
   const [restarts, setRestarts] = useState(0);
   const src = drawingUrl(view, block.id, reloads + restarts);
   const reads = useMemo(() => drawingReads(view, block), [view, block]);
-  const { frame, shown, onLoad, confirm, setConfirm } = useBridgeFrame({
+  const { frame, shown, onLoad, confirm, setConfirm, height } = useBridgeFrame({
     src,
     projectId: view.data.projectId,
     reads,
     what: 'drawing',
   });
-  const box = { height: block.height };
+  // The drawing's own height once it says (it fits its width too), so it shows whole without
+  // scrolling; the block's height until then.
+  const box = { height: height ?? block.height };
   if (shown === 'stopped')
     return (
       <FrameStopped

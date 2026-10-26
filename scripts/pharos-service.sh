@@ -208,7 +208,9 @@ bootstrap() { # [label plist]
   launchctl bootstrap "$DOMAIN" "$plist"
 }
 
-healthy() { curl -sf -m 1 "$HEALTH" >/dev/null 2>&1; }
+# Up to 3 s an answer: right after a restart every open tab reloads at once, and a server busy
+# with that burst is still healthy (a 1 s limit once rolled back a good update).
+healthy() { curl -sf -m 3 "$HEALTH" >/dev/null 2>&1; }
 
 wait_healthy() { # [seconds]
   local _

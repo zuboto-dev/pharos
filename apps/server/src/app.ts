@@ -745,9 +745,28 @@ export function createApp(
   const runs = new RunLog(store);
   api.get('/desk', (c) => c.json(deskOf(store, runs, { projectId: c.req.query('projectId') })));
   // Every active project's pulse: worked out from records and history, never written by an agent.
-  api.get('/pulse', (c) =>
-    c.json(pulseOf(store, runs, approvals, { projectId: c.req.query('projectId') })),
-  );
+  // Every open tab asks for it, and all at once after a restart: one answer per change, run and
+  // minute is reused, so a burst stays cheap (an update's health check once timed out behind it).
+  const pulses = new Map<string, ReturnType<typeof pulseOf>>();
+  api.get('/pulse', (c) => {
+    const projectId = c.req.query('projectId');
+    const key = [
+      projectId ?? '',
+      store.latestRevisionId(),
+      Math.floor(Date.now() / 60_000),
+      runs
+        .latest()
+        .map((r) => `${r.id}:${r.outcome}`)
+        .join(','),
+    ].join('|');
+    let pulse = pulses.get(key);
+    if (!pulse) {
+      if (pulses.size > 50) pulses.clear();
+      pulse = pulseOf(store, runs, approvals, { projectId });
+      pulses.set(key, pulse);
+    }
+    return c.json(pulse);
+  });
   // Standing approvals: the owner's rules (an app setting, never over MCP) and what they answered.
   const ownerRules = 'Only the owner sets standing approvals';
   api.get('/approvals', (c) => c.json(approvals.state()));

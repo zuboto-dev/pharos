@@ -278,7 +278,7 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   owner's rules (words in a decision's question, projects, a wait) answer matching decisions with
   the agent's recommendation, as `human` author `rule: <name>`, one revision each. The list of
   answers is read from those revisions (no separate log); undo reverts one (`POST
-  /api/approvals/undo`), and a decision a rule ever answered is never answered by a rule again.
+/api/approvals/undo`), and a decision a rule ever answered is never answered by a rule again.
   `Store.apply`'s `check` rechecks the decision inside the write transaction. Rules are the `approvals.rules` app setting, changed only by the owner
   (Settings; never over MCP). `approvalBlock` keeps gates, item picks, notes, non-yes picks and
   NEVER_WORDS (delete, send, publish, pay, production…) with the owner. `sweep` runs after every

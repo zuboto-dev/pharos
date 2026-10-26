@@ -35,21 +35,6 @@ export function VersionsLink({ view }: { view: Entity<'view'> }) {
   );
 }
 
-/** What changed on a board between two versions: widgets by id. */
-function boardChanges(before: ViewData | null, after: ViewData | null) {
-  const widgets = (d: ViewData | null) => {
-    const spec = d?.spec as { widgets?: { id: string; node: unknown }[] } | undefined;
-    return new Map((spec?.widgets ?? []).map((w) => [w.id, JSON.stringify(w)]));
-  };
-  const a = widgets(before);
-  const b = widgets(after);
-  return {
-    added: [...b.keys()].filter((id) => !a.has(id)).length,
-    removed: [...a.keys()].filter((id) => !b.has(id)).length,
-    changed: [...b.keys()].filter((id) => a.has(id) && a.get(id) !== b.get(id)).length,
-  };
-}
-
 export function ViewVersions({ view, selected }: { view: Entity<'view'>; selected: string }) {
   const { version } = useViewData();
   const list = useResource<ViewVersion[]>(`/api/views/${view.id}/versions?v=${version}`);
@@ -62,6 +47,9 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
     [data],
   );
   const latest = versions[0]?.revision;
+  // The version's document is the page as it is now (later changes left its blocks alone).
+  const sameDoc =
+    !!data?.after?.doc && JSON.stringify(data.after.doc) === JSON.stringify(view.data.doc);
   const shownView = data?.after ? { ...view, data: data.after } : view;
   const [restoreError, setRestoreError] = useState<string>();
   // A main page stays a document: a version that was a board can't be restored onto it.
@@ -93,14 +81,9 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
               {' · '}
               {data.version.op === 'create'
                 ? 'First version'
-                : comparison
-                  ? comparisonLine(comparison)
-                  : data.after?.spec
-                    ? comparisonLine(boardChanges(data.before, data.after)).replace(
-                        'blocks',
-                        'widgets',
-                      )
-                    : 'Changed'}
+                : data.version.changes
+                  ? comparisonLine(data.version.changes, data.version.changes.of)
+                  : 'Changed'}
             </p>
           )}
           {data && rev !== latest && data.after && data.version.op !== 'delete' && !blocked && (
@@ -123,7 +106,7 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
         {!data ? (
           <Skeleton lines={6} label="Loading the version" />
         ) : comparison ? (
-          <DocumentCompare view={shownView} comparison={comparison} />
+          <DocumentCompare view={shownView} comparison={comparison} current={sameDoc} />
         ) : (
           <p className="text-sm text-muted">
             This version is a board or a page written as HTML: its changes are listed by count
@@ -152,7 +135,12 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
                   {v.revision === latest && <span className="text-xs text-muted">Current</span>}
                   {v.revertedBy && <span className="text-xs text-muted">Undone</span>}
                 </span>
-                <span className="block text-xs text-muted">{v.author.name}</span>
+                <span className="block text-xs text-muted">
+                  {v.author.name}
+                  {v.changes &&
+                    v.op !== 'create' &&
+                    ` · ${comparisonLine(v.changes, v.changes.of)}`}
+                </span>
                 <span className="mt-0.5 line-clamp-2 block text-xs text-ink-soft">{v.message}</span>
               </Link>
             </li>

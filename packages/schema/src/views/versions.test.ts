@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAIN_PAGE_WORDS,
   compareDocs,
+  mainPageWordsWarning,
+  visibleWords,
   comparisonLine,
   isBoardView,
   isMainPage,
@@ -64,5 +67,20 @@ describe('compareDocs', () => {
       compareDocs({ blocks: [a] } as ReportDoc, { blocks: [b] } as ReportDoc).blocks[0]!.change,
     ).toBe('same');
     expect(comparisonLine({ added: 0, removed: 0, changed: 0 })).toBe('No change to the blocks');
+  });
+});
+
+describe('main page words', () => {
+  it('counts the words in view, not those folded into details or sheets', () => {
+    const doc = {
+      blocks: [
+        text('a', '# Pharos\n\nCarry a **project** forward.'),
+        { kind: 'details', id: 'd', summary: 'More', blocks: [text('b', 'hidden words here')] },
+      ],
+    } as ReportDoc;
+    expect(visibleWords(doc)).toBe(5);
+    expect(mainPageWordsWarning(doc)).toBeUndefined();
+    const long = { blocks: [text('a', 'word '.repeat(MAIN_PAGE_WORDS + 1))] };
+    expect(mainPageWordsWarning(long)).toMatch(/shows 201 words before any details/);
   });
 });

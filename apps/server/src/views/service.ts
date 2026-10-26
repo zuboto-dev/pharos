@@ -1,6 +1,7 @@
 import {
   Board,
   ENTITIES,
+  mainPageWordsWarning,
   ReportPage,
   TEMPLATES,
   type DocBlock,
@@ -718,9 +719,16 @@ function withView(store: Store, result: ApplyResult, viewId: string) {
     preview: entity.data.page
       ? previewPage(store, entity.data.projectId, entity.data.page, entity.id)
       : entity.data.doc
-        ? docPreview(store, entity.data.projectId, entity.data.doc, entity.id)
+        ? docPreview(store, entity.data.projectId, entity.data.doc, entity.id, mainWords(entity))
         : previewBoard(store, entity.data.projectId, effectiveBoard(entity)),
   };
+}
+
+/** A main page's word budget (MAIN_PAGE_WORDS), as a preview warning when it shows too many. */
+function mainWords(view: Entity<'view'>): string[] {
+  const warning =
+    view.data.kind === 'main' && view.data.doc ? mainPageWordsWarning(view.data.doc) : undefined;
+  return warning ? [warning] : [];
 }
 
 /** A document's preview with every warning (per block too) listed once at the top. */
@@ -771,7 +779,11 @@ export function previewReport(store: Store, input: z.infer<typeof ViewPreviewInp
     store.getOfType('project', projectId);
     return {
       view: view ? view.data.name : '(draft)',
-      ...docPreview(store, projectId, doc, view?.id, warnings),
+      // A draft for the main page is checked against its word budget too.
+      ...docPreview(store, projectId, doc, view?.id, [
+        ...warnings,
+        ...(view ? mainWords({ ...view, data: { ...view.data, doc } }) : []),
+      ]),
     };
   }
   if (input.page !== undefined) {
@@ -796,7 +808,7 @@ export function previewReport(store: Store, input: z.infer<typeof ViewPreviewInp
     if (view.data.doc)
       return {
         view: view.data.name,
-        ...docPreview(store, view.data.projectId, view.data.doc, view.id),
+        ...docPreview(store, view.data.projectId, view.data.doc, view.id, mainWords(view)),
       };
   }
   return null;

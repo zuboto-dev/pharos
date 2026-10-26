@@ -78,6 +78,8 @@ export type ViewVersion = {
   op: 'create' | 'update' | 'delete';
   /** Undone later: this revision has a revert. */
   revertedBy?: number;
+  /** What it changed in the document or board: blocks (or widgets) added, changed, removed. */
+  changes?: { added: number; changed: number; removed: number; of: 'blocks' | 'widgets' };
 };
 
 export type BlockChange = 'added' | 'removed' | 'changed' | 'same';
@@ -163,11 +165,75 @@ export function compareDocs(before: ReportDoc | undefined, after: ReportDoc): Do
 }
 
 /** "2 added · 1 changed" — what a comparison found, or "No change to the blocks". */
-export function comparisonLine(c: Pick<DocComparison, 'added' | 'removed' | 'changed'>): string {
+export function comparisonLine(
+  c: Pick<DocComparison, 'added' | 'removed' | 'changed'>,
+  of: 'blocks' | 'widgets' = 'blocks',
+): string {
   const parts = [
     c.added && `${c.added} added`,
     c.changed && `${c.changed} changed`,
     c.removed && `${c.removed} removed`,
   ].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'No change to the blocks';
+  return parts.length ? parts.join(' · ') : `No change to the ${of}`;
+}
+
+/** Words a main page may show before its folded details (owner, 2026-10-26: "full of words"). */
+export const MAIN_PAGE_WORDS = 200;
+
+/** Words in a text block's prose and titles. */
+function blockWords(block: DocBlock): number {
+  if (block.kind !== 'block') return 0;
+  const node = block.node as Record<string, unknown>;
+  return ['content', 'text', 'body', 'title']
+    .map((k) => node[k])
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+    .replace(/[-#>*_`|]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+/**
+ * The words a reader sees on a document without opening anything: text blocks at the top level
+ * and in columns; details and sheets are folded and don't count.
+ */
+export function visibleWords(doc: ReportDoc): number {
+  const count = (blocks: DocBlock[]): number =>
+    blocks.reduce((n, b) => {
+      if (b.kind === 'columns') return n + b.columns.reduce((m, col) => m + count(col), 0);
+      return n + blockWords(b);
+    }, 0);
+  return count(doc.blocks);
+}
+
+/** The warning for a main page that shows too many words, if it does. */
+export function mainPageWordsWarning(doc: ReportDoc): string | undefined {
+  const n = visibleWords(doc);
+  return n > MAIN_PAGE_WORDS
+    ? `The main page shows ${n} words before any details (keep it under ${MAIN_PAGE_WORDS}): show it with a drawing, Stat or StatCards, figures or a short table, and fold the rest into details blocks`
+    : undefined;
+}
+
+/** What a version changed between the view before and after it: blocks, or a board's widgets. */
+export function versionChanges(
+  before: { doc?: ReportDoc | undefined; spec?: unknown } | null,
+  after: { doc?: ReportDoc | undefined; spec?: unknown } | null,
+): ViewVersion['changes'] {
+  if (after?.doc) {
+    const c = compareDocs(before?.doc, after.doc);
+    return { added: c.added, changed: c.changed, removed: c.removed, of: 'blocks' };
+  }
+  const widgets = (v: { spec?: unknown } | null) => {
+    const list = (v?.spec as { widgets?: { id: string }[] } | undefined)?.widgets ?? [];
+    return new Map(list.map((w) => [w.id, stable(w)]));
+  };
+  if (!after?.spec) return undefined;
+  const a = widgets(before);
+  const b = widgets(after);
+  return {
+    added: [...b.keys()].filter((id) => !a.has(id)).length,
+    changed: [...b.keys()].filter((id) => a.has(id) && a.get(id) !== b.get(id)).length,
+    removed: [...a.keys()].filter((id) => !b.has(id)).length,
+    of: 'widgets',
+  };
 }

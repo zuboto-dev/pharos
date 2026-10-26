@@ -1,4 +1,4 @@
-import { type Author, type Entity, type ViewVersion } from '@pharos/schema';
+import { versionChanges, type Author, type Entity, type ViewVersion } from '@pharos/schema';
 import { HIDDEN_REVISION_MESSAGE, type AgentFiles } from '../store/agent-files.js';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
@@ -28,7 +28,12 @@ const SELECT = `SELECT r.id AS revision, r.created_at AS at, r.author_kind AS ki
  WHERE c.entity_type = 'view' AND c.entity_id = ?`;
 
 function toVersion(row: Row): ViewVersion {
+  const parse = (text: string | null) =>
+    text ? (JSON.parse(text) as Entity<'view'>['data']) : null;
+  const changes =
+    row.op === 'delete' ? undefined : versionChanges(parse(row.before), parse(row.after));
   return {
+    ...(changes ? { changes } : {}),
     revision: row.revision,
     at: row.at,
     author: { kind: row.kind, name: row.name },

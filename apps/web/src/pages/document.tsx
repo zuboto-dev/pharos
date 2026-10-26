@@ -303,49 +303,86 @@ const DEL = 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200';
 const INS =
   'bg-emerald-100 text-emerald-900 no-underline dark:bg-emerald-950/60 dark:text-emerald-100';
 
+/** Consecutive unchanged blocks as one run, so each run folds behind a single line. */
+function foldUnchanged(blocks: DocComparison['blocks']) {
+  const runs: { unchanged: boolean; blocks: DocComparison['blocks'] }[] = [];
+  for (const b of blocks) {
+    const unchanged = b.change === 'same';
+    const last = runs.at(-1);
+    if (last && last.unchanged && unchanged) last.blocks.push(b);
+    else runs.push({ unchanged, blocks: [b] });
+  }
+  return runs;
+}
+
 /**
  * One version of a document compared with the one before (the page's version history): every
  * block as that version left it, those added, changed or removed marked on the left edge with a
  * word and a symbol (never colour alone); a changed text shows its words taken out and put in.
- * A drawing that changed is named, not drawn: its frame only serves the page as it is now.
+ * A drawing that changed is drawn only for the current version (its frame serves the page as it
+ * is now); in an older one it is named.
  */
 export function DocumentCompare({
   view,
   comparison,
+  current = false,
 }: {
   view: Entity<'view'>;
   comparison: DocComparison;
+  /** The version compared is the page as it is now: its drawings can be drawn. */
+  current?: boolean;
 }) {
   return (
     <VariantProvider variant="document">
       <FileViewerProvider>
         <article aria-label={`${view.data.name}, compared`} className="doc doc-flow pt-2 pb-16">
-          {comparison.blocks.map(({ block, change, words }) => {
-            const drawn =
-              block.kind === 'drawing' && change !== 'same' ? (
-                <p className="text-sm text-muted">
-                  A drawing{change === 'removed' ? ' was here' : ''}.
-                </p>
-              ) : words ? (
-                <WordChanges words={words} />
-              ) : (
-                <DocTopBlock view={view} block={block} />
-              );
-            if (change === 'same') return <div key={block.id}>{drawn}</div>;
-            const look = CHANGE_LOOK[change];
-            return (
-              <div
-                key={`${change}:${block.id}`}
-                data-change={change}
-                className={clsx('rounded-r-tile border-l-4 py-2 pr-3 pl-4', look.box)}
+          {foldUnchanged(comparison.blocks).map((run) =>
+            run.unchanged ? (
+              // Summary first: what stayed the same waits behind one line, so the changes stand out.
+              <details
+                key={`same:${run.blocks[0]!.block.id}`}
+                data-unchanged=""
+                className="doc-earlier"
               >
-                <p className={clsx('mb-1 flex items-center gap-1 text-xs font-medium', look.tag)}>
-                  <look.icon className="size-3.5" aria-hidden /> {look.label}
-                </p>
-                {drawn}
-              </div>
-            );
-          })}
+                <summary className="doc-earlier-summary text-muted">
+                  {run.blocks.length} {run.blocks.length === 1 ? 'block' : 'blocks'} unchanged
+                </summary>
+                {run.blocks.map(({ block }) => (
+                  <div key={block.id}>
+                    <DocTopBlock view={view} block={block} />
+                  </div>
+                ))}
+              </details>
+            ) : (
+              run.blocks.map(({ block, change, words }) => {
+                const drawn =
+                  block.kind === 'drawing' && (!current || change === 'removed') ? (
+                    <p className="text-sm text-muted">
+                      A drawing{change === 'removed' ? ' was here' : ''}.
+                    </p>
+                  ) : words ? (
+                    <WordChanges words={words} />
+                  ) : (
+                    <DocTopBlock view={view} block={block} />
+                  );
+                const look = CHANGE_LOOK[change as Exclude<BlockChange, 'same'>];
+                return (
+                  <div
+                    key={`${change}:${block.id}`}
+                    data-change={change}
+                    className={clsx('rounded-r-tile border-l-4 py-2 pr-3 pl-4', look.box)}
+                  >
+                    <p
+                      className={clsx('mb-1 flex items-center gap-1 text-xs font-medium', look.tag)}
+                    >
+                      <look.icon className="size-3.5" aria-hidden /> {look.label}
+                    </p>
+                    {drawn}
+                  </div>
+                );
+              })
+            ),
+          )}
         </article>
       </FileViewerProvider>
     </VariantProvider>

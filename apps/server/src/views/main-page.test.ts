@@ -37,6 +37,23 @@ describe('the main page', () => {
     expect(view.data).toMatchObject({ kind: 'main', pinned: true, order: -1 });
   });
 
+  it('warns when it shows more than 200 words before its details', () => {
+    const { store, p } = setup();
+    const main = store.list('view', { projectId: p }).find((v) => v.data.kind === 'main')!;
+    store.apply(me, {
+      message: 'make room',
+      operations: [{ op: 'update', type: 'view', id: main.id, data: { kind: null } }],
+    });
+    const long = createView(store, agent, {
+      projectId: p,
+      name: 'Wordy',
+      main: true,
+      doc: { ...doc('word '.repeat(250)), summary: 'Wordy' },
+      message: 'too many words',
+    });
+    expect(long.preview.warnings.join('\n')).toMatch(/shows 250 words before any details/);
+  });
+
   it('is one per project and a document', () => {
     const { store, p } = setup();
     expect(() =>
@@ -120,6 +137,7 @@ describe('view versions', () => {
     });
     const versions = viewVersions(store, mainId);
     expect(versions.map((v) => v.message)).toEqual(['Teach the kids too', 'The main page']);
+    expect(versions[0]!.changes).toEqual({ added: 0, changed: 1, removed: 0, of: 'blocks' });
     expect(versions[0]).toMatchObject({ op: 'update', author: agent });
     const at = viewAt(store, mainId, versions[0]!.revision);
     expect(JSON.stringify(at.before?.doc)).toContain('Grow food for the family.');

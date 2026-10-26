@@ -124,7 +124,12 @@ describe('version history', () => {
         op: 'create',
       },
     ];
-    vi.stubGlobal('fetch', async (url: string) => {
+    const posts: { url: string; author: string | null }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        posts.push({ url, author: new Headers(init.headers).get('x-pharos-author') });
+        return Response.json({ revision: { id: 4 } });
+      }
       if (url.startsWith('/api/views/view_main/versions?')) return Response.json(versions);
       if (url === '/api/views/view_main/versions/1')
         return Response.json({
@@ -139,13 +144,10 @@ describe('version history', () => {
     await screen.findByText(/First version/);
     expect(document.querySelector('[data-change="added"]')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Restore this version/ }));
-    await waitFor(() => expect(apply).toHaveBeenCalled());
-    const [message, ops] = apply.mock.calls[0]!;
-    expect(message).toMatch(/^Restore “About the garden” to its version of .* \(#1\)$/);
-    expect(ops[0]).toMatchObject({
-      op: 'update',
-      id: 'view_main',
-      data: { doc: doc('Grow food for the family.'), spec: null, page: null },
-    });
+    await waitFor(() =>
+      expect(posts).toEqual([
+        { url: '/api/views/view_main/versions/1/restore', author: 'human:me' },
+      ]),
+    );
   });
 });

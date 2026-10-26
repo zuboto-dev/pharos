@@ -1,12 +1,12 @@
 import { compareDocs, comparisonLine, type Entity, type ViewVersion } from '@pharos/schema';
 import clsx from 'clsx';
 import { ArrowLeft, History, RotateCcw } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useViewData } from '../catalog/context';
 import { Skeleton } from '../catalog/skeleton';
 import { BUTTON } from '../catalog/ui';
-import { useResource } from '../lib/api';
+import { ApiError, ownerSend, useResource } from '../lib/api';
 import { dateTime, plural } from '../lib/format';
 import { DocumentCompare } from './document';
 
@@ -51,7 +51,7 @@ function boardChanges(before: ViewData | null, after: ViewData | null) {
 }
 
 export function ViewVersions({ view, selected }: { view: Entity<'view'>; selected: string }) {
-  const { version, actions } = useViewData();
+  const { version } = useViewData();
   const list = useResource<ViewVersion[]>(`/api/views/${view.id}/versions?v=${version}`);
   const versions = Array.isArray(list.data) ? list.data : [];
   const rev = selected === 'latest' ? versions[0]?.revision : Number(selected);
@@ -63,21 +63,20 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
   );
   const latest = versions[0]?.revision;
   const shownView = data?.after ? { ...view, data: data.after } : view;
-  const restore = () => {
+  const [restoreError, setRestoreError] = useState<string>();
+  // A main page stays a document: a version that was a board can't be restored onto it.
+  const blocked =
+    view.data.kind === 'main' && data?.after && !data.after.doc && !data.after.page
+      ? 'This version was a board; the main page is a document, so it can’t be restored here.'
+      : undefined;
+  const restore = async () => {
     if (!data?.after) return;
-    const after = data.after;
-    void actions.apply(
-      `Restore “${view.data.name}” to its version of ${dateTime(data.version.at)} (#${data.version.revision})`,
-      [
-        {
-          op: 'update',
-          type: 'view',
-          id: view.id,
-          data: { doc: after.doc ?? null, spec: after.spec ?? null, page: after.page ?? null },
-        },
-      ],
-      { undoable: true },
-    );
+    setRestoreError(undefined);
+    try {
+      await ownerSend(`/api/views/${view.id}/versions/${data.version.revision}/restore`, {});
+    } catch (e) {
+      setRestoreError(e instanceof ApiError ? e.message : String(e));
+    }
   };
 
   return (
@@ -104,12 +103,22 @@ export function ViewVersions({ view, selected }: { view: Entity<'view'>; selecte
                     : 'Changed'}
             </p>
           )}
-          {data && rev !== latest && data.after && data.version.op !== 'delete' && (
-            <button type="button" onClick={restore} className={clsx(BUTTON.accent, 'ml-auto')}>
+          {data && rev !== latest && data.after && data.version.op !== 'delete' && !blocked && (
+            <button
+              type="button"
+              onClick={() => void restore()}
+              className={clsx(BUTTON.accent, 'ml-auto')}
+            >
               <RotateCcw className="size-3.5" aria-hidden /> Restore this version
             </button>
           )}
         </div>
+        {blocked && rev !== latest && <p className="text-sm text-muted">{blocked}</p>}
+        {restoreError && (
+          <p role="alert" className="text-sm text-rose-600">
+            {restoreError}
+          </p>
+        )}
         {data && <p className="text-sm text-ink-soft">{data.version.message}</p>}
         {!data ? (
           <Skeleton lines={6} label="Loading the version" />

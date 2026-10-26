@@ -458,7 +458,10 @@ export function ProjectPage({ page }: { page?: 'files' } = {}) {
   const views = sortViews(
     dataset.data.views.filter((v) => (!v.data.archived && !isExpired(v)) || v.id === viewId),
   );
-  const active = filesPage ? undefined : (views.find((v) => v.id === viewId) ?? views[0]);
+  // The same page shownViewId marks seen: the main page, else the first that isn't for managing.
+  const active = filesPage
+    ? undefined
+    : (views.find((v) => v.id === viewId) ?? firstView(dataset.data.views) ?? views[0]);
   if (viewId && !views.some((v) => v.id === viewId))
     return <Navigate to={`/projects/${projectId}`} replace />;
   const spec: ViewSpec = active ? specOf(active) : TEMPLATES.overview;

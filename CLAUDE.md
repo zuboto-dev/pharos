@@ -301,7 +301,10 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
 - A view's versions are its revisions (`apps/server/src/views/versions.ts`, `GET
 /api/views/:id/versions[/:rev]`); the web app shows them in place of the page (`?versions=`),
   the picked version compared with the one before (`compareDocs`: blocks added, changed with
-  word changes, removed), and restores one as a new, undoable change.
+  word changes, removed). Restoring one is `POST /api/views/:id/versions/:rev/restore` (owner only):
+  a new, undoable change that also brings back the evidence the text was written from
+  (`Store.apply`'s `evidenceAt`); a board version can't be restored onto a main page. Agents get
+  version messages filtered like /api/history (`AgentFiles`).
 
 ## Files
 

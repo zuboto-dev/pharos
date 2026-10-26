@@ -519,6 +519,11 @@ export class Store {
        * meanwhile); it throws to refuse the write. Standing approvals recheck their decision here.
        */
       check?: () => void;
+      /**
+       * A restored version's evidence (view versions): its views get this `evidenceRevision`, the
+       * revision the restored text was written from, so it is out of date as it was then.
+       */
+      evidenceAt?: number;
     } = {},
   ): ApplyResult {
     let input = raw;
@@ -562,7 +567,8 @@ export class Store {
       const created: Record<string, string> = {};
       const refs = new Map<string, string>();
       // Everything before this revision (inside the transaction, nothing else can write).
-      const evidence = options.evidence ? this.latestRevisionId() - 1 : undefined;
+      const evidence =
+        options.evidenceAt ?? (options.evidence ? this.latestRevisionId() - 1 : undefined);
       input.operations.forEach((op, index) => {
         tx.context = `operations[${index}]`;
         const stamped =

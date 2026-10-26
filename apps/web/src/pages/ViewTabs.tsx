@@ -276,13 +276,13 @@ export function ViewTabs({
   }, [shape]);
   const activeIndex = visible.findIndex((v) => v.id === active?.id);
   const measured = room > 0 && sizes.tabs.length === visible.length;
-  // With archived views the button is always there, so its room is kept from the start.
+  // With archived or tucked views the button is always there, so its room is kept from the start.
   const shownIndexes = measured
     ? fitTabs(
         sizes.tabs,
-        room - sizes.plus - (archived.length ? sizes.more : 0),
+        room - sizes.plus - (archived.length || tucked.length ? sizes.more : 0),
         activeIndex,
-        archived.length ? 0 : sizes.more,
+        archived.length || tucked.length ? 0 : sizes.more,
       )
     : visible.map((_, i) => i);
   const shown = shownIndexes.map((i) => visible[i]!);

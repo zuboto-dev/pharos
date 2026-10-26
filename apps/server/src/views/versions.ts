@@ -1,4 +1,5 @@
-import type { Author, Entity, ViewVersion } from '@pharos/schema';
+import { type Author, type Entity, type ViewVersion } from '@pharos/schema';
+import { HIDDEN_REVISION_MESSAGE, type AgentFiles } from '../store/agent-files.js';
 import { PharosError } from '../store/errors.js';
 import type { Store } from '../store/store.js';
 
@@ -37,8 +38,27 @@ function toVersion(row: Row): ViewVersion {
   };
 }
 
-/** Newest first, at most `limit`. */
-export function viewVersions(store: Store, viewId: string, limit = 200): ViewVersion[] {
+/**
+ * For an agent (R7.9), a version whose revision also changed an item it can't see gets a neutral
+ * message, as in /api/history: the revision's own message may name a hidden file.
+ */
+function forAgent(store: Store, files: AgentFiles | null, version: ViewVersion): ViewVersion {
+  if (!files) return version;
+  const ids = store.database
+    .prepare('SELECT DISTINCT entity_id AS id FROM changes WHERE revision_id = ?')
+    .all(version.revision) as { id: string }[];
+  return ids.every((r) => files.visible(r.id))
+    ? version
+    : { ...version, message: HIDDEN_REVISION_MESSAGE };
+}
+
+/** Newest first, at most `limit`; `files` when an agent asks. */
+export function viewVersions(
+  store: Store,
+  viewId: string,
+  limit = 200,
+  files: AgentFiles | null = null,
+): ViewVersion[] {
   if (store.get(viewId)?.type !== 'view' && !store.lastKnown(viewId))
     throw new PharosError('not_found', `View ${viewId} not found`);
   const rows = store.database
@@ -49,7 +69,7 @@ export function viewVersions(store: Store, viewId: string, limit = 200): ViewVer
   return rows
     .filter((r) => !seen.has(r.revision) && seen.add(r.revision))
     .slice(0, limit)
-    .map(toVersion);
+    .map((row) => forAgent(store, files, toVersion(row)));
 }
 
 /** The view as revision `revision` left it, and as it was just before. */
@@ -57,6 +77,7 @@ export function viewAt(
   store: Store,
   viewId: string,
   revision: number,
+  files: AgentFiles | null = null,
 ): {
   version: ViewVersion;
   after: Entity<'view'>['data'] | null;
@@ -70,8 +91,45 @@ export function viewAt(
   const parse = (text: string | null) =>
     text ? (JSON.parse(text) as Entity<'view'>['data']) : null;
   return {
-    version: toVersion(rows.at(-1)!),
+    version: forAgent(store, files, toVersion(rows.at(-1)!)),
     before: parse(rows[0]!.before),
     after: parse(rows.at(-1)!.after),
   };
+}
+
+/**
+ * Restores a view to the content a version left it with, as a new change (undoable): its doc,
+ * board or page, and the evidence that text was written from, so restored prose that is out of
+ * date says so. A main page stays a document: a version without one can't be restored onto it.
+ */
+export function restoreVersion(store: Store, author: Author, viewId: string, revision: number) {
+  const view = store.get(viewId) as Entity<'view'> | null;
+  if (view?.type !== 'view') throw new PharosError('not_found', `View ${viewId} not found`);
+  const { version, after } = viewAt(store, viewId, revision);
+  if (!after) throw new PharosError('invalid', 'That version deleted the view; nothing to restore');
+  if (view.data.kind === 'main' && !after.doc && !after.page)
+    throw new PharosError(
+      'invalid',
+      'That version was a board; the main page is a document. Restore a later version, or make another page the main page first',
+    );
+  return store.apply(
+    author,
+    {
+      message: `Restore “${view.data.name}” to its version of ${version.at.slice(0, 16).replace('T', ' ')} UTC (#${revision})`,
+      operations: [
+        {
+          op: 'update',
+          type: 'view',
+          id: viewId,
+          data: {
+            doc: after.doc ?? null,
+            spec: after.spec ?? null,
+            page: after.page ?? null,
+            template: after.template ?? null,
+          },
+        },
+      ],
+    },
+    after.evidenceRevision !== undefined ? { evidenceAt: after.evidenceRevision } : {},
+  );
 }

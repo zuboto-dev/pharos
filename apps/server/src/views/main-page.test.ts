@@ -4,7 +4,8 @@ import { createApp } from '../app.js';
 import { openDatabase } from '../store/database.js';
 import { Store } from '../store/store.js';
 import { createView } from './service.js';
-import { viewAt, viewVersions } from './versions.js';
+import { restoreVersion, viewAt, viewVersions } from './versions.js';
+import { AgentFiles, HIDDEN_REVISION_MESSAGE } from '../store/agent-files.js';
 
 const me: Author = { kind: 'human', name: 'me' };
 const agent: Author = { kind: 'agent', name: 'Claude Code' };
@@ -130,5 +131,89 @@ describe('view versions', () => {
     const res = await app.request(`/api/views/${mainId}/versions`);
     expect(((await res.json()) as unknown[]).length).toBe(3);
     expect((await app.request(`/api/views/${mainId}/versions/99999`)).status).toBe(404);
+  });
+});
+
+describe('restoring a version', () => {
+  it('brings back the content and the evidence it was written from, as a new change', () => {
+    const { store, mainId, p } = setup();
+    const first = store.get(mainId)!.data as { evidenceRevision?: number };
+    expect(first.evidenceRevision).toBeGreaterThan(0);
+    // Later work, then the agent rewrites the page from the newer data.
+    store.apply(agent, {
+      message: 'work',
+      operations: [{ op: 'create', type: 'task', data: { projectId: p, title: 'Dig' } }],
+    });
+    store.apply(
+      agent,
+      {
+        message: 'Rewrite',
+        operations: [{ op: 'update', type: 'view', id: mainId, data: { doc: doc('New text') } }],
+      },
+      { evidence: true },
+    );
+    const original = viewVersions(store, mainId).at(-1)!.revision;
+    restoreVersion(store, me, mainId, original);
+    const now = store.get(mainId)!.data as { doc?: unknown; evidenceRevision?: number };
+    expect(JSON.stringify(now.doc)).toContain('Grow food for the family.');
+    expect(now.evidenceRevision).toBe(first.evidenceRevision);
+    expect(viewVersions(store, mainId)[0]!.message).toMatch(
+      /^Restore “About the garden” to its version of/,
+    );
+  });
+
+  it('refuses to put a board version onto the main page', () => {
+    const { store, p } = setup();
+    const { created } = store.apply(me, {
+      message: 'a board',
+      operations: [
+        {
+          op: 'create',
+          type: 'view',
+          ref: 'b',
+          data: { projectId: p, name: 'Plan', spec: { component: 'Board', widgets: [] } },
+        },
+      ],
+    });
+    const boardRev = viewVersions(store, created.b!)[0]!.revision;
+    const main = store.list('view', { projectId: p }).find((v) => v.data.kind === 'main')!;
+    store.apply(me, {
+      message: 'swap',
+      operations: [
+        { op: 'update', type: 'view', id: main.id, data: { kind: null } },
+        {
+          op: 'update',
+          type: 'view',
+          id: created.b!,
+          data: { kind: 'main', doc: doc('Plan'), spec: null },
+        },
+      ],
+    });
+    expect(() => restoreVersion(store, me, created.b!, boardRev)).toThrow(
+      /main page is a document/,
+    );
+  });
+});
+
+describe('versions as agents see them', () => {
+  it('a version whose revision also changed a hidden file gets a neutral message', () => {
+    const { store, mainId, p } = setup();
+    const files = { visible: (id: string) => !id.startsWith('task_') } as unknown as AgentFiles;
+    const { revision } = store.apply(me, {
+      message: 'Passport scan noted; page updated',
+      operations: [
+        {
+          op: 'create',
+          type: 'task',
+          data: { projectId: p, title: 'x' },
+        },
+        { op: 'update', type: 'view', id: mainId, data: { doc: doc('Changed') } },
+      ],
+    });
+    expect(viewVersions(store, mainId, 10, files)[0]!.message).toBe(HIDDEN_REVISION_MESSAGE);
+    expect(viewAt(store, mainId, revision!.id, files).version.message).toBe(
+      HIDDEN_REVISION_MESSAGE,
+    );
+    expect(viewVersions(store, mainId)[0]!.message).toBe('Passport scan noted; page updated');
   });
 });

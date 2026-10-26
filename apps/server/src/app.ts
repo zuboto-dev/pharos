@@ -65,7 +65,7 @@ import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './term
 import { lastAssistantText, SessionNoteInput, SessionNotes } from './session-notes.js';
 import { StandingApprovals } from './approvals.js';
 import { pulseOf } from './pulse.js';
-import { viewAt, viewVersions } from './views/versions.js';
+import { restoreVersion, viewAt, viewVersions } from './views/versions.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
 import { TURN_TOKEN_HEADER } from './terminal/command.js';
@@ -932,10 +932,20 @@ export function createApp(
   });
 
   // A view's versions: the revisions that changed it, and the view as one of them left it.
-  api.get('/views/:id/versions', (c) => c.json(viewVersions(store, c.req.param('id'))));
-  api.get('/views/:id/versions/:rev', (c) =>
-    c.json(viewAt(store, c.req.param('id'), IntParam.parse(c.req.param('rev')))),
+  const agentFiles = (c: Context) => (declaresAgent(c) ? new AgentFiles(store) : null);
+  api.get('/views/:id/versions', (c) =>
+    c.json(viewVersions(store, c.req.param('id'), 200, agentFiles(c))),
   );
+  api.get('/views/:id/versions/:rev', (c) =>
+    c.json(viewAt(store, c.req.param('id'), IntParam.parse(c.req.param('rev')), agentFiles(c))),
+  );
+  // Restores a version as a new change (the owner's), with the evidence it was written from.
+  api.post('/views/:id/versions/:rev/restore', (c) => {
+    if (declaresAgent(c)) return forbidden(c, 'Only the owner restores a version');
+    return c.json(
+      restoreVersion(store, authorOf(c), c.req.param('id'), IntParam.parse(c.req.param('rev'))),
+    );
+  });
 
   api.get('/revisions/:id', (c) => {
     const id = IntParam.parse(c.req.param('id'));

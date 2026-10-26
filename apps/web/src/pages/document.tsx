@@ -250,7 +250,11 @@ function marked(text: string, wrap: (words: string) => string) {
  * the words are shown as plain text instead, so a marker never breaks the formatting.
  */
 function WordChanges({ words }: { words: DiffPart[] }) {
-  const plain = words.some((w) => w.op !== 'same' && MARKUP.test(w.text));
+  // Markers are safe only in plain prose: not when a change touches markdown symbols, and not in
+  // a text with code or links anywhere (a marker inside `code` or [a link] would show as text).
+  const plain =
+    words.some((w) => w.op !== 'same' && MARKUP.test(w.text)) ||
+    words.some((w) => /[`[\]<]/.test(w.text));
   if (plain)
     return (
       <p className="text-[0.95rem] leading-relaxed whitespace-pre-wrap">

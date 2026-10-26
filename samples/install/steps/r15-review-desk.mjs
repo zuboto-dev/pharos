@@ -47,7 +47,7 @@ export function reviewDoc(decisionId) {
         [
           '# Three things need you, about ten minutes',
           '',
-          "This week's work on **Pantry**, a made-up shopping-list app, is done and checked. Each sheet below says what changed, why, the evidence, how to check it, and what I need from you. Your answers stay here for my next session.",
+          "This week's work on **Pantry**, a made-up shopping-list app, is checked. One sheet per item: what changed, the evidence, what I need from you.",
         ].join('\n'),
       ),
       {

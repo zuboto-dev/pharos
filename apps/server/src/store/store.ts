@@ -6,6 +6,7 @@ import {
   ENTITY_TYPES,
   OWNER_DECISION_FIELDS,
   isProjectManagementView,
+  docWordsIssue,
   OWNER_TASK_FIELDS,
   decisionIssues,
   decisionWarnings,
@@ -673,6 +674,7 @@ export class Store {
           agentTaskAnswerIssue(tx.changes) ??
           agentOutcomeIssue(tx.changes) ??
           agentMainPageIssue(tx.changes) ??
+          agentDocWordsIssue(tx.changes) ??
           agentBlockScopeIssue(this, tx.changes);
         if (issue) throw new PharosError('invalid', issue);
       }
@@ -719,6 +721,24 @@ function agentFileIssue(op: Operation): string | undefined {
 function agentArtifactFileIssue(op: Operation): string | undefined {
   if (op.type !== 'artifact' || op.op === 'delete' || !('fileId' in op.data)) return undefined;
   return "agents can't set fileId; put the local path in uri and Pharos links it to the project file";
+}
+
+/**
+ * Documents agents write show at most DOC_WORDS words before their folded details (MAIN_PAGE_WORDS
+ * on a main page): a picture, a few lines, the rest in details. Checked when an agent writes a
+ * document's blocks; pages written before stay as they are until an agent rewrites them.
+ */
+function agentDocWordsIssue(changes: Change[]): string | undefined {
+  for (const change of changes) {
+    if (change.type !== 'view' || !change.after?.doc) continue;
+    if (isDeepStrictEqual(change.before?.doc, change.after.doc)) continue;
+    const issue = docWordsIssue(
+      change.after.doc as Parameters<typeof docWordsIssue>[0],
+      change.after.kind === 'main',
+    );
+    if (issue) return `${describe('view', change.id, change.after)}: ${issue}`;
+  }
+  return undefined;
 }
 
 /**

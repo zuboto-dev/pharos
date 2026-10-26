@@ -301,6 +301,11 @@ fails as a section of words only, a log of what the workers did, or a table of f
 
 ## Report documents
 
+- **Pictures first, at most 250 words in view** (200 on a main page): the owner reads pictures,
+  not walls of text. Lead with the point as a drawing, figure, Stat or StatCards, chart or short
+  table; a few short lines; explanations, evidence and long lists go in \`details\` blocks.
+  Pharos counts every word shown before the details (text, captions, steps, sheets, drawings'
+  text) and refuses a save over the limit.
 - view_create {projectId, name, doc: {blocks, data?, summary}, message}. view_update {viewId,
   expectedRevision, doc, message} replaces the whole document (send it whole); view_get shows it.
 - Blocks, in reading order, each with a stable \`id\`:

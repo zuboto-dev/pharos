@@ -37,21 +37,47 @@ describe('the main page', () => {
     expect(view.data).toMatchObject({ kind: 'main', pinned: true, order: -1 });
   });
 
-  it('warns when it shows more than 200 words before its details', () => {
+  it('an agent’s main page over 200 words is refused; the owner’s gets a warning', () => {
     const { store, p } = setup();
     const main = store.list('view', { projectId: p }).find((v) => v.data.kind === 'main')!;
     store.apply(me, {
       message: 'make room',
       operations: [{ op: 'update', type: 'view', id: main.id, data: { kind: null } }],
     });
-    const long = createView(store, agent, {
+    const wordy = {
       projectId: p,
       name: 'Wordy',
       main: true,
-      doc: { ...doc('word '.repeat(250)), summary: 'Wordy' },
+      doc: { ...doc('word '.repeat(220)), summary: 'Wordy' },
       message: 'too many words',
-    });
-    expect(long.preview.warnings.join('\n')).toMatch(/shows 250 words before any details/);
+    };
+    expect(() => createView(store, agent, wordy)).toThrow(
+      /the main page shows 220 words before any details \(at most 200\)/,
+    );
+    const mine = createView(store, me, wordy);
+    expect(mine.preview.warnings.join('\n')).toMatch(/shows 220 words before any details/);
+  });
+
+  it('any agent document over 250 words is refused, until the rest folds into details', () => {
+    const { store, p } = setup();
+    const long = (blocks: unknown[]) =>
+      createView(store, agent, {
+        projectId: p,
+        name: 'Report',
+        doc: { blocks, summary: 'A report' },
+        message: 'report',
+      });
+    expect(() => long(doc('word '.repeat(260)).blocks)).toThrow(/shows 260 words/);
+    const folded = long([
+      ...doc('# The point in one line').blocks,
+      {
+        kind: 'details',
+        id: 'more',
+        summary: 'Everything else',
+        blocks: doc('word '.repeat(400)).blocks.map((b) => ({ ...b, id: 'more-text' })),
+      },
+    ]);
+    expect(folded.view.id).toBeTruthy();
   });
 
   it('is one per project and a document', () => {

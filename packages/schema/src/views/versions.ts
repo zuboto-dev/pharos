@@ -179,41 +179,68 @@ export function comparisonLine(
 
 /** Words a main page may show before its folded details (owner, 2026-10-26: "full of words"). */
 export const MAIN_PAGE_WORDS = 200;
+/**
+ * Words any document an agent writes may show before its folded details. The owner's documents
+ * showed a median of 354 (2026-10-26) and they were tired of asking for pictures instead.
+ */
+export const DOC_WORDS = 250;
 
-/** Words in a text block's prose and titles. */
-function blockWords(block: DocBlock): number {
-  if (block.kind !== 'block') return 0;
-  const node = block.node as Record<string, unknown>;
-  return ['content', 'text', 'body', 'title']
-    .map((k) => node[k])
-    .filter((v): v is string => typeof v === 'string')
-    .join(' ')
+const countWords = (text: string) =>
+  text
     .replace(/[-#>*_`|]+/g, ' ')
     .split(/\s+/)
     .filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+
+/** The text a drawing shows: its HTML without tags, styles or scripts. */
+function drawingText(html: string): string {
+  return html
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ');
+}
+
+/** Words a leaf block shows: its prose, titles and captions, or a drawing's text. */
+function leafWords(block: DocBlock): number {
+  const b = block as unknown as Record<string, unknown>;
+  if (block.kind === 'drawing') return countWords(drawingText(String(b.html ?? '')));
+  const texts: unknown[] = [b.caption, b.title];
+  if (block.kind === 'block') {
+    const node = b.node as Record<string, unknown>;
+    texts.push(node.content, node.text, node.body, node.title);
+  }
+  for (const item of Array.isArray(b.items) ? (b.items as Record<string, unknown>[]) : [])
+    texts.push(item.caption, item.text);
+  return countWords(texts.filter((t): t is string => typeof t === 'string').join(' '));
 }
 
 /**
- * The words a reader sees on a document without opening anything: text blocks at the top level
- * and in columns; details and sheets are folded and don't count.
+ * The words a reader sees on a document without opening anything: every block at the top level,
+ * in columns and in review sheets (they read open); details blocks are folded and don't count.
  */
 export function visibleWords(doc: ReportDoc): number {
   const count = (blocks: DocBlock[]): number =>
     blocks.reduce((n, b) => {
+      if (b.kind === 'details') return n;
       if (b.kind === 'columns') return n + b.columns.reduce((m, col) => m + count(col), 0);
-      return n + blockWords(b);
+      if (b.kind === 'sheet') return n + countWords(b.title) + count(b.blocks as DocBlock[]);
+      return n + leafWords(b);
     }, 0);
   return count(doc.blocks);
 }
 
-/** The warning for a main page that shows too many words, if it does. */
-export function mainPageWordsWarning(doc: ReportDoc): string | undefined {
+/** Why an agent's document shows too many words, if it does (main pages have the lower limit). */
+export function docWordsIssue(doc: ReportDoc, main = false): string | undefined {
   const n = visibleWords(doc);
-  return n > MAIN_PAGE_WORDS
-    ? `The main page shows ${n} words before any details (keep it under ${MAIN_PAGE_WORDS}): show it with a drawing, Stat or StatCards, figures or a short table, and fold the rest into details blocks`
-    : undefined;
+  const limit = main ? MAIN_PAGE_WORDS : DOC_WORDS;
+  if (n <= limit) return undefined;
+  return `${main ? 'the main page' : 'this document'} shows ${n} words before any details (at most ${limit}): the owner reads pictures, not walls of text. Lead with a picture of the point (a drawing, a figure, Stat or StatCards, a chart, a short table), keep a few short lines, and fold explanations, evidence and long lists into details blocks`;
 }
 
+/** The preview warning for a main page that shows too many words, if it does. */
+export function mainPageWordsWarning(doc: ReportDoc): string | undefined {
+  const issue = docWordsIssue(doc, true);
+  return issue ? issue.charAt(0).toUpperCase() + issue.slice(1) : undefined;
+}
 /** What a version changed between the view before and after it: blocks, or a board's widgets. */
 export function versionChanges(
   before: { doc?: ReportDoc | undefined; spec?: unknown } | null,

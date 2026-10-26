@@ -306,6 +306,14 @@ Settings page (`/settings`) can also pause or resume answering; both are saved w
   (`Store.apply`'s `evidenceAt`); a board version can't be restored onto a main page. Agents get
   version messages filtered like /api/history (`AgentFiles`).
 
+## Word limit for documents
+
+- Agents' documents show at most `DOC_WORDS` (250) words before their details blocks, a main page
+  `MAIN_PAGE_WORDS` (200); `visibleWords` counts text blocks, captions, steps, open review sheets
+  and drawings' text. `Store.apply` refuses an agent's document write over the limit
+  (`agentDocWordsIssue`); the owner's edits get a preview warning only. Pages written before stay
+  until an agent rewrites them. Samples and guidance examples must keep under it.
+
 ## Files
 
 - Project files (R7) stay on the owner's disk, inside folders added on the Settings page. The

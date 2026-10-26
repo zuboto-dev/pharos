@@ -5,12 +5,16 @@ import {
   REPO_PATHS_MAX,
   REPO_SCHEME,
   repoHref,
+  repoMediaKind,
+  repoMediaUrl,
   repoPathInCode,
   repoPathsUrl,
   sentencesOf,
   type RepoLink,
+  type RepoMediaKind,
   type RepoPathsResult,
 } from '@pharos/schema';
+import clsx from 'clsx';
 import {
   createContext,
   useCallback,
@@ -26,6 +30,7 @@ import type { JSX } from 'react';
 import { useOptionalViewData } from '../catalog/context';
 import { getJson } from '../lib/api';
 import { useExit } from '../lib/motion';
+import { fileName } from './files';
 import { RepoFileViewer } from './repo-viewer';
 
 // Repository file links in Markdown (packages/schema/src/repo-files.ts). An agent writes
@@ -33,6 +38,10 @@ import { RepoFileViewer } from './repo-viewer';
 // file in the viewer, read from the project's repository. A relative path written as plain text
 // or inline code is linked too, once the server says the repository has it: at the ref the same
 // sentence names ("… on review/formal-model."), else in the working tree.
+//
+// A link or path to a picture, video or sound that stands alone on its line is shown right there
+// (the player, or the picture), with its file name under it opening the viewer. One inside a
+// sentence stays a link, so nothing jumps around mid-sentence.
 
 /** The project whose repository links resolve against, or null (no project, no repository). */
 export function useRepoProject(): string | null {
@@ -122,13 +131,76 @@ function linkPhrasing(parent: MdNode) {
   walk(parent);
 }
 
-/** A remark plugin: candidate repository paths become `repo:` links marked `data-repo-auto`. */
+/** The media link a line is made of (alone, apart from spaces), or null. */
+function mediaLinkOf(line: MdNode[]): MdNode | null {
+  const shown = line.filter((n) => !(n.type === 'text' && !n.value?.trim()));
+  const only = shown.length === 1 ? shown[0]! : null;
+  if (only?.type !== 'link') return null;
+  const link = parseRepoHref(only.url);
+  return link && repoMediaKind(link.path) ? only : null;
+}
+
+/**
+ * A paragraph split where a line is just a link to a picture, video or sound: that line becomes
+ * its own block (a `div`, the link marked `data-repo-embed`), the lines around it stay
+ * paragraphs. Null when no line is one (the paragraph stays as it is).
+ */
+function embedLines(paragraph: MdNode): MdNode[] | null {
+  type Line = { sep: MdNode | null; nodes: MdNode[] };
+  const lines: Line[] = [{ sep: null, nodes: [] }];
+  for (const child of paragraph.children ?? []) {
+    if (child.type === 'break') {
+      lines.push({ sep: child, nodes: [] });
+    } else if (child.type === 'text' && child.value?.includes('\n')) {
+      child.value.split('\n').forEach((value, i) => {
+        if (i) lines.push({ sep: { type: 'text', value: '\n' }, nodes: [] });
+        if (value) lines.at(-1)!.nodes.push({ type: 'text', value });
+      });
+    } else lines.at(-1)!.nodes.push(child);
+  }
+  if (!lines.some((l) => mediaLinkOf(l.nodes))) return null;
+  const out: MdNode[] = [];
+  let group: MdNode[] = [];
+  const close = () => {
+    if (group.some((n) => n.type !== 'text' || n.value?.trim()))
+      out.push({ type: 'paragraph', children: group });
+    group = [];
+  };
+  for (const line of lines) {
+    const media = mediaLinkOf(line.nodes);
+    if (media) {
+      close();
+      const hProperties = (media.data?.hProperties ?? {}) as Record<string, unknown>;
+      out.push({
+        type: 'paragraph',
+        data: { hName: 'div', hProperties: { dataRepoEmbedBlock: '' } },
+        children: [
+          { ...media, data: { ...media.data, hProperties: { ...hProperties, dataRepoEmbed: '' } } },
+        ],
+      });
+    } else {
+      if (group.length && line.sep) group.push(line.sep);
+      group.push(...line.nodes);
+    }
+  }
+  close();
+  return out;
+}
+
+/**
+ * A remark plugin: candidate repository paths become `repo:` links marked `data-repo-auto`, and a
+ * line that is only a link to a picture, video or sound is marked to show it (`embedLines`).
+ */
 export function remarkRepoPaths() {
   return (tree: MdNode) => {
     const visit = (node: MdNode) => {
       if (SKIP.has(node.type)) return;
       if (PHRASING_PARENTS.has(node.type)) return linkPhrasing(node);
-      node.children?.forEach(visit);
+      if (!node.children) return;
+      node.children = node.children.flatMap((child) => {
+        visit(child);
+        return child.type === 'paragraph' ? (embedLines(child) ?? [child]) : [child];
+      });
     };
     visit(tree);
   };
@@ -253,6 +325,90 @@ export function RepoFileLink({
 }
 
 /**
+ * A picture, video or sound of the repository: the player fitted to the space (a video at most
+ * 70% of the screen's height in the viewer, 60% in text), or a plain line when the browser
+ * can't play it.
+ */
+export function RepoMedia({
+  kind,
+  src,
+  label,
+  size,
+}: {
+  kind: RepoMediaKind;
+  src: string;
+  label: string;
+  size: 'viewer' | 'inline';
+}) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const fallback =
+    kind === 'image' ? 'This picture couldn’t be shown' : 'This browser can’t play this file';
+  if (failed === src)
+    return (
+      <p role="note" className="text-sm text-muted">
+        {fallback}
+      </p>
+    );
+  const fit = clsx('max-w-full', size === 'viewer' ? 'mx-auto max-h-[70vh]' : 'max-h-[60vh]');
+  const onError = () => setFailed(src);
+  if (kind === 'video')
+    return (
+      <video
+        controls
+        playsInline
+        preload="metadata"
+        src={src}
+        aria-label={label}
+        onError={onError}
+        className={clsx('block rounded-tile bg-black', fit)}
+      >
+        {fallback}
+      </video>
+    );
+  if (kind === 'audio')
+    return (
+      <audio
+        controls
+        preload="metadata"
+        src={src}
+        aria-label={label}
+        onError={onError}
+        className={clsx('block w-full max-w-xl', size === 'viewer' && 'mx-auto')}
+      >
+        {fallback}
+      </audio>
+    );
+  return <img src={src} alt={label} onError={onError} className={clsx('block', fit)} />;
+}
+
+/** A link to a picture, video or sound alone on its line: shown there, its name opening the viewer. */
+function RepoEmbed({ projectId, link }: { projectId: string | null; link: RepoLink }) {
+  const kind = repoMediaKind(link.path);
+  const name = fileName(link.path);
+  if (!projectId || !kind)
+    return (
+      <RepoFileLink projectId={projectId} link={link}>
+        {name}
+      </RepoFileLink>
+    );
+  return (
+    <figure data-repo-embed={kind} className="my-2 space-y-1">
+      <RepoMedia
+        kind={kind}
+        src={repoMediaUrl(projectId, link.path, link.ref)}
+        label={link.path}
+        size="inline"
+      />
+      <figcaption className="text-xs">
+        <RepoFileLink projectId={projectId} link={link}>
+          {name}
+        </RepoFileLink>
+      </figcaption>
+    </figure>
+  );
+}
+
+/**
  * The ref paths are looked up at when their sentence names none: inside a repository file shown
  * at a branch, that branch.
  */
@@ -262,15 +418,24 @@ export const RepoDefaultRef = createContext<string | undefined>(undefined);
 function AutoRepoLink({
   projectId,
   link,
+  embed,
   children,
 }: {
   projectId: string | null;
   link: RepoLink;
+  embed?: boolean;
   children: ReactNode;
 }) {
   const fallback = useContext(RepoDefaultRef);
   const found = useRepoPathCheck(projectId, link.path, link.ref ?? fallback);
   if (!found) return <>{children}</>;
+  if (embed)
+    return (
+      <RepoEmbed
+        projectId={projectId}
+        link={{ path: link.path, ...(found.ref ? { ref: found.ref } : {}) }}
+      />
+    );
   return (
     <RepoFileLink
       projectId={projectId}
@@ -295,12 +460,14 @@ export function repoAnchor(projectId: string | null, inner?: Components['a']): C
     void node;
     const link = parseRepoHref(href);
     if (link) {
+      const embed = 'data-repo-embed' in rest;
       if ('data-repo-auto' in rest)
         return (
-          <AutoRepoLink projectId={projectId} link={link}>
+          <AutoRepoLink projectId={projectId} link={link} embed={embed}>
             {children}
           </AutoRepoLink>
         );
+      if (embed) return <RepoEmbed projectId={projectId} link={link} />;
       return (
         <RepoFileLink projectId={projectId} link={link}>
           {children}

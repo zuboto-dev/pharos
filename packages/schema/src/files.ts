@@ -390,6 +390,8 @@ export const FILE_ROUTES = {
   artifactFile: '/api/artifacts/:artifactId/file',
   /** GET ?path=&ref= → RepoFile: a file of the project's repository (repo-files.ts). */
   repoFile: '/api/projects/:projectId/repo-file',
+  /** GET ?path=&ref= → a picture, video or sound's bytes, with byte ranges (repo-files.ts). */
+  repoMedia: '/api/projects/:projectId/repo-media',
   /** GET ?path=…&ref= → RepoPathsResult: which paths the repository has (repo-files.ts). */
   repoPaths: '/api/projects/:projectId/repo-paths',
   /** GET → MentionedFile[]: the project's local sources not in Pharos yet (R7.12). */

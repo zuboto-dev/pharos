@@ -1,4 +1,4 @@
-import { repoFileUrl, type RepoFile, type RepoLink } from '@pharos/schema';
+import { repoFileUrl, repoMediaUrl, type RepoFile, type RepoLink } from '@pharos/schema';
 import clsx from 'clsx';
 import { FolderOpen, GitBranch } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -9,12 +9,12 @@ import { FileTypeIcon } from '../catalog/components/file-list';
 import { FileViewer } from './FileViewer';
 import { PreviewSkeleton } from './FilePreview';
 import { fileActionUrl, fileName, formatSize } from './files';
-import { RepoDefaultRef, RepoFileLink } from './repo-links';
+import { RepoDefaultRef, RepoFileLink, RepoMedia } from './repo-links';
 
 // The viewer for a repository file (repo: links): the file viewer's dialog (Esc closes, a full
 // sheet on phones) with the file read from the project's repository, at a ref or from the
 // working tree. Markdown is rendered, code and text shown with line numbers and the linked lines
-// marked; a picture is shown; a missing file reads "Not found on <ref>".
+// marked; a picture is shown, a video or sound played; a missing file reads "Not found on <ref>".
 
 export function RepoFileViewer({
   projectId,
@@ -169,9 +169,26 @@ function RepoFileBody({
     ) : (
       <Calm>This picture is too big to show here ({formatSize(file.size)}).</Calm>
     );
+  if (file.kind === 'video' || file.kind === 'audio')
+    return file.truncated ? (
+      <Calm>
+        This {file.kind === 'video' ? 'video' : 'sound'} is too big to play here (
+        {formatSize(file.size)}).
+      </Calm>
+    ) : (
+      <RepoMedia
+        kind={file.kind}
+        src={repoMediaUrl(projectId, file.path, link.ref)}
+        label={file.path}
+        size="viewer"
+      />
+    );
   if (file.kind === 'binary' || file.content === undefined)
     return (
-      <Calm>A binary file ({formatSize(file.size)}); Pharos shows text, code and pictures.</Calm>
+      <Calm>
+        A binary file ({formatSize(file.size)}); Pharos shows text, code, pictures, videos and
+        sounds.
+      </Calm>
     );
   if (file.kind === 'markdown')
     return (

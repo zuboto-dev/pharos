@@ -20,6 +20,11 @@ export const REPO_SCHEME = 'repo:';
 export const REPO_FILE_MAX_BYTES = 400 * 1024;
 /** Pictures up to this size are sent whole (as data for an <img>); bigger ones aren't shown. */
 export const REPO_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * Videos and sounds up to this size are served (as bytes, with byte ranges so the player can
+ * seek); bigger ones aren't shown.
+ */
+export const REPO_MEDIA_MAX_BYTES = 200 * 1024 * 1024;
 /** Paths checked in one `repoPaths` request. */
 export const REPO_PATHS_MAX = 50;
 
@@ -32,6 +37,48 @@ export function repoFileUrl(projectId: string, path: string, ref?: string): stri
   return `/api/projects/${encodeURIComponent(projectId)}/repo-file?${q.join('&')}`;
 }
 
+/**
+ * A picture, video or sound of the repository as its bytes (`GET /api/projects/:id/repo-media`,
+ * owner only), for an `<img>`, `<video>` or `<audio>`; answers byte ranges.
+ */
+export function repoMediaUrl(projectId: string, path: string, ref?: string): string {
+  const q = [
+    `path=${encodeURIComponent(path)}`,
+    ...(ref ? [`ref=${encodeURIComponent(ref)}`] : []),
+  ];
+  return `/api/projects/${encodeURIComponent(projectId)}/repo-media?${q.join('&')}`;
+}
+
+export type RepoMediaKind = 'image' | 'video' | 'audio';
+
+/** The pictures, videos and sounds the repository viewer shows, by extension. */
+export const REPO_MEDIA_TYPES: Readonly<Record<string, { kind: RepoMediaKind; mime: string }>> = {
+  png: { kind: 'image', mime: 'image/png' },
+  jpg: { kind: 'image', mime: 'image/jpeg' },
+  jpeg: { kind: 'image', mime: 'image/jpeg' },
+  gif: { kind: 'image', mime: 'image/gif' },
+  webp: { kind: 'image', mime: 'image/webp' },
+  avif: { kind: 'image', mime: 'image/avif' },
+  svg: { kind: 'image', mime: 'image/svg+xml' },
+  mp4: { kind: 'video', mime: 'video/mp4' },
+  m4v: { kind: 'video', mime: 'video/mp4' },
+  webm: { kind: 'video', mime: 'video/webm' },
+  mov: { kind: 'video', mime: 'video/quicktime' },
+  mp3: { kind: 'audio', mime: 'audio/mpeg' },
+  m4a: { kind: 'audio', mime: 'audio/mp4' },
+  wav: { kind: 'audio', mime: 'audio/wav' },
+  ogg: { kind: 'audio', mime: 'audio/ogg' },
+  flac: { kind: 'audio', mime: 'audio/flac' },
+};
+
+/** Whether a path names a picture, video or sound (by its extension), or null. */
+export function repoMediaKind(path: string): RepoMediaKind | null {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return null;
+  return REPO_MEDIA_TYPES[name.slice(dot + 1).toLowerCase()]?.kind ?? null;
+}
+
 /** `FILE_ROUTES.repoPaths` for a list of paths (owner only). */
 export function repoPathsUrl(projectId: string, paths: readonly string[], ref?: string): string {
   const q = paths.map((p) => `path=${encodeURIComponent(p)}`);
@@ -42,7 +89,7 @@ export function repoPathsUrl(projectId: string, paths: readonly string[], ref?: 
 export type RepoLines = { from: number; to: number };
 export type RepoLink = { path: string; ref?: string; lines?: RepoLines };
 
-export type RepoFileKind = 'markdown' | 'code' | 'text' | 'image' | 'binary';
+export type RepoFileKind = 'markdown' | 'code' | 'text' | 'image' | 'video' | 'audio' | 'binary';
 
 /** `GET /api/projects/:id/repo-file`. */
 export type RepoFile = {
@@ -55,9 +102,15 @@ export type RepoFile = {
   kind: RepoFileKind;
   /** Highlighting hint for code, e.g. "typescript". */
   language?: string;
-  /** Text (at most REPO_FILE_MAX_BYTES), or a data: URL for a picture; none for binary files. */
+  /**
+   * Text (at most REPO_FILE_MAX_BYTES), or a data: URL for a picture; none for binary files,
+   * videos and sounds (their bytes are at `repoMediaUrl`).
+   */
   content?: string;
+  /** Pictures, videos and sounds: true when too big to show (REPO_IMAGE/MEDIA_MAX_BYTES). */
   truncated: boolean;
+  /** The media type of a picture, video or sound. */
+  mime?: string;
   /** The project file with this path, when the owner already added it (opens "in folder"). */
   fileId?: string;
 };

@@ -179,7 +179,7 @@ function agentRefusal(c: Context, store: Store): Response | undefined {
     /^\/settings\/folder-requests(\/.*)?$/.test(path) ||
     /^\/projects\/[^/]+\/mentioned-files$/.test(path) ||
     // The repository's files (repo: links) are the owner's; an agent reads its own checkout.
-    /^\/projects\/[^/]+\/repo-(file|paths)$/.test(path) ||
+    /^\/projects\/[^/]+\/repo-(file|paths|media)$/.test(path) ||
     /^\/settings\/folders\/[^/]+\/scan$/.test(path) ||
     /^\/projects\/[^/]+\/scanned-files$/.test(path) ||
     (/^\/projects\/[^/]+\/files$/.test(path) && c.req.method === 'POST')

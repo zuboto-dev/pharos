@@ -5,6 +5,7 @@ import {
   parseRepoHref,
   refInSentence,
   repoHref,
+  repoMediaUrl,
   repoPathInCode,
   type ProjectDataset,
   type RepoFile,
@@ -61,6 +62,12 @@ describe('repo: links', () => {
     expect(refInSentence('Written on Tuesday on review/x.')).toBe('review/x');
     expect(findRepoPaths('See https://example.com/docs/a.md or example.com/a.md')).toEqual([]);
     expect(findRepoPaths('version 1.2, a/b, and README.md')).toEqual([]);
+    expect(
+      findRepoPaths('app/var/shots/q061_load_before_after.mp4, a/b.webm, c/d.MOV, e/f.flac').map(
+        (f) => f.path,
+      ),
+    ).toEqual(['app/var/shots/q061_load_before_after.mp4', 'a/b.webm', 'c/d.MOV', 'e/f.flac']);
+    expect(repoPathInCode('clip.m4v')).toBe('clip.m4v');
     expect(repoPathInCode('README.md')).toBe('README.md');
     expect(repoPathInCode('./src/a.ts')).toBe('src/a.ts');
     expect(repoPathInCode('npm run build')).toBeNull();
@@ -90,6 +97,7 @@ describe('in Markdown', () => {
         const found: Record<string, { ref: string | null }> = {};
         for (const p of url.searchParams.getAll('path'))
           if (p.startsWith('docs/') || p.startsWith('eval/')) found[p] = { ref };
+          else if (p.startsWith('app/var/')) found[p] = { ref: null };
           else if (p === 'README.md') found[p] = { ref: null };
         return Response.json({ found });
       }
@@ -103,6 +111,15 @@ describe('in Markdown', () => {
             size: MODEL.length,
             kind: 'markdown',
             content: MODEL,
+            truncated: false,
+          } satisfies RepoFile);
+        if (path === 'app/var/shots/clip.mp4')
+          return Response.json({
+            path,
+            ref,
+            size: 1000,
+            kind: 'video',
+            mime: 'video/mp4',
             truncated: false,
           } satisfies RepoFile);
         if (path === 'src/plan.ts')
@@ -208,5 +225,50 @@ describe('in Markdown', () => {
     await act(async () => new Promise((r) => setTimeout(r, 5)));
     expect(screen.queryByRole('button')).toBeNull();
     expect(requests).toEqual([]);
+  });
+
+  const clip = 'app/var/shots/clip.mp4';
+  const clipUrl = () => repoMediaUrl(data.project.id, clip);
+
+  it('plays a video in the viewer', async () => {
+    show(`Before and after: [the clip](repo:${clip}).`);
+    fireEvent.click(screen.getByRole('button', { name: 'the clip' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog.querySelector('video')).toBeTruthy());
+    const video = dialog.querySelector('video')!;
+    expect(video.getAttribute('src')).toBe(clipUrl());
+    expect(video.hasAttribute('controls')).toBe(true);
+    expect(video.hasAttribute('playsinline')).toBe(true);
+    expect(video.textContent).toBe('This browser can’t play this file');
+  });
+
+  it('shows a video path alone on its line right there, its name opening the viewer', async () => {
+    const { container } = show(`The load, before and after:\n${clip}\n\nLooks right.`);
+    await waitFor(() => expect(container.querySelector('video')).toBeTruthy());
+    const video = container.querySelector('video')!;
+    expect(video.getAttribute('src')).toBe(clipUrl());
+    expect(video.getAttribute('preload')).toBe('metadata');
+    expect(screen.getByText('The load, before and after:').tagName).toBe('P');
+    const name = screen.getByRole('button', { name: 'clip.mp4' });
+    expect(name.closest('figcaption')).toBeTruthy();
+    fireEvent.click(name);
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(dialog.querySelector('video')).toBeTruthy());
+  });
+
+  it('shows a repo: link to a sound alone in its paragraph as a player', () => {
+    const { container } = show('[bell](repo:sounds/bell.mp3@main)');
+    const audio = container.querySelector('audio')!;
+    expect(audio.getAttribute('src')).toBe(
+      repoMediaUrl(data.project.id, 'sounds/bell.mp3', 'main'),
+    );
+    expect(screen.getByRole('button', { name: 'bell.mp3' })).toBeTruthy();
+  });
+
+  it('keeps a video path inside a sentence a plain link', async () => {
+    const { container } = show(`The clip ${clip} shows the load.`);
+    expect(await screen.findByRole('button', { name: clip })).toBeTruthy();
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('figure')).toBeNull();
   });
 });

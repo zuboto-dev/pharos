@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { Readable } from 'node:stream';
 import { realpathSync } from 'node:fs';
 import { lstat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
@@ -8,6 +9,8 @@ import {
   FileFolders,
   REPO_FILE_MAX_BYTES,
   REPO_IMAGE_MAX_BYTES,
+  REPO_MEDIA_MAX_BYTES,
+  REPO_MEDIA_TYPES,
   REPO_PATHS_MAX,
   type RepoFile,
   type RepoFileKind,
@@ -20,6 +23,7 @@ import type { Store } from '../store/store.js';
 import { folderOf } from './artifact-file.js';
 import { sameOriginOnly } from './routes.js';
 import { effectiveExtensionOf, isAllowedPath, openInside, PathRefused } from './safety.js';
+import { byteRange, contentDisposition } from './service.js';
 
 /**
  * Files of a project's code repository, for the owner's repo links (`repo:` in Markdown, see
@@ -36,8 +40,8 @@ import { effectiveExtensionOf, isAllowedPath, openInside, PathRefused } from './
 
 export class RepoFileError extends Error {
   constructor(
-    readonly status: 400 | 403 | 404,
-    readonly code: 'invalid' | 'forbidden' | 'not_found',
+    readonly status: 400 | 403 | 404 | 413,
+    readonly code: 'invalid' | 'forbidden' | 'not_found' | 'too_large',
     message: string,
   ) {
     super(message);
@@ -45,15 +49,6 @@ export class RepoFileError extends Error {
 }
 
 const MARKDOWN = new Set(['md', 'markdown', 'mdx']);
-const IMAGES: Record<string, string> = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  avif: 'image/avif',
-  svg: 'image/svg+xml',
-};
 const LANGUAGES: Record<string, string> = {
   ts: 'typescript',
   tsx: 'typescript',
@@ -117,11 +112,19 @@ function kindOf(path: string): Kind | null {
   const name = path.slice(path.lastIndexOf('/') + 1);
   const ext = effectiveExtensionOf(name);
   if (MARKDOWN.has(ext)) return { kind: 'markdown', language: 'markdown' };
-  if (IMAGES[ext]) return { kind: 'image', mime: IMAGES[ext] };
+  const media = REPO_MEDIA_TYPES[ext];
+  if (media) return { kind: media.kind, mime: media.mime };
   if (LANGUAGES[ext]) return { kind: 'code', language: LANGUAGES[ext] };
   if (CODE_NAMES[name.toLowerCase()])
     return { kind: 'code', language: CODE_NAMES[name.toLowerCase()] };
   if (TEXT.has(ext)) return { kind: 'text' };
+  return null;
+}
+
+/** The most of a picture, video or sound that is served (0: none, it's too big), else null. */
+function mediaCap(kind: Kind | null): number | null {
+  if (kind?.kind === 'image') return REPO_IMAGE_MAX_BYTES;
+  if (kind?.kind === 'video' || kind?.kind === 'audio') return REPO_MEDIA_MAX_BYTES;
   return null;
 }
 
@@ -140,14 +143,19 @@ function toFile(
   const known = kindOf(path);
   const base = { path, ref, size, ...extra };
   if (known?.kind === 'image') {
-    if (size > REPO_IMAGE_MAX_BYTES) return { ...base, kind: 'image', truncated: true };
+    if (size > REPO_IMAGE_MAX_BYTES)
+      return { ...base, kind: 'image', mime: known.mime, truncated: true };
     return {
       ...base,
       kind: 'image',
+      mime: known.mime,
       content: `data:${known.mime};base64,${bytes.toString('base64')}`,
       truncated: false,
     };
   }
+  // Videos and sounds: no contents here; the player reads them from `repoMediaUrl`.
+  if (known?.kind === 'video' || known?.kind === 'audio')
+    return { ...base, kind: known.kind, mime: known.mime, truncated: size > REPO_MEDIA_MAX_BYTES };
   if (looksBinary(bytes)) return { ...base, kind: 'binary', truncated: false };
   const truncated = size > REPO_FILE_MAX_BYTES;
   let text = bytes.subarray(0, REPO_FILE_MAX_BYTES).toString('utf8');
@@ -319,7 +327,9 @@ export async function readRepoFile(
         ? entry.size > REPO_IMAGE_MAX_BYTES
           ? 0
           : entry.size
-        : REPO_FILE_MAX_BYTES + 4;
+        : kind?.kind === 'video' || kind?.kind === 'audio'
+          ? 0
+          : REPO_FILE_MAX_BYTES + 4;
     const { stdout } =
       limit > 0
         ? await git(root, ['cat-file', 'blob', entry.object], { limit })
@@ -339,7 +349,13 @@ export async function readRepoFile(
     const size = opened.stats.size;
     const kind = kindOf(path);
     const limit =
-      kind?.kind === 'image' ? (size > REPO_IMAGE_MAX_BYTES ? 0 : size) : REPO_FILE_MAX_BYTES + 4;
+      kind?.kind === 'image'
+        ? size > REPO_IMAGE_MAX_BYTES
+          ? 0
+          : size
+        : kind?.kind === 'video' || kind?.kind === 'audio'
+          ? 0
+          : REPO_FILE_MAX_BYTES + 4;
     const buffer = Buffer.alloc(Math.min(limit, size));
     let read = 0;
     while (read < buffer.length) {
@@ -352,6 +368,109 @@ export async function readRepoFile(
   } finally {
     await opened.handle.close().catch(() => {});
   }
+}
+
+const tooLarge = (size: number, cap: number) =>
+  new RepoFileError(
+    413,
+    'too_large',
+    `Too big to show here (${Math.round(size / 1024 / 1024)} MB; at most ${Math.round(cap / 1024 / 1024)} MB)`,
+  );
+
+/**
+ * A picture, video or sound of the repository as its bytes, for `<img>`, `<video>` and
+ * `<audio>`: the same path, ref and name checks as `readRepoFile`, at most REPO_IMAGE_MAX_BYTES
+ * for a picture and REPO_MEDIA_MAX_BYTES for a video or sound. One byte range ("bytes=a-b")
+ * answers 206 with Content-Range, so players can seek (Safari won't play without it).
+ */
+export async function repoMediaResponse(
+  root: string,
+  path: string,
+  ref: string | null,
+  range: string | undefined,
+): Promise<Response> {
+  checkPath(path);
+  const kind = kindOf(path);
+  const cap = mediaCap(kind);
+  if (cap === null || !kind?.mime)
+    throw new RepoFileError(400, 'invalid', 'Not a picture, video or sound');
+  const headersFor = (size: number, part: { start: number; end: number } | undefined) => {
+    const length = part ? part.end - part.start + 1 : size;
+    const headers = new Headers({
+      'content-type': kind.mime!,
+      'content-length': String(length),
+      'content-disposition': contentDisposition('inline', path.slice(path.lastIndexOf('/') + 1)),
+      'accept-ranges': 'bytes',
+      'x-content-type-options': 'nosniff',
+      // An SVG opened on its own runs no script.
+      'content-security-policy': 'sandbox',
+      'cross-origin-resource-policy': 'same-origin',
+      'referrer-policy': 'no-referrer',
+      'cache-control': 'private, no-store',
+    });
+    if (part) headers.set('content-range', `bytes ${part.start}-${part.end}/${size}`);
+    return headers;
+  };
+  const unsatisfiable = (size: number) =>
+    new Response(null, {
+      status: 416,
+      headers: { 'content-range': `bytes */${size}`, 'cache-control': 'private, no-store' },
+    });
+
+  if (ref !== null) {
+    const problem = repoRefProblem(ref);
+    if (problem) throw new RepoFileError(400, 'invalid', problem);
+    const commit = await commitOf(root, ref);
+    if (!commit) throw new RepoFileError(404, 'not_found', `No branch, tag or commit “${ref}”`);
+    const entry = await treeEntry(root, commit, path);
+    if (!entry) throw notFoundOn(ref);
+    if (entry.mode === '120000' || entry.type !== 'blob')
+      throw new RepoFileError(403, 'forbidden', 'Not a file Pharos shows (a link or a folder)');
+    if (entry.size > cap) throw tooLarge(entry.size, cap);
+    const part = byteRange(range, entry.size);
+    if (part === 'unsatisfiable') return unsatisfiable(entry.size);
+    // git writes the blob from the start: read up to the range's end, then cut its start off.
+    const end = part ? part.end : entry.size - 1;
+    const { stdout } =
+      entry.size > 0
+        ? await git(root, ['cat-file', 'blob', entry.object], { limit: end + 1 })
+        : { stdout: Buffer.alloc(0) };
+    const bytes = stdout.subarray(part ? part.start : 0, end + 1);
+    return new Response(new Uint8Array(bytes), {
+      status: part ? 206 : 200,
+      headers: headersFor(entry.size, part),
+    });
+  }
+
+  let opened;
+  try {
+    opened = await openInside({ id: `repo:${root}`, path: root, level: 'contents' }, path);
+  } catch (error) {
+    if (error instanceof PathRefused)
+      throw new RepoFileError(403, 'forbidden', 'Not a file Pharos shows');
+    throw notFoundOn(null);
+  }
+  const size = opened.stats.size;
+  const part = size > cap ? undefined : byteRange(range, size);
+  if (size > cap || part === 'unsatisfiable') {
+    await opened.handle.close().catch(() => {});
+    if (size > cap) throw tooLarge(size, cap);
+    return unsatisfiable(size);
+  }
+  if (size === 0) {
+    await opened.handle.close().catch(() => {});
+    return new Response(new Uint8Array(0), { status: 200, headers: headersFor(0, undefined) });
+  }
+  const stream = opened.handle.createReadStream({
+    start: part ? part.start : 0,
+    end: part ? part.end : size - 1,
+    autoClose: true,
+  });
+  stream.on('error', () => {});
+  return new Response(Readable.toWeb(stream) as ReadableStream<Uint8Array>, {
+    status: part ? 206 : 200,
+    headers: headersFor(size, part),
+  });
 }
 
 /** Which of `paths` exist: at `ref` when it names a commit and has the file, else in the tree. */
@@ -423,6 +542,7 @@ export function repoFileRoutes(store: Store): Hono {
   const api = new Hono();
   api.use('/projects/:projectId/repo-file', sameOriginOnly);
   api.use('/projects/:projectId/repo-paths', sameOriginOnly);
+  api.use('/projects/:projectId/repo-media', sameOriginOnly);
 
   api.get('/projects/:projectId/repo-file', async (c) => {
     const projectId = c.req.param('projectId');
@@ -431,6 +551,20 @@ export function repoFileRoutes(store: Store): Hono {
     try {
       const root = repoRootOf(store, projectId);
       return c.json(await readRepoFile(root, path, ref, fileIdFinder(store, projectId)));
+    } catch (error) {
+      return repoError(c, error);
+    }
+  });
+
+  api.get('/projects/:projectId/repo-media', async (c) => {
+    try {
+      const root = repoRootOf(store, c.req.param('projectId'));
+      return await repoMediaResponse(
+        root,
+        c.req.query('path') ?? '',
+        c.req.query('ref') || null,
+        c.req.header('range'),
+      );
     } catch (error) {
       return repoError(c, error);
     }

@@ -1,6 +1,7 @@
 import { decisionState, meaningOf, type Entity } from '@pharos/schema';
 import { deskOf, RunLog, waitingHandBacks } from './desk.js';
 import type { Presence } from './presence.js';
+import type { SessionNotes } from './session-notes.js';
 import type { Store } from './store/store.js';
 import { folderProjects } from './terminal/command.js';
 
@@ -14,7 +15,7 @@ import { folderProjects } from './terminal/command.js';
 export function projectBrief(
   store: Store,
   projectId: string,
-  options: { now?: Date; presence?: Presence; runs?: RunLog } = {},
+  options: { now?: Date; presence?: Presence; runs?: RunLog; notes?: SessionNotes } = {},
 ): string {
   const now = options.now ?? new Date();
   const project = store.get(projectId) as Entity<'project'> | null;
@@ -113,6 +114,16 @@ export function projectBrief(
     ),
   ];
   if (working.length) add('Working in Pharos right now', working);
+  // What the other sessions did last, wherever they ran: your terminal, the panel, routines.
+  const recent = options.notes?.recent(projectId, 5) ?? [];
+  add(
+    'Recent sessions (their last message)',
+    recent.map((n) => {
+      const where = [n.kind, n.host].filter(Boolean).join(' on ');
+      const when = n.lastAt.slice(0, 16).replace('T', ' ');
+      return `${when} UTC · ${n.agent ?? 'agent'} (${where}): ${n.message.replace(/\s+/g, ' ').slice(0, 400)}`;
+    }),
+  );
 
   lines.push(
     '',

@@ -367,10 +367,23 @@ describe('pnpm agents install / remove (the hook)', () => {
       },
     };
     writeFileSync(settings, JSON.stringify(before));
-    expect(await setup('install')).toMatch(/permission hook added/);
+    expect(await setup('install')).toMatch(/permission and session-note hooks added/);
     const installed = JSON.parse(readFileSync(settings, 'utf8'));
     expect(installed.permissions).toEqual(before.permissions);
-    expect(installed.hooks.Stop).toEqual(before.hooks.Stop);
+    // Your own Stop hook stays first; the session-note hook is added after it.
+    expect(installed.hooks.Stop).toEqual([
+      before.hooks.Stop[0],
+      {
+        matcher: '*',
+        hooks: [
+          {
+            type: 'command',
+            command: `node "${HOOK.replace('permission-ask.mjs', 'session-note.mjs')}"`,
+            timeout: 10,
+          },
+        ],
+      },
+    ]);
     expect(installed.hooks.PermissionRequest).toEqual([
       before.hooks.PermissionRequest[0],
       {
@@ -379,11 +392,12 @@ describe('pnpm agents install / remove (the hook)', () => {
       },
     ]);
     expect(readdirSync(claudeHome).filter((n) => n.includes('pharos-backup-'))).toHaveLength(1);
-    expect(await setup('install')).toMatch(/permission hook already current/);
+    expect(await setup('install')).toMatch(/permission and session-note hooks already current/);
     expect(await setup('status')).toMatch(/permission hook: installed, current/);
-    expect(await setup('remove')).toMatch(/permission hook removed/);
+    expect(await setup('status')).toMatch(/session-note hook: installed, current/);
+    expect(await setup('remove')).toMatch(/permission and session-note hooks removed/);
     expect(JSON.parse(readFileSync(settings, 'utf8'))).toEqual(before);
-    expect(await setup('remove')).toMatch(/no Pharos permission hook/);
+    expect(await setup('remove')).toMatch(/no Pharos hooks/);
   });
 });
 

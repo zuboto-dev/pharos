@@ -1,3 +1,4 @@
+import { SessionNotes } from './session-notes.js';
 import { projectBrief } from './brief.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -346,6 +347,7 @@ export function createMcpServer(store: Store, options: McpOptions = {}): McpServ
       run(() =>
         projectBrief(store, projectId, {
           runs,
+          notes: new SessionNotes(store),
           ...(options.presence ? { presence: options.presence } : {}),
         }),
       ),

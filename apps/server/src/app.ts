@@ -62,6 +62,7 @@ import { permissionAskRoutes, permissionRoutes } from './permissions/routes.js';
 import type { PermissionAsk } from '@pharos/schema';
 import { PermissionService } from './permissions/service.js';
 import { LOCAL_HOSTS, terminalPlaceRefusal, terminalSocketRefusal } from './terminal/guard.js';
+import { lastAssistantText, SessionNoteInput, SessionNotes } from './session-notes.js';
 import type { TerminalService, TerminalStatus } from './terminal/service.js';
 import type { TerminalClient } from './terminal/sessions.js';
 import { TURN_TOKEN_HEADER } from './terminal/command.js';
@@ -242,6 +243,7 @@ export function createApp(
   const presence = info.presence ?? new Presence();
   watchAgentRevisions(store, feed, presence);
   const notifications = info.notifications ?? new Notifications(store, new RunLog(store));
+  const notes = new SessionNotes(store);
 
   // Text goes compressed when the browser accepts it (project data, the app's scripts and styles:
   // about a fifth of the size over the network, to a phone). Never the live feed, the terminal
@@ -588,8 +590,30 @@ export function createApp(
     if (hook.hook_event_name !== undefined && hook.hook_event_name !== 'Stop')
       return c.json({ ok: true, ignored: true });
     if (!info.terminal?.hookTurn(token)) return notFound(c, 'No agent panel has that token');
+    // The panel's turn is a session note too, so other sessions see what it did.
+    const transcript = typeof hook.transcript_path === 'string' ? hook.transcript_path : '';
+    const cwd = typeof hook.cwd === 'string' ? hook.cwd : '';
+    const sessionId = typeof hook.session_id === 'string' ? hook.session_id : '';
+    if (transcript && cwd && sessionId)
+      notes.record({
+        session_id: sessionId,
+        cwd,
+        host: 'this Mac',
+        kind: 'panel',
+        agent: 'Claude Code',
+        message: lastAssistantText(transcript),
+      });
     return c.json({ ok: true });
   });
+  // Any Claude Code session's turn ended (Stop hook agents/claude/hooks/session-note.mjs): your
+  // terminal, a routine here or on a runner (through its SSH tunnel). From this computer only.
+  api.post('/sessions/note', async (c) => {
+    if (terminalPlaceRefusal(header(c)))
+      return forbidden(c, 'Only a session on this computer (or its runners) reports a turn');
+    const note = notes.record(SessionNoteInput.parse(await c.req.json().catch(() => ({}))));
+    return c.json({ ok: true, projectId: note?.projectId ?? null });
+  });
+  api.get('/projects/:id/sessions', (c) => c.json(notes.recent(c.req.param('id'), 20)));
   api.get('/projects/:id/terminal', (c) => {
     if (declaresAgent(c)) return forbidden(c, 'Agents can’t open the owner’s terminal');
     projectOrThrow(c.req.param('id'));
@@ -717,12 +741,12 @@ export function createApp(
   api.get('/projects/:id/brief', (c) => {
     if (store.get(c.req.param('id'))?.type !== 'project')
       throw new PharosError('not_found', 'project not found');
-    return c.text(projectBrief(store, c.req.param('id'), { presence, runs }));
+    return c.text(projectBrief(store, c.req.param('id'), { presence, runs, notes }));
   });
   api.get('/brief', (c) => {
     const folder = c.req.query('folder');
     if (!folder) throw new PharosError('invalid', 'folder is required');
-    return c.text(folderBriefs(store, folder, { presence, runs }).join('\n\n---\n\n'));
+    return c.text(folderBriefs(store, folder, { presence, runs, notes }).join('\n\n---\n\n'));
   });
   // What MCP ask_owner does, for runners without MCP (the routines): one call puts a decision
   // (with options) or a task on the owner's desk. projectId may be a project's id or its name.

@@ -220,6 +220,24 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX notifications_unread ON notifications(read_at, kind);
   `,
+  // Session notes: one row per Claude Code session (your terminal, the panel, a routine on any
+  // runner), refreshed at the end of each of its turns with its last message, so every session
+  // starts from what the others just did (the brief's "Recent sessions"). Operational, no revisions.
+  `
+  CREATE TABLE session_notes (
+    session_id TEXT PRIMARY KEY,
+    project_id TEXT,
+    cwd TEXT NOT NULL,
+    host TEXT,
+    kind TEXT NOT NULL,
+    agent TEXT,
+    message TEXT NOT NULL,
+    turns INTEGER NOT NULL DEFAULT 1,
+    first_at TEXT NOT NULL,
+    last_at TEXT NOT NULL
+  );
+  CREATE INDEX session_notes_project ON session_notes(project_id, last_at);
+  `,
 ];
 
 export function openDatabase(file: string = defaultDatabasePath()): DatabaseSync {

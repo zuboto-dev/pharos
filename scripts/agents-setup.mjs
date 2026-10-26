@@ -47,9 +47,16 @@ const HOOK_MARK = 'permission-ask.mjs';
 const HOOK_EVENT = 'PermissionRequest';
 const hookCommand = `node "${hookScript}"`;
 
-const isOurs = (group) =>
+// The session-note hook: Claude Code runs it when a session finishes a turn; it posts the
+// session's last message to Pharos so other sessions see it in the project brief.
+const noteScript = join(source, 'claude', 'hooks', 'session-note.mjs');
+const NOTE_MARK = 'session-note.mjs';
+const NOTE_EVENT = 'Stop';
+const noteCommand = `node "${noteScript}"`;
+
+const hasMark = (group, mark) =>
   Array.isArray(group?.hooks) &&
-  group.hooks.some((h) => typeof h?.command === 'string' && h.command.includes(HOOK_MARK));
+  group.hooks.some((h) => typeof h?.command === 'string' && h.command.includes(mark));
 
 function readSettings() {
   const text = read(settingsPath);
@@ -71,21 +78,21 @@ function backupSettings(text) {
   return backup;
 }
 
-function withHook(json, add) {
+/** Settings with Pharos's hook for one event added (or taken out); other hooks stay as they are. */
+function withEventHook(json, event, mark, command, timeout, add) {
   const hooks = { ...(json.hooks ?? {}) };
-  const groups = (Array.isArray(hooks[HOOK_EVENT]) ? hooks[HOOK_EVENT] : []).filter(
-    (g) => !isOurs(g),
-  );
-  if (add)
-    groups.push({
-      matcher: '*',
-      hooks: [{ type: 'command', command: hookCommand, timeout: 120 }],
-    });
-  if (groups.length) hooks[HOOK_EVENT] = groups;
-  else delete hooks[HOOK_EVENT];
+  const groups = (Array.isArray(hooks[event]) ? hooks[event] : []).filter((g) => !hasMark(g, mark));
+  if (add) groups.push({ matcher: '*', hooks: [{ type: 'command', command, timeout }] });
+  if (groups.length) hooks[event] = groups;
+  else delete hooks[event];
   const next = { ...json, hooks };
   if (!Object.keys(hooks).length) delete next.hooks;
   return next;
+}
+
+function withHook(json, add) {
+  const once = withEventHook(json, HOOK_EVENT, HOOK_MARK, hookCommand, 120, add);
+  return withEventHook(once, NOTE_EVENT, NOTE_MARK, noteCommand, 10, add);
 }
 
 function installHook() {
@@ -98,14 +105,14 @@ function installHook() {
   }
   const next = withHook(settings.json, true);
   if (settings.text !== undefined && JSON.stringify(next) === JSON.stringify(settings.json)) {
-    console.log(`Claude Code: permission hook already current (${settingsPath})`);
+    console.log(`Claude Code: permission and session-note hooks already current (${settingsPath})`);
     return;
   }
   const backup = backupSettings(settings.text);
   mkdirSync(claudeHome, { recursive: true });
   writeFileSync(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
   console.log(
-    `Claude Code: permission hook added to ${settingsPath}${backup ? ` (backup: ${backup})` : ''}`,
+    `Claude Code: permission and session-note hooks added to ${settingsPath}${backup ? ` (backup: ${backup})` : ''}`,
   );
 }
 
@@ -117,21 +124,25 @@ function removeHook() {
     console.log(`Claude Code: ${settingsPath} isn't valid JSON; left alone.`);
     return;
   }
-  const groups = settings.json.hooks?.[HOOK_EVENT];
-  if (!Array.isArray(groups) || !groups.some(isOurs)) {
-    console.log('Claude Code: no Pharos permission hook to remove');
+  const ours = [HOOK_EVENT, NOTE_EVENT].some((e) =>
+    (settings.json.hooks?.[e] ?? []).some((g) =>
+      hasMark(g, e === HOOK_EVENT ? HOOK_MARK : NOTE_MARK),
+    ),
+  );
+  if (!ours) {
+    console.log('Claude Code: no Pharos hooks to remove');
     return;
   }
   const backup = backupSettings(settings.text);
   writeFileSync(settingsPath, `${JSON.stringify(withHook(settings.json, false), null, 2)}\n`);
-  console.log(`Claude Code: permission hook removed (backup: ${backup})`);
+  console.log(`Claude Code: permission and session-note hooks removed (backup: ${backup})`);
 }
 
-function hookStatus() {
+function hookStatus(event = HOOK_EVENT, mark = HOOK_MARK, command = hookCommand) {
   try {
-    const ours = (readSettings().json.hooks?.[HOOK_EVENT] ?? []).find(isOurs);
+    const ours = (readSettings().json.hooks?.[event] ?? []).find((g) => hasMark(g, mark));
     if (!ours) return 'not installed';
-    return ours.hooks.some((h) => h.command === hookCommand)
+    return ours.hooks.some((h) => h.command === command)
       ? 'installed, current'
       : 'installed from another folder (pnpm agents install)';
   } catch {
@@ -184,6 +195,7 @@ function status() {
     `Claude Code skill: ${current === undefined ? 'not installed' : current === skill ? 'installed, current' : current.includes(SKILL_MARK) ? 'installed, older version (pnpm agents install)' : 'a skill of that name not from Pharos'}`,
   );
   console.log(`Claude Code permission hook: ${hookStatus()}`);
+  console.log(`Claude Code session-note hook: ${hookStatus(NOTE_EVENT, NOTE_MARK, noteCommand)}`);
   const agents = read(agentsTo) ?? '';
   const block = readFileSync(agentsFrom, 'utf8').trim();
   console.log(

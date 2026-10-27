@@ -126,7 +126,7 @@ const num = (attrs: string, name: string, fallback = 0) => {
 };
 
 /**
- * Horizontal and vertical lines in a drawing's SVG that run through a text label (the Atlas
+ * Horizontal and vertical lines in a drawing's SVG that run through a text label (a
  * diagram of 2026-10-21: connectors drawn across a box struck through its words). Reads simple
  * `<path d="M… H… V… L…">` and `<line>`; text boxes are estimated from x, y, size and anchor.
  */

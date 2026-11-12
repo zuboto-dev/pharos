@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pharos</title>
+    <meta
+      name="description"
+      content="Your AI agent shows the project instead of telling it. Local-first, open source, works over MCP."
+    />
+    <meta property="og:title" content="Pharos" />
+    <meta
+      property="og:description"
+      content="Less reading, more seeing. Your AI agent shows the project instead of telling it."
+    />
+    <meta property="og:url" content="https://pharos.zuboto.com/" />
+    <meta
+      property="og:image"
+      content="https://pharos.zuboto.com/images/report-page-spending-story.png"
+    />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://pharos.zuboto.com/" />
+    <style>
+      :root {
+        --canvas: #fafafa;
+        --surface: #ffffff;
+        --sunken: #f5f5f5;
+        --line: #e5e5e5;
+        --ink: #171717;
+        --ink-soft: #404040;
+        --muted: #737373;
+        --faint: #d4d4d4;
+        --accent: #0369a1;
+        --beam: #f59e0b;
+        --ok: #059669;
+        --ok-bg: #d1fae5;
+        --bad: #e11d48;
+        --bad-bg: #ffe4e6;
+        --now: #0284c7;
+        --now-bg: #e0f2fe;
+        --code-bg: #171717;
+        --code-ink: #f5f5f5;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --canvas: #0a0a0a;
+          --surface: #171717;
+          --sunken: #111111;
+          --line: #2a2a2a;
+          --ink: #f5f5f5;
+          --ink-soft: #d4d4d4;
+          --muted: #a3a3a3;
+          --faint: #404040;
+          --accent: #38bdf8;
+          --ok: #34d399;
+          --ok-bg: #064e3b;
+          --bad: #fb7185;
+          --bad-bg: #4c0519;
+          --now: #38bdf8;
+          --now-bg: #0c4a6e;
+          --code-bg: #000000;
+          --code-ink: #e5e5e5;
+          color-scheme: dark;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font:
+          16px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      a {
+        color: var(--accent);
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 20px;
+      }
+      header .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 650;
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .brand img {
+        width: 28px;
+        height: 28px;
+      }
+      .gh {
+        color: var(--ink-soft);
+        text-decoration: none;
+        font-weight: 500;
+      }
+
+      .hero {
+        text-align: center;
+        padding: 56px 0 40px;
+      }
+      h1 {
+        font-size: clamp(2.4rem, 7vw, 4.2rem);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        margin: 0 0 16px;
+      }
+      h1 span {
+        color: var(--beam);
+      }
+      .lede {
+        font-size: 1.2rem;
+        color: var(--muted);
+        margin: 0 0 28px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 11px 20px;
+        border-radius: 10px;
+        font-weight: 600;
+        text-decoration: none;
+        background: var(--ink);
+        color: var(--canvas);
+      }
+
+      /* Before / after */
+      .compare {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 20px;
+        padding-bottom: 72px;
+      }
+      @media (max-width: 760px) {
+        .compare {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        height: 400px;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      .tag {
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 14px 18px 0;
+      }
+      .tag.good {
+        color: var(--beam);
+      }
+      .wall {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+        padding: 10px 18px 0;
+        font-size: 0.8rem;
+        line-height: 1.55;
+        color: var(--muted);
+      }
+      .wall::after {
+        content: '';
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 120px;
+        background: linear-gradient(transparent, var(--surface));
+      }
+      .wall p {
+        margin: 0 0 10px;
+      }
+      .scroll {
+        animation: drown 40s linear infinite;
+      }
+      @keyframes drown {
+        to {
+          transform: translateY(-50%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .scroll {
+          animation: none;
+        }
+      }
+
+      .view {
+        flex: 1;
+        padding: 12px 18px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .stages {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .stage {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-align: center;
+        padding: 8px 4px;
+        border-radius: 8px;
+        background: var(--sunken);
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .stage.done {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .stage.now {
+        background: var(--now-bg);
+        color: var(--now);
+        outline: 2px solid var(--now);
+        outline-offset: -2px;
+      }
+      .meter {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.8rem;
+        color: var(--muted);
+      }
+      .bar {
+        flex: 1;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--sunken);
+        overflow: hidden;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        width: 62%;
+        background: var(--now);
+        border-radius: 4px;
+      }
+      .board {
+        flex: 1;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        min-height: 0;
+      }
+      .col {
+        background: var(--sunken);
+        border-radius: 10px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .col b {
+        font-size: 0.7rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0 2px 2px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 7px 8px;
+        font-size: 0.75rem;
+        line-height: 1.3;
+      }
+      .card.blocked {
+        border-color: var(--bad);
+        background: var(--bad-bg);
+        color: var(--bad);
+        font-weight: 600;
+      }
+      .card.ok {
+        color: var(--muted);
+        text-decoration: line-through;
+      }
+
+      /* Steps */
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+        text-align: center;
+        padding: 56px 0;
+        border-top: 1px solid var(--line);
+      }
+      @media (max-width: 640px) {
+        .steps {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 32px;
+        }
+      }
+      .steps svg {
+        width: 44px;
+        height: 44px;
+        stroke: var(--beam);
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        margin-bottom: 10px;
+      }
+      .steps strong {
+        display: block;
+        font-size: 1.1rem;
+      }
+      .steps span {
+        color: var(--muted);
+      }
+
+      .shot {
+        padding: 56px 0;
+        border-top: 1px solid var(--line);
+        text-align: center;
+      }
+      .shot img {
+        width: 100%;
+        max-width: 820px;
+        height: auto;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        display: block;
+        margin: 0 auto 12px;
+      }
+      .shot p {
+        color: var(--muted);
+        margin: 0;
+        font-size: 0.9rem;
+      }
+
+      .start {
+        padding: 56px 0 64px;
+        border-top: 1px solid var(--line);
+        text-align: center;
+      }
+      h2 {
+        font-size: 1.8rem;
+        letter-spacing: -0.02em;
+        margin: 0 0 20px;
+      }
+      pre {
+        text-align: left;
+        max-width: 640px;
+        margin: 0 auto 16px;
+        background: var(--code-bg);
+        color: var(--code-ink);
+        border-radius: 12px;
+        padding: 18px 20px;
+        overflow-x: auto;
+        font:
+          0.875rem/1.6 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      pre .c {
+        color: #a3a3a3;
+      }
+      .start p {
+        color: var(--muted);
+        margin: 0;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        padding: 28px 0 40px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <a class="brand" href="#"><img src="favicon.svg" alt="" /> Pharos</a>
+        <a class="gh" href="https://github.com/zuboto-dev/pharos">GitHub</a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div class="hero">
+        <h1>Less reading.<br /><span>More seeing.</span></h1>
+        <p class="lede">Your AI agent shows the project instead of telling it.</p>
+        <a class="btn" href="#start">Get started</a>
+      </div>
+
+      <div class="compare">
+        <div class="panel" aria-label="An agent's status update as a long wall of text">
+          <div class="tag">Without Pharos</div>
+          <div class="wall" aria-hidden="true">
+            <div class="scroll">
+              <p>
+                Great question! Let me give you a comprehensive overview of where things stand. We
+                completed the research phase last week, and the design phase is mostly wrapped up,
+                although there are still a couple of open items I mentioned earlier that we should
+                revisit. Currently we're in the build stage, which is roughly 60% complete depending
+                on how you count the tasks that were split...
+              </p>
+              <p>
+                Regarding blockers: the payment integration is waiting on API keys, which I noted in
+                my third message yesterday. The auth refactor depends on that too, indirectly,
+                because the session model changed after we decided (see the discussion above) to
+                move to tokens. I also want to flag that the onboarding copy hasn't been reviewed
+                yet, though that isn't strictly blocking...
+              </p>
+              <p>
+                In terms of next steps, I'd recommend we first resolve the keys issue, then resume
+                the auth work, after which we can parallelize the dashboard and the email flows. To
+                recap the decisions so far: we chose Postgres over SQLite for production, decided
+                against a mobile app for v1, and agreed to revisit pricing after the beta, as
+                summarized in my earlier message...
+              </p>
+              <p>
+                Let me know if you'd like me to elaborate on any of these points, or if you want a
+                more detailed breakdown of each task, its owner, its estimate, and its dependencies.
+                I can also summarize the summary above if that would help...
+              </p>
+              <p>
+                Great question! Let me give you a comprehensive overview of where things stand. We
+                completed the research phase last week, and the design phase is mostly wrapped up,
+                although there are still a couple of open items I mentioned earlier that we should
+                revisit. Currently we're in the build stage, which is roughly 60% complete depending
+                on how you count the tasks that were split...
+              </p>
+              <p>
+                Regarding blockers: the payment integration is waiting on API keys, which I noted in
+                my third message yesterday. The auth refactor depends on that too, indirectly,
+                because the session model changed after we decided (see the discussion above) to
+                move to tokens. I also want to flag that the onboarding copy hasn't been reviewed
+                yet, though that isn't strictly blocking...
+              </p>
+              <p>
+                In terms of next steps, I'd recommend we first resolve the keys issue, then resume
+                the auth work, after which we can parallelize the dashboard and the email flows. To
+                recap the decisions so far: we chose Postgres over SQLite for production, decided
+                against a mobile app for v1, and agreed to revisit pricing after the beta, as
+                summarized in my earlier message...
+              </p>
+              <p>
+                Let me know if you'd like me to elaborate on any of these points, or if you want a
+                more detailed breakdown of each task, its owner, its estimate, and its dependencies.
+                I can also summarize the summary above if that would help...
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="panel"
+          aria-label="The same status as a Pharos view: stages, progress and a task board"
+        >
+          <div class="tag good">With Pharos</div>
+          <div class="view">
+            <div class="stages">
+              <div class="stage done">Research</div>
+              <div class="stage done">Design</div>
+              <div class="stage now">Build</div>
+              <div class="stage">Launch</div>
+            </div>
+            <div class="meter">
+              <div class="bar"><i></i></div>
+              62%
+            </div>
+            <div class="board">
+              <div class="col">
+                <b>To do</b>
+                <div class="card">Dashboard</div>
+                <div class="card">Email flows</div>
+              </div>
+              <div class="col">
+                <b>Doing</b>
+                <div class="card blocked">Payments: needs API keys</div>
+                <div class="card">Auth tokens</div>
+              </div>
+              <div class="col">
+                <b>Done</b>
+                <div class="card ok">Data model</div>
+                <div class="card ok">Wireframes</div>
+                <div class="card ok">Postgres</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="12" rx="2" />
+            <path d="M8 20h8M12 16v4M8 9h2M14 9h2" />
+          </svg>
+          <strong>Your agent works</strong>
+          <span>Claude Code, Codex, Cursor…</span>
+        </div>
+        <div>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5" />
+            <rect x="14" y="3" width="7" height="7" rx="1.5" />
+            <rect x="3" y="14" width="7" height="7" rx="1.5" />
+            <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          </svg>
+          <strong>Pharos draws it</strong>
+          <span>Live views, not paragraphs</span>
+        </div>
+        <div>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <strong>You see it</strong>
+          <span>Ask from any widget</span>
+        </div>
+      </div>
+
+      <div class="shot">
+        <img
+          src="images/report-page-spending-story.png"
+          width="1400"
+          height="1250"
+          loading="lazy"
+          alt="A Pharos report page with totals and a chart, built from a made-up sample project"
+        />
+        <p>A real Pharos page, written by an agent from live project data.</p>
+      </div>
+
+      <div class="start" id="start">
+        <h2>Try it in a minute</h2>
+        <pre><code>git clone https://github.com/zuboto-dev/pharos
+cd pharos && pnpm install && pnpm dev
+
+<span class="c"># connect your agent</span>
+claude mcp add --transport http pharos http://localhost:4300/mcp</code></pre>
+        <p>
+          Runs on your machine. No account.
+          <a href="https://github.com/zuboto-dev/pharos#readme">Full setup</a>
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      v0.2 preview · Local-first · MIT ·
+      <a href="https://github.com/zuboto-dev/pharos">GitHub</a>
+    </footer>
+  </body>
+</html>

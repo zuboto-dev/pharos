@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Pharos means lighthouse: the sidebar logo, filled, on an amber tile so it reads at 16 px. -->
+  <rect width="32" height="32" rx="7" fill="#f59e0b"/>
+  <path d="M12.5 10.2 3.5 7v7z M19.5 10.2 28.5 7v7z" fill="#fff" opacity=".55"/>
+  <path d="M16 3.5 10.5 8.5h11z" fill="#fff"/>
+  <rect x="12" y="8.5" width="8" height="4.5" fill="#fff"/>
+  <rect x="14" y="9.6" width="4" height="2.4" rx=".6" fill="#b45309"/>
+  <path d="M12 13h8l2 13.5H10z" fill="#fff"/>
+  <path d="M11.2 18.5h9.6v2.6h-10z" fill="#f59e0b"/>
+  <rect x="6.5" y="25.5" width="19" height="3" rx="1.5" fill="#fff"/>
+</svg>
